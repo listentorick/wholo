@@ -23,14 +23,16 @@ Wholo will initially be built as a **web-based, mobile-first platform**. Native 
 |---|---|
 | Node.js | Backend runtime |
 | TypeScript | Type-safe backend development |
-| NestJS or Fastify | API/backend framework |
+| NestJS | API/backend framework |
 | REST APIs | Application API style |
 | OpenAPI | API documentation and future client generation |
 | Postgres | Primary relational database |
 | Redis | Caching, queues, locks and short-lived state |
 | BullMQ | Background job processing |
 | Object storage | Product images, videos, signatures and documents |
-| Prisma | ORM  | 
+| Prisma | ORM |
+
+NestJS was chosen over Fastify because its built-in dependency injection and module system maps directly to the domain modules in this codebase, supporting the modular monolith structure without additional scaffolding.
 
 ### Integrations
 
@@ -39,6 +41,7 @@ Wholo will initially be built as a **web-based, mobile-first platform**. Native 
 | Xero | Accounting, invoices, payments and customer balances |
 | Payment provider | Future invoice/card payment support |
 | Email/notification provider | Customer invitations, order updates and operational alerts |
+| Push notification provider | New order alerts and operational push notifications (e.g. Firebase Cloud Messaging) |
 
 ---
 
@@ -74,7 +77,65 @@ The architecture should support the product goals without becoming unnecessarily
 
 ---
 
-## 3. What Needs to Scale
+## 3. Authentication & Authorization
+
+### Authentication approach
+
+Authentication will be implemented in two phases:
+
+1. **Phase 1 (initial):** Local email/password login using bcrypt password hashing.
+2. **Phase 2 (future):** External identity provider (IDP) support via OAuth 2.0 / OIDC (e.g. Google, Microsoft, or a managed identity service such as Auth0 or Keycloak).
+
+The auth layer must be built using NestJS Passport.js strategy pattern so that IDP strategies can be added without rewiring the authorization infrastructure.
+
+### Token strategy
+
+- **Access tokens:** Short-lived JWTs (e.g. 15 minutes), signed with a server secret, containing user claims (userId, organisationId, role).
+- **Refresh tokens:** Longer-lived, stored in the database (allowing revocation), rotated on each use.
+- A claims-based approach is used throughout: the JWT payload carries the user's role and organisation context so downstream services can make authorization decisions without additional database lookups.
+- This approach is stateless for the API tier while retaining the ability to revoke sessions, and it supports future native mobile clients and IDP-issued tokens.
+
+### Roles
+
+The platform uses role-based access control (RBAC) with the following roles:
+
+| Role | Description |
+|---|---|
+| Platform Admin | Wholo platform-level administration |
+| Distributor Admin | Full access to a distributor's organisation |
+| Warehouse Staff | Stock receiving and fulfillment workflows |
+| Driver | Delivery workflows only |
+| Trade Customer | Ordering, invoices and account management for their organisation |
+
+Roles are scoped to an organisation. A user may hold different roles across different organisations (e.g. a person who manages two separate trade customer accounts).
+
+### Multi-tenancy enforcement
+
+Every distributor-owned resource carries a `distributorId`. The API layer must validate that the authenticated user belongs to the distributor being accessed on every request. This is enforced at the service layer, not only at the route level.
+
+Trade customers access distributor data only through an approved trade relationship. The API must verify that an active trade relationship exists between the trade customer's organisation and the distributor before allowing catalogue or order access.
+
+---
+
+## 4. Multi-Tenancy & Data Isolation
+
+Wholo is a multi-tenant platform. Multiple distributors and their customers share the same database.
+
+### Strategy: application-level tenant scoping
+
+All distributor-owned tables include a `distributor_id` foreign key. The application layer is responsible for applying tenant scoping on every query. There is no shared data access across distributors.
+
+This approach is preferred over Postgres row-level security (RLS) for initial delivery because it is simpler to implement, debug and reason about in combination with Prisma. Postgres RLS may be introduced later as a defence-in-depth measure.
+
+### Rules
+
+- Every query against a tenant-scoped table must include a `distributorId` filter.
+- No cross-distributor data access is permitted except at the platform admin level.
+- Trade customer access to distributor data is always gated by an active trade relationship record.
+
+---
+
+## 5. What Needs to Scale
 
 Not every part of the platform will need to scale in the same way. The architecture should identify likely pressure points early.
 
@@ -112,7 +173,7 @@ Pricing may become complex and frequently accessed because customers can have:
 - negotiated trade pricing
 - promotional pricing
 
-Pricing should be centralised in a pricing service and designed to support caching where safe.
+Pricing should be centralised in a pricing service and designed to support caching where safe. Cache invalidation must be triggered whenever a price list or customer-specific pricing record is updated.
 
 ### Order placement
 
@@ -141,6 +202,8 @@ Inventory must handle concurrent updates from:
 
 Inventory should be movement-based, with stock movement records for auditability.
 
+**Concurrency control:** Inventory updates use optimistic locking (a `version` column incremented on each write). If a write conflict is detected, the operation is retried. This keeps transactions short and avoids lock contention under concurrent order placement.
+
 ### Background jobs
 
 The queue/worker layer needs to scale independently from the API because it will handle:
@@ -154,6 +217,14 @@ The queue/worker layer needs to scale independently from the API because it will
 - search indexing
 
 Workers should be horizontally scalable.
+
+### Real-time updates & push notifications
+
+WebSockets and server-sent events are out of scope for v1. The platform's workflows are asynchronous by nature and do not require a persistent connection. This decision will be revisited if warehouse coordination or live tracking needs emerge at scale.
+
+**Push notifications** will be used for time-sensitive operational events. The primary use case is alerting distributor admins when a new customer order is placed. A push notification provider (e.g. Firebase Cloud Messaging) will handle delivery to both web browsers (Web Push API) and future native mobile apps (APNs / FCM). Push notification delivery is handled asynchronously via the worker queue, not in the order placement request path.
+
+---
 
 ### Xero integration
 
@@ -176,24 +247,28 @@ Media should scale through object storage, with Postgres storing metadata and re
 
 ---
 
-## 4. Component Responsibilities
+## 6. Component Responsibilities
 
-### Web Application
+### Web Applications
 
-**Technology:** Next.js, React, Tailwind CSS, shadcn/ui
+The frontend is split into four separate Next.js applications, each targeting a distinct persona. They share a common component library (`packages/ui`) and API client (`packages/api-client`) within the monorepo.
 
-Responsible for:
+| App | Personas | Rendering | Notes |
+|---|---|---|---|
+| `app-discovery` | Public / prospective trade customers | SSR + ISR | SEO-indexable public site, no auth required |
+| `app-portal` | Trade customers | CSR | Auth-gated mobile-first commerce experience |
+| `app-admin` | Distributor admins | CSR | Desktop-oriented management tool |
+| `app-ops` | Warehouse staff + drivers | CSR / PWA | Mobile task workflows, offline capability candidate |
 
-- public distributor discovery pages
-- trade customer portal
-- distributor admin portal
-- warehouse mobile web workflows
-- driver mobile web workflows
-- responsive mobile-first user experience
-- calling backend APIs
+All four applications share the same technology stack: Next.js, React, TypeScript, Tailwind CSS, shadcn/ui, React Hook Form, Zod, and TanStack Query.
+
+Each application is responsible for:
+
+- its own routing and page structure
+- calling backend APIs via the shared API client
 - presenting validation errors and workflow state
 
-Not responsible for:
+No application is responsible for:
 
 - pricing authority
 - stock reservation
@@ -201,23 +276,36 @@ Not responsible for:
 - Xero integration logic
 - core business rules
 
+#### State management
+
+- **Server state:** TanStack Query (fetching, caching, invalidation of API data)
+- **Client/UI state:** React context or state co-located with components; avoid a global store unless complexity demands it
+
 ---
 
 ### API Application
 
-**Technology:** Node.js, TypeScript, NestJS or Fastify
+**Technology:** Node.js, TypeScript, NestJS
 
 Responsible for:
 
 - exposing versioned REST APIs
 - authentication and authorisation
 - validating requests
-- enforcing permissions
+- enforcing permissions and tenant scoping
 - orchestrating business workflows
 - calling domain services
 - returning data shaped for web and future mobile clients
 
 The API should remain stateless where possible so it can scale horizontally.
+
+#### API design conventions
+
+- **Versioning:** URL path prefix — `/api/v1/`
+- **Pagination:** Cursor-based pagination for lists (supports large datasets and consistent results under concurrent writes). Offset pagination only for fixed-size admin lists.
+- **Error format:** RFC 7807 Problem Details (`application/problem+json`) for consistent error responses.
+- **Idempotency:** Order creation and Xero-triggering endpoints must accept an `Idempotency-Key` header. Keys are stored in Redis with a short TTL to detect duplicate requests.
+- **Rate limiting:** Applied at the API gateway or reverse proxy layer, not inside the application.
 
 ---
 
@@ -227,7 +315,7 @@ The backend should be organised into modules with clear responsibilities.
 
 | Module | Responsibility |
 |---|---|
-| Auth & Users | Login, users, memberships, roles and permissions |
+| Auth & Users | Login, token issuance, refresh, users, memberships, roles and permissions |
 | Organisations | Distributors, trade customers and platform-level organisation records |
 | Trade Relationships | Links between distributors and trade customers, including account status and access |
 | Discovery | Public distributor profiles and trade account requests |
@@ -241,7 +329,7 @@ The backend should be organised into modules with clear responsibilities.
 | Invoicing | Local invoice records, invoice status and invoice visibility |
 | Xero Integration | Product import, invoice creation and invoice/payment synchronisation |
 | Media | Images, videos, documents and signatures |
-| Notifications | Emails, alerts and customer invitations |
+| Notifications | Emails, push notifications, alerts and customer invitations |
 | Search | Product and distributor search indexing/querying |
 
 ---
@@ -268,20 +356,30 @@ Responsible for storing core business data, including:
 
 Postgres is the source of truth for business data.
 
+#### Soft deletes
+
+Entities where audit history or operational integrity matters (orders, invoices, inventory movements, price lists) should use soft deletes (`deletedAt` timestamp) rather than hard deletes. Hard deletes are acceptable for entities with no audit significance (e.g. draft basket items).
+
 ---
 
 ### Redis
 
 Responsible for:
 
-- queue backing store
-- short-lived caching
+- queue backing store (BullMQ)
+- short-lived caching (catalogue queries, pricing results)
 - rate limiting
 - idempotency keys
-- distributed locks
+- distributed locks (stock reservation, Xero job deduplication)
 - temporary workflow state where appropriate
 
 Redis should not be the source of truth for business data.
+
+#### Caching strategy
+
+- **Pattern:** Cache-aside. The application checks Redis before querying Postgres and populates the cache on miss.
+- **What is cached:** Catalogue queries (product lists per distributor), resolved pricing for customer/product combinations, distributor public profiles.
+- **Invalidation:** Event-driven. When a price list, product, or distributor profile is updated, the relevant cache keys are explicitly deleted. TTL is a fallback safety net, not the primary invalidation mechanism.
 
 ---
 
@@ -306,6 +404,8 @@ Workers should be deployable and scalable separately from the API.
 
 ### Scheduler
 
+**Implementation:** A separate `wholo-scheduler` process using BullMQ's repeatable job feature (not a process running inside the worker).
+
 Responsible for recurring jobs, such as:
 
 - periodic Xero synchronisation
@@ -319,6 +419,8 @@ Responsible for recurring jobs, such as:
 ---
 
 ### Object Storage
+
+**Upload strategy:** Presigned URLs. The API issues a short-lived presigned upload URL; the client uploads directly from the browser to object storage. This avoids routing large media files (especially video) through the API tier.
 
 Responsible for storing binary assets, including:
 
@@ -355,12 +457,108 @@ Wholo remains responsible for:
 
 ---
 
-## 5. Initial Deployment Shape
+## 7. Observability
+
+Observability is provided by the **Grafana stack**, deployed via Helm charts alongside the application services.
+
+| Tool | Role |
+|---|---|
+| Prometheus | Metrics collection from all services |
+| Loki | Log aggregation |
+| Tempo | Distributed tracing |
+| Grafana | Dashboards and alerting across metrics, logs and traces |
+
+### Logging
+
+- Structured JSON logs from all services are shipped to Loki.
+- Log levels: `error`, `warn`, `info`, `debug`.
+- All HTTP requests logged with method, path, status code, duration and `distributorId` where applicable.
+- Sensitive fields (passwords, tokens) must never be logged.
+
+### Distributed tracing
+
+- OpenTelemetry instrumentation in the API and worker processes, with traces sent to Tempo.
+- Trace IDs propagate into BullMQ job metadata so async job chains (e.g. order → Xero invoice creation) are traceable end-to-end.
+
+### Metrics & alerting
+
+- Prometheus scrapes metrics from all services.
+- Key metrics: API response times, queue depths, job failure rates, Xero sync lag, Postgres connection pool utilisation.
+- Grafana alerts are configured for critical thresholds (error rate spikes, queue backlog, job failures).
+
+### Health checks
+
+- Each service exposes a `/health` endpoint covering its critical dependencies (Postgres, Redis).
+- Kubernetes liveness and readiness probes point to `/health`.
+
+---
+
+## 8. Local Development
+
+### Repository structure
+
+All services live in a **monorepo** using pnpm workspaces, structured as:
+
+```
+apps/
+  discovery/     # app-discovery — public SEO site
+  portal/        # app-portal — trade customer ordering
+  admin/         # app-admin — distributor management
+  ops/           # app-ops — warehouse + driver workflows
+  api/           # wholo-api — NestJS REST API
+  worker/        # wholo-worker — BullMQ job processor
+  scheduler/     # wholo-scheduler — recurring jobs
+packages/
+  ui/            # shared component library (shadcn/ui base)
+  api-client/    # shared typed API client
+  types/         # shared TypeScript types
+```
+
+### Containerisation
+
+All application services are containerised (Docker). Each service (`app-discovery`, `app-portal`, `app-admin`, `app-ops`, `wholo-api`, `wholo-worker`, `wholo-scheduler`) has its own `Dockerfile`.
+
+Deployment to Kubernetes is managed via **Helm charts**. The Helm chart covers all services, configuration, secrets references, ingress and scaling rules.
+
+### Local environment
+
+All services including infrastructure (Postgres, Redis) run via Docker Compose for local development.
+
+```
+docker compose up           # starts all services (Postgres, Redis, API, all web apps, worker)
+pnpm dev:api                # alternatively, run the NestJS API locally in watch mode
+pnpm dev:discovery          # alternatively, run app-discovery locally in watch mode
+pnpm dev:portal             # alternatively, run app-portal locally in watch mode
+pnpm dev:admin              # alternatively, run app-admin locally in watch mode
+pnpm dev:ops                # alternatively, run app-ops locally in watch mode
+pnpm dev:worker             # alternatively, run the BullMQ worker locally in watch mode
+```
+
+### Environment variables
+
+- Local: `.env` files per package (not committed).
+- Shared secrets for local dev: `.env.example` files with placeholder values committed.
+- Production: managed via the deployment platform's secrets manager.
+
+### Database migrations
+
+Managed by Prisma Migrate.
+
+- `pnpm db:migrate:dev` — applies pending migrations in development.
+- `pnpm db:migrate:deploy` — applies migrations in CI/production (no interactive prompt).
+- Migrations run as a pre-deployment step before the new API version starts.
+
+---
+
+## 9. Initial Deployment Shape
 
 The initial deployment should be simple:
 
 ```text
-wholo-web
+app-discovery
+app-portal
+app-admin
+app-ops
 wholo-api
 wholo-worker
 wholo-scheduler
@@ -369,21 +567,35 @@ redis
 object-storage
 ```
 
-### wholo-web
+All services are containerised and deployed to Kubernetes via Helm charts.
 
-Hosts the responsive web application.
+### app-discovery
+
+Public distributor discovery site. SSR + ISR, SEO-indexable, no auth required.
+
+### app-portal
+
+Trade customer ordering portal. Mobile-first, auth-gated.
+
+### app-admin
+
+Distributor admin and management tool. Desktop-oriented, auth-gated.
+
+### app-ops
+
+Warehouse and driver workflows. Mobile-first, PWA candidate for offline support.
 
 ### wholo-api
 
-Hosts the REST API used by the web app and future mobile apps.
+Hosts the REST API used by all web apps and future mobile apps.
 
 ### wholo-worker
 
-Processes background jobs.
+Processes background jobs. Horizontally scalable — multiple replicas can be run safely.
 
 ### wholo-scheduler
 
-Runs recurring jobs. This can make use of BullMQ scheduled tasks
+Runs recurring jobs via BullMQ repeatable tasks. Runs as a single replica to avoid duplicate job scheduling.
 
 ### postgres
 
@@ -399,13 +611,13 @@ Stores media and documents.
 
 ---
 
-## 6. Key Architectural Decisions
+## 10. Key Architectural Decisions
 
 1. Wholo will start as a web-based platform.
 2. The UI will be mobile-first and responsive.
 3. Native mobile apps may be added later.
 4. The backend will expose APIs that can support both web and future mobile clients.
-5. The backend will start as a modular monolith, not microservices.
+5. The backend will start as a modular monolith using NestJS, not microservices.
 6. Postgres will be the primary database and source of truth.
 7. Redis will be used for queues, caching, locks and temporary state.
 8. Background jobs will be used for Xero integration, imports, notifications and media processing.
@@ -413,5 +625,11 @@ Stores media and documents.
 10. Xero will be the accounting system of record.
 11. Wholo will be the source of truth for catalogue, pricing, ordering, stock and merchandising.
 12. Pricing logic will be centralised in the backend.
-13. Inventory will be movement-based.
-14. Object storage will be used for media and documents.
+13. Inventory will be movement-based with optimistic locking (version column) for concurrent update safety.
+14. Object storage will be used for media and documents, with presigned URL uploads.
+15. Authentication will use local email/password initially, with the Passport.js strategy pattern enabling future IDP support.
+16. A claims-based JWT approach: short-lived access tokens carrying user claims (userId, organisationId, role), plus database-backed refresh tokens (revocable).
+17. Multi-tenancy will be enforced at the application layer via `distributorId` scoping on every tenant-owned query.
+18. The frontend is split into four separate Next.js apps (`app-discovery`, `app-portal`, `app-admin`, `app-ops`) sharing a common component library and API client.
+19. All services are managed in a pnpm monorepo with `apps/` and `packages/` structure.
+20. All application services are containerised (Docker) and deployed to Kubernetes via Helm charts.
