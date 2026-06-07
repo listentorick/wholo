@@ -83,94 +83,109 @@ export default function HomePage() {
         .action-tile { transition: background 0.15s, transform 0.15s; }
         .action-tile:active { background: #f9f9f9; transform: scale(0.97); }
 
-        /* ── Phone breakpoints ─────────────────────────────────────────
-           All phone-sized viewports (≤ 480 px) get a truly full-width
-           layout with no side margins or max-width cap.
-           Device-specific tweaks are layered on top.
-        ────────────────────────────────────────────────────────────── */
+        /* Nav and banner are always full viewport width — they sit outside
+           the content shell so no max-width ever clips them. */
+        .home-nav    { padding-left: 16px; padding-right: 16px; }
+        .home-banner { width: 100%; height: 38vh; min-height: 180px; }
 
-        /* Default phone baseline — covers iPhone 12 Pro (390 px) and
-           anything narrower */
+        /* Content shell centres the welcome text and tile grid.
+           On phones it is full width; on larger screens it is a
+           centred card. */
+        .home-content { width: 100%; }
+
+        /* ── Phone breakpoints ─────────────────────────────────── */
+
+        /* Phone baseline — iPhone 12 Pro (390 px) and narrower */
         @media (max-width: 480px) {
-          .home-shell  { max-width: 100%; margin-left: 0; margin-right: 0; }
-          .home-banner { min-height: 200px; max-height: none; height: 38vh; }
-          .home-nav    { padding-left: 16px; padding-right: 16px; }
-          .tile-icon   { width: 52px; height: 52px; }
-          .tile-label  { font-size: 11px; }
-          .tile-btn    { padding-top: 36px; padding-bottom: 36px; }
+          .home-banner  { height: 38vh; }
+          .tile-icon    { width: 52px; height: 52px; }
+          .tile-label   { font-size: 11px; }
+          .tile-btn     { padding-top: 36px; padding-bottom: 36px; }
         }
 
-        /* iPhone 14 Pro Max — 430 px logical width */
+        /* iPhone 14 Pro Max — 430 px */
         @media (min-width: 428px) and (max-width: 430px) {
-          .home-banner { height: 40vh; }
-          .tile-icon   { width: 58px; height: 58px; }
-          .tile-label  { font-size: 12px; }
-          .tile-btn    { padding-top: 44px; padding-bottom: 44px; }
-          .welcome-text{ font-size: 18px; }
+          .home-banner  { height: 40vh; }
+          .tile-icon    { width: 58px; height: 58px; }
+          .tile-label   { font-size: 12px; }
+          .tile-btn     { padding-top: 44px; padding-bottom: 44px; }
+          .welcome-text { font-size: 18px; }
         }
 
-        /* Pixel 7 — 412 px logical width */
+        /* Pixel 7 — 412 px */
         @media (min-width: 411px) and (max-width: 412px) {
-          .home-banner { height: 39vh; }
-          .tile-icon   { width: 56px; height: 56px; }
-          .tile-label  { font-size: 11.5px; }
-          .tile-btn    { padding-top: 40px; padding-bottom: 40px; }
+          .home-banner  { height: 39vh; }
+          .tile-icon    { width: 56px; height: 56px; }
+          .tile-label   { font-size: 11.5px; }
+          .tile-btn     { padding-top: 40px; padding-bottom: 40px; }
         }
 
-        /* Tablet and above — centred card */
+        /* ── Tablet and above (≥ 481 px) ──────────────────────── */
+
+        /* Content (welcome + tiles) centres as a card.
+           Nav and banner remain full width — they are outside this shell. */
         @media (min-width: 481px) {
-          .home-shell  { max-width: 390px; margin-left: auto; margin-right: auto; }
-          .home-banner { height: 38vh; min-height: 180px; max-height: 260px; }
+          .home-content { max-width: 390px; margin-left: auto; margin-right: auto; }
+          .home-banner  { max-height: 260px; }
+        }
+
+        /* iPad mini (768 px) — banner gets more height to fill
+           the wider viewport proportionally */
+        @media (min-width: 768px) {
+          .home-nav     { padding-left: 24px; padding-right: 24px; }
+          .home-banner  { height: 42vh; max-height: 360px; }
         }
       `}</style>
 
       <div className="flex min-h-screen flex-col bg-white">
-        <div className="home-shell w-full flex flex-col flex-1">
 
-          {/* Nav */}
-          <nav className="home-nav anim-nav flex items-center justify-between py-3.5 bg-white border-b border-[#E5E7EB]">
-            <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Menu">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-                <line x1="3" y1="6"  x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            </button>
-
-            <button className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-[#1A1A1A]">
-              {user.organisationName}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 text-[#9CA3AF]">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-
-            <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Cart">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M16 10a4 4 0 01-8 0" />
-              </svg>
-            </button>
-          </nav>
-
-          {/* Banner */}
-          <div className="home-banner anim-banner relative w-full">
-            <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)' }}
-            />
-            <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
-              <filter id="grain">
-                <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
-                <feColorMatrix type="saturate" values="0" />
-              </filter>
-              <rect width="100%" height="100%" filter="url(#grain)" />
+        {/* Nav — always full viewport width */}
+        <nav className="home-nav anim-nav flex w-full items-center justify-between py-3.5 bg-white border-b border-[#E5E7EB]">
+          <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+              <line x1="3" y1="6"  x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
-            <div
-              className="absolute inset-0"
-              style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
-            />
-          </div>
+          </button>
+
+          <button className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-[#1A1A1A]">
+            {user.organisationName}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 text-[#9CA3AF]">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Cart">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 01-8 0" />
+            </svg>
+          </button>
+        </nav>
+
+        {/* Banner — always full viewport width */}
+        <div className="home-banner anim-banner relative">
+          <div
+            className="absolute inset-0"
+            style={{ background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)' }}
+          />
+          <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
+            <filter id="grain">
+              <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
+              <feColorMatrix type="saturate" values="0" />
+            </filter>
+            <rect width="100%" height="100%" filter="url(#grain)" />
+          </svg>
+          <div
+            className="absolute inset-0"
+            style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
+          />
+        </div>
+
+        {/* Content — welcome + tiles, centred on tablet+ */}
+        <div className="home-content flex flex-col flex-1">
 
           {/* Welcome */}
           <div className="anim-welcome flex flex-col items-center pt-7 pb-6">
