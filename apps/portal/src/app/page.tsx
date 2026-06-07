@@ -73,22 +73,62 @@ export default function HomePage() {
           from { opacity: 0; transform: scale(0.94); }
           to   { opacity: 1; transform: scale(1); }
         }
-        .anim-nav   { animation: fadeDown 0.4s ease both; }
-        .anim-banner{ animation: scaleIn 0.5s ease both 0.1s; }
-        .anim-welcome { animation: fadeUp 0.4s ease both 0.25s; }
-        .anim-tile-0 { animation: fadeUp 0.4s ease both 0.32s; }
-        .anim-tile-1 { animation: fadeUp 0.4s ease both 0.38s; }
-        .anim-tile-2 { animation: fadeUp 0.4s ease both 0.44s; }
-        .anim-tile-3 { animation: fadeUp 0.4s ease both 0.50s; }
-        .action-tile:active { background: #f9f9f9; transform: scale(0.97); }
+        .anim-nav    { animation: fadeDown 0.4s ease both; }
+        .anim-banner { animation: scaleIn 0.5s ease both 0.1s; }
+        .anim-welcome{ animation: fadeUp  0.4s ease both 0.25s; }
+        .anim-tile-0 { animation: fadeUp  0.4s ease both 0.32s; }
+        .anim-tile-1 { animation: fadeUp  0.4s ease both 0.38s; }
+        .anim-tile-2 { animation: fadeUp  0.4s ease both 0.44s; }
+        .anim-tile-3 { animation: fadeUp  0.4s ease both 0.50s; }
         .action-tile { transition: background 0.15s, transform 0.15s; }
+        .action-tile:active { background: #f9f9f9; transform: scale(0.97); }
+
+        /* ── Phone breakpoints ─────────────────────────────────────────
+           All phone-sized viewports (≤ 480 px) get a truly full-width
+           layout with no side margins or max-width cap.
+           Device-specific tweaks are layered on top.
+        ────────────────────────────────────────────────────────────── */
+
+        /* Default phone baseline — covers iPhone 12 Pro (390 px) and
+           anything narrower */
+        @media (max-width: 480px) {
+          .home-shell  { max-width: 100%; margin-left: 0; margin-right: 0; }
+          .home-banner { min-height: 200px; max-height: none; height: 38vh; }
+          .home-nav    { padding-left: 16px; padding-right: 16px; }
+          .tile-icon   { width: 52px; height: 52px; }
+          .tile-label  { font-size: 11px; }
+          .tile-btn    { padding-top: 36px; padding-bottom: 36px; }
+        }
+
+        /* iPhone 14 Pro Max — 430 px logical width */
+        @media (min-width: 428px) and (max-width: 430px) {
+          .home-banner { height: 40vh; }
+          .tile-icon   { width: 58px; height: 58px; }
+          .tile-label  { font-size: 12px; }
+          .tile-btn    { padding-top: 44px; padding-bottom: 44px; }
+          .welcome-text{ font-size: 18px; }
+        }
+
+        /* Pixel 7 — 412 px logical width */
+        @media (min-width: 411px) and (max-width: 412px) {
+          .home-banner { height: 39vh; }
+          .tile-icon   { width: 56px; height: 56px; }
+          .tile-label  { font-size: 11.5px; }
+          .tile-btn    { padding-top: 40px; padding-bottom: 40px; }
+        }
+
+        /* Tablet and above — centred card */
+        @media (min-width: 481px) {
+          .home-shell  { max-width: 390px; margin-left: auto; margin-right: auto; }
+          .home-banner { height: 38vh; min-height: 180px; max-height: 260px; }
+        }
       `}</style>
 
       <div className="flex min-h-screen flex-col bg-white">
-        <div className="mx-auto w-full max-w-[390px] flex flex-col flex-1">
+        <div className="home-shell w-full flex flex-col flex-1">
 
           {/* Nav */}
-          <nav className="anim-nav flex items-center justify-between px-4 py-3.5 bg-white border-b border-[#E5E7EB]">
+          <nav className="home-nav anim-nav flex items-center justify-between py-3.5 bg-white border-b border-[#E5E7EB]">
             <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Menu">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
                 <line x1="3" y1="6"  x2="21" y2="6" />
@@ -114,14 +154,11 @@ export default function HomePage() {
           </nav>
 
           {/* Banner */}
-          <div className="anim-banner relative w-full" style={{ height: '38vh', minHeight: 180, maxHeight: 260 }}>
+          <div className="home-banner anim-banner relative w-full">
             <div
               className="absolute inset-0"
-              style={{
-                background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)',
-              }}
+              style={{ background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)' }}
             />
-            {/* Grain overlay */}
             <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
               <filter id="grain">
                 <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
@@ -129,7 +166,6 @@ export default function HomePage() {
               </filter>
               <rect width="100%" height="100%" filter="url(#grain)" />
             </svg>
-            {/* Subtle vignette */}
             <div
               className="absolute inset-0"
               style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
@@ -138,7 +174,7 @@ export default function HomePage() {
 
           {/* Welcome */}
           <div className="anim-welcome flex flex-col items-center pt-7 pb-6">
-            <p className="text-[17px] font-light tracking-wide text-[#1A1A1A]">
+            <p className="welcome-text text-[17px] font-light tracking-wide text-[#1A1A1A]">
               Welcome back {user.firstName}&nbsp;!
             </p>
             <div className="mt-2.5 h-px w-8 bg-accent" />
@@ -149,12 +185,12 @@ export default function HomePage() {
             {actions.map((action, i) => (
               <button
                 key={action.label}
-                className={`action-tile anim-tile-${i} flex flex-col items-center justify-center gap-3 bg-white py-10 text-[#9CA3AF] hover:text-[#1A1A1A]`}
+                className={`action-tile tile-btn anim-tile-${i} flex flex-col items-center justify-center gap-3 bg-white text-[#9CA3AF] hover:text-[#1A1A1A]`}
               >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full border border-[#E5E7EB] text-[#9CA3AF] transition-colors group-hover:border-accent">
+                <span className="tile-icon flex items-center justify-center rounded-full border border-[#E5E7EB] text-[#9CA3AF]">
                   {action.icon}
                 </span>
-                <span className="text-[11px] font-normal tracking-wide text-[#9CA3AF]">
+                <span className="tile-label font-normal tracking-wide text-[#9CA3AF]">
                   {action.label}
                 </span>
               </button>
