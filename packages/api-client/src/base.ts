@@ -11,12 +11,10 @@ export class ApiError extends Error {
 }
 
 function getBaseUrl(): string {
-  if (typeof window !== 'undefined') {
-    return (window as any).__ENV__?.NEXT_PUBLIC_API_URL
-      ?? process.env['NEXT_PUBLIC_API_URL']
-      ?? 'http://localhost:3001';
-  }
-  return process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+  // process.env is available in Next.js (injected by webpack at build time)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const env = (globalThis as any).process?.env as Record<string, string | undefined> | undefined;
+  return env?.['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 }
 
 export async function apiFetch<T>(

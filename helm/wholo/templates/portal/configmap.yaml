@@ -6,3 +6,4 @@ metadata:
     app: {{ include "wholo.fullname" . }}-portal
 data:
   NEXT_PUBLIC_API_URL: {{ .Values.portal.apiUrl | quote }}
+  HOSTNAME: "0.0.0.0"
