@@ -176,6 +176,8 @@ Pricing may become complex and frequently accessed because customers can have:
 
 Pricing should be centralised in a pricing service and designed to support caching where safe. Cache invalidation must be triggered whenever a price list or customer-specific pricing record is updated.
 
+Pricing resolves in this order: customer-specific pricing override → assigned customer price list → default distributor pricing.
+
 ### Order placement
 
 Order placement is business-critical and must be reliable.
@@ -336,6 +338,18 @@ The backend should be organised into modules with clear responsibilities.
 
 ---
 
+### Product Types and Attribute Definitions
+
+Each distributor defines their own product types (e.g. Wine, Beer, Bread) and the attribute definitions that apply to each type. Attribute definitions are stored relationally and include: key, label, data type, unit, required, filterable, sortable, show-on-card, show-on-detail, and display order.
+
+Controlled attributes (e.g. vineyard, region, grape variety) define a set of allowed options, also stored relationally. Product entry forms, validation, catalogue filters and sort options are generated from these definitions at runtime.
+
+Only attributes marked `filterable` are exposed as customer-facing catalogue filters. Only attributes marked `sortable` are available as catalogue sort options.
+
+How product attribute values are stored against product records is deferred to v2 (see ADR-022). JSONB on the product row is the recommended approach when this is implemented.
+
+---
+
 ### Postgres Database
 
 Responsible for storing core business data, including:
@@ -360,7 +374,7 @@ Postgres is the source of truth for business data.
 
 #### Soft deletes
 
-Entities where audit history or operational integrity matters (orders, invoices, inventory movements, price lists) should use soft deletes (`deletedAt` timestamp) rather than hard deletes. Hard deletes are acceptable for entities with no audit significance (e.g. draft basket items).
+Entities where audit history or operational integrity matters (orders, invoices, inventory movements, price lists, products, trade relationships) should use soft deletes (`deletedAt` timestamp) rather than hard deletes. Hard deletes are acceptable for entities with no audit significance (e.g. draft basket items).
 
 ---
 
@@ -375,7 +389,7 @@ Responsible for:
 - distributed locks (stock reservation, Xero job deduplication)
 - temporary workflow state where appropriate
 
-Redis should not be the source of truth for business data.
+Redis should not be the source of truth for business data. Redis must be deployed with persistence enabled (RDB or AOF) so that queued jobs survive a Redis restart.
 
 #### Caching strategy
 
@@ -422,7 +436,9 @@ Responsible for recurring jobs, such as:
 
 ### Object Storage
 
-**Upload strategy:** Presigned URLs. The API issues a short-lived presigned upload URL; the client uploads directly from the browser to object storage. This avoids routing large media files (especially video) through the API tier.
+**Upload strategy:** Presigned URLs. The API issues a short-lived presigned upload URL; the client uploads directly from the browser to object storage. This avoids routing large media files (especially video) through the API tier. The API tracks upload completion via a post-upload confirmation to associate the stored object with its record.
+
+**Download strategy:** Private assets (e.g. delivery signatures) are served via short-lived presigned download URLs. Public assets (e.g. product images, videos) should be served via a CDN in front of object storage.
 
 Responsible for storing binary assets, including:
 
@@ -447,7 +463,13 @@ The Xero integration operates in two directions for products:
 
 1. **Initial import (one-time bootstrap)** — Xero items are imported into Wholo to seed the initial catalogue. The distributor reviews and confirms before committing. The Xero `ItemID` is stored on each product as an external reference.
 
-2. **Ongoing sync (Wholo → Xero)** — when products are created, updated or archived in Wholo, the corresponding Xero item is updated asynchronously via the worker queue. This keeps Xero's item list current so invoice line items can reference valid Xero item codes.
+2. **Ongoing sync (Wholo → Xero)** — when products are created, updated or archived in Wholo, the corresponding Xero item is updated asynchronously via the worker queue. This keeps Xero's item list current so invoice line items can reference valid Xero item codes. The specific sync operations are:
+   - Product created in Wholo → create item in Xero, store `xeroItemId`
+   - Product name/description updated → update Xero item
+   - Product archived → mark Xero item inactive
+   - Product price updated → update `SalesDetails.UnitPrice` on the Xero item
+
+The `xeroItemId` must be present on a product before invoice creation can proceed. Products ingested without a Xero counterpart trigger an async create-item job before invoicing is possible.
 
 Other future ingestion sources (Excel, CSV, documents) are **ingestion only** — data flows into Wholo; Wholo does not write back to those sources.
 
@@ -474,6 +496,10 @@ Source trigger / file upload
 #### Source connectors
 
 Connectors are pluggable; the interface is defined from day one. Only `XeroConnector` is implemented in v1. Excel, CSV and document connectors follow later.
+
+#### Field mappings
+
+Field mappings are stored per distributor per source type and are reusable across subsequent imports from the same source. Mappings support direct field mapping, static default values and simple transformations (trim, uppercase, unit conversion).
 
 #### Product type inference
 

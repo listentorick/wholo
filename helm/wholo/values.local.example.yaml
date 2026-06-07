@@ -1,0 +1,16 @@
+# Copy this file to values.local.yaml and customise for your local environment.
+# values.local.yaml is gitignored.
+
+postgresql:
+  password: wholo
+
+redis: {}
+
+api:
+  image:
+    pullPolicy: Never
+  jwt:
+    secret: "local-dev-secret-do-not-use-in-prod"
+
+portal:
+  apiUrl: "http://localhost:3001"

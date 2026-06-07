@@ -1,0 +1,15 @@
+Wholo has been deployed to Kubernetes.
+
+API:
+  kubectl get svc {{ include "wholo.fullname" . }}-api
+
+Portal:
+  kubectl get svc {{ include "wholo.fullname" . }}-portal
+
+For local development with hot-reload, port-forward the infrastructure:
+  kubectl port-forward svc/{{ include "wholo.fullname" . }}-postgresql 5432:5432
+  kubectl port-forward svc/{{ include "wholo.fullname" . }}-redis 6379:6379
+
+Then run apps locally:
+  pnpm dev:api
+  pnpm dev:portal

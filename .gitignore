@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+helm/wholo/values.local.yaml
+helm/wholo/charts/
+*.tgz
+
+# pnpm
+.pnpm-store/

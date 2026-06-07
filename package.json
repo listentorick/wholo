@@ -1,0 +1,30 @@
+{
+  "name": "wholo",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@wholo/api",
+    "dev:portal": "turbo run dev --filter=@wholo/portal",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "db:migrate:dev": "pnpm --filter @wholo/api exec prisma migrate dev",
+    "db:migrate:deploy": "pnpm --filter @wholo/api exec prisma migrate deploy",
+    "db:seed": "pnpm --filter @wholo/api exec tsx prisma/seed.ts",
+    "helm:deps": "helm dependency update helm/wholo",
+    "helm:install": "helm upgrade --install wholo helm/wholo -f helm/wholo/values.local.yaml",
+    "helm:uninstall": "helm uninstall wholo",
+    "k8s:build": "docker build -t wholo/api:local -f apps/api/Dockerfile . && docker build -t wholo/portal:local -f apps/portal/Dockerfile .",
+    "k8s:pf:postgres": "kubectl port-forward svc/wholo-postgresql 5432:5432",
+    "k8s:pf:redis": "kubectl port-forward svc/wholo-redis-master 6379:6379"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

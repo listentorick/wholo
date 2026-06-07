@@ -1,0 +1,52 @@
+postgresql:
+  image: postgres:16-alpine
+  port: 5432
+  database: wholo
+  username: wholo
+  password: wholo
+  storageSize: 1Gi
+
+redis:
+  image: redis:7-alpine
+  port: 6379
+  storageSize: 512Mi
+
+api:
+  image:
+    repository: wholo/api
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  jwt:
+    secret: "dev-secret-change-in-prod"
+    expiresIn: "15m"
+  refreshToken:
+    expiresDays: "30"
+
+portal:
+  image:
+    repository: wholo/portal
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "200m"
+  apiUrl: "http://localhost:3001"

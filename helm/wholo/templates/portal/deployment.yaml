@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-portal
+  labels:
+    app: {{ include "wholo.fullname" . }}-portal
+spec:
+  replicas: {{ .Values.portal.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-portal
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-portal
+    spec:
+      containers:
+        - name: portal
+          image: {{ .Values.portal.image.repository }}:{{ .Values.portal.image.tag }}
+          imagePullPolicy: {{ .Values.portal.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-portal
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}

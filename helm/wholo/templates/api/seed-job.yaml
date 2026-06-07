@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "wholo.fullname" . }}-seed
+  labels:
+    app: {{ include "wholo.fullname" . }}-seed
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-seed
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["npx", "prisma", "db", "seed"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-api
