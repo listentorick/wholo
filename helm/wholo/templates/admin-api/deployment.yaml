@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-admin-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-admin-api
+spec:
+  replicas: {{ .Values.adminApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-admin-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-admin-api
+    spec:
+      containers:
+        - name: admin-api
+          image: {{ .Values.adminApi.image.repository }}:{{ .Values.adminApi.image.tag }}
+          imagePullPolicy: {{ .Values.adminApi.image.pullPolicy }}
+          ports:
+            - containerPort: 3002
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-admin-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-admin-api
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.adminApi.resources | nindent 12 }}

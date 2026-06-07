@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-admin
+  labels:
+    app: {{ include "wholo.fullname" . }}-admin
+data:
+  NEXT_PUBLIC_ADMIN_API_URL: {{ .Values.admin.adminApiUrl | quote }}
+  HOSTNAME: "0.0.0.0"
+  PORT: "3020"

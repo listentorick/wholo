@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-admin-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-admin-api
+spec:
+  type: {{ .Values.adminApi.service.type }}
+  selector:
+    app: {{ include "wholo.fullname" . }}-admin-api
+  ports:
+    - port: {{ .Values.adminApi.service.port }}
+      targetPort: 3002

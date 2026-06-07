@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker build *)",
+      "Bash(pnpm --filter @wholo/admin-api type-check)",
+      "Bash(pnpm --filter @wholo/admin type-check)",
+      "Bash(pnpm install *)",
+      "Bash(node ../../node_modules/.bin/tsc --noEmit)",
+      "Bash(node /mnt/c/sourcecode/source/wholo/node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(node /mnt/c/sourcecode/source/wholo/node_modules/typescript/bin/tsc --noEmit -p packages/admin-api-client/tsconfig.json)",
+      "Bash(helm template *)",
+      "Bash(docker version *)",
+      "Bash(helm upgrade *)",
+      "Bash(kubectl get *)",
+      "Bash(kubectl logs *)",
+      "Bash(kubectl rollout *)",
+      "Bash(kubectl exec *)",
+      "Bash(kubectl wait *)"
+    ]
+  }
+}

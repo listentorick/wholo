@@ -24,3 +24,7 @@ Expand the name of the chart.
 {{- define "wholo.postgresql.url" -}}
 {{- printf "postgresql://%s:%s@%s:%d/%s" .Values.postgresql.username .Values.postgresql.password (include "wholo.postgresql.host" .) (int .Values.postgresql.port) .Values.postgresql.database }}
 {{- end }}
+
+{{- define "wholo.adminApi.host" -}}
+{{- printf "%s-admin-api" (include "wholo.fullname" .) }}
+{{- end }}

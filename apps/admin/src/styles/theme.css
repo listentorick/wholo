@@ -1,0 +1,29 @@
+/* Wholo Admin — design token definitions.
+   To rebrand: replace values on :root only. No component files need touching. */
+
+:root {
+  /* Sidebar */
+  --color-sidebar-bg:      220 30% 16%;   /* #1A1F36 navy */
+  --color-sidebar-fg:      0 0% 95%;      /* near-white text */
+  --color-sidebar-accent:  27 70% 52%;    /* #D97036 orange — active item */
+  --color-sidebar-border:  220 30% 22%;   /* slightly lighter navy */
+  --color-sidebar-hover:   220 30% 21%;   /* hover row */
+
+  /* Top bar */
+  --color-topbar-bg:       0 0% 100%;
+
+  /* Brand / CTA */
+  --color-primary:         27 70% 52%;    /* #D97036 */
+  --color-primary-fg:      0 0% 100%;
+  --color-primary-hover:   27 70% 45%;    /* #C4622A */
+
+  /* Content area */
+  --color-surface:         0 0% 100%;
+  --color-border:          220 13% 91%;
+  --color-muted:           220 9% 63%;
+  --color-text:            220 26% 14%;
+
+  /* Layout */
+  --sidebar-width:         220px;
+  --topbar-height:         56px;
+}

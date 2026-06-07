@@ -48,7 +48,31 @@ async function main() {
     },
   });
 
-  console.log(`Seeded: distributor "${distributor.name}", user "${user.email}"`);
+  const adminPasswordHash = await bcrypt.hash('admin123', 10);
+
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'james@vineandco.com' },
+    update: {},
+    create: {
+      id: 'seed-admin-1',
+      email: 'james@vineandco.com',
+      passwordHash: adminPasswordHash,
+      firstName: 'James',
+      lastName: 'Vine',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: adminUser.id, organisationId: distributor.id } },
+    update: {},
+    create: {
+      userId: adminUser.id,
+      organisationId: distributor.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
+  console.log(`Seeded: distributor "${distributor.name}", user "${user.email}", admin "${adminUser.email}"`);
 }
 
 main()
