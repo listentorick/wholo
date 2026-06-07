@@ -38,10 +38,11 @@ NestJS was chosen over Fastify because its built-in dependency injection and mod
 
 | Integration | Purpose |
 |---|---|
-| Xero | Accounting, invoices, payments and customer balances |
+| Xero | Accounting, invoices, payments, customer balances and product item synchronisation |
 | Payment provider | Future invoice/card payment support |
 | Email/notification provider | Customer invitations, order updates and operational alerts |
 | Push notification provider | New order alerts and operational push notifications (e.g. Firebase Cloud Messaging) |
+| LLM provider | Product type inference during ingestion and future metadata extraction (future) |
 
 ---
 
@@ -319,7 +320,8 @@ The backend should be organised into modules with clear responsibilities.
 | Organisations | Distributors, trade customers and platform-level organisation records |
 | Trade Relationships | Links between distributors and trade customers, including account status and access |
 | Discovery | Public distributor profiles and trade account requests |
-| Catalogue | Products, categories, product visibility and product metadata |
+| Catalogue | Products, categories, product types, product visibility and product metadata |
+| Product Ingestion | Source connectors, field mappings, import jobs, product type inference and Xero item synchronisation |
 | Pricing | Price lists, customer-specific pricing and price calculation |
 | Basket & Orders | Basket, checkout, order creation, order status and order history |
 | Inventory | Stock balances, reservations, adjustments and stock movements |
@@ -435,6 +437,54 @@ Postgres should store metadata and storage references only.
 
 ---
 
+### Product Ingestion Pipeline
+
+Wholo is the source of truth for all product data. Products may be bootstrapped from external sources but once in Wholo, Wholo owns them.
+
+#### Xero product relationship
+
+The Xero integration operates in two directions for products:
+
+1. **Initial import (one-time bootstrap)** — Xero items are imported into Wholo to seed the initial catalogue. The distributor reviews and confirms before committing. The Xero `ItemID` is stored on each product as an external reference.
+
+2. **Ongoing sync (Wholo → Xero)** — when products are created, updated or archived in Wholo, the corresponding Xero item is updated asynchronously via the worker queue. This keeps Xero's item list current so invoice line items can reference valid Xero item codes.
+
+Other future ingestion sources (Excel, CSV, documents) are **ingestion only** — data flows into Wholo; Wholo does not write back to those sources.
+
+#### Pipeline stages
+
+```
+Source trigger / file upload
+        ↓
+[Source Connector]      normalise source into raw records
+        ↓
+[Field Mapper]          apply stored mapping rules
+        ↓
+[Validator]             required fields, types, SKU uniqueness
+        ↓
+[Type Classifier]       infer product type (rule-based → LLM for unmatched)
+        ↓
+[Review Step]           distributor confirms before committing
+        ↓
+[Loader]                write to catalogue in a single transaction
+        ↓
+[Import Report]         per-record success / failure / warning
+```
+
+#### Source connectors
+
+Connectors are pluggable; the interface is defined from day one. Only `XeroConnector` is implemented in v1. Excel, CSV and document connectors follow later.
+
+#### Product type inference
+
+Xero items have no product type concept. During import, product types are inferred using rule-based keyword matching first, then an LLM classification call for unmatched items. The distributor confirms or corrects during the review step.
+
+#### Import job lifecycle
+
+Import jobs are tracked in the database: `Pending → Processing → AwaitingReview → Committed / Failed / Cancelled`. The review step is optional per source — trusted sources (e.g. scheduled Xero syncs) can auto-commit.
+
+---
+
 ### Xero
 
 Responsible for:
@@ -445,10 +495,11 @@ Responsible for:
 - customer balances
 - credit notes
 - accounting records
+- product item list (kept in sync by Wholo)
 
 Wholo remains responsible for:
 
-- product catalogue
+- product catalogue (source of truth)
 - ordering
 - customer-specific pricing
 - stock availability
