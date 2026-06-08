@@ -20,14 +20,43 @@ enum Role {
   TRADE_CUSTOMER
 }
 
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum TradeRelationshipStatus {
+  PENDING_INVITE
+  PENDING_REQUEST
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
 model Organisation {
-  id          String           @id @default(cuid())
-  name        String
-  type        OrganisationType
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  deletedAt   DateTime?
-  memberships Membership[]
+  id                              String              @id @default(cuid())
+  name                            String
+  type                            OrganisationType
+  email                           String?
+  phone                           String?
+  createdAt                       DateTime            @default(now())
+  updatedAt                       DateTime            @updatedAt
+  deletedAt                       DateTime?
+  memberships                     Membership[]
+  productTypes                    ProductType[]       @relation("DistributorProductTypes")
+  suppliers                       Supplier[]          @relation("DistributorSuppliers")
+  products                        Product[]           @relation("DistributorProducts")
+  tradeRelationshipsAsDistributor TradeRelationship[] @relation("DistributorRelationships")
+  tradeRelationshipsAsCustomer    TradeRelationship[] @relation("CustomerRelationships")
+  customerInvitations             CustomerInvitation[]
 
   @@map("organisations")
 }
@@ -71,4 +100,127 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id])
 
   @@map("refresh_tokens")
+}
+
+model ProductType {
+  id            String       @id @default(cuid())
+  distributorId String
+  name          String
+  code          String
+  displayOrder  Int          @default(0)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  distributor   Organisation @relation("DistributorProductTypes", fields: [distributorId], references: [id])
+  products      Product[]
+
+  @@unique([distributorId, code])
+  @@index([distributorId])
+  @@map("product_types")
+}
+
+model Supplier {
+  id            String       @id @default(cuid())
+  distributorId String
+  name          String
+  deletedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  distributor   Organisation @relation("DistributorSuppliers", fields: [distributorId], references: [id])
+  products      Product[]
+
+  @@index([distributorId])
+  @@map("suppliers")
+}
+
+model Product {
+  id                 String                     @id @default(cuid())
+  distributorId      String
+  productTypeId      String?
+  supplierId         String?
+  name               String
+  description        String?
+  sku                String?
+  status             ProductStatus              @default(DRAFT)
+  price              Decimal?                   @db.Decimal(10, 2)
+  compareAtPrice     Decimal?                   @db.Decimal(10, 2)
+  deletedAt          DateTime?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  distributor        Organisation               @relation("DistributorProducts", fields: [distributorId], references: [id])
+  productType        ProductType?               @relation(fields: [productTypeId], references: [id])
+  supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
+  externalReferences ProductExternalReference[]
+
+  @@unique([distributorId, sku])
+  @@index([distributorId, createdAt])
+  @@index([distributorId, deletedAt])
+  @@map("products")
+}
+
+model ProductExternalReference {
+  id            String   @id @default(cuid())
+  productId     String
+  distributorId String
+  source        String
+  externalId    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  product       Product  @relation(fields: [productId], references: [id])
+
+  @@unique([productId, source])
+  @@index([distributorId, source])
+  @@map("product_external_references")
+}
+
+model TradeRelationship {
+  id               String                  @id @default(cuid())
+  distributorId    String
+  customerId       String
+  status           TradeRelationshipStatus @default(PENDING_INVITE)
+  accountNumber    String?
+  creditLimit      Decimal?                @db.Decimal(10, 2)
+  paymentTerms     String?
+  notes            String?
+  deliveryLine1    String?
+  deliveryLine2    String?
+  deliveryCity     String?
+  deliveryState    String?
+  deliveryPostcode String?
+  deliveryCountry  String?
+  billingLine1     String?
+  billingLine2     String?
+  billingCity      String?
+  billingState     String?
+  billingPostcode  String?
+  billingCountry   String?
+  deletedAt        DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  distributor      Organisation            @relation("DistributorRelationships", fields: [distributorId], references: [id])
+  customer         Organisation            @relation("CustomerRelationships", fields: [customerId], references: [id])
+  invitations      CustomerInvitation[]
+
+  @@unique([distributorId, customerId])
+  @@index([distributorId, createdAt])
+  @@index([distributorId, status])
+  @@map("trade_relationships")
+}
+
+model CustomerInvitation {
+  id                  String            @id @default(cuid())
+  tradeRelationshipId String
+  distributorId       String
+  email               String
+  token               String            @unique
+  status              InvitationStatus  @default(PENDING)
+  expiresAt           DateTime
+  acceptedAt          DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  tradeRelationship   TradeRelationship @relation(fields: [tradeRelationshipId], references: [id])
+  distributor         Organisation      @relation(fields: [distributorId], references: [id])
+
+  @@index([token])
+  @@index([distributorId])
+  @@map("customer_invitations")
 }

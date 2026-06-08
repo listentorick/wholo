@@ -3,6 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { ProductTypesModule } from './product-types/product-types.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
+import { ProductsModule } from './products/products.module';
+import { CustomersModule } from './customers/customers.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -11,6 +15,10 @@ import { HealthController } from './health.controller';
     PrismaModule,
     UsersModule,
     AuthModule,
+    ProductTypesModule,
+    SuppliersModule,
+    ProductsModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
 })

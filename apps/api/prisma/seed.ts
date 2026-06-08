@@ -72,7 +72,53 @@ async function main() {
     },
   });
 
-  console.log(`Seeded: distributor "${distributor.name}", user "${user.email}", admin "${adminUser.email}"`);
+  // Product types for Vine & Co
+  const productTypeData = [
+    { id: 'seed-pt-wine', name: 'Wine', code: 'wine', displayOrder: 1 },
+    { id: 'seed-pt-beer', name: 'Beer', code: 'beer', displayOrder: 2 },
+    { id: 'seed-pt-spirits', name: 'Spirits', code: 'spirits', displayOrder: 3 },
+    { id: 'seed-pt-cider', name: 'Cider', code: 'cider', displayOrder: 4 },
+    { id: 'seed-pt-non-alc', name: 'Non-Alcoholic', code: 'non-alcoholic', displayOrder: 5 },
+  ];
+
+  for (const pt of productTypeData) {
+    await prisma.productType.upsert({
+      where: { distributorId_code: { distributorId: distributor.id, code: pt.code } },
+      update: { name: pt.name, displayOrder: pt.displayOrder },
+      create: {
+        id: pt.id,
+        distributorId: distributor.id,
+        name: pt.name,
+        code: pt.code,
+        displayOrder: pt.displayOrder,
+      },
+    });
+  }
+
+  // Suppliers for Vine & Co
+  const supplierData = [
+    { id: 'seed-sup-1', name: 'LeafyLegacy' },
+    { id: 'seed-sup-2', name: 'Artisan Beverages Co' },
+    { id: 'seed-sup-3', name: 'Southern Cellars' },
+  ];
+
+  for (const sup of supplierData) {
+    await prisma.supplier.upsert({
+      where: { id: sup.id },
+      update: { name: sup.name },
+      create: {
+        id: sup.id,
+        distributorId: distributor.id,
+        name: sup.name,
+      },
+    });
+  }
+
+  console.log(
+    `Seeded: distributor "${distributor.name}", ` +
+    `user "${user.email}", admin "${adminUser.email}", ` +
+    `${productTypeData.length} product types, ${supplierData.length} suppliers`,
+  );
 }
 
 main()
