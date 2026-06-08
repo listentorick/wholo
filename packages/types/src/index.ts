@@ -83,6 +83,40 @@ export interface ProductListParams {
   status?: ProductStatus;
 }
 
+// ─── Catalogue (customer-facing) ─────────────────────────────────────────────
+
+export interface CatalogueProductType {
+  id: string;
+  name: string;
+  code: string;
+}
+
+export interface CatalogueProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  sku: string | null;
+  price: string | null;
+  compareAtPrice: string | null;
+  productType: CatalogueProductType | null;
+}
+
+export interface CatalogueProductsParams {
+  limit?: number;
+  cursor?: string;
+  productTypeCode?: string;
+}
+
+export interface CatalogueProductsResponse {
+  distributor: { id: string; name: string };
+  data: CatalogueProduct[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    total: number;
+  };
+}
+
 export interface CreateProductRequest {
   name: string;
   description?: string;

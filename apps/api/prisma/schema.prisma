@@ -44,6 +44,7 @@ enum InvitationStatus {
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
+  slug                            String?             @unique
   type                            OrganisationType
   email                           String?
   phone                           String?

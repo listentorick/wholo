@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,6 +18,12 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [apiError, setApiError] = useState<string | null>(null);
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setReturnUrl(params.get('returnUrl'));
+  }, []);
 
   const {
     register,
@@ -29,7 +35,7 @@ export default function LoginPage() {
     setApiError(null);
     try {
       await login(data.email, data.password);
-      router.push('/');
+      router.push(returnUrl ?? '/');
     } catch (err) {
       setApiError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
     }
