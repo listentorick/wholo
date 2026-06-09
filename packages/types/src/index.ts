@@ -256,3 +256,60 @@ export interface InviteResponse {
   inviteUrl: string;
   expiresAt: string;
 }
+
+// ─── Catalogues ───────────────────────────────────────────────────────────────
+
+export interface CatalogueProductEntry {
+  product: {
+    id: string;
+    name: string;
+    sku: string | null;
+    status: ProductStatus;
+    price: string | null;
+    productType: { id: string; name: string; code: string } | null;
+  };
+}
+
+export interface Catalogue {
+  id: string;
+  distributorId: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  products: CatalogueProductEntry[];
+  _count: { customers: number };
+}
+
+export interface CatalogueSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  _count: { products: number; customers: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerCatalogueSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  _count: { products: number };
+}
+
+export interface CreateCatalogueRequest {
+  name: string;
+  description?: string;
+  productIds?: string[];
+}
+
+export interface UpdateCatalogueRequest {
+  name?: string;
+  description?: string;
+  productIds: string[];
+}
+
+export interface CatalogueListParams {
+  limit?: number;
+  cursor?: string;
+}

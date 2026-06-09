@@ -62,6 +62,7 @@ model Organisation {
   productTypes                    ProductType[]       @relation("DistributorProductTypes")
   suppliers                       Supplier[]          @relation("DistributorSuppliers")
   products                        Product[]           @relation("DistributorProducts")
+  catalogues                      Catalogue[]         @relation("DistributorCatalogues")
   tradeRelationshipsAsDistributor TradeRelationship[] @relation("DistributorRelationships")
   tradeRelationshipsAsCustomer    TradeRelationship[] @relation("CustomerRelationships")
   customerInvitations             CustomerInvitation[]
@@ -161,6 +162,7 @@ model Product {
   supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
   externalReferences ProductExternalReference[]
   orderItems         OrderItem[]
+  catalogues         CatalogueProduct[]
 
   @@unique([distributorId, sku])
   @@index([distributorId, createdAt])
@@ -210,6 +212,7 @@ model TradeRelationship {
   distributor      Organisation            @relation("DistributorRelationships", fields: [distributorId], references: [id])
   customer         Organisation            @relation("CustomerRelationships", fields: [customerId], references: [id])
   invitations      CustomerInvitation[]
+  catalogues       CustomerCatalogue[]
 
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
@@ -266,4 +269,42 @@ model OrderItem {
 
   @@unique([orderId, productId])
   @@map("order_items")
+}
+
+model Catalogue {
+  id            String              @id @default(cuid())
+  distributorId String
+  name          String
+  description   String?
+  deletedAt     DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  distributor   Organisation        @relation("DistributorCatalogues", fields: [distributorId], references: [id])
+  products      CatalogueProduct[]
+  customers     CustomerCatalogue[]
+
+  @@index([distributorId])
+  @@map("catalogues")
+}
+
+model CatalogueProduct {
+  catalogueId String
+  productId   String
+  createdAt   DateTime  @default(now())
+  catalogue   Catalogue @relation(fields: [catalogueId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@id([catalogueId, productId])
+  @@map("catalogue_products")
+}
+
+model CustomerCatalogue {
+  tradeRelationshipId String
+  catalogueId         String
+  createdAt           DateTime          @default(now())
+  tradeRelationship   TradeRelationship @relation(fields: [tradeRelationshipId], references: [id])
+  catalogue           Catalogue         @relation(fields: [catalogueId], references: [id])
+
+  @@id([tradeRelationshipId, catalogueId])
+  @@map("customer_catalogues")
 }

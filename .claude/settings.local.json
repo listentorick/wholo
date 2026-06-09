@@ -15,7 +15,13 @@
       "Bash(kubectl logs *)",
       "Bash(kubectl rollout *)",
       "Bash(kubectl exec *)",
-      "Bash(kubectl wait *)"
+      "Bash(kubectl wait *)",
+      "Bash(npx prisma *)",
+      "Bash(DATABASE_URL=\"postgresql://wholo:wholo@10.99.114.60:5432/wholo\" npx *)",
+      "Bash(kubectl port-forward *)",
+      "Bash(DATABASE_URL=\"postgresql://wholo:wholo@localhost:5432/wholo\" npx --prefix /mnt/c/sourcecode/source/wholo/apps/api prisma migrate dev --name add_catalogues --schema /mnt/c/sourcecode/source/wholo/apps/api/prisma/schema.prisma)",
+      "Bash(wait)",
+      "Bash(DATABASE_URL=\"postgresql://wholo:wholo@localhost:5432/wholo\" npx prisma generate)"
     ]
   }
 }

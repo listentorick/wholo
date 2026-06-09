@@ -72,7 +72,7 @@ adminApi:
     expiresIn: "15m"
   refreshToken:
     expiresDays: "30"
-  centralApiUrl: "http://localhost:3001"
+  centralApiUrl: "http://wholo-api:3001"
 
 admin:
   image:

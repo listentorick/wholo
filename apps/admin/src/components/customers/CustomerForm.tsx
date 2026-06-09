@@ -7,6 +7,7 @@ import { z } from 'zod';
 import Link from 'next/link';
 import { TradeRelationshipStatus, InvitationStatus } from '@wholo/types';
 import type { Customer, CreateCustomerRequest, InviteResponse } from '@wholo/types';
+import { CustomerCatalogues } from './CustomerCatalogues';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,6 @@ const schema = z.object({
       'Enter a valid amount (e.g. 5000.00)',
     ),
   paymentTerms: z.string().optional(),
-  notes: z.string().optional(),
   deliveryLine1: z.string().optional(),
   deliveryLine2: z.string().optional(),
   deliveryCity: z.string().optional(),
@@ -176,7 +176,7 @@ interface CustomerFormProps {
   onInvite?: () => Promise<InviteResponse>;
 }
 
-export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onDelete, onInvite }: CustomerFormProps) {
+export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, onInvite }: CustomerFormProps) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -197,7 +197,6 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
       accountNumber: initialValues?.accountNumber ?? '',
       creditLimit: initialValues?.creditLimit ?? '',
       paymentTerms: initialValues?.paymentTerms ?? '',
-      notes: initialValues?.notes ?? '',
       deliveryLine1: initialValues?.deliveryLine1 ?? '',
       deliveryLine2: initialValues?.deliveryLine2 ?? '',
       deliveryCity: initialValues?.deliveryCity ?? '',
@@ -223,7 +222,6 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
         paymentTerms: data.paymentTerms || undefined,
-        notes: data.notes || undefined,
         deliveryLine1: data.deliveryLine1 || undefined,
         deliveryLine2: data.deliveryLine2 || undefined,
         deliveryCity: data.deliveryCity || undefined,
@@ -339,9 +337,9 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
       </div>
 
       <form onSubmit={handleSubmit(onFormSubmit)} noValidate>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_288px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_256px]">
 
-          {/* ── Left column ── */}
+          {/* ── Left column — data ── */}
           <div className="space-y-5">
             <FormCard title="Business details">
               <div className="space-y-4">
@@ -381,17 +379,6 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
               </div>
             </FormCard>
 
-            <FormCard title="Delivery address">
-              <AddressGrid prefix="delivery" register={register} disabled={disabled} />
-            </FormCard>
-
-            <FormCard title="Billing address">
-              <AddressGrid prefix="billing" register={register} disabled={disabled} />
-            </FormCard>
-          </div>
-
-          {/* ── Right column ── */}
-          <div className="space-y-5">
             <FormCard title="Account details">
               <div className="space-y-4">
                 <div>
@@ -431,18 +418,22 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
               </div>
             </FormCard>
 
-            <FormCard title="Notes">
-              <textarea
-                id="notes"
-                rows={4}
-                placeholder="Internal notes about this customer…"
-                disabled={disabled}
-                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                {...register('notes')}
-              />
+            <FormCard title="Delivery address">
+              <AddressGrid prefix="delivery" register={register} disabled={disabled} />
             </FormCard>
 
-            {/* Invitation status card (edit mode only) */}
+            <FormCard title="Billing address">
+              <AddressGrid prefix="billing" register={register} disabled={disabled} />
+            </FormCard>
+
+            {/* Catalogues (edit mode only) */}
+            {mode === 'edit' && initialValues && (
+              <FormCard title="Catalogues">
+                <CustomerCatalogues customerId={initialValues.id} token={token} />
+              </FormCard>
+            )}
+
+            {/* Portal access (edit mode only) */}
             {mode === 'edit' && (
               <FormCard title="Portal access">
                 {inv ? (
@@ -493,6 +484,44 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
                 )}
               </FormCard>
             )}
+          </div>
+
+          {/* ── Right column — actions ── */}
+          <div className="space-y-5">
+            {/* Save / Discard */}
+            <FormCard>
+              <div className="space-y-2">
+                {apiError && (
+                  <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {apiError}
+                  </div>
+                )}
+                {!inviteUrl ? (
+                  <>
+                    <button
+                      type="submit"
+                      disabled={disabled}
+                      className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+                    >
+                      {isSubmitting ? 'Saving…' : mode === 'create' ? 'Save customer' : 'Save changes'}
+                    </button>
+                    <Link
+                      href="/customers"
+                      className="block w-full rounded-md px-4 py-2 text-center text-sm font-medium text-muted transition-colors hover:text-text"
+                    >
+                      Discard
+                    </Link>
+                  </>
+                ) : (
+                  <Link
+                    href="/customers"
+                    className="block w-full rounded-md bg-primary px-4 py-2 text-center text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+                  >
+                    Done
+                  </Link>
+                )}
+              </div>
+            </FormCard>
 
             {/* Danger zone (edit mode only) */}
             {mode === 'edit' && onDelete && (
@@ -531,40 +560,6 @@ export function CustomerForm({ mode, token: _token, initialValues, onSubmit, onD
             )}
           </div>
         </div>
-
-        {/* Form actions */}
-        {apiError && (
-          <div className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {apiError}
-          </div>
-        )}
-        {!inviteUrl && (
-          <div className="mt-5 flex items-center justify-end gap-3 border-t border-border pt-5">
-            <Link
-              href="/customers"
-              className="rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
-            >
-              Discard
-            </Link>
-            <button
-              type="submit"
-              disabled={disabled}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              {isSubmitting ? 'Saving…' : mode === 'create' ? 'Save customer' : 'Save changes'}
-            </button>
-          </div>
-        )}
-        {inviteUrl && (
-          <div className="mt-5 flex items-center justify-end gap-3 border-t border-border pt-5">
-            <Link
-              href="/customers"
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-            >
-              Done
-            </Link>
-          </div>
-        )}
       </form>
     </>
   );

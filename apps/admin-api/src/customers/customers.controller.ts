@@ -5,6 +5,7 @@ import {
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
+import { ApiClientService } from '../api-client/api-client.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
@@ -12,7 +13,10 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(private customersService: CustomersService) {}
+  constructor(
+    private customersService: CustomersService,
+    private api: ApiClientService,
+  ) {}
 
   @Get()
   findAll(@Req() req: Request, @Query() query: CustomerQueryDto) {
@@ -49,5 +53,34 @@ export class CustomersController {
   invite(@Req() req: Request, @Param('id') id: string) {
     const { organisationId } = req.user as { organisationId: string };
     return this.customersService.invite(id, organisationId);
+  }
+
+  // ── Catalogue assignment — proxied to apps/api ────────────────────────────
+
+  @Get(':id/catalogues')
+  getCatalogues(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.api.get(`/admin/trade-relationships/${id}/catalogues`, organisationId);
+  }
+
+  @Post(':id/catalogues/:catalogueId')
+  assignCatalogue(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('catalogueId') catalogueId: string,
+  ) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.api.post(`/admin/trade-relationships/${id}/catalogues/${catalogueId}`, organisationId);
+  }
+
+  @Delete(':id/catalogues/:catalogueId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  unassignCatalogue(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('catalogueId') catalogueId: string,
+  ) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.api.delete(`/admin/trade-relationships/${id}/catalogues/${catalogueId}`, organisationId);
   }
 }

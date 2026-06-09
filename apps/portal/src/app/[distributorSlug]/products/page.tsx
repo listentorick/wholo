@@ -18,7 +18,7 @@ export default function CataloguePage() {
   const distributorSlug = params.distributorSlug as string;
   const pathname = usePathname();
 
-  const { user, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
+  const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
@@ -26,15 +26,15 @@ export default function CataloguePage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !accessToken) return;
     setFetchLoading(true);
     setFetchError(null);
     catalogueApi
-      .getProducts(distributorSlug)
+      .getProducts(distributorSlug, accessToken)
       .then(setCatalogue)
       .catch(() => setFetchError('Failed to load products. Please try again.'))
       .finally(() => setFetchLoading(false));
-  }, [distributorSlug, user]);
+  }, [distributorSlug, user, accessToken]);
 
   const getQty = (id: string) => quantities[id] ?? 1;
 

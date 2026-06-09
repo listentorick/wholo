@@ -7,11 +7,14 @@ import { ProductTypesModule } from './product-types/product-types.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
+import { CataloguesModule } from './catalogues/catalogues.module';
+import { ApiClientModule } from './api-client/api-client.module';
 import { HealthController } from './health.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ApiClientModule,
     PrismaModule,
     UsersModule,
     AuthModule,
@@ -19,6 +22,7 @@ import { HealthController } from './health.controller';
     SuppliersModule,
     ProductsModule,
     CustomersModule,
+    CataloguesModule,
   ],
   controllers: [HealthController],
 })

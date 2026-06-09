@@ -1,4 +1,6 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
 import { CatalogueService } from './catalogue.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
@@ -11,8 +13,10 @@ export class CatalogueController {
     return this.catalogueService.getDistributor(slug);
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Get(':slug/products')
-  getProducts(@Param('slug') slug: string, @Query() query: CatalogueQueryDto) {
-    return this.catalogueService.getProducts(slug, query);
+  getProducts(@Req() req: Request, @Param('slug') slug: string, @Query() query: CatalogueQueryDto) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.catalogueService.getProducts(slug, query, organisationId);
   }
 }

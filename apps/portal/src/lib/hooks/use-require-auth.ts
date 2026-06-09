@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 
 export function useRequireAuth(returnUrl?: string) {
-  const { user, isLoading } = useAuth();
+  const { user, accessToken, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -17,5 +17,5 @@ export function useRequireAuth(returnUrl?: string) {
     }
   }, [user, isLoading, router, returnUrl]);
 
-  return { user, isLoading };
+  return { user, accessToken, isLoading };
 }

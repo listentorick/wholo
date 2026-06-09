@@ -8,6 +8,7 @@ export const catalogueApi = {
 
   getProducts(
     distributorSlug: string,
+    token: string,
     params?: CatalogueProductsParams,
   ): Promise<CatalogueProductsResponse> {
     const query = new URLSearchParams();
@@ -17,6 +18,7 @@ export const catalogueApi = {
     const qs = query.toString();
     return apiFetch<CatalogueProductsResponse>(
       `/api/v1/catalogue/${distributorSlug}/products${qs ? `?${qs}` : ''}`,
+      { token },
     );
   },
 };
