@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
+import { PageSubHeader } from '@/components/PageSubHeader';
+
 export default function CheckoutPage() {
   const params = useParams();
   const distributorSlug = params.distributorSlug as string;
@@ -54,6 +56,7 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <>
+        <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
         <style>{`
           @keyframes co-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
           .co-empty { animation: co-fade-up 0.4s ease both 0.1s; }
@@ -100,10 +103,8 @@ export default function CheckoutPage() {
   return (
     <>
       <style>{`
-        @keyframes co-fade-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes co-fade-up   { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes co-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        .co-title   { animation: co-fade-down 0.3s ease both; }
         .co-section { animation: co-fade-up 0.35s ease both; }
 
         .co-stepper-btn {
@@ -172,21 +173,9 @@ export default function CheckoutPage() {
         }
       `}</style>
 
-      <div className="co-shell w-full flex flex-col pb-10">
+      <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-        {/* Sub-header: back nav + page title */}
-        <div className="co-title w-full border-b border-[#E5E7EB] flex items-center justify-between px-4 py-2.5">
-          <button
-            className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide"
-            onClick={() => router.push(`/${distributorSlug}/products`)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Products
-          </button>
-          <span className="text-sm font-medium text-[#1A1A1A]">Checkout</span>
-        </div>
+      <div className="co-shell w-full flex flex-col pb-10">
 
         {/* Product list */}
         <div className="co-section" style={{ animationDelay: '0.05s' }}>

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { catalogueApi } from '@wholo/api-client';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
+import { PageSubHeader } from '@/components/PageSubHeader';
 
 function formatPrice(price: string | null): string {
   if (price === null) return 'Price on request';
@@ -16,7 +17,6 @@ export default function CataloguePage() {
   const params = useParams();
   const distributorSlug = params.distributorSlug as string;
   const pathname = usePathname();
-  const router = useRouter();
 
   const { user, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
@@ -57,12 +57,7 @@ export default function CataloguePage() {
           from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes fadeDown {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
 
-        .cat-subheader  { animation: fadeDown 0.3s ease both; }
         .cat-product-row { animation: fadeUp 0.35s ease both; }
 
         .stepper-btn {
@@ -107,19 +102,7 @@ export default function CataloguePage() {
         }
       `}</style>
 
-      {/* Sub-header: breadcrumb + page title */}
-      <div className="cat-subheader w-full border-b border-[#E5E7EB] flex items-center justify-between px-4 py-2.5">
-        <button
-          className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide"
-          onClick={() => router.push(`/${distributorSlug}`)}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Home
-        </button>
-        <span className="text-sm font-medium text-[#1A1A1A]">All Products</span>
-      </div>
+      <PageSubHeader backLabel="Home" backHref={`/${distributorSlug}`} title="All Products" />
 
       {/* Product list */}
       <div className="cat-shell flex-1 w-full">
