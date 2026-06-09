@@ -1,7 +1,11 @@
-import type { CatalogueProductsParams, CatalogueProductsResponse } from '@wholo/types';
+import type { CatalogueProductsParams, CatalogueProductsResponse, DistributorInfo } from '@wholo/types';
 import { apiFetch } from './base';
 
 export const catalogueApi = {
+  getDistributor(distributorSlug: string): Promise<DistributorInfo> {
+    return apiFetch<DistributorInfo>(`/api/v1/catalogue/${distributorSlug}`);
+  },
+
   getProducts(
     distributorSlug: string,
     params?: CatalogueProductsParams,

@@ -41,6 +41,13 @@ enum InvitationStatus {
   REVOKED
 }
 
+enum OrderStatus {
+  DRAFT
+  PLACED
+  CONFIRMED
+  CANCELLED
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -58,6 +65,8 @@ model Organisation {
   tradeRelationshipsAsDistributor TradeRelationship[] @relation("DistributorRelationships")
   tradeRelationshipsAsCustomer    TradeRelationship[] @relation("CustomerRelationships")
   customerInvitations             CustomerInvitation[]
+  ordersAsDistributor             Order[]             @relation("DistributorOrders")
+  ordersAsCustomer                Order[]             @relation("CustomerOrders")
 
   @@map("organisations")
 }
@@ -151,6 +160,7 @@ model Product {
   productType        ProductType?               @relation(fields: [productTypeId], references: [id])
   supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
   externalReferences ProductExternalReference[]
+  orderItems         OrderItem[]
 
   @@unique([distributorId, sku])
   @@index([distributorId, createdAt])
@@ -224,4 +234,36 @@ model CustomerInvitation {
   @@index([token])
   @@index([distributorId])
   @@map("customer_invitations")
+}
+
+model Order {
+  id            String      @id @default(cuid())
+  distributorId String
+  customerId    String
+  status        OrderStatus @default(DRAFT)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  distributor   Organisation @relation("DistributorOrders", fields: [distributorId], references: [id])
+  customer      Organisation @relation("CustomerOrders", fields: [customerId], references: [id])
+  items         OrderItem[]
+
+  @@unique([distributorId, customerId, status])
+  @@index([distributorId, status])
+  @@index([customerId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order     Order    @relation(fields: [orderId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+  @@map("order_items")
 }

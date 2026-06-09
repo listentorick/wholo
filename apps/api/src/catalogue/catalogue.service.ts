@@ -16,6 +16,15 @@ const catalogueProductInclude = {
 export class CatalogueService {
   constructor(private prisma: PrismaService) {}
 
+  async getDistributor(distributorSlug: string) {
+    const distributor = await this.prisma.organisation.findFirst({
+      where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!distributor) throw new NotFoundException('Distributor not found');
+    return distributor;
+  }
+
   async getProducts(distributorSlug: string, query: CatalogueQueryDto) {
     const distributor = await this.prisma.organisation.findFirst({
       where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },

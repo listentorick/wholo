@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, usePathname } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { catalogueApi } from '@wholo/api-client';
+import { useAuth } from '@/lib/auth-context';
+import { catalogueApi, cartApi } from '@wholo/api-client';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
 
 function formatPrice(price: string | null): string {
@@ -15,15 +16,19 @@ export default function CataloguePage() {
   const params = useParams();
   const distributorSlug = params.distributorSlug as string;
   const pathname = usePathname();
+  const router = useRouter();
 
   const { user, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
+  const { accessToken } = useAuth();
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [inCart, setInCart] = useState<Set<string>>(new Set());
+  const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
 
+  // Load products
   useEffect(() => {
     if (!user) return;
     setFetchLoading(true);
@@ -35,6 +40,24 @@ export default function CataloguePage() {
       .finally(() => setFetchLoading(false));
   }, [distributorSlug, user]);
 
+  // Load cart from server on mount
+  useEffect(() => {
+    if (!user || !accessToken) return;
+    cartApi
+      .getCart(distributorSlug, accessToken)
+      .then((cart) => {
+        const qtys: Record<string, number> = {};
+        const ids = new Set<string>();
+        for (const item of cart.items) {
+          qtys[item.productId] = item.quantity;
+          ids.add(item.productId);
+        }
+        setQuantities(qtys);
+        setInCart(ids);
+      })
+      .catch(() => {});
+  }, [distributorSlug, user, accessToken]);
+
   const getQty = (id: string) => quantities[id] ?? 1;
 
   const adjustQty = (id: string, delta: number) => {
@@ -44,11 +67,45 @@ export default function CataloguePage() {
     }));
   };
 
-  const handleAdd = (id: string) => {
-    setInCart((prev) => new Set([...prev, id]));
-  };
+  const syncItem = useCallback(
+    async (productId: string, quantity: number) => {
+      if (!accessToken) return;
+      setSavingItems((prev) => new Set([...prev, productId]));
 
-  const cartCount = [...inCart].reduce((sum, id) => sum + getQty(id), 0);
+      // Optimistic update
+      setInCart((prev) => new Set([...prev, productId]));
+      setQuantities((prev) => ({ ...prev, [productId]: quantity }));
+
+      try {
+        const cart = await cartApi.upsertItem({ distributorSlug, productId, quantity }, accessToken);
+        // Reconcile with server response
+        const qtys: Record<string, number> = {};
+        const ids = new Set<string>();
+        for (const item of cart.items) {
+          qtys[item.productId] = item.quantity;
+          ids.add(item.productId);
+        }
+        setQuantities((prev) => ({ ...prev, ...qtys }));
+        setInCart(ids);
+      } catch {
+        // Revert optimistic update on error
+        setInCart((prev) => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      } finally {
+        setSavingItems((prev) => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+      }
+    },
+    [accessToken, distributorSlug],
+  );
+
+  const cartCount = [...inCart].reduce((sum, id) => sum + (quantities[id] ?? 1), 0);
 
   if (authLoading || (user && fetchLoading)) {
     return (
@@ -115,6 +172,7 @@ export default function CataloguePage() {
         }
         .order-btn:hover  { background: #D97036; color: #fff; }
         .order-btn:active { background: #C4622A; border-color: #C4622A; color: #fff; }
+        .order-btn:disabled { opacity: 0.55; cursor: default; }
 
         /* Cart badge */
         .cart-badge {
@@ -153,8 +211,7 @@ export default function CataloguePage() {
       <div className="flex min-h-screen flex-col bg-white">
 
         {/* ── Top nav ────────────────────────────────────────────── */}
-        <nav className="cat-nav sticky top-0 z-20 w-full bg-white border-b border-[#E5E7EB]">
-          <div className="cat-shell flex items-center justify-between px-4 py-3.5">
+        <nav className="cat-nav sticky top-0 z-20 w-full bg-white border-b border-[#E5E7EB] flex items-center justify-between px-4 py-3.5">
 
             {/* Left: hamburger + search */}
             <div className="flex items-center gap-1">
@@ -198,20 +255,20 @@ export default function CataloguePage() {
               </svg>
             </button>
 
-          </div>
         </nav>
 
         {/* ── Category sub-header ─────────────────────────────────── */}
-        <div className="cat-subheader w-full border-b border-[#E5E7EB]">
-          <div className="cat-shell flex items-center justify-between px-4 py-2.5">
-            <button className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              Categories
-            </button>
-            <span className="text-sm font-medium text-[#1A1A1A]">All Products</span>
-          </div>
+        <div className="cat-subheader w-full border-b border-[#E5E7EB] flex items-center justify-between px-4 py-2.5">
+          <button
+            className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide"
+            onClick={() => router.push(`/${distributorSlug}`)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Home
+          </button>
+          <span className="text-sm font-medium text-[#1A1A1A]">All Products</span>
         </div>
 
         {/* ── Product list ─────────────────────────────────────────── */}
@@ -230,6 +287,7 @@ export default function CataloguePage() {
               {products.map((product, i) => {
                 const qty = getQty(product.id);
                 const added = inCart.has(product.id);
+                const saving = savingItems.has(product.id);
                 const delay = Math.min(0.08 + i * 0.04, 0.52);
 
                 return (
@@ -289,9 +347,10 @@ export default function CataloguePage() {
 
                         <button
                           className="order-btn"
-                          onClick={() => !added && handleAdd(product.id)}
+                          disabled={saving || product.price === null}
+                          onClick={() => syncItem(product.id, qty)}
                         >
-                          {added ? 'Update' : 'Add'}
+                          {saving ? '…' : added ? 'Update' : 'Add'}
                         </button>
                       </div>
                     </div>

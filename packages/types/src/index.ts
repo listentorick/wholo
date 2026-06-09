@@ -33,6 +33,33 @@ export interface ProblemDetail {
   detail: string;
 }
 
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+export enum OrderStatus {
+  DRAFT = 'DRAFT',
+  PLACED = 'PLACED',
+  CONFIRMED = 'CONFIRMED',
+  CANCELLED = 'CANCELLED',
+}
+
+export interface CartItem {
+  productId: string;
+  quantity: number;
+  unitPrice: string;
+  product: { id: string; name: string; sku: string | null };
+}
+
+export interface CartResponse {
+  orderId: string;
+  items: CartItem[];
+}
+
+export interface UpsertCartItemRequest {
+  distributorSlug: string;
+  productId: string;
+  quantity: number;
+}
+
 // ─── Products ────────────────────────────────────────────────────────────────
 
 export enum ProductStatus {
@@ -105,6 +132,12 @@ export interface CatalogueProductsParams {
   limit?: number;
   cursor?: string;
   productTypeCode?: string;
+}
+
+export interface DistributorInfo {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 export interface CatalogueProductsResponse {

@@ -1,7 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
+import { catalogueApi } from '@wholo/api-client';
+import type { DistributorInfo } from '@wholo/types';
 
 export default function DistributorHomePage() {
   const params = useParams();
@@ -10,6 +13,12 @@ export default function DistributorHomePage() {
   const router = useRouter();
 
   const { user, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
+  const [distributor, setDistributor] = useState<DistributorInfo | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    catalogueApi.getDistributor(distributorSlug).then(setDistributor).catch(() => {});
+  }, [distributorSlug, user]);
 
   if (isLoading) {
     return (
@@ -141,7 +150,7 @@ export default function DistributorHomePage() {
           </button>
 
           <button className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-[#1A1A1A]">
-            {user.organisationName}
+            {distributor?.name ?? distributorSlug}
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 text-[#9CA3AF]">
               <polyline points="6 9 12 15 18 9" />
             </svg>
