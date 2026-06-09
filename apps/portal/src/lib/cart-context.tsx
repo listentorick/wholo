@@ -2,10 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { cartApi } from '@wholo/api-client';
+import type { CartItem } from '@wholo/types';
 import { useAuth } from './auth-context';
 
 interface CartContextValue {
+  cartLoading: boolean;
   cartCount: number;
+  items: CartItem[];
   quantities: Record<string, number>;
   inCart: Set<string>;
   savingItems: Set<string>;
@@ -23,26 +26,36 @@ export function CartProvider({
   children: React.ReactNode;
 }) {
   const { user, accessToken } = useAuth();
+  const [cartLoading, setCartLoading] = useState(false);
+  const [items, setItems] = useState<CartItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [inCart, setInCart] = useState<Set<string>>(new Set());
   const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
 
+  const reconcile = useCallback((cartItems: CartItem[]) => {
+    const qtys: Record<string, number> = {};
+    const ids = new Set<string>();
+    for (const item of cartItems) {
+      qtys[item.productId] = item.quantity;
+      ids.add(item.productId);
+    }
+    setItems(cartItems);
+    setQuantities(qtys);
+    setInCart(ids);
+  }, []);
+
   useEffect(() => {
-    if (!user || !accessToken) return;
+    if (!user || !accessToken) {
+      setCartLoading(false);
+      return;
+    }
+    setCartLoading(true);
     cartApi
       .getCart(distributorSlug, accessToken)
-      .then((cart) => {
-        const qtys: Record<string, number> = {};
-        const ids = new Set<string>();
-        for (const item of cart.items) {
-          qtys[item.productId] = item.quantity;
-          ids.add(item.productId);
-        }
-        setQuantities(qtys);
-        setInCart(ids);
-      })
-      .catch(() => {});
-  }, [distributorSlug, user, accessToken]);
+      .then((cart) => reconcile(cart.items))
+      .catch(() => {})
+      .finally(() => setCartLoading(false));
+  }, [distributorSlug, user, accessToken, reconcile]);
 
   const adjustQty = useCallback((productId: string, delta: number) => {
     setQuantities((prev) => ({
@@ -61,14 +74,7 @@ export function CartProvider({
 
       try {
         const cart = await cartApi.upsertItem({ distributorSlug, productId, quantity }, accessToken);
-        const qtys: Record<string, number> = {};
-        const ids = new Set<string>();
-        for (const item of cart.items) {
-          qtys[item.productId] = item.quantity;
-          ids.add(item.productId);
-        }
-        setQuantities((prev) => ({ ...prev, ...qtys }));
-        setInCart(ids);
+        reconcile(cart.items);
       } catch {
         setInCart((prev) => {
           const next = new Set(prev);
@@ -83,13 +89,13 @@ export function CartProvider({
         });
       }
     },
-    [accessToken, distributorSlug],
+    [accessToken, distributorSlug, reconcile],
   );
 
   const cartCount = [...inCart].reduce((sum, id) => sum + (quantities[id] ?? 1), 0);
 
   return (
-    <CartContext.Provider value={{ cartCount, quantities, inCart, savingItems, adjustQty, syncItem }}>
+    <CartContext.Provider value={{ cartLoading, cartCount, items, quantities, inCart, savingItems, adjustQty, syncItem }}>
       {children}
     </CartContext.Provider>
   );

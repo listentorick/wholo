@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { catalogueApi } from '@wholo/api-client';
 import { useCart } from '@/lib/cart-context';
 
 export function DistributorNav({ distributorSlug }: { distributorSlug: string }) {
   const { cartCount } = useCart();
+  const router = useRouter();
   const [distributorName, setDistributorName] = useState<string>(distributorSlug);
 
   useEffect(() => {
@@ -61,6 +63,7 @@ export function DistributorNav({ distributorSlug }: { distributorSlug: string })
 
         {/* Right: cart icon + badge */}
         <button
+          onClick={() => router.push(`/${distributorSlug}/checkout`)}
           className="relative flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
           aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`}
         >
