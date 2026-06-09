@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
-import { catalogueApi } from '@wholo/api-client';
-
 export default function CheckoutPage() {
   const params = useParams();
   const distributorSlug = params.distributorSlug as string;
@@ -15,18 +13,10 @@ export default function CheckoutPage() {
   const { user, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
   const { cartLoading, items, quantities, savingItems, syncItem } = useCart();
 
-  const [distributorName, setDistributorName] = useState('');
   const [poOpen, setPoOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [poNumber, setPoNumber] = useState('');
   const [comment, setComment] = useState('');
-
-  useEffect(() => {
-    catalogueApi
-      .getDistributor(distributorSlug)
-      .then((d) => setDistributorName(d.name))
-      .catch(() => {});
-  }, [distributorSlug]);
 
   const handleAdjust = (productId: string, delta: number) => {
     const current = quantities[productId] ?? 1;
@@ -184,11 +174,18 @@ export default function CheckoutPage() {
 
       <div className="co-shell w-full flex flex-col pb-10">
 
-        {/* Distributor name header */}
-        <div className="co-title py-4 px-4 text-center border-b border-[#E5E7EB]">
-          <h1 style={{ fontSize: 18, fontWeight: 300, letterSpacing: '0.02em', color: '#1A1A1A' }}>
-            {distributorName || distributorSlug}
-          </h1>
+        {/* Sub-header: back nav + page title */}
+        <div className="co-title w-full border-b border-[#E5E7EB] flex items-center justify-between px-4 py-2.5">
+          <button
+            className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide"
+            onClick={() => router.push(`/${distributorSlug}/products`)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Products
+          </button>
+          <span className="text-sm font-medium text-[#1A1A1A]">Checkout</span>
         </div>
 
         {/* Product list */}
