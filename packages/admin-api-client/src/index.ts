@@ -4,4 +4,5 @@ export { adminSuppliersApi } from './suppliers';
 export { adminProductsApi } from './products';
 export { adminCustomersApi } from './customers';
 export { adminCataloguesApi } from './catalogues';
+export { adminOrdersApi } from './orders';
 export { ApiError } from './base';

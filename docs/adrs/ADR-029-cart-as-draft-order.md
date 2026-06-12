@@ -1,6 +1,6 @@
 # ADR-029 — Cart as Draft Order
 
-**Status**: Accepted  
+**Status**: Superseded by ADR-031  
 **Date**: 2026-06-08  
 **Deciders**: Rick Walsh
 

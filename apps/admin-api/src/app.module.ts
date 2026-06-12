@@ -8,6 +8,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
 import { CataloguesModule } from './catalogues/catalogues.module';
+import { OrdersModule } from './orders/orders.module';
 import { ApiClientModule } from './api-client/api-client.module';
 import { HealthController } from './health.controller';
 
@@ -23,6 +24,7 @@ import { HealthController } from './health.controller';
     ProductsModule,
     CustomersModule,
     CataloguesModule,
+    OrdersModule,
   ],
   controllers: [HealthController],
 })

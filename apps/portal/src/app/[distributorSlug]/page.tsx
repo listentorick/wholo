@@ -44,7 +44,7 @@ export default function DistributorHomePage() {
     },
     {
       label: 'Orders',
-      onClick: () => {},
+      onClick: () => router.push(`/${distributorSlug}/orders`),
       icon: (
         <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.25} stroke="currentColor" className="h-7 w-7">
           <rect x="4" y="3" width="16" height="18" rx="2" />

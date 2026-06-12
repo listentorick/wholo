@@ -41,11 +41,46 @@ enum InvitationStatus {
   REVOKED
 }
 
-enum OrderStatus {
+// Cart backing data — temporary, cleared on submission
+enum CartOrderStatus {
   DRAFT
-  PLACED
-  CONFIRMED
+}
+
+// Commercial order statuses
+enum OrderStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
   CANCELLED
+  COMPLETED
+}
+
+enum OrderLineStatus {
+  SUBMITTED
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum OrderAcceptanceMode {
+  MANUAL
+  AUTO_ON_SUBMISSION
+}
+
+enum AcceptanceModeSource {
+  DISTRIBUTOR_DEFAULT
+  TRADER_CUSTOMER_OVERRIDE
+}
+
+enum AcceptedByActorType {
+  USER
+  SYSTEM
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PUBLISHED
+  FAILED
 }
 
 model Organisation {
@@ -66,8 +101,12 @@ model Organisation {
   tradeRelationshipsAsDistributor TradeRelationship[] @relation("DistributorRelationships")
   tradeRelationshipsAsCustomer    TradeRelationship[] @relation("CustomerRelationships")
   customerInvitations             CustomerInvitation[]
+  cartOrdersAsDistributor         CartOrder[]         @relation("DistributorCartOrders")
+  cartOrdersAsCustomer            CartOrder[]         @relation("CustomerCartOrders")
   ordersAsDistributor             Order[]             @relation("DistributorOrders")
   ordersAsCustomer                Order[]             @relation("CustomerOrders")
+  distributorSettings             DistributorSettings?
+  traderCustomerSettings          TraderCustomerSettings[] @relation("TraderCustomerSettingsCustomer")
 
   @@map("organisations")
 }
@@ -161,7 +200,8 @@ model Product {
   productType        ProductType?               @relation(fields: [productTypeId], references: [id])
   supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
   externalReferences ProductExternalReference[]
-  orderItems         OrderItem[]
+  cartOrderLines     CartOrderLine[]
+  orderLines         OrderLine[]
   catalogues         CatalogueProduct[]
 
   @@unique([distributorId, sku])
@@ -213,6 +253,7 @@ model TradeRelationship {
   customer         Organisation            @relation("CustomerRelationships", fields: [customerId], references: [id])
   invitations      CustomerInvitation[]
   catalogues       CustomerCatalogue[]
+  traderCustomerSettings TraderCustomerSettings[]
 
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
@@ -239,37 +280,165 @@ model CustomerInvitation {
   @@map("customer_invitations")
 }
 
-model Order {
-  id            String      @id @default(cuid())
+// ─── Cart backing data ────────────────────────────────────────────────────────
+
+model CartOrder {
+  id            String          @id @default(cuid())
   distributorId String
   customerId    String
-  status        OrderStatus @default(DRAFT)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  distributor   Organisation @relation("DistributorOrders", fields: [distributorId], references: [id])
-  customer      Organisation @relation("CustomerOrders", fields: [customerId], references: [id])
-  items         OrderItem[]
+  status        CartOrderStatus @default(DRAFT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  distributor   Organisation    @relation("DistributorCartOrders", fields: [distributorId], references: [id])
+  customer      Organisation    @relation("CustomerCartOrders", fields: [customerId], references: [id])
+  lines         CartOrderLine[]
 
   @@unique([distributorId, customerId, status])
   @@index([distributorId, status])
   @@index([customerId, status])
+  @@map("cart_orders")
+}
+
+model CartOrderLine {
+  id          String    @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  order       CartOrder @relation(fields: [orderId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+  @@map("cart_order_lines")
+}
+
+// ─── Commercial orders ────────────────────────────────────────────────────────
+
+model Order {
+  id               String               @id @default(cuid())
+  distributorId    String
+  traderCustomerId String
+  placedByUserId   String
+  orderNumber      String               @unique
+
+  status                       OrderStatus
+  fulfilmentStatus             String?
+  invoiceStatus                String?
+  paymentStatus                String?
+
+  acceptanceModeSnapshot       OrderAcceptanceMode
+  acceptanceModeSourceSnapshot AcceptanceModeSource
+
+  currency       String              @default("GBP")
+  subtotalAmount Decimal             @db.Decimal(10, 2)
+  taxAmount      Decimal             @db.Decimal(10, 2)
+  totalAmount    Decimal             @db.Decimal(10, 2)
+
+  billingAddressSnapshot  Json?
+  deliveryAddressSnapshot Json?
+  customerReference       String?
+  notes                   String?
+
+  submittedAt          DateTime?
+  acceptedAt           DateTime?
+  acceptedByActorType  AcceptedByActorType?
+  acceptedByUserId     String?
+  rejectedAt           DateTime?
+  rejectedByUserId     String?
+  rejectionReason      String?
+  cancelledAt          DateTime?
+  cancelledByUserId    String?
+  cancellationReason   String?
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  distributor    Organisation @relation("DistributorOrders", fields: [distributorId], references: [id])
+  customer       Organisation @relation("CustomerOrders", fields: [traderCustomerId], references: [id])
+  lines          OrderLine[]
+
+  @@index([distributorId, status])
+  @@index([traderCustomerId, status])
+  @@index([distributorId, createdAt])
   @@map("orders")
 }
 
-model OrderItem {
-  id        String   @id @default(cuid())
-  orderId   String
-  productId String
-  quantity  Int
-  unitPrice Decimal  @db.Decimal(10, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  order     Order    @relation(fields: [orderId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+model OrderLine {
+  id               String          @id @default(cuid())
+  orderId          String
+  distributorId    String
+  traderCustomerId String
+  productId        String
 
-  @@unique([orderId, productId])
-  @@map("order_items")
+  productVariantId       String?
+  skuSnapshot            String?
+  productNameSnapshot    String
+  unitOfMeasureSnapshot  String?
+
+  quantityOrdered   Int
+  unitPriceSnapshot Decimal @db.Decimal(10, 2)
+  taxRateSnapshot   String  @default("0")
+  subtotalAmount    Decimal @db.Decimal(10, 2)
+  taxAmount         Decimal @db.Decimal(10, 2)
+  totalAmount       Decimal @db.Decimal(10, 2)
+
+  status    OrderLineStatus
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([distributorId])
+  @@map("order_lines")
 }
+
+// ─── Acceptance configuration ─────────────────────────────────────────────────
+
+model DistributorSettings {
+  distributorId              String              @id
+  defaultOrderAcceptanceMode OrderAcceptanceMode @default(MANUAL)
+  distributor                Organisation        @relation(fields: [distributorId], references: [id])
+
+  @@map("distributor_settings")
+}
+
+model TraderCustomerSettings {
+  id                          String               @id @default(cuid())
+  distributorId               String
+  traderCustomerId            String
+  tradeRelationshipId         String?
+  orderAcceptanceModeOverride OrderAcceptanceMode?
+  tradeRelationship           TradeRelationship?   @relation(fields: [tradeRelationshipId], references: [id])
+  traderCustomer              Organisation         @relation("TraderCustomerSettingsCustomer", fields: [traderCustomerId], references: [id])
+
+  @@unique([distributorId, traderCustomerId])
+  @@map("trader_customer_settings")
+}
+
+// ─── Outbox ───────────────────────────────────────────────────────────────────
+
+model OutboxEvent {
+  id            String            @id @default(cuid())
+  aggregateType String
+  aggregateId   String
+  eventType     String
+  payload       Json
+  status        OutboxEventStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  publishedAt   DateTime?
+  failedAt      DateTime?
+  retryCount    Int               @default(0)
+  errorMessage  String?
+
+  @@index([status, createdAt])
+  @@map("outbox_events")
+}
+
+// ─── Catalogues ───────────────────────────────────────────────────────────────
 
 model Catalogue {
   id            String              @id @default(cuid())

@@ -5,6 +5,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
+import { ordersApi, ApiError } from '@wholo/api-client';
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -12,13 +13,35 @@ export default function CheckoutPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
+  const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
   const { cartLoading, items, quantities, savingItems, syncItem } = useCart();
 
   const [poOpen, setPoOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [poNumber, setPoNumber] = useState('');
   const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handlePlaceOrder = async () => {
+    if (!accessToken || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const order = await ordersApi.submitOrder(
+        {
+          distributorSlug,
+          customerReference: poNumber || undefined,
+          notes: comment || undefined,
+        },
+        accessToken,
+      );
+      router.push(`/${distributorSlug}/orders/${order.id}`);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.problem.detail : 'Failed to place order. Please try again.');
+      setSubmitting(false);
+    }
+  };
 
   const handleAdjust = (productId: string, delta: number) => {
     const current = quantities[productId] ?? 1;
@@ -41,7 +64,7 @@ export default function CheckoutPage() {
   const freight = 0;
   const gst = 0;
   const total = subtotal + freight + gst;
-  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  const fmt = (n: number) => `£${n.toFixed(2)}`;
 
   if (authLoading || cartLoading) {
     return (
@@ -156,9 +179,13 @@ export default function CheckoutPage() {
         .co-place-order {
           width: 100%; border: 1.5px solid #D97036; background: transparent;
           color: #D97036; padding: 15px 20px; font-size: 13px; font-weight: 600;
-          letter-spacing: 0.08em; cursor: not-allowed; opacity: 0.4;
+          letter-spacing: 0.08em; cursor: pointer;
           font-family: inherit; text-align: center;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: background 0.15s, color 0.15s;
         }
+        .co-place-order:hover:not(:disabled) { background: #FEF3EC; }
+        .co-place-order:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .co-ghost-btn {
           width: 100%; border: none; background: transparent;
@@ -347,13 +374,25 @@ export default function CheckoutPage() {
 
         {/* Action buttons */}
         <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.35s' }}>
-          <button className="co-place-order" disabled>
-            Place Order
+          <button
+            className="co-place-order"
+            disabled={submitting}
+            onClick={handlePlaceOrder}
+          >
+            {submitting ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
+            ) : null}
+            {submitting ? 'Placing Order…' : 'Place Order'}
           </button>
+          {submitError && (
+            <p style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', padding: '6px 0 2px' }}>
+              {submitError}
+            </p>
+          )}
           <button className="co-ghost-btn" disabled>
             Add to Favorites
           </button>
-          <button className="co-ghost-btn" onClick={handleClearCart}>
+          <button className="co-ghost-btn" disabled={submitting} onClick={handleClearCart}>
             Clear Cart
           </button>
         </div>

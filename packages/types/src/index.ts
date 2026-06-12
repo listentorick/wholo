@@ -33,13 +33,10 @@ export interface ProblemDetail {
   detail: string;
 }
 
-// ─── Orders ──────────────────────────────────────────────────────────────────
+// ─── Cart ─────────────────────────────────────────────────────────────────────
 
-export enum OrderStatus {
+export enum CartOrderStatus {
   DRAFT = 'DRAFT',
-  PLACED = 'PLACED',
-  CONFIRMED = 'CONFIRMED',
-  CANCELLED = 'CANCELLED',
 }
 
 export interface CartItem {
@@ -58,6 +55,134 @@ export interface UpsertCartItemRequest {
   distributorSlug: string;
   productId: string;
   quantity: number;
+}
+
+// ─── Commercial Orders ────────────────────────────────────────────────────────
+
+export enum OrderStatus {
+  SUBMITTED = 'SUBMITTED',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+  COMPLETED = 'COMPLETED',
+}
+
+export enum OrderLineStatus {
+  SUBMITTED = 'SUBMITTED',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum OrderAcceptanceMode {
+  MANUAL = 'MANUAL',
+  AUTO_ON_SUBMISSION = 'AUTO_ON_SUBMISSION',
+}
+
+export enum AcceptanceModeSource {
+  DISTRIBUTOR_DEFAULT = 'DISTRIBUTOR_DEFAULT',
+  TRADER_CUSTOMER_OVERRIDE = 'TRADER_CUSTOMER_OVERRIDE',
+}
+
+export enum AcceptedByActorType {
+  USER = 'USER',
+  SYSTEM = 'SYSTEM',
+}
+
+export interface AddressSnapshot {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+}
+
+export interface OrderLine {
+  id: string;
+  orderId: string;
+  distributorId: string;
+  traderCustomerId: string;
+  productId: string;
+  productVariantId: string | null;
+  skuSnapshot: string | null;
+  productNameSnapshot: string;
+  unitOfMeasureSnapshot: string | null;
+  quantityOrdered: number;
+  unitPriceSnapshot: string;
+  taxRateSnapshot: string;
+  subtotalAmount: string;
+  taxAmount: string;
+  totalAmount: string;
+  status: OrderLineStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  distributorId: string;
+  traderCustomerId: string;
+  placedByUserId: string;
+  status: OrderStatus;
+  currency: string;
+  subtotalAmount: string;
+  taxAmount: string;
+  totalAmount: string;
+  billingAddressSnapshot: AddressSnapshot | null;
+  deliveryAddressSnapshot: AddressSnapshot | null;
+  customerReference: string | null;
+  notes: string | null;
+  acceptanceModeSnapshot: OrderAcceptanceMode;
+  acceptanceModeSourceSnapshot: AcceptanceModeSource;
+  submittedAt: string | null;
+  acceptedAt: string | null;
+  acceptedByActorType: AcceptedByActorType | null;
+  acceptedByUserId: string | null;
+  rejectedAt: string | null;
+  rejectedByUserId: string | null;
+  rejectionReason: string | null;
+  cancelledAt: string | null;
+  cancelledByUserId: string | null;
+  cancellationReason: string | null;
+  lines: OrderLine[];
+  traderCustomer: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderSummary {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  totalAmount: string;
+  traderCustomerName: string;
+  submittedAt: string | null;
+  acceptedAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+}
+
+export interface SubmitOrderRequest {
+  distributorSlug: string;
+  customerReference?: string;
+  notes?: string;
+}
+
+export interface RejectOrderRequest {
+  reason: string;
+}
+
+export interface CancelOrderRequest {
+  reason: string;
+}
+
+export interface OrderListParams {
+  limit?: number;
+  cursor?: string;
+  status?: OrderStatus;
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

@@ -3,11 +3,11 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { OrganisationType, OrderStatus } from '@prisma/client';
+import { OrganisationType, CartOrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertCartItemDto } from './dto/upsert-cart-item.dto';
 
-const cartItemInclude = {
+const cartLineInclude = {
   product: { select: { id: true, name: true, sku: true } },
 } as const;
 
@@ -26,7 +26,7 @@ export class CartService {
     const order = await this.findOrCreateDraft(distributor.id, customerId);
 
     if (dto.quantity === 0) {
-      await this.prisma.orderItem.deleteMany({
+      await this.prisma.cartOrderLine.deleteMany({
         where: { orderId: order.id, productId: dto.productId },
       });
     } else {
@@ -42,7 +42,7 @@ export class CartService {
         );
       }
 
-      await this.prisma.orderItem.upsert({
+      await this.prisma.cartOrderLine.upsert({
         where: { orderId_productId: { orderId: order.id, productId: dto.productId } },
         create: {
           orderId: order.id,
@@ -57,9 +57,9 @@ export class CartService {
       });
     }
 
-    const updated = await this.prisma.order.findUniqueOrThrow({
+    const updated = await this.prisma.cartOrder.findUniqueOrThrow({
       where: { id: order.id },
-      include: { items: { include: cartItemInclude } },
+      include: { lines: { include: cartLineInclude } },
     });
 
     return this.formatCart(updated);
@@ -75,17 +75,17 @@ export class CartService {
   }
 
   private async findOrCreateDraft(distributorId: string, customerId: string) {
-    return this.prisma.order.upsert({
-      where: { distributorId_customerId_status: { distributorId, customerId, status: OrderStatus.DRAFT } },
-      create: { distributorId, customerId, status: OrderStatus.DRAFT },
+    return this.prisma.cartOrder.upsert({
+      where: { distributorId_customerId_status: { distributorId, customerId, status: CartOrderStatus.DRAFT } },
+      create: { distributorId, customerId, status: CartOrderStatus.DRAFT },
       update: {},
-      include: { items: { include: cartItemInclude } },
+      include: { lines: { include: cartLineInclude } },
     });
   }
 
   private formatCart(order: {
     id: string;
-    items: Array<{
+    lines: Array<{
       productId: string;
       quantity: number;
       unitPrice: { toFixed: (n: number) => string } | string | null;
@@ -94,13 +94,13 @@ export class CartService {
   }) {
     return {
       orderId: order.id,
-      items: order.items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        unitPrice: typeof item.unitPrice === 'object' && item.unitPrice !== null
-          ? (item.unitPrice as { toFixed: (n: number) => string }).toFixed(2)
-          : String(item.unitPrice),
-        product: item.product,
+      items: order.lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        unitPrice: typeof line.unitPrice === 'object' && line.unitPrice !== null
+          ? (line.unitPrice as { toFixed: (n: number) => string }).toFixed(2)
+          : String(line.unitPrice),
+        product: line.product,
       })),
     };
   }
