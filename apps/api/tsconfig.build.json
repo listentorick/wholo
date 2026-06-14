@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src"
+  },
+  "exclude": ["node_modules", "prisma", "test", "dist", "**/*.spec.ts", "jest.config.ts", "jest.integration.config.ts"]
+}

@@ -39,6 +39,54 @@ Three primary actor types:
 
 Advanced warehouse management, route optimisation, procurement forecasting, barcode scanning, multi-warehouse, BI/reporting, AI recommendations, EDI integrations.
 
+## Testing
+
+Unit tests are **required** for all new code. Every service method, controller, and utility must have a corresponding `.spec.ts` (backend) or `.spec.tsx` (frontend) file alongside it.
+
+### Frameworks
+
+| App | Framework | Run |
+|---|---|---|
+| `apps/api` | Jest + `@nestjs/testing` | `pnpm --filter @wholo/api test` |
+| `apps/admin-api` | Jest + `@nestjs/testing` | `pnpm --filter @wholo/admin-api test` |
+| `apps/admin` | Vitest + Testing Library | `pnpm --filter @wholo/admin test` |
+| `apps/portal` | Vitest + Testing Library | `pnpm --filter @wholo/portal test` |
+
+Run all tests from root: `turbo test`
+
+### NestJS unit test conventions
+
+- Use `Test.createTestingModule` from `@nestjs/testing`
+- Mock all dependencies with `{ provide: ServiceName, useValue: mockObject }`
+- Never import `PrismaModule` or `ApiClientModule` in tests — mock the service directly
+- Test the service in isolation; controller tests are optional unless routing logic is non-trivial
+
+### What to test
+
+- All service methods: happy path + error cases (NotFoundException, ForbiddenException, etc.)
+- Input validation edge cases (null, empty, boundary values)
+- Auth guard coverage is asserted by checking `@UseGuards` presence, not re-testing NestJS internals
+
+### Integration tests (required for ownership and multi-tenancy)
+
+Unit tests with mocked Prisma cannot verify that a real database query actually enforces a distributor boundary — they only confirm that the code *passes the right arguments* to the mock. Integration tests are therefore **required** for any feature that involves:
+
+- Ownership checks (a distributor can only access their own records)
+- Multi-tenancy isolation (distributor A cannot read, modify, or delete distributor B's data)
+- Cross-entity constraints that span multiple tables
+
+**Location**: `apps/api/test/*.integration-spec.ts`  
+**Config**: `apps/api/jest.integration.config.ts`  
+**Run**: `pnpm --filter @wholo/api test:integration`
+
+**Prerequisites** (integration tests hit a real database):
+```bash
+kubectl port-forward svc/wholo-postgresql 5432:5432
+# DATABASE_URL is read from the environment — see apps/api/.env.example
+```
+
+**Test structure**: Use `beforeAll` to create fixed-ID test organisations (`upsert` for idempotency), `beforeEach` to clean child records between tests, and `afterAll` to tear everything down. Use `supertest` to drive the HTTP layer — these tests exercise the full stack from controller to database.
+
 ## Reference
 
 Full product requirements are in `prd.md`.

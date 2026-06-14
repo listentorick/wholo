@@ -1,15 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { ApiClientService } from '../api-client/api-client.service';
 
 @Injectable()
 export class SuppliersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private api: ApiClientService) {}
 
-  async findAll(distributorId: string) {
-    return this.prisma.supplier.findMany({
-      where: { distributorId, deletedAt: null },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    });
+  findAll(distributorId: string) {
+    return this.api.get('/admin/suppliers', distributorId);
   }
 }
