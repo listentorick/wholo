@@ -10,6 +10,8 @@ import { OutboxModule } from './outbox/outbox.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
 import { AdminProductsModule } from './admin-products/admin-products.module';
+import { AdminOrdersModule } from './admin-orders/admin-orders.module';
+import { AdminCustomersModule } from './admin-customers/admin-customers.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -25,6 +27,8 @@ import { HealthController } from './health.controller';
     OrdersModule,
     PriceListsModule,
     AdminProductsModule,
+    AdminOrdersModule,
+    AdminCustomersModule,
   ],
   controllers: [HealthController],
 })

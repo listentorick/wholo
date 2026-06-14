@@ -1,11 +1,10 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query, Req, UseGuards, HttpCode, HttpStatus, HttpException,
+  Param, Body, Query, Req, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomersService } from './customers.service';
-import { ApiClientService } from '../api-client/api-client.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
@@ -13,10 +12,7 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(
-    private customersService: CustomersService,
-    private api: ApiClientService,
-  ) {}
+  constructor(private customersService: CustomersService) {}
 
   @Get()
   findAll(@Req() req: Request, @Query() query: CustomerQueryDto) {
@@ -50,17 +46,16 @@ export class CustomersController {
   }
 
   @Post(':id/invite')
+  @HttpCode(HttpStatus.OK)
   invite(@Req() req: Request, @Param('id') id: string) {
     const { organisationId } = req.user as { organisationId: string };
     return this.customersService.invite(id, organisationId);
   }
 
-  // ── Catalogue assignment — proxied to apps/api ────────────────────────────
-
   @Get(':id/catalogues')
   getCatalogues(@Req() req: Request, @Param('id') id: string) {
     const { organisationId } = req.user as { organisationId: string };
-    return this.api.get(`/admin/trade-relationships/${id}/catalogues`, organisationId);
+    return this.customersService.getCatalogues(id, organisationId);
   }
 
   @Post(':id/catalogues/:catalogueId')
@@ -70,7 +65,7 @@ export class CustomersController {
     @Param('catalogueId') catalogueId: string,
   ) {
     const { organisationId } = req.user as { organisationId: string };
-    return this.api.post(`/admin/trade-relationships/${id}/catalogues/${catalogueId}`, organisationId);
+    return this.customersService.assignCatalogue(id, catalogueId, organisationId);
   }
 
   @Delete(':id/catalogues/:catalogueId')
@@ -81,10 +76,8 @@ export class CustomersController {
     @Param('catalogueId') catalogueId: string,
   ) {
     const { organisationId } = req.user as { organisationId: string };
-    return this.api.delete(`/admin/trade-relationships/${id}/catalogues/${catalogueId}`, organisationId);
+    return this.customersService.unassignCatalogue(id, catalogueId, organisationId);
   }
-
-  // ── Price list assignment ─────────────────────────────────────────────────────
 
   @Patch(':id/price-list')
   assignPriceList(
@@ -93,6 +86,6 @@ export class CustomersController {
     @Body() body: { priceListId: string | null },
   ) {
     const { organisationId } = req.user as { organisationId: string };
-    return this.api.patch(`/admin/trade-relationships/${id}/price-list`, organisationId, body);
+    return this.customersService.assignPriceList(id, organisationId, body);
   }
 }

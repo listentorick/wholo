@@ -14,6 +14,7 @@ export class ApiClientService {
     path: string,
     distributorId: string,
     body?: unknown,
+    userId?: string,
   ): Promise<T> {
     const url = `${this.baseUrl}/api/v1${path}`;
     const res = await fetch(url, {
@@ -21,6 +22,7 @@ export class ApiClientService {
       headers: {
         'Content-Type': 'application/json',
         'x-distributor-id': distributorId,
+        ...(userId && { 'x-user-id': userId }),
       },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
@@ -37,23 +39,23 @@ export class ApiClientService {
     return data as T;
   }
 
-  get<T>(path: string, distributorId: string): Promise<T> {
-    return this.request<T>('GET', path, distributorId);
+  get<T>(path: string, distributorId: string, userId?: string): Promise<T> {
+    return this.request<T>('GET', path, distributorId, undefined, userId);
   }
 
-  post<T>(path: string, distributorId: string, body?: unknown): Promise<T> {
-    return this.request<T>('POST', path, distributorId, body);
+  post<T>(path: string, distributorId: string, body?: unknown, userId?: string): Promise<T> {
+    return this.request<T>('POST', path, distributorId, body, userId);
   }
 
-  patch<T>(path: string, distributorId: string, body?: unknown): Promise<T> {
-    return this.request<T>('PATCH', path, distributorId, body);
+  patch<T>(path: string, distributorId: string, body?: unknown, userId?: string): Promise<T> {
+    return this.request<T>('PATCH', path, distributorId, body, userId);
   }
 
-  put<T>(path: string, distributorId: string, body?: unknown): Promise<T> {
-    return this.request<T>('PUT', path, distributorId, body);
+  put<T>(path: string, distributorId: string, body?: unknown, userId?: string): Promise<T> {
+    return this.request<T>('PUT', path, distributorId, body, userId);
   }
 
-  delete<T>(path: string, distributorId: string): Promise<T> {
-    return this.request<T>('DELETE', path, distributorId);
+  delete<T>(path: string, distributorId: string, userId?: string): Promise<T> {
+    return this.request<T>('DELETE', path, distributorId, undefined, userId);
   }
 }

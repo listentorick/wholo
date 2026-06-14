@@ -52,7 +52,36 @@ Unit tests are **required** for all new code. Every service method, controller, 
 | `apps/admin` | Vitest + Testing Library | `pnpm --filter @wholo/admin test` |
 | `apps/portal` | Vitest + Testing Library | `pnpm --filter @wholo/portal test` |
 
-Run all tests from root: `turbo test`
+### Running all tests
+
+**All unit tests (from repo root):**
+```bash
+turbo test
+```
+
+**Individual app unit tests:**
+```bash
+pnpm --filter @wholo/api test
+pnpm --filter @wholo/admin-api test
+pnpm --filter @wholo/admin test
+pnpm --filter @wholo/portal test
+```
+
+**Integration tests** (requires a running database — start the port-forward first):
+```bash
+# Terminal 1 — keep this running
+kubectl port-forward svc/wholo-postgresql 5432:5432
+
+# Terminal 2 — run integration tests
+DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo pnpm --filter @wholo/api test:integration
+```
+
+**Everything (unit + integration) in one shot:**
+```bash
+# Start port-forward first, then:
+turbo test
+DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo pnpm --filter @wholo/api test:integration
+```
 
 ### NestJS unit test conventions
 

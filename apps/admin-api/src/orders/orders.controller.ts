@@ -32,12 +32,12 @@ export class OrdersController {
   @Post(':id/reject')
   rejectOrder(@Param('id') id: string, @Body() dto: RejectOrderDto, @Req() req: Request) {
     const { organisationId, sub } = req['user'] as { organisationId: string; sub: string };
-    return this.ordersService.rejectOrder(id, organisationId, sub, dto.reason);
+    return this.ordersService.rejectOrder(id, organisationId, sub, dto);
   }
 
   @Post(':id/cancel')
   cancelOrder(@Param('id') id: string, @Body() dto: CancelOrderDto, @Req() req: Request) {
     const { organisationId, sub } = req['user'] as { organisationId: string; sub: string };
-    return this.ordersService.cancelOrder(id, organisationId, sub, dto.reason);
+    return this.ordersService.cancelOrder(id, organisationId, sub, dto);
   }
 }
