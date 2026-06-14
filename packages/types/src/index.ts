@@ -250,6 +250,7 @@ export interface CatalogueProduct {
   sku: string | null;
   price: string | null;
   compareAtPrice: string | null;
+  resolvedPrice: string | null;
   productType: CatalogueProductType | null;
 }
 
@@ -340,6 +341,9 @@ export interface Customer {
   billingState: string | null;
   billingPostcode: string | null;
   billingCountry: string | null;
+  priceListId: string | null;
+  priceList: { id: string; name: string } | null;
+  catalogues: { id: string; name: string }[];
   latestInvitation: LatestInvitation | null;
   createdAt: string;
   updatedAt: string;
@@ -435,6 +439,113 @@ export interface UpdateCatalogueRequest {
 }
 
 export interface CatalogueListParams {
+  limit?: number;
+  cursor?: string;
+}
+
+// ─── Price Lists ──────────────────────────────────────────────────────────────
+
+export enum PriceListRuleSelectorType {
+  ALL_PRODUCTS = 'ALL_PRODUCTS',
+  PRODUCT = 'PRODUCT',
+}
+
+export enum PriceListRuleValueType {
+  FIXED_PRICE = 'FIXED_PRICE',
+  PERCENTAGE_DISCOUNT = 'PERCENTAGE_DISCOUNT',
+}
+
+export enum PriceListRuleDiscountBaseType {
+  PRODUCT_PRICE = 'PRODUCT_PRICE',
+  PRICE_LIST = 'PRICE_LIST',
+}
+
+export interface PriceListRule {
+  id: string;
+  distributorId: string;
+  priceListId: string;
+  selectorType: PriceListRuleSelectorType;
+  productId: string | null;
+  productVariantId: string | null;
+  productName?: string | null;
+  minQuantity: number;
+  valueType: PriceListRuleValueType;
+  unitPrice: string | null;
+  discountPercentage: string | null;
+  discountBaseType: PriceListRuleDiscountBaseType | null;
+  basePriceListId: string | null;
+  currency: string;
+  sortOrder: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PriceList {
+  id: string;
+  distributorId: string;
+  name: string;
+  description: string | null;
+  currency: string;
+  isDefault: boolean;
+  active: boolean;
+  rules: PriceListRule[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PriceListSummary {
+  id: string;
+  distributorId: string;
+  name: string;
+  description: string | null;
+  currency: string;
+  isDefault: boolean;
+  active: boolean;
+  _count: { rules: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductPricingEntry {
+  priceListId: string;
+  priceListName: string;
+  currency: string;
+  rule: PriceListRule;
+}
+
+export interface CreatePriceListRequest {
+  name: string;
+  description?: string;
+  currency?: string;
+}
+
+export type UpdatePriceListRequest = Partial<CreatePriceListRequest> & {
+  active?: boolean;
+};
+
+export interface CreatePriceListRuleRequest {
+  selectorType: PriceListRuleSelectorType;
+  productId?: string;
+  minQuantity?: number;
+  valueType?: PriceListRuleValueType;
+  unitPrice?: string;
+  discountPercentage?: string;
+  discountBaseType?: PriceListRuleDiscountBaseType;
+  basePriceListId?: string;
+  currency?: string;
+  sortOrder?: number;
+}
+
+export type UpdatePriceListRuleRequest = Partial<Omit<CreatePriceListRuleRequest, 'selectorType' | 'valueType'>> & {
+  active?: boolean;
+};
+
+export interface AssignPriceListRequest {
+  priceListId: string | null;
+}
+
+export interface PriceListListParams {
   limit?: number;
   cursor?: string;
 }

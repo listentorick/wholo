@@ -14,6 +14,7 @@ interface CartContextValue {
   savingItems: Set<string>;
   adjustQty: (productId: string, delta: number) => void;
   syncItem: (productId: string, quantity: number) => Promise<void>;
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -92,10 +93,16 @@ export function CartProvider({
     [accessToken, distributorSlug, reconcile],
   );
 
+  const refreshCart = useCallback(async () => {
+    if (!accessToken) return;
+    const cart = await cartApi.getCart(distributorSlug, accessToken);
+    reconcile(cart.items);
+  }, [accessToken, distributorSlug, reconcile]);
+
   const cartCount = [...inCart].reduce((sum, id) => sum + (quantities[id] ?? 1), 0);
 
   return (
-    <CartContext.Provider value={{ cartLoading, cartCount, items, quantities, inCart, savingItems, adjustQty, syncItem }}>
+    <CartContext.Provider value={{ cartLoading, cartCount, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
       {children}
     </CartContext.Provider>
   );

@@ -22,6 +22,19 @@ const relationshipInclude = {
     take: 1,
     select: { id: true, email: true, status: true, expiresAt: true, token: true },
   },
+  traderCustomerSettings: {
+    select: {
+      priceListId: true,
+      priceList: { select: { id: true, name: true } },
+    },
+    take: 1,
+  },
+  catalogues: {
+    where: { catalogue: { deletedAt: null } },
+    select: {
+      catalogue: { select: { id: true, name: true } },
+    },
+  },
 } satisfies Prisma.TradeRelationshipInclude;
 
 @Injectable()
@@ -263,6 +276,9 @@ export class CustomersService {
       billingState: rel.billingState,
       billingPostcode: rel.billingPostcode,
       billingCountry: rel.billingCountry,
+      priceListId: rel.traderCustomerSettings?.[0]?.priceListId ?? null,
+      priceList: rel.traderCustomerSettings?.[0]?.priceList ?? null,
+      catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
       latestInvitation: latestInvitation
         ? { status: latestInvitation.status, email: latestInvitation.email, expiresAt: latestInvitation.expiresAt }
         : null,

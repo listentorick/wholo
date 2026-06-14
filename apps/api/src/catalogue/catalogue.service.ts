@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, OrganisationType, ProductStatus } from '@prisma/client';
+import { Prisma, OrganisationType, ProductStatus, PriceListRuleDiscountBaseType, PriceListRuleSelectorType, PriceListRuleValueType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
 interface CursorPayload {
@@ -14,7 +15,10 @@ const catalogueProductInclude = {
 
 @Injectable()
 export class CatalogueService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private priceResolution: PriceResolutionService,
+  ) {}
 
   async getDistributor(distributorSlug: string) {
     const distributor = await this.prisma.organisation.findFirst({
@@ -33,7 +37,6 @@ export class CatalogueService {
     if (!distributor) throw new NotFoundException('Distributor not found');
 
     // When a customer is authenticated, filter products to their assigned catalogues only.
-    // No catalogues assigned → empty result.
     let catalogueProductIdFilter: string[] | undefined;
     if (customerOrgId) {
       const relationship = await this.prisma.tradeRelationship.findFirst({
@@ -100,17 +103,106 @@ export class CatalogueService {
     ]);
 
     const hasMore = items.length > limit;
-    const data = hasMore ? items.slice(0, -1) : items;
+    const rawData = hasMore ? items.slice(0, -1) : items;
 
-    const nextCursor = hasMore
+    // All catalogue products are always shown. For authenticated customers, populate
+    // resolvedPrices from their price list where a rule exists. Products with no
+    // matching rule fall back to the base product price on the frontend.
+    const data = rawData;
+    const resolvedPrices = new Map<string, string>();
+
+    if (customerOrgId) {
+      const priceListId = await this.priceResolution.resolvePriceListId(distributor.id, customerOrgId);
+
+      if (priceListId) {
+        const rules = await this.prisma.priceListRule.findMany({
+          where: { priceListId, active: true },
+          select: {
+            selectorType: true,
+            productId: true,
+            minQuantity: true,
+            valueType: true,
+            unitPrice: true,
+            discountPercentage: true,
+            discountBaseType: true,
+            basePriceListId: true,
+          },
+        });
+
+        const toDecimal = (v: unknown): Prisma.Decimal | null =>
+          v != null && typeof v === 'object' && 'toFixed' in (v as object)
+            ? (v as Prisma.Decimal)
+            : null;
+
+        const priceResolutionService = this.priceResolution;
+        await Promise.all(
+          rawData.map(async (product) => {
+            const candidates = rules.filter(
+              (r) =>
+                r.minQuantity <= 1 &&
+                (r.selectorType === PriceListRuleSelectorType.ALL_PRODUCTS ||
+                  (r.selectorType === PriceListRuleSelectorType.PRODUCT && r.productId === product.id)),
+            );
+
+            if (candidates.length === 0) return; // no rule → base price used on frontend
+
+            candidates.sort((a, b) => {
+              const selectorOrder =
+                (a.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1) -
+                (b.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1);
+              if (selectorOrder !== 0) return selectorOrder;
+              return b.minQuantity - a.minQuantity;
+            });
+
+            const matched = candidates[0];
+
+            if (matched.valueType === PriceListRuleValueType.FIXED_PRICE) {
+              const d = toDecimal(matched.unitPrice);
+              if (!d) return; // malformed rule → fall back to base price
+              resolvedPrices.set(product.id, d.toFixed(2));
+            } else {
+              // PERCENTAGE_DISCOUNT
+              let base: Prisma.Decimal | null = null;
+              if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRODUCT_PRICE) {
+                base = toDecimal(product.price);
+              } else if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRICE_LIST && matched.basePriceListId) {
+                const baseResolved = await priceResolutionService.resolvePrice(
+                  distributor.id, customerOrgId!, product.id, 1, 0, matched.basePriceListId,
+                );
+                base = baseResolved?.unitPrice ?? null;
+              }
+              if (!base || !matched.discountPercentage) return; // can't compute → fall back to base price
+              const pct = toDecimal(matched.discountPercentage)!;
+              const multiplier = new Prisma.Decimal(1).minus(pct.div(100));
+              resolvedPrices.set(product.id, base.mul(multiplier).toFixed(2));
+            }
+          }),
+        );
+      }
+    }
+
+    const nextCursor = hasMore && rawData.length > 0
       ? Buffer.from(
-          JSON.stringify({ createdAt: data[data.length - 1].createdAt, id: data[data.length - 1].id }),
+          JSON.stringify({ createdAt: rawData[rawData.length - 1].createdAt, id: rawData[rawData.length - 1].id }),
         ).toString('base64url')
       : null;
 
     return {
       distributor: { id: distributor.id, name: distributor.name },
-      data,
+      data: data.map((p) => ({
+        ...p,
+        price: p.price
+          ? typeof p.price === 'object' && 'toFixed' in (p.price as object)
+            ? (p.price as { toFixed: (n: number) => string }).toFixed(2)
+            : String(p.price)
+          : null,
+        compareAtPrice: p.compareAtPrice
+          ? typeof p.compareAtPrice === 'object' && 'toFixed' in (p.compareAtPrice as object)
+            ? (p.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
+            : String(p.compareAtPrice)
+          : null,
+        resolvedPrice: resolvedPrices.get(p.id) ?? null,
+      })),
       pagination: { nextCursor, hasMore, total },
     };
   }

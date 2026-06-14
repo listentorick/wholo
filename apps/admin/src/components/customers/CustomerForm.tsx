@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { TradeRelationshipStatus, InvitationStatus } from '@wholo/types';
 import type { Customer, CreateCustomerRequest, InviteResponse } from '@wholo/types';
 import { CustomerCatalogues } from './CustomerCatalogues';
+import { CustomerPriceList } from './CustomerPriceList';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -430,6 +431,17 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
             {mode === 'edit' && initialValues && (
               <FormCard title="Catalogues">
                 <CustomerCatalogues customerId={initialValues.id} token={token} />
+              </FormCard>
+            )}
+
+            {/* Price list (edit mode only) */}
+            {mode === 'edit' && initialValues && (
+              <FormCard title="Price list">
+                <CustomerPriceList
+                  customerId={initialValues.id}
+                  token={token}
+                  currentPriceListId={initialValues.priceListId}
+                />
               </FormCard>
             )}
 

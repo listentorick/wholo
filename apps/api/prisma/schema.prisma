@@ -83,6 +83,21 @@ enum OutboxEventStatus {
   FAILED
 }
 
+enum PriceListRuleSelectorType {
+  ALL_PRODUCTS
+  PRODUCT
+}
+
+enum PriceListRuleValueType {
+  FIXED_PRICE
+  PERCENTAGE_DISCOUNT
+}
+
+enum PriceListRuleDiscountBaseType {
+  PRODUCT_PRICE
+  PRICE_LIST
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -107,6 +122,7 @@ model Organisation {
   ordersAsCustomer                Order[]             @relation("CustomerOrders")
   distributorSettings             DistributorSettings?
   traderCustomerSettings          TraderCustomerSettings[] @relation("TraderCustomerSettingsCustomer")
+  priceLists                      PriceList[]         @relation("DistributorPriceLists")
 
   @@map("organisations")
 }
@@ -203,6 +219,7 @@ model Product {
   cartOrderLines     CartOrderLine[]
   orderLines         OrderLine[]
   catalogues         CatalogueProduct[]
+  priceListRules     PriceListRule[]             @relation("ProductPriceListRules")
 
   @@unique([distributorId, sku])
   @@index([distributorId, createdAt])
@@ -300,15 +317,18 @@ model CartOrder {
 }
 
 model CartOrderLine {
-  id          String    @id @default(cuid())
-  orderId     String
-  productId   String
-  quantity    Int
-  unitPrice   Decimal   @db.Decimal(10, 2)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  order       CartOrder @relation(fields: [orderId], references: [id])
-  product     Product   @relation(fields: [productId], references: [id])
+  id                      String    @id @default(cuid())
+  orderId                 String
+  productId               String
+  quantity                Int
+  unitPrice               Decimal   @db.Decimal(10, 2)
+  resolvedPriceListId     String?
+  resolvedPriceListRuleId String?
+  priceResolvedAt         DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  order                   CartOrder @relation(fields: [orderId], references: [id])
+  product                 Product   @relation(fields: [productId], references: [id])
 
   @@unique([orderId, productId])
   @@map("cart_order_lines")
@@ -377,12 +397,14 @@ model OrderLine {
   productNameSnapshot    String
   unitOfMeasureSnapshot  String?
 
-  quantityOrdered   Int
-  unitPriceSnapshot Decimal @db.Decimal(10, 2)
-  taxRateSnapshot   String  @default("0")
-  subtotalAmount    Decimal @db.Decimal(10, 2)
-  taxAmount         Decimal @db.Decimal(10, 2)
-  totalAmount       Decimal @db.Decimal(10, 2)
+  quantityOrdered         Int
+  unitPriceSnapshot       Decimal @db.Decimal(10, 2)
+  taxRateSnapshot         String  @default("0")
+  subtotalAmount          Decimal @db.Decimal(10, 2)
+  taxAmount               Decimal @db.Decimal(10, 2)
+  totalAmount             Decimal @db.Decimal(10, 2)
+  priceListIdSnapshot     String?
+  priceListRuleIdSnapshot String?
 
   status    OrderLineStatus
   createdAt DateTime        @default(now())
@@ -412,8 +434,10 @@ model TraderCustomerSettings {
   traderCustomerId            String
   tradeRelationshipId         String?
   orderAcceptanceModeOverride OrderAcceptanceMode?
+  priceListId                 String?
   tradeRelationship           TradeRelationship?   @relation(fields: [tradeRelationshipId], references: [id])
   traderCustomer              Organisation         @relation("TraderCustomerSettingsCustomer", fields: [traderCustomerId], references: [id])
+  priceList                   PriceList?           @relation(fields: [priceListId], references: [id])
 
   @@unique([distributorId, traderCustomerId])
   @@map("trader_customer_settings")
@@ -476,4 +500,54 @@ model CustomerCatalogue {
 
   @@id([tradeRelationshipId, catalogueId])
   @@map("customer_catalogues")
+}
+
+// ─── Price Lists ──────────────────────────────────────────────────────────────
+
+model PriceList {
+  id               String                   @id @default(cuid())
+  distributorId    String
+  name             String
+  description      String?
+  currency         String                   @default("GBP")
+  isDefault        Boolean                  @default(false)
+  active           Boolean                  @default(true)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  distributor      Organisation             @relation("DistributorPriceLists", fields: [distributorId], references: [id])
+  rules            PriceListRule[]
+  customerSettings TraderCustomerSettings[]
+  basedOnRules     PriceListRule[]          @relation("BasePriceListRules")
+
+  @@index([distributorId, active])
+  @@index([distributorId, isDefault])
+  @@map("price_lists")
+}
+
+model PriceListRule {
+  id                 String                          @id @default(cuid())
+  distributorId      String
+  priceListId        String
+  selectorType       PriceListRuleSelectorType
+  productId          String?
+  productVariantId   String?
+  minQuantity        Int                             @default(1)
+  valueType          PriceListRuleValueType          @default(FIXED_PRICE)
+  unitPrice          Decimal?                        @db.Decimal(10, 2)
+  discountPercentage Decimal?                        @db.Decimal(5, 2)
+  discountBaseType   PriceListRuleDiscountBaseType?
+  basePriceListId    String?
+  currency           String                          @default("GBP")
+  sortOrder          Int                             @default(0)
+  active             Boolean                         @default(true)
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  priceList          PriceList                       @relation(fields: [priceListId], references: [id])
+  product            Product?                        @relation("ProductPriceListRules", fields: [productId], references: [id])
+  basePriceList      PriceList?                      @relation("BasePriceListRules", fields: [basePriceListId], references: [id])
+
+  @@index([priceListId, active])
+  @@index([priceListId, selectorType, productId])
+  @@index([distributorId])
+  @@map("price_list_rules")
 }

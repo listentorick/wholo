@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { PriceListDrawer } from '@/components/customers/PriceListDrawer';
+import { CatalogueDrawer } from '@/components/customers/CatalogueDrawer';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import type { Customer } from '@wholo/types';
 import { TradeRelationshipStatus } from '@wholo/types';
@@ -72,7 +74,14 @@ function Spinner() {
 // ─── Customer row ──────────────────────────────────────────────────────────────
 
 function CustomerRow({ customer }: { customer: Customer }) {
+  const [activeDrawer, setActiveDrawer] = useState<
+    | { type: 'pricelist'; id: string }
+    | { type: 'catalogue'; id: string }
+    | null
+  >(null);
+
   return (
+    <>
     <tr className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors cursor-pointer">
       <td className="py-3 pl-5 pr-4">
         <Link href={`/customers/${customer.id}/edit`} className="block">
@@ -84,22 +93,60 @@ function CustomerRow({ customer }: { customer: Customer }) {
           )}
         </Link>
       </td>
-      <td className="py-3 px-4">
-        <Link href={`/customers/${customer.id}/edit`} className="block">
-          <StatusBadge status={customer.status} />
-        </Link>
-      </td>
       <td className="py-3 px-4 text-sm text-muted">
         <Link href={`/customers/${customer.id}/edit`} className="block">
           {customer.accountNumber ?? '—'}
         </Link>
       </td>
-      <td className="py-3 pl-4 pr-5 text-sm text-muted">
+      <td className="py-3 px-4 text-sm text-muted">
         <Link href={`/customers/${customer.id}/edit`} className="block">
           {customer.organisation.phone ?? '—'}
         </Link>
       </td>
+      <td className="py-3 px-4">
+        {customer.catalogues.length === 0 ? (
+          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {customer.catalogues.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'catalogue', id: c.id }); }}
+                className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        {customer.priceList ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'pricelist', id: customer.priceList!.id }); }}
+            className="text-sm text-text hover:text-primary transition-colors"
+          >
+            {customer.priceList.name}
+          </button>
+        ) : (
+          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+        )}
+      </td>
+      <td className="py-3 pl-4 pr-5">
+        <Link href={`/customers/${customer.id}/edit`} className="block">
+          <StatusBadge status={customer.status} />
+        </Link>
+      </td>
     </tr>
+    {activeDrawer?.type === 'pricelist' && (
+      <PriceListDrawer priceListId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+    )}
+    {activeDrawer?.type === 'catalogue' && (
+      <CatalogueDrawer catalogueId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+    )}
+    </>
   );
 }
 
@@ -185,13 +232,19 @@ export default function CustomersPage() {
                   Customer
                 </th>
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Status
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
                   Account #
                 </th>
-                <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">
+                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
                   Phone
+                </th>
+                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Catalogues
+                </th>
+                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Price List
+                </th>
+                <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Status
                 </th>
               </tr>
             </thead>

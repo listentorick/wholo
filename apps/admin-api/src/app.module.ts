@@ -9,6 +9,7 @@ import { ProductsModule } from './products/products.module';
 import { CustomersModule } from './customers/customers.module';
 import { CataloguesModule } from './catalogues/catalogues.module';
 import { OrdersModule } from './orders/orders.module';
+import { PriceListsModule } from './price-lists/price-lists.module';
 import { ApiClientModule } from './api-client/api-client.module';
 import { HealthController } from './health.controller';
 
@@ -25,6 +26,7 @@ import { HealthController } from './health.controller';
     CustomersModule,
     CataloguesModule,
     OrdersModule,
+    PriceListsModule,
   ],
   controllers: [HealthController],
 })

@@ -143,7 +143,7 @@ export default function CataloguePage() {
                       <span className="text-[11px] text-[#C4B5A8] leading-none">{product.sku}</span>
                     )}
                     <span className="text-xs text-[#9CA3AF] mt-0.5">
-                      {formatPrice(product.price)}
+                      {formatPrice(product.resolvedPrice ?? product.price)}
                     </span>
 
                     <div className="flex items-center gap-2 mt-2">
@@ -177,7 +177,7 @@ export default function CataloguePage() {
 
                       <button
                         className="order-btn"
-                        disabled={saving || product.price === null}
+                        disabled={saving || (product.resolvedPrice === null && product.price === null)}
                         onClick={() => syncItem(product.id, qty)}
                       >
                         {saving ? '…' : added ? 'Update' : 'Add'}

@@ -14,7 +14,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
-  const { cartLoading, items, quantities, savingItems, syncItem } = useCart();
+  const { cartLoading, items, quantities, savingItems, syncItem, refreshCart } = useCart();
 
   const [poOpen, setPoOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -36,6 +36,7 @@ export default function CheckoutPage() {
         },
         accessToken,
       );
+      await refreshCart(); // re-sync from server (server cleared the cart on submission)
       router.push(`/${distributorSlug}/orders/${order.id}`);
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.problem.detail : 'Failed to place order. Please try again.');

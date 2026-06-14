@@ -40,6 +40,8 @@ const orderLineSelect = {
   subtotalAmount: true,
   taxAmount: true,
   totalAmount: true,
+  priceListIdSnapshot: true,
+  priceListRuleIdSnapshot: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -152,6 +154,8 @@ export class OrdersService {
         subtotalAmount: new Prisma.Decimal(subtotal),
         taxAmount: new Prisma.Decimal(0),
         totalAmount: new Prisma.Decimal(subtotal),
+        priceListIdSnapshot: line.resolvedPriceListId ?? null,
+        priceListRuleIdSnapshot: line.resolvedPriceListRuleId ?? null,
       };
     });
 
@@ -435,6 +439,8 @@ export class OrdersService {
         subtotalAmount: dec(l.subtotalAmount),
         taxAmount: dec(l.taxAmount),
         totalAmount: dec(l.totalAmount),
+        priceListIdSnapshot: l.priceListIdSnapshot,
+        priceListRuleIdSnapshot: l.priceListRuleIdSnapshot,
         status: l.status,
         createdAt: l.createdAt.toISOString(),
         updatedAt: l.updatedAt.toISOString(),

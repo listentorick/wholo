@@ -8,6 +8,7 @@ import { CartModule } from './cart/cart.module';
 import { AdminCataloguesModule } from './admin-catalogues/admin-catalogues.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { OrdersModule } from './orders/orders.module';
+import { PriceListsModule } from './price-lists/price-lists.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -21,6 +22,7 @@ import { HealthController } from './health.controller';
     AdminCataloguesModule,
     OutboxModule,
     OrdersModule,
+    PriceListsModule,
   ],
   controllers: [HealthController],
 })

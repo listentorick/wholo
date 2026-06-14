@@ -5,6 +5,7 @@ import {
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProductsService } from './products.service';
+import { ApiClientService } from '../api-client/api-client.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -12,7 +13,10 @@ import { ProductQueryDto } from './dto/product-query.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('products')
 export class ProductsController {
-  constructor(private productsService: ProductsService) {}
+  constructor(
+    private productsService: ProductsService,
+    private api: ApiClientService,
+  ) {}
 
   @Get()
   findAll(@Req() req: Request, @Query() query: ProductQueryDto) {
@@ -43,5 +47,11 @@ export class ProductsController {
   remove(@Req() req: Request, @Param('id') id: string) {
     const { organisationId } = req.user as { organisationId: string };
     return this.productsService.remove(id, organisationId);
+  }
+
+  @Get(':id/pricing')
+  getProductPricing(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.api.get(`/admin/products/${id}/pricing`, organisationId);
   }
 }

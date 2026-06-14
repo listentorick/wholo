@@ -5,4 +5,5 @@ export { adminProductsApi } from './products';
 export { adminCustomersApi } from './customers';
 export { adminCataloguesApi } from './catalogues';
 export { adminOrdersApi } from './orders';
+export { adminPriceListsApi } from './price-lists';
 export { ApiError } from './base';

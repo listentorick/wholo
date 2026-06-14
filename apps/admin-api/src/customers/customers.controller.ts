@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query, Req, UseGuards, HttpCode, HttpStatus,
+  Param, Body, Query, Req, UseGuards, HttpCode, HttpStatus, HttpException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -82,5 +82,17 @@ export class CustomersController {
   ) {
     const { organisationId } = req.user as { organisationId: string };
     return this.api.delete(`/admin/trade-relationships/${id}/catalogues/${catalogueId}`, organisationId);
+  }
+
+  // ── Price list assignment ─────────────────────────────────────────────────────
+
+  @Patch(':id/price-list')
+  assignPriceList(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { priceListId: string | null },
+  ) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.api.patch(`/admin/trade-relationships/${id}/price-list`, organisationId, body);
   }
 }
