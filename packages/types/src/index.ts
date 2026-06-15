@@ -252,6 +252,7 @@ export interface CatalogueProduct {
   compareAtPrice: string | null;
   resolvedPrice: string | null;
   productType: CatalogueProductType | null;
+  thumbnailUrl?: string | null;
 }
 
 export interface CatalogueProductsParams {

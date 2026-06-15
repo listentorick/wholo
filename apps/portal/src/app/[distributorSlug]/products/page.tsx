@@ -129,11 +129,22 @@ export default function CataloguePage() {
                   className="cat-product-row flex items-center border-b border-[#E5E7EB]"
                   style={{ animationDelay: `${delay}s` }}
                 >
-                  <div
-                    className="product-img-placeholder shrink-0"
-                    style={{ width: 96, height: 96 }}
-                    aria-hidden="true"
-                  />
+                  {product.thumbnailUrl ? (
+                    <img
+                      src={product.thumbnailUrl}
+                      alt={product.name}
+                      width={96}
+                      height={96}
+                      loading="lazy"
+                      style={{ width: 96, height: 96, objectFit: 'cover', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <div
+                      className="product-img-placeholder shrink-0"
+                      style={{ width: 96, height: 96 }}
+                      aria-hidden="true"
+                    />
+                  )}
 
                   <div className="flex flex-1 flex-col gap-0.5 px-3 py-3 min-w-0">
                     <span className="text-sm font-medium text-[#1A1A1A] leading-snug truncate">

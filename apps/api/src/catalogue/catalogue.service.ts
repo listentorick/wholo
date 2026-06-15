@@ -2,11 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, OrganisationType, ProductStatus, PriceListRuleDiscountBaseType, PriceListRuleSelectorType, PriceListRuleValueType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
 interface CursorPayload {
   createdAt: string;
   id: string;
+}
+
+interface AssetImageVariants {
+  thumb?: string;
+  catalogue?: string;
+  large?: string;
+  [key: string]: string | undefined;
 }
 
 const catalogueProductInclude = {
@@ -18,6 +26,7 @@ export class CatalogueService {
   constructor(
     private prisma: PrismaService,
     private priceResolution: PriceResolutionService,
+    private r2Storage: R2StorageService,
   ) {}
 
   async getDistributor(distributorSlug: string) {
@@ -111,6 +120,25 @@ export class CatalogueService {
     const data = rawData;
     const resolvedPrices = new Map<string, string>();
 
+    const thumbnailUrls = new Map<string, string>();
+    if (rawData.length > 0) {
+      const productIds = rawData.map((p) => p.id);
+      const images = await this.prisma.assetImage.findMany({
+        where: {
+          assetType: 'product-image',
+          entityId: { in: productIds },
+          distributorId: distributor.id,
+          isPrimary: true,
+        },
+        select: { entityId: true, variants: true },
+      });
+      for (const img of images) {
+        const variants = img.variants as AssetImageVariants;
+        const thumbKey = variants?.thumb ?? null;
+        if (thumbKey) thumbnailUrls.set(img.entityId, this.r2Storage.getPublicUrl(thumbKey));
+      }
+    }
+
     if (customerOrgId) {
       const priceListId = await this.priceResolution.resolvePriceListId(distributor.id, customerOrgId);
 
@@ -202,6 +230,7 @@ export class CatalogueService {
             : String(p.compareAtPrice)
           : null,
         resolvedPrice: resolvedPrices.get(p.id) ?? null,
+        thumbnailUrl: thumbnailUrls.get(p.id) ?? null,
       })),
       pagination: { nextCursor, hasMore, total },
     };
