@@ -1,20 +1,31 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Request } from 'express';
+import {
+  ApiBearerAuth, ApiTags, ApiOperation,
+  ApiOkResponse, ApiNotFoundResponse,
+} from '@nestjs/swagger';
 import { CatalogueService } from './catalogue.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
+@ApiTags('Catalogue')
 @Controller('catalogue')
 export class CatalogueController {
   constructor(private readonly catalogueService: CatalogueService) {}
 
   @Get(':slug')
+  @ApiOperation({ summary: 'Get distributor details by slug' })
+  @ApiOkResponse({ description: 'Distributor profile' })
+  @ApiNotFoundResponse({ description: 'Distributor not found' })
   getDistributor(@Param('slug') slug: string) {
     return this.catalogueService.getDistributor(slug);
   }
 
   @UseGuards(AuthGuard('jwt'))
   @Get(':slug/products')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Browse products in a distributor catalogue with customer-specific pricing' })
+  @ApiOkResponse({ description: 'Paginated product list' })
   getProducts(@Req() req: Request, @Param('slug') slug: string, @Query() query: CatalogueQueryDto) {
     const { organisationId } = req.user as { organisationId: string };
     return this.catalogueService.getProducts(slug, query, organisationId);

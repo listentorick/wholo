@@ -1,6 +1,7 @@
 import { IsOptional, IsEnum, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProductStatus } from '@prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class ProductQueryDto {
   @IsOptional()
@@ -13,6 +14,7 @@ export class ProductQueryDto {
   @IsOptional()
   cursor?: string;
 
+  @ApiProperty({ enum: ProductStatus, enumName: 'ProductStatus', required: false })
   @IsOptional()
   @IsEnum(ProductStatus)
   status?: ProductStatus;

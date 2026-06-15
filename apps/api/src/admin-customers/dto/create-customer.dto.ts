@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCustomerDto {
   @IsString()
@@ -17,6 +18,7 @@ export class CreateCustomerDto {
   @IsString()
   accountNumber?: string;
 
+  @ApiProperty({ type: String, description: 'Decimal string, e.g. "5000.00"', required: false })
   @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })
   creditLimit?: string;

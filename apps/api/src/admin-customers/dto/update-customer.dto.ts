@@ -1,5 +1,6 @@
 import { IsString, IsOptional, IsEmail, IsDecimal, IsEnum, MinLength } from 'class-validator';
 import { TradeRelationshipStatus } from '@prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateCustomerDto {
   @IsOptional()
@@ -15,6 +16,7 @@ export class UpdateCustomerDto {
   @IsString()
   phone?: string;
 
+  @ApiProperty({ enum: TradeRelationshipStatus, enumName: 'TradeRelationshipStatus', required: false })
   @IsOptional()
   @IsEnum(TradeRelationshipStatus)
   status?: TradeRelationshipStatus;
@@ -23,6 +25,7 @@ export class UpdateCustomerDto {
   @IsString()
   accountNumber?: string;
 
+  @ApiProperty({ type: String, description: 'Decimal string, e.g. "5000.00"', required: false })
   @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })
   creditLimit?: string;

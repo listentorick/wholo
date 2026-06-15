@@ -5,6 +5,15 @@
   "compilerOptions": {
     "tsConfigPath": "tsconfig.build.json",
     "deleteOutDir": true,
-    "assets": [{ "include": "../prisma/**", "outDir": "dist", "watchAssets": true }]
+    "assets": [{ "include": "../prisma/**", "outDir": "dist", "watchAssets": true }],
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true
+        }
+      }
+    ]
   }
 }
