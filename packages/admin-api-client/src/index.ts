@@ -1,4 +1,5 @@
 export { adminAuthApi } from './auth';
+export { adminAssetImagesApi } from './asset-images';
 export { adminProductTypesApi } from './product-types';
 export { adminSuppliersApi } from './suppliers';
 export { adminProductsApi } from './products';

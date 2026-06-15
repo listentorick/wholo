@@ -551,3 +551,26 @@ model PriceListRule {
   @@index([distributorId])
   @@map("price_list_rules")
 }
+
+// ─── Asset Images ─────────────────────────────────────────────────────────────
+
+model AssetImage {
+  id              String   @id
+  assetType       String
+  entityId        String
+  distributorId   String
+  variants        Json
+  sourceFilename  String?
+  sourceMimeType  String
+  sourceSizeBytes Int
+  sourceWidth     Int?
+  sourceHeight    Int?
+  sortOrder       Int      @default(0)
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([assetType, entityId, sortOrder])
+  @@index([distributorId])
+  @@map("asset_images")
+}

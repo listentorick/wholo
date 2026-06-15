@@ -59,6 +59,34 @@ export class ApiClientService {
     return this.request<T>('DELETE', path, distributorId, undefined, userId);
   }
 
+  async postMultipart<T>(
+    path: string,
+    distributorId: string,
+    formData: FormData,
+    userId?: string,
+  ): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'x-distributor-id': distributorId,
+        ...(userId && { 'x-user-id': userId }),
+      },
+      body: formData,
+    });
+
+    if (res.status === 204) return undefined as T;
+
+    const data = await res.json();
+    if (!res.ok) {
+      const message = data?.message ?? `Request failed: ${res.status}`;
+      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
+      err.status = res.status;
+      throw err;
+    }
+    return data as T;
+  }
+
   async postAnonymous<T>(path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl}/api/v1${path}`;
     const res = await fetch(url, {

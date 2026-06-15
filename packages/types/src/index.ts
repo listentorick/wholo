@@ -549,3 +549,28 @@ export interface PriceListListParams {
   limit?: number;
   cursor?: string;
 }
+
+// ─── Asset Images ─────────────────────────────────────────────────────────────
+
+export interface AssetImage {
+  id: string;
+  assetType: string;
+  entityId: string;
+  distributorId: string;
+  variants: Record<string, string>;
+  sourceFilename: string | null;
+  sourceMimeType: string;
+  sourceSizeBytes: number;
+  sourceWidth: number | null;
+  sourceHeight: number | null;
+  sortOrder: number;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReorderAssetImagesRequest {
+  assetType: string;
+  entityId: string;
+  imageIds: string[];
+}

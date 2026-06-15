@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType } from '@wholo/types';
 import type { ProductType, Supplier, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
 import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi } from '@wholo/admin-api-client';
+import { ProductImageUploader } from './ProductImageUploader';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -794,6 +795,15 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
             )}
           </div>
         </div>
+
+        {/* Product images — edit mode only */}
+        {mode === 'edit' && initialValues?.id && (
+          <div className="mt-5">
+            <FormCard title="Product images">
+              <ProductImageUploader token={token} productId={initialValues.id} />
+            </FormCard>
+          </div>
+        )}
 
         {/* Form actions */}
         {apiError && (

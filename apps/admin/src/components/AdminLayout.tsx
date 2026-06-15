@@ -33,9 +33,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
           {children}
         </main>
       </div>

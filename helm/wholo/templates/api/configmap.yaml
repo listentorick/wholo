@@ -10,3 +10,6 @@ data:
   JWT_EXPIRES_IN: {{ .Values.api.jwt.expiresIn | quote }}
   REFRESH_TOKEN_EXPIRES_DAYS: {{ .Values.api.refreshToken.expiresDays | quote }}
   REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
+  R2_ACCOUNT_ID: {{ .Values.api.r2.accountId | quote }}
+  R2_BUCKET_NAME: {{ .Values.api.r2.bucketName | quote }}
+  R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}

@@ -32,6 +32,12 @@ api:
     expiresIn: "15m"
   refreshToken:
     expiresDays: "30"
+  r2:
+    accountId: ""
+    bucketName: ""
+    publicBaseUrl: ""
+    accessKeyId: ""
+    secretAccessKey: ""
 
 portal:
   image:

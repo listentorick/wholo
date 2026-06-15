@@ -9,6 +9,7 @@ import { CustomersModule } from './customers/customers.module';
 import { CataloguesModule } from './catalogues/catalogues.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
+import { AssetImagesModule } from './asset-images/asset-images.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -23,6 +24,7 @@ import { HealthController } from './health.controller';
     CataloguesModule,
     OrdersModule,
     PriceListsModule,
+    AssetImagesModule,
   ],
   controllers: [HealthController],
 })
