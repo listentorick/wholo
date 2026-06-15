@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-portal-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-portal-api
+spec:
+  replicas: {{ .Values.portalApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-portal-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-portal-api
+    spec:
+      containers:
+        - name: portal-api
+          image: {{ .Values.portalApi.image.repository }}:{{ .Values.portalApi.image.tag }}
+          imagePullPolicy: {{ .Values.portalApi.image.pullPolicy }}
+          ports:
+            - containerPort: 3003
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-portal-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-portal-api
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.portalApi.resources | nindent 12 }}

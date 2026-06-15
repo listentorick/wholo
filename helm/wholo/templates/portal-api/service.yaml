@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-portal-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-portal-api
+spec:
+  type: {{ .Values.portalApi.service.type }}
+  selector:
+    app: {{ include "wholo.fullname" . }}-portal-api
+  ports:
+    - port: {{ .Values.portalApi.service.port }}
+      targetPort: 3003

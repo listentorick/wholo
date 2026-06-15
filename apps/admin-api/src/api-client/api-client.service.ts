@@ -58,4 +58,42 @@ export class ApiClientService {
   delete<T>(path: string, distributorId: string, userId?: string): Promise<T> {
     return this.request<T>('DELETE', path, distributorId, undefined, userId);
   }
+
+  async postAnonymous<T>(path: string, body?: unknown): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+    if (res.status === 204) return undefined as T;
+    const data = await res.json();
+    if (!res.ok) {
+      const message = data?.message ?? `Request failed: ${res.status}`;
+      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
+      err.status = res.status;
+      throw err;
+    }
+    return data as T;
+  }
+
+  async getAsBearer<T>(path: string, bearerToken: string): Promise<T> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${bearerToken}`,
+      },
+    });
+    if (res.status === 204) return undefined as T;
+    const data = await res.json();
+    if (!res.ok) {
+      const message = data?.message ?? `Request failed: ${res.status}`;
+      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
+      err.status = res.status;
+      throw err;
+    }
+    return data as T;
+  }
 }

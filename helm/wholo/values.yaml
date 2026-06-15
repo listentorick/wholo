@@ -49,7 +49,28 @@ portal:
     limits:
       memory: "256Mi"
       cpu: "200m"
-  apiUrl: "http://localhost:3001"
+  apiUrl: "http://localhost:3003"
+
+portalApi:
+  image:
+    repository: wholo/portal-api
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3003
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  jwt:
+    secret: "dev-secret-change-in-prod"
+    expiresIn: "15m"
+  centralApiUrl: "http://wholo-api:3001"
 
 adminApi:
   image:

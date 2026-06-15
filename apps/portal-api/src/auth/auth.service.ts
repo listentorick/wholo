@@ -7,10 +7,10 @@ export class AuthService {
   constructor(private api: ApiClientService) {}
 
   login(dto: LoginDto) {
-    return this.api.postAnonymous<{ accessToken: string; refreshToken: string; user: unknown }>('/auth/login', dto);
+    return this.api.post('/auth/login', null, dto);
   }
 
-  me(bearerToken: string) {
-    return this.api.getAsBearer('/auth/me', bearerToken);
+  me(token: string) {
+    return this.api.get('/auth/me', token);
   }
 }

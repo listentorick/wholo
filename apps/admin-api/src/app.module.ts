@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
+import { ApiClientModule } from './api-client/api-client.module';
 import { AuthModule } from './auth/auth.module';
 import { ProductTypesModule } from './product-types/product-types.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
@@ -10,15 +9,12 @@ import { CustomersModule } from './customers/customers.module';
 import { CataloguesModule } from './catalogues/catalogues.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
-import { ApiClientModule } from './api-client/api-client.module';
 import { HealthController } from './health.controller';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ApiClientModule,
-    PrismaModule,
-    UsersModule,
     AuthModule,
     ProductTypesModule,
     SuppliersModule,

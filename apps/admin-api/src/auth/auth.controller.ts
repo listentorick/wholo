@@ -1,17 +1,16 @@
-import { Controller, Post, Get, UseGuards, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.login(req.user as any);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.login(dto);
 
     res.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
@@ -26,7 +25,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: Request) {
-    return this.authService.getProfile((req.user as any).sub);
+  me(@Req() req: Request) {
+    const token = req.headers['authorization']?.replace(/^Bearer\s+/i, '') ?? '';
+    return this.authService.me(token);
   }
 }

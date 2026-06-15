@@ -28,6 +28,18 @@ Three primary actor types:
 | Delivery Management | Delivery statuses, geographic availability rules, driver workflow, signature capture |
 | Xero Integration | Xero is system of record for invoices/payments/balances; Wholo is pricing authority — prices must not be overridden by Xero |
 
+## Application Ports
+
+| App | Port | Notes |
+|---|---|---|
+| `apps/api` | 3001 | Central domain API — all business logic |
+| `apps/admin-api` | 3002 | BFF for admin UI — proxies to apps/api |
+| `apps/portal-api` | 3003 | BFF for customer portal — proxies to apps/api |
+| `apps/admin` | 3020 | Admin Next.js frontend |
+| `apps/portal` | 3010 | Customer portal Next.js frontend |
+
+**Auth architecture**: `apps/api` is the single auth authority. BFFs proxy login to apps/api and forward the issued JWT. BFFs validate inbound JWTs locally using a shared `JWT_SECRET`. Future: dedicated auth service + client credentials for BFF→API calls.
+
 ## Architecture Principles (from PRD)
 
 - **Mobile-first**: all core workflows (ordering, stock receiving, delivery confirmation, signature capture) must work well on mobile.
