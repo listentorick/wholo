@@ -1,0 +1,55 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { UpdateSettingsDto } from './dto/update-settings.dto';
+
+@Injectable()
+export class AdminSettingsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async find(distributorId: string) {
+    const [org, settings] = await Promise.all([
+      this.prisma.organisation.findUniqueOrThrow({ where: { id: distributorId } }),
+      this.prisma.distributorSettings.upsert({
+        where: { distributorId },
+        create: { distributorId },
+        update: {},
+      }),
+    ]);
+
+    return {
+      name: org.name,
+      email: org.email,
+      phone: org.phone,
+      slug: org.slug,
+      defaultOrderAcceptanceMode: settings.defaultOrderAcceptanceMode,
+      marketplaceVisible: settings.marketplaceVisible,
+      marketplaceDescription: settings.marketplaceDescription,
+      orderNotificationEmails: settings.orderNotificationEmails,
+    };
+  }
+
+  async update(distributorId: string, dto: UpdateSettingsDto) {
+    const { name, email, phone, slug, ...settingsFields } = dto;
+
+    const orgPatch = Object.fromEntries(
+      Object.entries({ name, email, phone, slug }).filter(([, v]) => v !== undefined),
+    );
+
+    const settingsPatch = Object.fromEntries(
+      Object.entries(settingsFields).filter(([, v]) => v !== undefined),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(orgPatch).length > 0) {
+        await tx.organisation.update({ where: { id: distributorId }, data: orgPatch });
+      }
+      await tx.distributorSettings.upsert({
+        where: { distributorId },
+        create: { distributorId, ...settingsPatch },
+        update: settingsPatch,
+      });
+    });
+
+    return this.find(distributorId);
+  }
+}

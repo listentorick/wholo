@@ -555,6 +555,21 @@ export interface PriceListListParams {
   cursor?: string;
 }
 
+// ─── Distributor Settings ─────────────────────────────────────────────────────
+
+export interface DistributorSettings {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  slug: string | null;
+  defaultOrderAcceptanceMode: OrderAcceptanceMode;
+  marketplaceVisible: boolean;
+  marketplaceDescription: string | null;
+  orderNotificationEmails: string[];
+}
+
+export type UpdateDistributorSettingsRequest = Partial<DistributorSettings>;
+
 // ─── Asset Images ─────────────────────────────────────────────────────────────
 
 export interface AssetImage {

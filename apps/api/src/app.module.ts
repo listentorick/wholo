@@ -12,6 +12,7 @@ import { PriceListsModule } from './price-lists/price-lists.module';
 import { AdminProductsModule } from './admin-products/admin-products.module';
 import { AdminOrdersModule } from './admin-orders/admin-orders.module';
 import { AdminCustomersModule } from './admin-customers/admin-customers.module';
+import { AdminSettingsModule } from './admin-settings/admin-settings.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
@@ -32,6 +33,7 @@ import './admin-products/product-image.asset-config';
     AdminProductsModule,
     AdminOrdersModule,
     AdminCustomersModule,
+    AdminSettingsModule,
   ],
   controllers: [HealthController],
 })

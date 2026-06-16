@@ -423,6 +423,9 @@ model OrderLine {
 model DistributorSettings {
   distributorId              String              @id
   defaultOrderAcceptanceMode OrderAcceptanceMode @default(MANUAL)
+  marketplaceVisible         Boolean             @default(false)
+  marketplaceDescription     String?
+  orderNotificationEmails    String[]            @default([])
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")
