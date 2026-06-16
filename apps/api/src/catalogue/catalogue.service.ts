@@ -235,4 +235,151 @@ export class CatalogueService {
       pagination: { nextCursor, hasMore, total },
     };
   }
+
+  async getProduct(distributorSlug: string, productId: string, customerOrgId?: string) {
+    const distributor = await this.prisma.organisation.findFirst({
+      where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    if (!distributor) throw new NotFoundException('Distributor not found');
+
+    let catalogueProductIdFilter: string[] | undefined;
+    if (customerOrgId) {
+      const relationship = await this.prisma.tradeRelationship.findFirst({
+        where: { distributorId: distributor.id, customerId: customerOrgId, deletedAt: null },
+        select: { id: true },
+      });
+      if (relationship) {
+        const assignments = await this.prisma.customerCatalogue.findMany({
+          where: { tradeRelationshipId: relationship.id },
+          select: {
+            catalogue: {
+              select: { products: { select: { productId: true } } },
+            },
+          },
+        });
+        const ids = new Set<string>();
+        for (const a of assignments) {
+          for (const p of a.catalogue.products) ids.add(p.productId);
+        }
+        catalogueProductIdFilter = [...ids];
+      } else {
+        catalogueProductIdFilter = [];
+      }
+    }
+
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        distributorId: distributor.id,
+        status: ProductStatus.ACTIVE,
+        deletedAt: null,
+      },
+      include: catalogueProductInclude,
+    });
+    if (!product) throw new NotFoundException('Product not found');
+
+    if (catalogueProductIdFilter !== undefined && !catalogueProductIdFilter.includes(productId)) {
+      throw new NotFoundException('Product not found');
+    }
+
+    const image = await this.prisma.assetImage.findFirst({
+      where: {
+        assetType: 'product-image',
+        entityId: productId,
+        distributorId: distributor.id,
+        isPrimary: true,
+      },
+      select: { variants: true },
+    });
+    const variants = image?.variants as AssetImageVariants | null;
+    const imageKey = variants?.catalogue ?? variants?.large ?? null;
+    const imageUrl = imageKey ? this.r2Storage.getPublicUrl(imageKey) : null;
+
+    const thumbnailKey = variants?.thumb ?? null;
+    const thumbnailUrl = thumbnailKey ? this.r2Storage.getPublicUrl(thumbnailKey) : null;
+
+    let resolvedPrice: string | null = null;
+
+    if (customerOrgId) {
+      const priceListId = await this.priceResolution.resolvePriceListId(distributor.id, customerOrgId);
+
+      if (priceListId) {
+        const rules = await this.prisma.priceListRule.findMany({
+          where: { priceListId, active: true },
+          select: {
+            selectorType: true,
+            productId: true,
+            minQuantity: true,
+            valueType: true,
+            unitPrice: true,
+            discountPercentage: true,
+            discountBaseType: true,
+            basePriceListId: true,
+          },
+        });
+
+        const toDecimal = (v: unknown): Prisma.Decimal | null =>
+          v != null && typeof v === 'object' && 'toFixed' in (v as object)
+            ? (v as Prisma.Decimal)
+            : null;
+
+        const candidates = rules.filter(
+          (r) =>
+            r.minQuantity <= 1 &&
+            (r.selectorType === PriceListRuleSelectorType.ALL_PRODUCTS ||
+              (r.selectorType === PriceListRuleSelectorType.PRODUCT && r.productId === product.id)),
+        );
+
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => {
+            const selectorOrder =
+              (a.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1) -
+              (b.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1);
+            if (selectorOrder !== 0) return selectorOrder;
+            return b.minQuantity - a.minQuantity;
+          });
+
+          const matched = candidates[0];
+
+          if (matched.valueType === PriceListRuleValueType.FIXED_PRICE) {
+            const d = toDecimal(matched.unitPrice);
+            if (d) resolvedPrice = d.toFixed(2);
+          } else {
+            let base: Prisma.Decimal | null = null;
+            if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRODUCT_PRICE) {
+              base = toDecimal(product.price);
+            } else if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRICE_LIST && matched.basePriceListId) {
+              const baseResolved = await this.priceResolution.resolvePrice(
+                distributor.id, customerOrgId, product.id, 1, 0, matched.basePriceListId,
+              );
+              base = baseResolved?.unitPrice ?? null;
+            }
+            if (base && matched.discountPercentage) {
+              const pct = toDecimal(matched.discountPercentage)!;
+              const multiplier = new Prisma.Decimal(1).minus(pct.div(100));
+              resolvedPrice = base.mul(multiplier).toFixed(2);
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      ...product,
+      price: product.price
+        ? typeof product.price === 'object' && 'toFixed' in (product.price as object)
+          ? (product.price as { toFixed: (n: number) => string }).toFixed(2)
+          : String(product.price)
+        : null,
+      compareAtPrice: product.compareAtPrice
+        ? typeof product.compareAtPrice === 'object' && 'toFixed' in (product.compareAtPrice as object)
+          ? (product.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
+          : String(product.compareAtPrice)
+        : null,
+      resolvedPrice,
+      thumbnailUrl,
+      imageUrl,
+    };
+  }
 }

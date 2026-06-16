@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { OrganisationType, ProductStatus } from '@prisma/client';
+import { OrganisationType, PriceListRuleSelectorType, PriceListRuleValueType, ProductStatus } from '@prisma/client';
 import { CatalogueService } from './catalogue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
@@ -10,7 +10,23 @@ const DISTRIBUTOR_ID = 'dist-1';
 const DISTRIBUTOR_SLUG = 'test-dist';
 const PRODUCT_ID_1 = 'prod-1';
 const PRODUCT_ID_2 = 'prod-2';
+const CUSTOMER_ORG_ID = 'cust-1';
+const RELATIONSHIP_ID = 'rel-1';
 const NOW = new Date('2025-01-15T00:00:00Z');
+
+interface DecimalLike {
+  toFixed: (d: number) => string;
+  div: (d: number) => DecimalLike;
+  mul: (other: DecimalLike) => DecimalLike;
+  minus: (other: DecimalLike) => DecimalLike;
+}
+
+const makeDecimal = (value: string): DecimalLike => ({
+  toFixed: (d: number) => parseFloat(value).toFixed(d),
+  div: (d: number) => makeDecimal((parseFloat(value) / d).toString()),
+  mul: (other: DecimalLike) => makeDecimal((parseFloat(value) * parseFloat(other.toFixed(10))).toString()),
+  minus: (other: DecimalLike) => makeDecimal((parseFloat(value) - parseFloat(other.toFixed(10))).toString()),
+});
 
 const baseDistributor = {
   id: DISTRIBUTOR_ID,
@@ -37,9 +53,9 @@ const mockPrisma = {
   organisation: { findFirst: jest.fn() },
   tradeRelationship: { findFirst: jest.fn() },
   customerCatalogue: { findMany: jest.fn() },
-  product: { findMany: jest.fn(), count: jest.fn() },
+  product: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
   priceListRule: { findMany: jest.fn() },
-  assetImage: { findMany: jest.fn() },
+  assetImage: { findFirst: jest.fn(), findMany: jest.fn() },
 };
 
 const mockPriceResolution = {
@@ -70,7 +86,13 @@ describe('CatalogueService', () => {
     mockPrisma.organisation.findFirst.mockResolvedValue(baseDistributor);
     mockPrisma.product.count.mockResolvedValue(0);
     mockPrisma.product.findMany.mockResolvedValue([]);
+    mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
     mockPrisma.assetImage.findMany.mockResolvedValue([]);
+    mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+    mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+    mockPrisma.customerCatalogue.findMany.mockResolvedValue([]);
+    mockPrisma.priceListRule.findMany.mockResolvedValue([]);
+    mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
   });
 
   describe('getDistributor', () => {
@@ -208,6 +230,146 @@ describe('CatalogueService', () => {
       expect(result.pagination.hasMore).toBe(true);
       expect(result.pagination.nextCursor).not.toBeNull();
       expect(result.data).toHaveLength(50);
+    });
+  });
+
+  describe('getProduct', () => {
+    it('throws NotFoundException when distributor does not exist', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue(null);
+      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when product does not exist', async () => {
+      mockPrisma.product.findFirst.mockResolvedValue(null);
+      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when product is not in customer catalogues', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: 'other-product' }] } },
+      ]);
+      // Product exists in DB but is not in the customer's catalogue
+      mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
+
+      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns the correct product by id rather than an arbitrary catalogue entry', async () => {
+      const target = { ...makeProduct(PRODUCT_ID_1), description: 'The real description' };
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: PRODUCT_ID_1 }, { productId: PRODUCT_ID_2 }] } },
+      ]);
+      mockPrisma.product.findFirst.mockResolvedValue(target);
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+
+      expect(result.id).toBe(PRODUCT_ID_1);
+      expect(result.description).toBe('The real description');
+      expect(mockPrisma.product.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: PRODUCT_ID_1 }) }),
+      );
+    });
+
+    it('returns imageUrl from catalogue variant of primary image', async () => {
+      mockPrisma.assetImage.findFirst.mockResolvedValue({
+        variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp', large: 'key/large.webp' },
+      });
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(result.imageUrl).toBe('https://cdn.example.com/key/catalogue.webp');
+    });
+
+    it('falls back to large variant when catalogue variant is absent', async () => {
+      mockPrisma.assetImage.findFirst.mockResolvedValue({
+        variants: { thumb: 'key/thumb.webp', large: 'key/large.webp' },
+      });
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(result.imageUrl).toBe('https://cdn.example.com/key/large.webp');
+    });
+
+    it('returns imageUrl null when no primary image exists', async () => {
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(result.imageUrl).toBeNull();
+    });
+
+    it('returns imageUrl null when primary image has only thumb variant', async () => {
+      mockPrisma.assetImage.findFirst.mockResolvedValue({
+        variants: { thumb: 'key/thumb.webp' },
+      });
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(result.imageUrl).toBeNull();
+    });
+
+    it('returns thumbnailUrl from thumb variant', async () => {
+      mockPrisma.assetImage.findFirst.mockResolvedValue({
+        variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp' },
+      });
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(result.thumbnailUrl).toBe('https://cdn.example.com/key/thumb.webp');
+    });
+
+    it('scopes product query to distributor id', async () => {
+      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(mockPrisma.product.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ distributorId: DISTRIBUTOR_ID }),
+        }),
+      );
+    });
+
+    it('scopes assetImage query to distributor id', async () => {
+      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+
+      expect(mockPrisma.assetImage.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ distributorId: DISTRIBUTOR_ID }),
+        }),
+      );
+    });
+
+    it('returns resolvedPrice for a FIXED_PRICE rule', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
+      ]);
+      mockPriceResolution.resolvePriceListId.mockResolvedValue('price-list-1');
+      mockPrisma.priceListRule.findMany.mockResolvedValue([
+        {
+          selectorType: PriceListRuleSelectorType.PRODUCT,
+          productId: PRODUCT_ID_1,
+          minQuantity: 1,
+          valueType: PriceListRuleValueType.FIXED_PRICE,
+          unitPrice: makeDecimal('15.00'),
+          discountPercentage: null,
+          discountBaseType: null,
+          basePriceListId: null,
+        },
+      ]);
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+
+      expect(result.resolvedPrice).toBe('15.00');
+    });
+
+    it('returns resolvedPrice null when customer has no price list', async () => {
+      mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+
+      expect(result.resolvedPrice).toBeNull();
     });
   });
 });

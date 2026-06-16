@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
@@ -129,27 +130,32 @@ export default function CataloguePage() {
                   className="cat-product-row flex items-center border-b border-[#E5E7EB]"
                   style={{ animationDelay: `${delay}s` }}
                 >
-                  {product.thumbnailUrl ? (
-                    <img
-                      src={product.thumbnailUrl}
-                      alt={product.name}
-                      width={96}
-                      height={96}
-                      loading="lazy"
-                      style={{ width: 96, height: 96, objectFit: 'cover', flexShrink: 0 }}
-                    />
-                  ) : (
-                    <div
-                      className="product-img-placeholder shrink-0"
-                      style={{ width: 96, height: 96 }}
-                      aria-hidden="true"
-                    />
-                  )}
+                  <Link href={`/${distributorSlug}/products/${product.id}`} className="shrink-0 focus:outline-none">
+                    {product.thumbnailUrl ? (
+                      <img
+                        src={product.thumbnailUrl}
+                        alt={product.name}
+                        width={96}
+                        height={96}
+                        loading="lazy"
+                        style={{ width: 96, height: 96, objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div
+                        className="product-img-placeholder"
+                        style={{ width: 96, height: 96 }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </Link>
 
                   <div className="flex flex-1 flex-col gap-0.5 px-3 py-3 min-w-0">
-                    <span className="text-sm font-medium text-[#1A1A1A] leading-snug truncate">
+                    <Link
+                      href={`/${distributorSlug}/products/${product.id}`}
+                      className="text-sm font-medium text-[#1A1A1A] leading-snug truncate hover:underline"
+                    >
                       {product.name}
-                    </span>
+                    </Link>
                     {product.sku && (
                       <span className="text-[11px] text-[#C4B5A8] leading-none">{product.sku}</span>
                     )}

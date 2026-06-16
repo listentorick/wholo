@@ -6,12 +6,16 @@ export class CatalogueService {
   constructor(private api: ApiClientService) {}
 
   getDistributor(slug: string) {
-    return this.api.get(`/catalogue/${slug}`);
+    return this.api.get(`/distributors/${slug}`);
   }
 
   getProducts(slug: string, query: Record<string, string>, token: string) {
     const params = new URLSearchParams(query);
     const qs = params.toString();
-    return this.api.get(`/catalogue/${slug}/products${qs ? `?${qs}` : ''}`, token);
+    return this.api.get(`/distributors/${slug}/products${qs ? `?${qs}` : ''}`, token);
+  }
+
+  getProduct(slug: string, productId: string, token: string) {
+    return this.api.get(`/distributors/${slug}/products/${productId}`, token);
   }
 }

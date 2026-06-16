@@ -255,6 +255,10 @@ export interface CatalogueProduct {
   thumbnailUrl?: string | null;
 }
 
+export interface CatalogueProductDetail extends CatalogueProduct {
+  imageUrl: string | null;
+}
+
 export interface CatalogueProductsParams {
   limit?: number;
   cursor?: string;

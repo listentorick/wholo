@@ -3,7 +3,7 @@ import { Request } from 'express';
 import { CatalogueService } from './catalogue.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@Controller('catalogue')
+@Controller('distributors')
 export class CatalogueController {
   constructor(private readonly catalogueService: CatalogueService) {}
 
@@ -21,5 +21,16 @@ export class CatalogueController {
   ) {
     const { token } = req['user'] as { token: string };
     return this.catalogueService.getProducts(slug, query, token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':slug/products/:productId')
+  getProduct(
+    @Param('slug') slug: string,
+    @Param('productId') productId: string,
+    @Req() req: Request,
+  ) {
+    const { token } = req['user'] as { token: string };
+    return this.catalogueService.getProduct(slug, productId, token);
   }
 }

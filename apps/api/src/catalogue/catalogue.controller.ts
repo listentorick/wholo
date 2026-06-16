@@ -8,8 +8,8 @@ import {
 import { CatalogueService } from './catalogue.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
-@ApiTags('Catalogue')
-@Controller('catalogue')
+@ApiTags('Distributors')
+@Controller('distributors')
 export class CatalogueController {
   constructor(private readonly catalogueService: CatalogueService) {}
 
@@ -29,5 +29,16 @@ export class CatalogueController {
   getProducts(@Req() req: Request, @Param('slug') slug: string, @Query() query: CatalogueQueryDto) {
     const { organisationId } = req.user as { organisationId: string };
     return this.catalogueService.getProducts(slug, query, organisationId);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get(':slug/products/:productId')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get a single product with customer-specific pricing' })
+  @ApiOkResponse({ description: 'Product detail' })
+  @ApiNotFoundResponse({ description: 'Product not found' })
+  getProduct(@Req() req: Request, @Param('slug') slug: string, @Param('productId') productId: string) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.catalogueService.getProduct(slug, productId, organisationId);
   }
 }
