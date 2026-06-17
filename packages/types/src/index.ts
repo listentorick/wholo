@@ -269,6 +269,9 @@ export interface DistributorInfo {
   id: string;
   name: string;
   slug: string;
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  bannerDominantColor: string | null;
 }
 
 export interface CatalogueProductsResponse {
@@ -578,6 +581,7 @@ export interface AssetImage {
   entityId: string;
   distributorId: string;
   variants: Record<string, string>;
+  dominantColor: string | null;
   sourceFilename: string | null;
   sourceMimeType: string;
   sourceSizeBytes: number;

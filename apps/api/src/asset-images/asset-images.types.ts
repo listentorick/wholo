@@ -12,6 +12,7 @@ export interface AssetTypeConfig {
   maxSizeBytes: number;
   minDimensionPx: number;
   maxDimensionPx: number;
+  extractDominantColor?: boolean;
 }
 
 export interface ProcessedVariant {
@@ -39,6 +40,7 @@ export interface AssetImageRecord {
   entityId: string;
   distributorId: string;
   variants: Record<string, string>;
+  dominantColor: string | null;
   sourceFilename: string | null;
   sourceMimeType: string;
   sourceSizeBytes: number;

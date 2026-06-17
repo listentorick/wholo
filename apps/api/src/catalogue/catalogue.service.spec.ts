@@ -96,10 +96,35 @@ describe('CatalogueService', () => {
   });
 
   describe('getDistributor', () => {
-    it('returns distributor when found', async () => {
+    it('returns distributor when found with null branding when no images', async () => {
       mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
       const result = await service.getDistributor(DISTRIBUTOR_SLUG);
       expect(result.id).toBe(DISTRIBUTOR_ID);
+      expect(result.logoUrl).toBeNull();
+      expect(result.bannerUrl).toBeNull();
+      expect(result.bannerDominantColor).toBeNull();
+    });
+
+    it('returns logoUrl from full variant when logo image exists', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
+      mockPrisma.assetImage.findFirst
+        .mockResolvedValueOnce({ variants: { full: 'distributors/dist-1/branding/logo/img-1/full.webp' }, dominantColor: null })
+        .mockResolvedValueOnce(null);
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.logoUrl).toBe('https://cdn.example.com/distributors/dist-1/branding/logo/img-1/full.webp');
+    });
+
+    it('returns bannerUrl from mobile variant and dominant colour when banner image exists', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
+      mockPrisma.assetImage.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          variants: { mobile: 'distributors/dist-1/branding/banner/img-2/mobile.webp' },
+          dominantColor: '#3d6e3c',
+        });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.bannerUrl).toBe('https://cdn.example.com/distributors/dist-1/branding/banner/img-2/mobile.webp');
+      expect(result.bannerDominantColor).toBe('#3d6e3c');
     });
 
     it('throws NotFoundException when distributor does not exist', async () => {
@@ -365,6 +390,10 @@ describe('CatalogueService', () => {
     });
 
     it('returns resolvedPrice null when customer has no price list', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
+      ]);
       mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
 
       const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);

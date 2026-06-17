@@ -73,6 +73,76 @@ async function main() {
     },
   });
 
+  // Yorkshire Hand Made Pies distributor
+  const yhmp = await prisma.organisation.upsert({
+    where: { id: 'seed-distributor-2' },
+    update: { slug: 'yhmp' },
+    create: {
+      id: 'seed-distributor-2',
+      name: 'Yorkshire Hand Made Pies',
+      slug: 'yhmp',
+      type: OrganisationType.DISTRIBUTOR,
+    },
+  });
+
+  const yhmpAdminPasswordHash = await bcrypt.hash('password123', 10);
+
+  const yhmpAdminUser = await prisma.user.upsert({
+    where: { email: 'rick@yorkshirehandmadepies.co.uk' },
+    update: {},
+    create: {
+      id: 'seed-admin-2',
+      email: 'rick@yorkshirehandmadepies.co.uk',
+      passwordHash: yhmpAdminPasswordHash,
+      firstName: 'Rick',
+      lastName: 'Yorkshire',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: yhmpAdminUser.id, organisationId: yhmp.id } },
+    update: {},
+    create: {
+      userId: yhmpAdminUser.id,
+      organisationId: yhmp.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
+  // Garratts — YHMP trade customer portal login
+  await prisma.organisation.update({
+    where: { id: 'cmqhajvd8000kou01gacuad3p' },
+    data: { email: 'buyer@garratts.co.uk' },
+  });
+
+  const garrattsPasswordHash = await bcrypt.hash('password123', 10);
+
+  const garrattsUser = await prisma.user.upsert({
+    where: { email: 'buyer@garratts.co.uk' },
+    update: {},
+    create: {
+      email: 'buyer@garratts.co.uk',
+      passwordHash: garrattsPasswordHash,
+      firstName: 'Garratts',
+      lastName: 'Buyer',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: garrattsUser.id, organisationId: 'cmqhajvd8000kou01gacuad3p' } },
+    update: {},
+    create: {
+      userId: garrattsUser.id,
+      organisationId: 'cmqhajvd8000kou01gacuad3p',
+      role: Role.TRADE_CUSTOMER,
+    },
+  });
+
+  await prisma.tradeRelationship.update({
+    where: { id: 'cmqhajvda000mou01kgeqoz8v' },
+    data: { status: 'ACTIVE' },
+  });
+
   // Product types for Vine & Co
   const productTypeData = [
     { id: 'seed-pt-wine', name: 'Wine', code: 'wine', displayOrder: 1 },
@@ -118,7 +188,8 @@ async function main() {
   console.log(
     `Seeded: distributor "${distributor.name}", ` +
     `user "${user.email}", admin "${adminUser.email}", ` +
-    `${productTypeData.length} product types, ${supplierData.length} suppliers`,
+    `${productTypeData.length} product types, ${supplierData.length} suppliers, ` +
+    `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}"`,
   );
 }
 

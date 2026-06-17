@@ -13,6 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@wholo/admin-api-client': path.resolve(__dirname, '../../packages/admin-api-client/src/index.ts'),
+      '@wholo/types': path.resolve(__dirname, '../../packages/types/src/index.ts'),
     },
   },
 });

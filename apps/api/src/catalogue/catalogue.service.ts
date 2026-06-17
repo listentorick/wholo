@@ -35,7 +35,26 @@ export class CatalogueService {
       select: { id: true, name: true, slug: true },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
-    return distributor;
+
+    const [logoImage, bannerImage] = await Promise.all([
+      this.prisma.assetImage.findFirst({
+        where: { assetType: 'distributor-logo', entityId: distributor.id, distributorId: distributor.id },
+      }),
+      this.prisma.assetImage.findFirst({
+        where: { assetType: 'distributor-banner', entityId: distributor.id, distributorId: distributor.id },
+      }),
+    ]);
+
+    return {
+      ...distributor,
+      logoUrl: logoImage
+        ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
+        : null,
+      bannerUrl: bannerImage
+        ? this.r2Storage.getPublicUrl((bannerImage.variants as Record<string, string>).mobile)
+        : null,
+      bannerDominantColor: bannerImage?.dominantColor ?? null,
+    };
   }
 
   async getProducts(distributorSlug: string, query: CatalogueQueryDto, customerOrgId?: string) {

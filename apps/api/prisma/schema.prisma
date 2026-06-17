@@ -564,6 +564,7 @@ model AssetImage {
   entityId        String
   distributorId   String
   variants        Json
+  dominantColor   String?
   sourceFilename  String?
   sourceMimeType  String
   sourceSizeBytes Int

@@ -16,6 +16,7 @@ import { AdminSettingsModule } from './admin-settings/admin-settings.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
+import './asset-images/branding-asset-types';
 
 @Module({
   imports: [

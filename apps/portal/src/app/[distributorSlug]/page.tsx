@@ -2,6 +2,8 @@
 
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
+import { useDistributor } from '@/lib/distributor-context';
+import { BrandingBanner } from '@/components/BrandingBanner';
 
 export default function DistributorHomePage() {
   const params = useParams();
@@ -10,6 +12,7 @@ export default function DistributorHomePage() {
   const router = useRouter();
 
   const { user, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
+  const { distributor, setBannerScrolledPast } = useDistributor();
 
   if (isLoading) {
     return (
@@ -20,6 +23,8 @@ export default function DistributorHomePage() {
   }
 
   if (!user) return null;
+
+  const hasLogo = Boolean(distributor?.logoUrl);
 
   const actions = [
     {
@@ -69,24 +74,18 @@ export default function DistributorHomePage() {
   return (
     <>
       <style>{`
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.94); }
-          to   { opacity: 1; transform: scale(1); }
-        }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .anim-banner { animation: scaleIn 0.5s ease both 0.1s; }
-        .anim-welcome{ animation: fadeUp  0.4s ease both 0.2s; }
-        .anim-tile-0 { animation: fadeUp  0.4s ease both 0.26s; }
-        .anim-tile-1 { animation: fadeUp  0.4s ease both 0.32s; }
-        .anim-tile-2 { animation: fadeUp  0.4s ease both 0.38s; }
-        .anim-tile-3 { animation: fadeUp  0.4s ease both 0.44s; }
+        .anim-welcome{ animation: fadeUp 0.4s ease both 0.2s; }
+        .anim-tile-0 { animation: fadeUp 0.4s ease both 0.26s; }
+        .anim-tile-1 { animation: fadeUp 0.4s ease both 0.32s; }
+        .anim-tile-2 { animation: fadeUp 0.4s ease both 0.38s; }
+        .anim-tile-3 { animation: fadeUp 0.4s ease both 0.44s; }
         .action-tile { transition: background 0.15s, transform 0.15s; }
         .action-tile:active { background: #f9f9f9; transform: scale(0.97); }
 
-        .home-banner  { width: 100%; height: 38vh; min-height: 180px; }
         .home-content { width: 100%; }
 
         @media (max-width: 480px) {
@@ -96,7 +95,6 @@ export default function DistributorHomePage() {
         }
 
         @media (min-width: 428px) and (max-width: 430px) {
-          .home-banner  { height: 40vh; }
           .tile-icon    { width: 58px; height: 58px; }
           .tile-label   { font-size: 12px; }
           .tile-btn     { padding-top: 44px; padding-bottom: 44px; }
@@ -105,35 +103,18 @@ export default function DistributorHomePage() {
 
         @media (min-width: 481px) {
           .home-content { max-width: 390px; margin-left: auto; margin-right: auto; }
-          .home-banner  { max-height: 260px; }
-        }
-
-        @media (min-width: 768px) {
-          .home-banner { height: 42vh; max-height: 360px; }
         }
       `}</style>
 
-      {/* Banner */}
-      <div className="home-banner anim-banner relative">
-        <div
-          className="absolute inset-0"
-          style={{ background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)' }}
-        />
-        <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
-          <filter id="grain">
-            <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
-            <feColorMatrix type="saturate" values="0" />
-          </filter>
-          <rect width="100%" height="100%" filter="url(#grain)" />
-        </svg>
-        <div
-          className="absolute inset-0"
-          style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
-        />
-      </div>
+      <BrandingBanner
+        logoUrl={distributor?.logoUrl ?? null}
+        bannerUrl={distributor?.bannerUrl ?? null}
+        dominantColor={distributor?.bannerDominantColor ?? null}
+        onScrolledPast={setBannerScrolledPast}
+      />
 
       {/* Content */}
-      <div className="home-content flex flex-col flex-1">
+      <div className="home-content flex flex-col flex-1" style={{ paddingTop: hasLogo ? '44px' : undefined }}>
         <div className="anim-welcome flex flex-col items-center pt-7 pb-6">
           <p className="welcome-text text-[17px] font-light tracking-wide text-[#1A1A1A]">
             Welcome back {user.firstName}&nbsp;!

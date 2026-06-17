@@ -46,6 +46,11 @@ export class AssetImagesService {
 
     await Promise.all(uploadTasks);
 
+    let dominantColor: string | null = null;
+    if (config.extractDominantColor) {
+      dominantColor = await this.extractDominantColor(file.buffer);
+    }
+
     const count = await this.prisma.assetImage.count({
       where: { assetType, entityId, distributorId },
     });
@@ -57,6 +62,7 @@ export class AssetImagesService {
         entityId,
         distributorId,
         variants: variantKeys,
+        dominantColor,
         sourceFilename: file.originalname ?? null,
         sourceMimeType: file.mimetype,
         sourceSizeBytes: file.size,
@@ -163,12 +169,27 @@ export class AssetImagesService {
     });
   }
 
+  private async extractDominantColor(buffer: Buffer): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const sharp = require('sharp') as typeof import('sharp').default;
+    const { data } = await sharp(buffer)
+      .resize(1, 1)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const r = data[0].toString(16).padStart(2, '0');
+    const g = data[1].toString(16).padStart(2, '0');
+    const b = data[2].toString(16).padStart(2, '0');
+    return `#${r}${g}${b}`;
+  }
+
   private formatRecord(record: {
     id: string;
     assetType: string;
     entityId: string;
     distributorId: string;
     variants: unknown;
+    dominantColor: string | null;
     sourceFilename: string | null;
     sourceMimeType: string;
     sourceSizeBytes: number;

@@ -7,7 +7,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ onMenuClick }: TopBarProps) {
-  const { user } = useAuth();
+  const { user, logoUrl } = useAuth();
 
   return (
     <header
@@ -49,15 +49,23 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           </svg>
         </button>
 
-        {/* User avatar */}
+        {/* User identity */}
         {user && (
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-fg">
-              {user.firstName[0]}{user.lastName[0]}
+            <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full bg-primary">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={user.organisationName} className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-primary-fg">
+                  {user.firstName[0]}{user.lastName[0]}
+                </span>
+              )}
             </div>
-            <span className="hidden text-sm font-medium text-text sm:block">
-              {user.firstName} {user.lastName}
-            </span>
+            <div className="hidden sm:block">
+              <p className="text-sm font-medium text-text leading-tight">{user.firstName} {user.lastName}</p>
+              <p className="text-xs text-muted leading-tight">{user.organisationName}</p>
+            </div>
           </div>
         )}
       </div>
