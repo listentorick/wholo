@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { PriceListDrawer } from '@/components/customers/PriceListDrawer';
 import { CatalogueDrawer } from '@/components/customers/CatalogueDrawer';
+import { DeliveryProfileDrawer } from '@/components/customers/DeliveryProfileDrawer';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import type { Customer } from '@wholo/types';
 import { TradeRelationshipStatus } from '@wholo/types';
@@ -77,6 +78,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
   const [activeDrawer, setActiveDrawer] = useState<
     | { type: 'pricelist'; id: string }
     | { type: 'catalogue'; id: string }
+    | { type: 'delivery-profile'; id: string }
     | null
   >(null);
 
@@ -115,7 +117,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
                 onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'catalogue', id: c.id }); }}
                 className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
               >
-                {c.name}
+                {c.name} →
               </button>
             ))}
           </div>
@@ -126,9 +128,22 @@ function CustomerRow({ customer }: { customer: Customer }) {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'pricelist', id: customer.priceList!.id }); }}
-            className="text-sm text-text hover:text-primary transition-colors"
+            className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
           >
-            {customer.priceList.name}
+            {customer.priceList.name} →
+          </button>
+        ) : (
+          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        {customer.deliveryProfile ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'delivery-profile', id: customer.deliveryProfile!.id }); }}
+            className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
+          >
+            {customer.deliveryProfile.name} →
           </button>
         ) : (
           <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
@@ -145,6 +160,9 @@ function CustomerRow({ customer }: { customer: Customer }) {
     )}
     {activeDrawer?.type === 'catalogue' && (
       <CatalogueDrawer catalogueId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+    )}
+    {activeDrawer?.type === 'delivery-profile' && (
+      <DeliveryProfileDrawer deliveryProfileId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
     )}
     </>
   );
@@ -242,6 +260,9 @@ export default function CustomersPage() {
                 </th>
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
                   Price List
+                </th>
+                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Delivery Profile
                 </th>
                 <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">
                   Status
