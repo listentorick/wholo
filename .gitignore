@@ -10,3 +10,12 @@ helm/wholo/charts/
 
 # pnpm
 .pnpm-store/
+
+# Turborepo cache
+.turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Next.js
+next-env.d.ts
