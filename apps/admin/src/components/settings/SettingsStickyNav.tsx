@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 const NAV_ITEMS = [
   { id: 'business', label: 'Business details' },
   { id: 'orders', label: 'Order settings' },
+  { id: 'processing-days', label: 'Processing days' },
   { id: 'discovery', label: 'Discovery' },
   { id: 'notifications', label: 'Notifications' },
 ];

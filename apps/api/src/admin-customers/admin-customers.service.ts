@@ -35,6 +35,8 @@ const relationshipInclude = {
     select: {
       priceListId: true,
       priceList: { select: { id: true, name: true } },
+      deliveryProfileId: true,
+      deliveryProfile: { select: { id: true, name: true } },
     },
     take: 1,
   },
@@ -296,6 +298,8 @@ export class AdminCustomersService {
       billingCountry: rel.billingCountry,
       priceListId: rel.traderCustomerSettings?.[0]?.priceListId ?? null,
       priceList: rel.traderCustomerSettings?.[0]?.priceList ?? null,
+      deliveryProfileId: rel.traderCustomerSettings?.[0]?.deliveryProfileId ?? null,
+      deliveryProfile: rel.traderCustomerSettings?.[0]?.deliveryProfile ?? null,
       catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
       latestInvitation: latestInvitation
         ? {

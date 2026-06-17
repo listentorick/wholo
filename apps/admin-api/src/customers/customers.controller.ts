@@ -88,4 +88,14 @@ export class CustomersController {
     const { organisationId } = req.user as { organisationId: string };
     return this.customersService.assignPriceList(id, organisationId, body);
   }
+
+  @Patch(':id/delivery-profile')
+  assignDeliveryProfile(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { deliveryProfileId: string | null },
+  ) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.customersService.assignDeliveryProfile(id, organisationId, body);
+  }
 }

@@ -19,4 +19,28 @@ export class OrderQueryDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   status?: OrderStatus;
+
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @IsOptional()
+  @IsEnum(OrderStatus)
+  statusExclude?: OrderStatus;
+
+  @IsOptional()
+  @IsString()
+  deliveryDateAfter?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryDateBefore?: string;
+
+  @IsOptional()
+  @IsEnum(['createdAt', 'requestedDeliveryDate'])
+  sortBy?: 'createdAt' | 'requestedDeliveryDate';
+
+  @IsOptional()
+  @IsEnum(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }

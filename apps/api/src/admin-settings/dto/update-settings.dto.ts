@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsBoolean,
   IsArray,
+  IsInt,
   MinLength,
 } from 'class-validator';
 import { OrderAcceptanceMode } from '@prisma/client';
@@ -43,4 +44,9 @@ export class UpdateSettingsDto {
   @IsArray()
   @IsEmail({}, { each: true })
   orderNotificationEmails?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  processingDays?: number[];
 }

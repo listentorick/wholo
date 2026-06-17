@@ -25,6 +25,7 @@ export class AdminSettingsService {
       marketplaceVisible: settings.marketplaceVisible,
       marketplaceDescription: settings.marketplaceDescription,
       orderNotificationEmails: settings.orderNotificationEmails,
+      processingDays: settings.processingDays,
     };
   }
 

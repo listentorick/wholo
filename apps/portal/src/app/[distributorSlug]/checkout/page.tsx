@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
-import { ordersApi, ApiError } from '@wholo/api-client';
+import { ordersApi, deliveryApi, ApiError } from '@wholo/api-client';
+import type { AvailableDeliveryDate } from '@wholo/types';
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -23,6 +24,20 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const [availableDates, setAvailableDates] = useState<AvailableDeliveryDate[]>([]);
+  const [loadingDates, setLoadingDates] = useState(true);
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    setLoadingDates(true);
+    deliveryApi
+      .getAvailableDates(distributorSlug, accessToken)
+      .then((res) => setAvailableDates(res.dates))
+      .catch(() => setAvailableDates([]))
+      .finally(() => setLoadingDates(false));
+  }, [accessToken, distributorSlug]);
+
   const handlePlaceOrder = async () => {
     if (!accessToken || submitting) return;
     setSubmitting(true);
@@ -33,13 +48,24 @@ export default function CheckoutPage() {
           distributorSlug,
           customerReference: poNumber || undefined,
           notes: comment || undefined,
+          requestedDeliveryDate: selectedDeliveryDate ?? undefined,
         },
         accessToken,
       );
       await refreshCart(); // re-sync from server (server cleared the cart on submission)
       router.push(`/${distributorSlug}/orders/${order.id}`);
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.problem.detail : 'Failed to place order. Please try again.');
+      if (err instanceof ApiError && err.problem.status === 422) {
+        // Delivery date no longer valid — re-fetch available dates and prompt reselection
+        setSelectedDeliveryDate(null);
+        deliveryApi
+          .getAvailableDates(distributorSlug, accessToken)
+          .then((res) => setAvailableDates(res.dates))
+          .catch(() => {});
+        setSubmitError('That delivery date is no longer available. Please select another date.');
+      } else {
+        setSubmitError(err instanceof ApiError ? err.problem.detail : 'Failed to place order. Please try again.');
+      }
       setSubmitting(false);
     }
   };
@@ -356,22 +382,54 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* Delivery Day — disabled placeholder */}
-        <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.3s', opacity: 0.4 }}>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
-            Delivery Day
-          </p>
-          <div style={{
-            border: '1.5px solid #E5E7EB', padding: '12px 14px',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            cursor: 'not-allowed',
-          }}>
-            <span style={{ fontSize: 14, color: '#9CA3AF' }}>Select delivery day</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14, color: '#9CA3AF', flexShrink: 0 }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
+        {/* Delivery Day */}
+        {(loadingDates || availableDates.length > 0) && (
+          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.3s' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
+              Delivery Day
+            </p>
+            {loadingDates ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#D97036]" />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {availableDates.map((d) => {
+                  const isSelected = selectedDeliveryDate === d.date;
+                  const deliveryDate = new Date(d.date + 'T00:00:00');
+                  const cutoff = new Date(d.cutoffDeadline);
+                  const cutoffLabel = cutoff.toLocaleString('en-GB', {
+                    weekday: 'long', day: 'numeric', month: 'long',
+                    hour: 'numeric', minute: '2-digit', hour12: true,
+                  });
+                  return (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
+                      style={{
+                        border: `1.5px solid ${isSelected ? '#D97036' : '#E5E7EB'}`,
+                        background: isSelected ? '#FEF3EC' : 'transparent',
+                        padding: '12px 14px',
+                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                        gap: 3, cursor: 'pointer', fontFamily: 'inherit',
+                        transition: 'border-color 0.15s, background 0.15s',
+                        textAlign: 'left', width: '100%',
+                      }}
+                    >
+                      <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? '#D97036' : '#1A1A1A' }}>
+                        {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                        Order by {cutoffLabel}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Action buttons */}
         <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.35s' }}>

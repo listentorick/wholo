@@ -13,6 +13,12 @@ export class OrdersService {
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.status) params.set('status', query.status);
+    if (query.customerName) params.set('customerName', query.customerName);
+    if (query.statusExclude) params.set('statusExclude', query.statusExclude);
+    if (query.deliveryDateAfter) params.set('deliveryDateAfter', query.deliveryDateAfter);
+    if (query.deliveryDateBefore) params.set('deliveryDateBefore', query.deliveryDateBefore);
+    if (query.sortBy) params.set('sortBy', query.sortBy);
+    if (query.sortOrder) params.set('sortOrder', query.sortOrder);
     const qs = params.toString();
     return this.api.get(`/admin/orders${qs ? `?${qs}` : ''}`, distributorId);
   }

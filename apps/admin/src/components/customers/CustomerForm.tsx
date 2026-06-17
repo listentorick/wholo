@@ -9,6 +9,7 @@ import { TradeRelationshipStatus, InvitationStatus } from '@wholo/types';
 import type { Customer, CreateCustomerRequest, InviteResponse } from '@wholo/types';
 import { CustomerCatalogues } from './CustomerCatalogues';
 import { CustomerPriceList } from './CustomerPriceList';
+import { CustomerDeliveryProfile } from './CustomerDeliveryProfile';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,18 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
                   customerId={initialValues.id}
                   token={token}
                   currentPriceListId={initialValues.priceListId}
+                />
+              </FormCard>
+            )}
+
+            {/* Delivery profile (edit mode only) */}
+            {mode === 'edit' && initialValues && (
+              <FormCard title="Delivery profile">
+                <CustomerDeliveryProfile
+                  customerId={initialValues.id}
+                  token={token}
+                  currentProfileId={initialValues.deliveryProfileId}
+                  currentProfileName={initialValues.deliveryProfile?.name ?? null}
                 />
               </FormCard>
             )}

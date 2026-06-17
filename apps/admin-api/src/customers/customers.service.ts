@@ -58,4 +58,8 @@ export class CustomersService {
   assignPriceList(id: string, distributorId: string, body: { priceListId: string | null }) {
     return this.api.patch(`/admin/trade-relationships/${id}/price-list`, distributorId, body);
   }
+
+  assignDeliveryProfile(id: string, distributorId: string, body: { deliveryProfileId: string | null }) {
+    return this.api.patch(`/admin/trade-relationships/${id}/delivery-profile`, distributorId, body);
+  }
 }

@@ -132,6 +132,7 @@ export interface Order {
   totalAmount: string;
   billingAddressSnapshot: AddressSnapshot | null;
   deliveryAddressSnapshot: AddressSnapshot | null;
+  requestedDeliveryDate: string | null;
   customerReference: string | null;
   notes: string | null;
   acceptanceModeSnapshot: OrderAcceptanceMode;
@@ -163,12 +164,14 @@ export interface OrderSummary {
   rejectedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
+  requestedDeliveryDate: string | null;
 }
 
 export interface SubmitOrderRequest {
   distributorSlug: string;
   customerReference?: string;
   notes?: string;
+  requestedDeliveryDate?: string;
 }
 
 export interface RejectOrderRequest {
@@ -183,6 +186,12 @@ export interface OrderListParams {
   limit?: number;
   cursor?: string;
   status?: OrderStatus;
+  statusExclude?: OrderStatus;
+  customerName?: string;
+  deliveryDateAfter?: string;
+  deliveryDateBefore?: string;
+  sortBy?: 'createdAt' | 'requestedDeliveryDate';
+  sortOrder?: 'asc' | 'desc';
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────
@@ -351,6 +360,8 @@ export interface Customer {
   billingCountry: string | null;
   priceListId: string | null;
   priceList: { id: string; name: string } | null;
+  deliveryProfileId: string | null;
+  deliveryProfile: { id: string; name: string } | null;
   catalogues: { id: string; name: string }[];
   latestInvitation: LatestInvitation | null;
   createdAt: string;
@@ -569,6 +580,7 @@ export interface DistributorSettings {
   marketplaceVisible: boolean;
   marketplaceDescription: string | null;
   orderNotificationEmails: string[];
+  processingDays: number[];
 }
 
 export type UpdateDistributorSettingsRequest = Partial<DistributorSettings>;
@@ -597,4 +609,89 @@ export interface ReorderAssetImagesRequest {
   assetType: string;
   entityId: string;
   imageIds: string[];
+}
+
+// ─── Delivery Profiles ────────────────────────────────────────────────────────
+
+export interface DeliveryProfileCutoffRule {
+  id: string;
+  deliveryProfileId: string;
+  weekday: number;
+  cutoffTime: string;
+  processingDaysBeforeDelivery: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryProfile {
+  id: string;
+  distributorId: string;
+  name: string;
+  active: boolean;
+  defaultWeekdays: number[];
+  defaultCutoffTime: string;
+  defaultCutoffProcessingDays: number;
+  speciallyEnabledDates: string[];
+  speciallyDisabledDates: string[];
+  cutoffRules: DeliveryProfileCutoffRule[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryProfileSummary {
+  id: string;
+  distributorId: string;
+  name: string;
+  active: boolean;
+  defaultWeekdays: number[];
+  _count: { customerSettings: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeliveryProfileRequest {
+  name: string;
+  defaultWeekdays?: number[];
+  defaultCutoffTime?: string;
+  defaultCutoffProcessingDays?: number;
+  speciallyEnabledDates?: string[];
+  speciallyDisabledDates?: string[];
+  active?: boolean;
+}
+
+export interface UpdateDeliveryProfileRequest {
+  name?: string;
+  active?: boolean;
+  defaultWeekdays?: number[];
+  defaultCutoffTime?: string;
+  defaultCutoffProcessingDays?: number;
+  speciallyEnabledDates?: string[];
+  speciallyDisabledDates?: string[];
+}
+
+export interface CreateDeliveryProfileCutoffRuleRequest {
+  weekday: number;
+  cutoffTime: string;
+  processingDaysBeforeDelivery: number;
+}
+
+export type UpdateDeliveryProfileCutoffRuleRequest = Partial<CreateDeliveryProfileCutoffRuleRequest>;
+
+export interface AssignDeliveryProfileRequest {
+  deliveryProfileId: string | null;
+}
+
+export interface DeliveryProfileListParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface AvailableDeliveryDate {
+  date: string;
+  cutoffDeadline: string;
+}
+
+export interface DeliveryAvailabilityResponse {
+  dates: AvailableDeliveryDate[];
+  profileId: string | null;
 }

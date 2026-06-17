@@ -14,6 +14,8 @@ import { AdminOrdersModule } from './admin-orders/admin-orders.module';
 import { AdminCustomersModule } from './admin-customers/admin-customers.module';
 import { AdminSettingsModule } from './admin-settings/admin-settings.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
+import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
+import { DeliveryAvailabilityModule } from './delivery-availability/delivery-availability.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
@@ -35,6 +37,8 @@ import './asset-images/branding-asset-types';
     AdminOrdersModule,
     AdminCustomersModule,
     AdminSettingsModule,
+    DeliveryProfilesModule,
+    DeliveryAvailabilityModule,
   ],
   controllers: [HealthController],
 })

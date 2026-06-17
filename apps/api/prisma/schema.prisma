@@ -123,6 +123,7 @@ model Organisation {
   distributorSettings             DistributorSettings?
   traderCustomerSettings          TraderCustomerSettings[] @relation("TraderCustomerSettingsCustomer")
   priceLists                      PriceList[]         @relation("DistributorPriceLists")
+  deliveryProfiles                DeliveryProfile[]   @relation("DistributorDeliveryProfiles")
 
   @@map("organisations")
 }
@@ -358,6 +359,7 @@ model Order {
 
   billingAddressSnapshot  Json?
   deliveryAddressSnapshot Json?
+  requestedDeliveryDate   DateTime? @db.Date
   customerReference       String?
   notes                   String?
 
@@ -426,6 +428,7 @@ model DistributorSettings {
   marketplaceVisible         Boolean             @default(false)
   marketplaceDescription     String?
   orderNotificationEmails    String[]            @default([])
+  processingDays             Int[]               @default([1, 2, 3, 4, 5])
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")
@@ -438,9 +441,11 @@ model TraderCustomerSettings {
   tradeRelationshipId         String?
   orderAcceptanceModeOverride OrderAcceptanceMode?
   priceListId                 String?
+  deliveryProfileId           String?
   tradeRelationship           TradeRelationship?   @relation(fields: [tradeRelationshipId], references: [id])
   traderCustomer              Organisation         @relation("TraderCustomerSettingsCustomer", fields: [traderCustomerId], references: [id])
   priceList                   PriceList?           @relation(fields: [priceListId], references: [id])
+  deliveryProfile             DeliveryProfile?     @relation(fields: [deliveryProfileId], references: [id])
 
   @@unique([distributorId, traderCustomerId])
   @@map("trader_customer_settings")
@@ -557,6 +562,42 @@ model PriceListRule {
 
 // ─── Asset Images ─────────────────────────────────────────────────────────────
 
+
+// ─── Delivery Profiles ───────────────────────────────────────────────────────
+
+model DeliveryProfile {
+  id                          String                      @id @default(cuid())
+  distributorId               String
+  name                        String
+  active                      Boolean                     @default(true)
+  defaultWeekdays             Int[]                       @default([])
+  defaultCutoffTime           String                      @default("17:00")
+  defaultCutoffProcessingDays Int                         @default(1)
+  speciallyEnabledDates       DateTime[]                  @db.Date
+  speciallyDisabledDates      DateTime[]                  @db.Date
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  distributor                 Organisation                @relation("DistributorDeliveryProfiles", fields: [distributorId], references: [id])
+  cutoffRules                 DeliveryProfileCutoffRule[]
+  customerSettings            TraderCustomerSettings[]
+
+  @@index([distributorId, active])
+  @@map("delivery_profiles")
+}
+
+model DeliveryProfileCutoffRule {
+  id                           String          @id @default(cuid())
+  deliveryProfileId            String
+  weekday                      Int
+  cutoffTime                   String
+  processingDaysBeforeDelivery Int
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
+  deliveryProfile              DeliveryProfile @relation(fields: [deliveryProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryProfileId, weekday])
+  @@map("delivery_profile_cutoff_rules")
+}
 
 model AssetImage {
   id              String   @id

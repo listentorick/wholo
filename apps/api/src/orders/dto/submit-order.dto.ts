@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsDateString } from 'class-validator';
 
 export class SubmitOrderDto {
   @IsString()
@@ -11,4 +11,8 @@ export class SubmitOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsDateString()
+  requestedDeliveryDate?: string;
 }

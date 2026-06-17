@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 
@@ -60,6 +61,7 @@ const orderSelect = {
   totalAmount: true,
   billingAddressSnapshot: true,
   deliveryAddressSnapshot: true,
+  requestedDeliveryDate: true,
   customerReference: true,
   notes: true,
   acceptanceModeSnapshot: true,
@@ -85,6 +87,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private outbox: OutboxService,
+    private deliveryAvailability: DeliveryAvailabilityService,
   ) {}
 
   async submitOrder(dto: SubmitOrderDto, placedByUserId: string, traderCustomerId: string) {
@@ -116,6 +119,15 @@ export class OrdersService {
 
     // Resolve acceptance mode
     const { mode, source } = await this.resolveAcceptanceMode(distributor.id, traderCustomerId);
+
+    // Revalidate requested delivery date against availability
+    if (dto.requestedDeliveryDate) {
+      const availability = await this.deliveryAvailability.getAvailableDates(distributor.id, traderCustomerId);
+      const isAvailable = availability.dates.some((d) => d.date === dto.requestedDeliveryDate);
+      if (!isAvailable) {
+        throw new UnprocessableEntityException('Requested delivery date is no longer available');
+      }
+    }
 
     // Snapshot address from TradeRelationship
     const tradeRel = await this.prisma.tradeRelationship.findUnique({
@@ -188,6 +200,7 @@ export class OrdersService {
           totalAmount: new Prisma.Decimal(totalAmount),
           billingAddressSnapshot: billingAddressSnapshot ?? Prisma.JsonNull,
           deliveryAddressSnapshot: deliveryAddressSnapshot ?? Prisma.JsonNull,
+          requestedDeliveryDate: dto.requestedDeliveryDate ? new Date(dto.requestedDeliveryDate) : null,
           customerReference: dto.customerReference ?? null,
           notes: dto.notes ?? null,
           submittedAt: now,
@@ -408,6 +421,9 @@ export class OrdersService {
       totalAmount: dec(order.totalAmount),
       billingAddressSnapshot: order.billingAddressSnapshot as Record<string, unknown> | null,
       deliveryAddressSnapshot: order.deliveryAddressSnapshot as Record<string, unknown> | null,
+      requestedDeliveryDate: order.requestedDeliveryDate
+        ? order.requestedDeliveryDate.toISOString().slice(0, 10)
+        : null,
       customerReference: order.customerReference,
       notes: order.notes,
       acceptanceModeSnapshot: order.acceptanceModeSnapshot,

@@ -15,8 +15,11 @@ import { OutboxService } from '../outbox/outbox.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 
 interface CursorPayload {
-  createdAt: string;
+  sortBy: 'createdAt' | 'requestedDeliveryDate';
+  sortOrder: 'asc' | 'desc';
   id: string;
+  createdAt?: string;
+  requestedDeliveryDate?: string | null;
 }
 
 const orderLineSelect = {
@@ -85,10 +88,25 @@ export class AdminOrdersService {
   async listOrders(distributorId: string, query: OrderQueryDto) {
     const limit = query.limit ?? 20;
     const take = limit + 1;
+    const sortBy = query.sortBy ?? 'createdAt';
+    const sortOrder = query.sortOrder ?? 'desc';
+
+    const deliveryDateFilter: Prisma.DateTimeNullableFilter | undefined =
+      query.deliveryDateAfter || query.deliveryDateBefore
+        ? {
+            ...(query.deliveryDateAfter ? { gte: new Date(query.deliveryDateAfter) } : {}),
+            ...(query.deliveryDateBefore ? { lte: new Date(query.deliveryDateBefore) } : {}),
+          }
+        : undefined;
 
     const baseWhere: Prisma.OrderWhereInput = {
       distributorId,
       ...(query.status && { status: query.status }),
+      ...(query.statusExclude && { status: { not: query.statusExclude } }),
+      ...(query.customerName && {
+        customer: { name: { contains: query.customerName, mode: 'insensitive' } },
+      }),
+      ...(deliveryDateFilter && { requestedDeliveryDate: deliveryDateFilter }),
     };
 
     let cursorWhere: Prisma.OrderWhereInput = {};
@@ -99,18 +117,48 @@ export class AdminOrdersService {
       } catch {
         throw new BadRequestException('Invalid cursor');
       }
-      cursorWhere = {
-        OR: [
-          { createdAt: { lt: new Date(decoded.createdAt) } },
-          { createdAt: new Date(decoded.createdAt), id: { lt: decoded.id } },
-        ],
-      };
+
+      if (decoded.sortBy === 'requestedDeliveryDate') {
+        const dir = decoded.sortOrder === 'asc' ? 'gt' : 'lt';
+        const oppDir = decoded.sortOrder === 'asc' ? 'lt' : 'gt';
+        void oppDir;
+        if (decoded.requestedDeliveryDate != null) {
+          const cursorDate = new Date(decoded.requestedDeliveryDate);
+          cursorWhere = {
+            OR: [
+              { requestedDeliveryDate: { [dir]: cursorDate } },
+              { requestedDeliveryDate: cursorDate, id: { gt: decoded.id } },
+              // nulls always come last regardless of direction
+              { requestedDeliveryDate: null },
+            ],
+          };
+        } else {
+          // cursor is on a null-date row; only more null-date rows remain
+          cursorWhere = { requestedDeliveryDate: null, id: { gt: decoded.id } };
+        }
+      } else {
+        // default: createdAt desc
+        cursorWhere = {
+          OR: [
+            { createdAt: { lt: new Date(decoded.createdAt!) } },
+            { createdAt: new Date(decoded.createdAt!), id: { lt: decoded.id } },
+          ],
+        };
+      }
     }
+
+    const orderBy: Prisma.OrderOrderByWithRelationInput[] =
+      sortBy === 'requestedDeliveryDate'
+        ? [
+            { requestedDeliveryDate: { sort: sortOrder, nulls: 'last' } },
+            { id: 'asc' },
+          ]
+        : [{ createdAt: 'desc' }, { id: 'desc' }];
 
     const [items, total] = await Promise.all([
       this.prisma.order.findMany({
         where: { AND: [baseWhere, cursorWhere] },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy,
         take,
         select: {
           id: true,
@@ -122,6 +170,7 @@ export class AdminOrdersService {
           rejectedAt: true,
           cancelledAt: true,
           createdAt: true,
+          requestedDeliveryDate: true,
           customer: { select: { id: true, name: true } },
         },
       }),
@@ -131,12 +180,17 @@ export class AdminOrdersService {
     const hasMore = items.length > limit;
     const data = hasMore ? items.slice(0, limit) : items;
     const last = data[data.length - 1];
-    const nextCursor =
-      hasMore && last
-        ? Buffer.from(
-            JSON.stringify({ createdAt: last.createdAt.toISOString(), id: last.id }),
-          ).toString('base64url')
-        : null;
+
+    let nextCursor: string | null = null;
+    if (hasMore && last) {
+      const payload: CursorPayload = { sortBy, sortOrder, id: last.id };
+      if (sortBy === 'requestedDeliveryDate') {
+        payload.requestedDeliveryDate = last.requestedDeliveryDate?.toISOString().slice(0, 10) ?? null;
+      } else {
+        payload.createdAt = last.createdAt.toISOString();
+      }
+      nextCursor = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    }
 
     return {
       data: data.map((o) => ({
@@ -150,6 +204,7 @@ export class AdminOrdersService {
         rejectedAt: o.rejectedAt?.toISOString() ?? null,
         cancelledAt: o.cancelledAt?.toISOString() ?? null,
         createdAt: o.createdAt.toISOString(),
+        requestedDeliveryDate: o.requestedDeliveryDate?.toISOString().slice(0, 10) ?? null,
       })),
       pagination: { nextCursor, hasMore, total },
     };

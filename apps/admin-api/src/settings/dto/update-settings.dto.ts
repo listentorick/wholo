@@ -34,4 +34,8 @@ export class UpdateSettingsDto {
   @IsArray()
   @IsString({ each: true })
   orderNotificationEmails?: string[];
+
+  @IsOptional()
+  @IsArray()
+  processingDays?: number[];
 }

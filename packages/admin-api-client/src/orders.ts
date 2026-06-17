@@ -14,6 +14,12 @@ export const adminOrdersApi = {
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
     if (params.status) qs.set('status', params.status);
+    if (params.customerName) qs.set('customerName', params.customerName);
+    if (params.statusExclude) qs.set('statusExclude', params.statusExclude);
+    if (params.deliveryDateAfter) qs.set('deliveryDateAfter', params.deliveryDateAfter);
+    if (params.deliveryDateBefore) qs.set('deliveryDateBefore', params.deliveryDateBefore);
+    if (params.sortBy) qs.set('sortBy', params.sortBy);
+    if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     return apiFetch<PaginatedResponse<OrderSummary>>(`/api/v1/orders?${qs.toString()}`, { token });
   },
 

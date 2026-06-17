@@ -1,13 +1,108 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { adminOrdersApi } from '@wholo/admin-api-client';
-import type { OrderSummary } from '@wholo/types';
+import type { OrderSummary, OrderListParams } from '@wholo/types';
 import { OrderStatus } from '@wholo/types';
+
+// ─── Filter types ─────────────────────────────────────────────────────────────
+
+type FilterField = 'status' | 'customerName' | 'requestedDeliveryDate';
+type FilterOperator = 'is' | 'is_not' | 'contains' | 'after' | 'before' | 'between';
+
+interface ActiveFilter {
+  id: string;
+  field: FilterField;
+  operator: FilterOperator;
+  value: string | string[];
+}
+
+const FIELD_LABELS: Record<FilterField, string> = {
+  status: 'Status',
+  customerName: 'Customer',
+  requestedDeliveryDate: 'Delivery date',
+};
+
+const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  is: 'is',
+  is_not: 'is not',
+  contains: 'contains',
+  after: 'after',
+  before: 'before',
+  between: 'between',
+};
+
+const OPERATORS_BY_FIELD: Record<FilterField, FilterOperator[]> = {
+  status: ['is', 'is_not'],
+  customerName: ['contains'],
+  requestedDeliveryDate: ['after', 'before', 'between'],
+};
+
+const STATUS_OPTIONS = [
+  { value: OrderStatus.SUBMITTED, label: 'Pending' },
+  { value: OrderStatus.ACCEPTED, label: 'Accepted' },
+  { value: OrderStatus.REJECTED, label: 'Rejected' },
+  { value: OrderStatus.CANCELLED, label: 'Cancelled' },
+  { value: OrderStatus.COMPLETED, label: 'Completed' },
+];
+
+function uid() {
+  return Math.random().toString(36).slice(2);
+}
+
+function fmtDateStr(iso: string | null | undefined) {
+  if (!iso) return '—';
+  return new Date(iso + (iso.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+function formatFilterValue(filter: ActiveFilter): string {
+  if (filter.field === 'status') {
+    const values = Array.isArray(filter.value) ? filter.value : [filter.value];
+    return values.map((v) => STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v).join(', ');
+  }
+  if (filter.field === 'requestedDeliveryDate' && filter.operator === 'between') {
+    const [after, before] = (filter.value as string).split(',');
+    return `${fmtDateStr(after)} – ${fmtDateStr(before)}`;
+  }
+  if (filter.field === 'requestedDeliveryDate') {
+    return fmtDateStr(filter.value as string);
+  }
+  return filter.value as string;
+}
+
+function buildApiParams(
+  filters: ActiveFilter[],
+  sort: 'createdAt' | 'requestedDeliveryDate',
+  order: 'asc' | 'desc',
+  cursor?: string,
+): OrderListParams {
+  const params: OrderListParams = { limit: 20, sortBy: sort, sortOrder: order };
+  if (cursor) params.cursor = cursor;
+  for (const f of filters) {
+    if (f.field === 'status') {
+      const val = (Array.isArray(f.value) ? f.value[0] : f.value) as OrderStatus;
+      if (f.operator === 'is') params.status = val;
+      else if (f.operator === 'is_not') params.statusExclude = val;
+    } else if (f.field === 'customerName') {
+      params.customerName = f.value as string;
+    } else if (f.field === 'requestedDeliveryDate') {
+      if (f.operator === 'after') params.deliveryDateAfter = f.value as string;
+      else if (f.operator === 'before') params.deliveryDateBefore = f.value as string;
+      else if (f.operator === 'between') {
+        const [after, before] = (f.value as string).split(',');
+        if (after) params.deliveryDateAfter = after;
+        if (before) params.deliveryDateBefore = before;
+      }
+    }
+  }
+  return params;
+}
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -32,22 +127,316 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Filter tabs ──────────────────────────────────────────────────────────────
+// ─── Filter chip ──────────────────────────────────────────────────────────────
 
-const FILTER_TABS: { label: string; value: OrderStatus | 'ALL' }[] = [
-  { label: 'All',       value: 'ALL' },
-  { label: 'Pending',   value: OrderStatus.SUBMITTED },
-  { label: 'Accepted',  value: OrderStatus.ACCEPTED },
-  { label: 'Rejected',  value: OrderStatus.REJECTED },
-  { label: 'Cancelled', value: OrderStatus.CANCELLED },
-];
+function FilterChip({
+  filter,
+  onEdit,
+  onRemove,
+}: {
+  filter: ActiveFilter;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-primary/30 bg-primary/5 text-xs">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex items-center gap-1 px-2 py-1 hover:bg-primary/10 transition-colors rounded-l-md"
+      >
+        <span className="text-muted">{FIELD_LABELS[filter.field]}</span>
+        <span className="text-muted italic">{OPERATOR_LABELS[filter.operator]}</span>
+        <span className="font-medium text-text">{formatFilterValue(filter)}</span>
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="px-1.5 py-1 text-muted hover:text-red-500 transition-colors rounded-r-md"
+        aria-label="Remove filter"
+      >
+        ×
+      </button>
+    </span>
+  );
+}
+
+// ─── Filter popover ───────────────────────────────────────────────────────────
+
+function FilterPopover({
+  initial,
+  onApply,
+  onCancel,
+}: {
+  initial?: ActiveFilter;
+  onApply: (filter: Omit<ActiveFilter, 'id'>) => void;
+  onCancel: () => void;
+}) {
+  const [field, setField] = useState<FilterField>(initial?.field ?? 'status');
+  const [operator, setOperator] = useState<FilterOperator>(
+    initial?.operator ?? OPERATORS_BY_FIELD[initial?.field ?? 'status'][0],
+  );
+  const [value, setValue] = useState<string>(
+    Array.isArray(initial?.value)
+      ? (initial.value[0] ?? '')
+      : (initial?.value as string | undefined) ?? '',
+  );
+  const [statusSelections, setStatusSelections] = useState<string[]>(
+    Array.isArray(initial?.value) ? initial.value : initial?.value ? [initial.value as string] : [],
+  );
+  const [betweenAfter, setBetweenAfter] = useState(
+    initial?.operator === 'between' ? (initial.value as string).split(',')[0] ?? '' : '',
+  );
+  const [betweenBefore, setBetweenBefore] = useState(
+    initial?.operator === 'between' ? (initial.value as string).split(',')[1] ?? '' : '',
+  );
+
+  function handleFieldChange(f: FilterField) {
+    setField(f);
+    const ops = OPERATORS_BY_FIELD[f];
+    setOperator(ops[0]);
+    setValue('');
+    setStatusSelections([]);
+    setBetweenAfter('');
+    setBetweenBefore('');
+  }
+
+  function handleOperatorChange(op: FilterOperator) {
+    setOperator(op);
+    setValue('');
+    setBetweenAfter('');
+    setBetweenBefore('');
+  }
+
+  function toggleStatus(val: string) {
+    setStatusSelections((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val],
+    );
+  }
+
+  function handleApply() {
+    let finalValue: string | string[] = value;
+    if (field === 'status') finalValue = statusSelections;
+    if (operator === 'between') finalValue = `${betweenAfter},${betweenBefore}`;
+    onApply({ field, operator, value: finalValue });
+  }
+
+  function canApply(): boolean {
+    if (field === 'status') return statusSelections.length > 0;
+    if (operator === 'between') return !!betweenAfter && !!betweenBefore;
+    return !!value.trim();
+  }
+
+  return (
+    <div
+      className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-border bg-white shadow-lg border-l-[3px] border-l-primary"
+    >
+      <div className="p-4 space-y-3">
+        {/* Field */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">Field</label>
+          <select
+            value={field}
+            onChange={(e) => handleFieldChange(e.target.value as FilterField)}
+            className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          >
+            {(Object.keys(FIELD_LABELS) as FilterField[]).map((f) => (
+              <option key={f} value={f}>{FIELD_LABELS[f]}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Operator */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">Operator</label>
+          <select
+            value={operator}
+            onChange={(e) => handleOperatorChange(e.target.value as FilterOperator)}
+            className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          >
+            {OPERATORS_BY_FIELD[field].map((op) => (
+              <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Value */}
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">Value</label>
+
+          {field === 'status' ? (
+            <div className="space-y-1.5 rounded-md border border-border p-2.5">
+              {STATUS_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={statusSelections.includes(opt.value)}
+                    onChange={() => toggleStatus(opt.value)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  <span className="text-sm text-text">{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          ) : operator === 'between' ? (
+            <div className="space-y-1.5">
+              <input
+                type="date"
+                value={betweenAfter}
+                onChange={(e) => setBetweenAfter(e.target.value)}
+                placeholder="From"
+                className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+              <input
+                type="date"
+                value={betweenBefore}
+                onChange={(e) => setBetweenBefore(e.target.value)}
+                placeholder="To"
+                className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+            </div>
+          ) : field === 'requestedDeliveryDate' ? (
+            <input
+              type="date"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="Type to filter…"
+              className="w-full rounded-md border border-border px-2.5 py-1.5 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              onKeyDown={(e) => { if (e.key === 'Enter' && canApply()) handleApply(); }}
+              autoFocus
+            />
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-muted hover:text-text transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={!canApply()}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40 transition-opacity"
+          >
+            Apply →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Filter bar ───────────────────────────────────────────────────────────────
+
+function FilterBar({
+  filters,
+  sortBy,
+  sortOrder,
+  onAddFilter,
+  onEditFilter,
+  onRemoveFilter,
+  onClearAll,
+  onToggleSortDirection,
+  onClearSort,
+}: {
+  filters: ActiveFilter[];
+  sortBy: 'createdAt' | 'requestedDeliveryDate';
+  sortOrder: 'asc' | 'desc';
+  onAddFilter: () => void;
+  onEditFilter: (id: string) => void;
+  onRemoveFilter: (id: string) => void;
+  onClearAll: () => void;
+  onToggleSortDirection: () => void;
+  onClearSort: () => void;
+}) {
+  const hasFilters = filters.length > 0 || sortBy === 'requestedDeliveryDate';
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      {filters.map((f) => (
+        <FilterChip
+          key={f.id}
+          filter={f}
+          onEdit={() => onEditFilter(f.id)}
+          onRemove={() => onRemoveFilter(f.id)}
+        />
+      ))}
+
+      {sortBy === 'requestedDeliveryDate' && (
+        <span className="inline-flex items-center rounded-md border border-border bg-surface text-xs">
+          <button
+            type="button"
+            onClick={onToggleSortDirection}
+            className="flex items-center gap-1 px-2 py-1 hover:bg-border/30 transition-colors rounded-l-md text-muted"
+          >
+            {sortOrder === 'asc' ? '↑' : '↓'}
+            <span>Delivery date</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClearSort}
+            className="px-1.5 py-1 text-muted hover:text-red-500 transition-colors rounded-r-md"
+            aria-label="Remove sort"
+          >
+            ×
+          </button>
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={onAddFilter}
+        className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1 text-xs text-muted hover:border-primary hover:text-primary transition-colors"
+      >
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-3 w-3">
+          <line x1="8" y1="3" x2="8" y2="13" />
+          <line x1="3" y1="8" x2="13" y2="8" />
+        </svg>
+        Add filter
+      </button>
+
+      {hasFilters && (
+        <button
+          type="button"
+          onClick={onClearAll}
+          className="text-xs text-muted hover:text-red-500 transition-colors"
+        >
+          Clear all
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Sort icon ────────────────────────────────────────────────────────────────
+
+function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" className={['ml-1 inline h-3 w-3', active ? 'text-primary' : 'text-border'].join(' ')}>
+      <path d="M8 3l3.5 5h-7L8 3z" fill="currentColor" opacity={active && dir === 'asc' ? 1 : 0.35} />
+      <path d="M8 13l-3.5-5h7L8 13z" fill="currentColor" opacity={active && dir === 'desc' ? 1 : 0.35} />
+    </svg>
+  );
+}
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonRow() {
   return (
     <tr className="border-b border-border">
-      {[80, 120, 64, 72, 80].map((w, i) => (
+      {[80, 120, 64, 72, 80, 80].map((w, i) => (
         <td key={i} className="py-3.5 px-4">
           <div className="h-3.5 animate-pulse rounded bg-border" style={{ width: w }} />
         </td>
@@ -134,20 +523,35 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'ALL'>('ALL');
 
-  const loadOrders = useCallback(async (
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+  const [sortBy, setSortBy] = useState<'createdAt' | 'requestedDeliveryDate'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Popover state: null = closed, 'add' = adding new, filterId = editing existing
+  const [popoverTarget, setPopoverTarget] = useState<'add' | string | null>(null);
+  const filterAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (filterAreaRef.current && !filterAreaRef.current.contains(e.target as Node)) {
+        setPopoverTarget(null);
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  const load = useCallback(async (
     token: string,
-    status: OrderStatus | 'ALL',
+    activeFilters: ActiveFilter[],
+    sort: 'createdAt' | 'requestedDeliveryDate',
+    order: 'asc' | 'desc',
     nextCursor?: string,
     append = false,
   ) => {
     try {
-      const params = {
-        limit: 20,
-        ...(nextCursor ? { cursor: nextCursor } : {}),
-        ...(status !== 'ALL' ? { status } : {}),
-      };
+      const params = buildApiParams(activeFilters, sort, order, nextCursor);
       const result = await adminOrdersApi.listOrders(params, token);
       setOrders((prev) => append ? [...prev, ...result.data] : result.data);
       setCursor(result.pagination.nextCursor ?? undefined);
@@ -160,15 +564,16 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!accessToken) return;
+    setCursor(undefined);
     setIsLoading(true);
     setError(null);
-    loadOrders(accessToken, statusFilter).finally(() => setIsLoading(false));
-  }, [accessToken, statusFilter, loadOrders]);
+    load(accessToken, filters, sortBy, sortOrder).finally(() => setIsLoading(false));
+  }, [accessToken, filters, sortBy, sortOrder, load]);
 
   async function handleLoadMore() {
     if (!accessToken || !cursor) return;
     setIsLoadingMore(true);
-    await loadOrders(accessToken, statusFilter, cursor, true);
+    await load(accessToken, filters, sortBy, sortOrder, cursor, true);
     setIsLoadingMore(false);
   }
 
@@ -176,10 +581,47 @@ export default function OrdersPage() {
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
   }
 
-  function fmtDate(iso: string | null) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  function handleAddFilter(f: Omit<ActiveFilter, 'id'>) {
+    setFilters((prev) => [...prev, { ...f, id: uid() }]);
+    setPopoverTarget(null);
   }
+
+  function handleEditFilter(id: string, f: Omit<ActiveFilter, 'id'>) {
+    setFilters((prev) => prev.map((x) => (x.id === id ? { ...f, id } : x)));
+    setPopoverTarget(null);
+  }
+
+  function handleRemoveFilter(id: string) {
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+    if (popoverTarget === id) setPopoverTarget(null);
+  }
+
+  function handleClearAll() {
+    setFilters([]);
+    setSortBy('createdAt');
+    setSortOrder('desc');
+    setPopoverTarget(null);
+  }
+
+  function handleToggleDeliveryDateSort() {
+    if (sortBy !== 'requestedDeliveryDate') {
+      setSortBy('requestedDeliveryDate');
+      setSortOrder('asc');
+    } else {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    }
+    setCursor(undefined);
+  }
+
+  function handleClearSort() {
+    setSortBy('createdAt');
+    setSortOrder('desc');
+    setCursor(undefined);
+  }
+
+  const editingFilter = popoverTarget && popoverTarget !== 'add'
+    ? filters.find((f) => f.id === popoverTarget)
+    : undefined;
 
   if (authLoading) {
     return (
@@ -201,30 +643,31 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="mb-4 flex gap-0.5 border-b border-border">
-        {FILTER_TABS.map((tab) => {
-          const active = statusFilter === tab.value;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => {
-                if (statusFilter !== tab.value) {
-                  setStatusFilter(tab.value);
-                  setCursor(undefined);
-                }
-              }}
-              className="relative px-4 py-2.5 text-sm font-medium transition-colors"
-              style={{ color: active ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            >
-              {tab.label}
-              {active && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t bg-primary" />
-              )}
-            </button>
-          );
-        })}
+      {/* Filter bar */}
+      <div ref={filterAreaRef} className="relative mb-4">
+        <FilterBar
+          filters={filters}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onAddFilter={() => setPopoverTarget((p) => (p === 'add' ? null : 'add'))}
+          onEditFilter={(id) => setPopoverTarget((p) => (p === id ? null : id))}
+          onRemoveFilter={handleRemoveFilter}
+          onClearAll={handleClearAll}
+          onToggleSortDirection={handleToggleDeliveryDateSort}
+          onClearSort={handleClearSort}
+        />
+
+        {popoverTarget !== null && (
+          <FilterPopover
+            initial={editingFilter}
+            onApply={(f) =>
+              editingFilter
+                ? handleEditFilter(editingFilter.id, f)
+                : handleAddFilter(f)
+            }
+            onCancel={() => setPopoverTarget(null)}
+          />
+        )}
       </div>
 
       {isLoading ? (
@@ -232,7 +675,7 @@ export default function OrdersPage() {
           <table className="w-full text-left">
             <thead className="border-b border-border bg-[#fafafa]">
               <tr>
-                {['Order', 'Customer', 'Status', 'Total', 'Date', 'Actions'].map((h) => (
+                {['Order', 'Customer', 'Status', 'Total', 'Delivery Date', 'Submitted', 'Actions'].map((h) => (
                   <th key={h} className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted first:pl-5 last:pr-5">
                     {h}
                   </th>
@@ -257,13 +700,22 @@ export default function OrdersPage() {
             </svg>
           </div>
           <h2 className="mb-1.5 text-base font-semibold text-text">
-            {statusFilter === 'ALL' ? 'No orders yet' : `No ${statusFilter.toLowerCase()} orders`}
+            {filters.length > 0 ? 'No matching orders' : 'No orders yet'}
           </h2>
           <p className="text-sm text-muted">
-            {statusFilter === 'ALL'
-              ? 'Orders placed by your customers will appear here.'
-              : `Orders with status "${STATUS_META[statusFilter]?.label ?? statusFilter}" will appear here.`}
+            {filters.length > 0
+              ? 'Try adjusting or clearing your filters.'
+              : 'Orders placed by your customers will appear here.'}
           </p>
+          {filters.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="mt-4 text-sm text-primary hover:underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-white overflow-hidden">
@@ -274,6 +726,12 @@ export default function OrdersPage() {
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">Customer</th>
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">Status</th>
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">Total</th>
+                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
+                  <button type="button" onClick={handleToggleDeliveryDateSort} className="flex items-center hover:text-text transition-colors">
+                    Delivery Date
+                    <SortIcon active={sortBy === 'requestedDeliveryDate'} dir={sortBy === 'requestedDeliveryDate' ? sortOrder : 'asc'} />
+                  </button>
+                </th>
                 <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">Submitted</th>
                 <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">Actions</th>
               </tr>
@@ -308,7 +766,12 @@ export default function OrdersPage() {
                   </td>
                   <td className="py-3 px-4 text-sm text-muted">
                     <Link href={`/orders/${order.id}`} className="block">
-                      {fmtDate(order.submittedAt)}
+                      {fmtDateStr(order.requestedDeliveryDate)}
+                    </Link>
+                  </td>
+                  <td className="py-3 px-4 text-sm text-muted">
+                    <Link href={`/orders/${order.id}`} className="block">
+                      {fmtDateStr(order.submittedAt)}
                     </Link>
                   </td>
                   <td className="py-3 pl-4 pr-5">

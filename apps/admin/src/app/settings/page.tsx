@@ -10,6 +10,7 @@ import { BusinessDetailsForm } from '@/components/settings/BusinessDetailsForm';
 import { OrderSettingsForm } from '@/components/settings/OrderSettingsForm';
 import { DiscoverySettingsForm } from '@/components/settings/DiscoverySettingsForm';
 import { NotificationsForm } from '@/components/settings/NotificationsForm';
+import { ProcessingDaysForm } from '@/components/settings/ProcessingDaysForm';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
 
 export default function CompanySettingsPage() {
@@ -62,6 +63,7 @@ export default function CompanySettingsPage() {
       <div className="space-y-5">
         <BusinessDetailsForm settings={settings} onSave={handleSave} />
         <OrderSettingsForm settings={settings} onSave={handleSave} />
+        <ProcessingDaysForm settings={settings} onSave={handleSave} />
         <DiscoverySettingsForm settings={settings} onSave={handleSave} />
         <NotificationsForm settings={settings} onSave={handleSave} />
       </div>

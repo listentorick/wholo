@@ -11,6 +11,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
+import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -27,6 +28,7 @@ import { HealthController } from './health.controller';
     PriceListsModule,
     AssetImagesModule,
     SettingsModule,
+    DeliveryProfilesModule,
   ],
   controllers: [HealthController],
 })

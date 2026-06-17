@@ -95,14 +95,14 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: 'Deliveries',
-    href: '/deliveries',
+    label: 'Delivery Profiles',
+    href: '/delivery-profiles',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <rect x="1" y="3" width="15" height="13" />
-        <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
-        <circle cx="5.5" cy="18.5" r="2.5" />
-        <circle cx="18.5" cy="18.5" r="2.5" />
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15 15" />
+        <line x1="3.05" y1="12" x2="1" y2="12" />
+        <line x1="23" y1="12" x2="20.95" y2="12" />
       </svg>
     ),
   },
