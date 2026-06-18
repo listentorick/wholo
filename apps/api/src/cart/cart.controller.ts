@@ -5,7 +5,7 @@ import { CartService } from './cart.service';
 import { UpsertCartItemDto } from './dto/upsert-cart-item.dto';
 
 interface RequestWithUser extends Request {
-  user: { organisationId: string };
+  user: { sub: string; organisationId: string };
 }
 
 @ApiTags('Cart')
@@ -19,13 +19,13 @@ export class CartController {
   @ApiOperation({ summary: 'Get the current cart for a distributor' })
   @ApiOkResponse({ description: 'Cart contents with line items' })
   getCart(@Query('distributorSlug') distributorSlug: string, @Req() req: RequestWithUser) {
-    return this.cartService.getCart(distributorSlug, req.user.organisationId);
+    return this.cartService.getCart(distributorSlug, req.user.organisationId, req.user.sub);
   }
 
   @Put('items')
   @ApiOperation({ summary: 'Add or update a cart item (quantity 0 removes the item)' })
   @ApiOkResponse({ description: 'Updated cart' })
   upsertItem(@Body() dto: UpsertCartItemDto, @Req() req: RequestWithUser) {
-    return this.cartService.upsertItem(dto, req.user.organisationId);
+    return this.cartService.upsertItem(dto, req.user.organisationId, req.user.sub);
   }
 }

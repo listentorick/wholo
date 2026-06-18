@@ -139,6 +139,7 @@ model User {
   deletedAt     DateTime?
   memberships   Membership[]
   refreshTokens RefreshToken[]
+  cartOrders    CartOrder[]
 
   @@map("users")
 }
@@ -304,14 +305,16 @@ model CartOrder {
   id            String          @id @default(cuid())
   distributorId String
   customerId    String
+  userId        String
   status        CartOrderStatus @default(DRAFT)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   distributor   Organisation    @relation("DistributorCartOrders", fields: [distributorId], references: [id])
   customer      Organisation    @relation("CustomerCartOrders", fields: [customerId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
   lines         CartOrderLine[]
 
-  @@unique([distributorId, customerId, status])
+  @@unique([distributorId, customerId, userId, status])
   @@index([distributorId, status])
   @@index([customerId, status])
   @@map("cart_orders")

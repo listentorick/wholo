@@ -101,9 +101,10 @@ export class OrdersService {
     // Load cart
     const cart = await this.prisma.cartOrder.findUnique({
       where: {
-        distributorId_customerId_status: {
+        distributorId_customerId_userId_status: {
           distributorId: distributor.id,
           customerId: traderCustomerId,
+          userId: placedByUserId,
           status: CartOrderStatus.DRAFT,
         },
       },

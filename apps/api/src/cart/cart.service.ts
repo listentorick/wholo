@@ -19,15 +19,15 @@ export class CartService {
     private priceResolution: PriceResolutionService,
   ) {}
 
-  async getCart(distributorSlug: string, customerId: string) {
+  async getCart(distributorSlug: string, customerId: string, userId: string) {
     const distributor = await this.resolveDistributor(distributorSlug);
-    const order = await this.findOrCreateDraft(distributor.id, customerId);
+    const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
     return this.formatCart(order);
   }
 
-  async upsertItem(dto: UpsertCartItemDto, customerId: string) {
+  async upsertItem(dto: UpsertCartItemDto, customerId: string, userId: string) {
     const distributor = await this.resolveDistributor(dto.distributorSlug);
-    const order = await this.findOrCreateDraft(distributor.id, customerId);
+    const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
 
     if (dto.quantity === 0) {
       await this.prisma.cartOrderLine.deleteMany({
@@ -92,10 +92,10 @@ export class CartService {
     return distributor;
   }
 
-  private async findOrCreateDraft(distributorId: string, customerId: string) {
+  private async findOrCreateDraft(distributorId: string, customerId: string, userId: string) {
     return this.prisma.cartOrder.upsert({
-      where: { distributorId_customerId_status: { distributorId, customerId, status: CartOrderStatus.DRAFT } },
-      create: { distributorId, customerId, status: CartOrderStatus.DRAFT },
+      where: { distributorId_customerId_userId_status: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT } },
+      create: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT },
       update: {},
       include: { lines: { include: cartLineInclude } },
     });
