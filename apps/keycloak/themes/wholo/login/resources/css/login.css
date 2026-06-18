@@ -1,0 +1,157 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background-color: #ffffff;
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e2436;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wh-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* ─── Wordmark ─────────────────────────────────────────── */
+
+.wh-header {
+  margin-bottom: 52px;
+  text-align: center;
+}
+
+.wh-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.wh-diamond {
+  width: 7px;
+  height: 7px;
+  background-color: #D97036;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+.wh-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #1e2436;
+  line-height: 1;
+}
+
+.wh-subtitle {
+  font-size: 12px;
+  color: #9BA3AE;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.wh-divider {
+  width: 28px;
+  height: 1.5px;
+  background-color: #D97036;
+  margin: 0 auto;
+}
+
+/* ─── Error ─────────────────────────────────────────────── */
+
+.wh-error {
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: #EF4444;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ─── Form fields ───────────────────────────────────────── */
+
+.wh-field {
+  margin-bottom: 28px;
+}
+
+.wh-field--last {
+  margin-bottom: 40px;
+}
+
+label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #1e2436;
+  margin-bottom: 4px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid #E5E7EB;
+  padding: 10px 0 12px;
+  font-size: 15px;
+  color: #1e2436;
+  outline: none;
+  transition: border-color 0.2s ease;
+  font-family: 'Inter', system-ui, sans-serif;
+  caret-color: #D97036;
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder {
+  color: #9BA3AE;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus {
+  border-bottom-color: #D97036;
+}
+
+/* ─── Submit button ─────────────────────────────────────── */
+
+.wh-btn {
+  width: 100%;
+  border: 1.5px solid #D97036;
+  background: #ffffff;
+  color: #D97036;
+  padding: 15px 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.22s ease, color 0.22s ease;
+  font-family: 'Inter', system-ui, sans-serif;
+  display: block;
+  border-radius: 0;
+}
+
+.wh-btn:hover {
+  background: #D97036;
+  color: #ffffff;
+}
+
+.wh-btn:active {
+  background: #C4622A;
+  border-color: #C4622A;
+  color: #ffffff;
+}

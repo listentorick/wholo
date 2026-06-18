@@ -28,3 +28,7 @@ Expand the name of the chart.
 {{- define "wholo.adminApi.host" -}}
 {{- printf "%s-admin-api" (include "wholo.fullname" .) }}
 {{- end }}
+
+{{- define "wholo.keycloak.host" -}}
+{{- printf "%s-keycloak" (include "wholo.fullname" .) }}
+{{- end }}

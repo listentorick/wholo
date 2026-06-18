@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-keycloak-realm
+  labels:
+    app: {{ include "wholo.fullname" . }}-keycloak
+data:
+  wholo-realm.json: |
+    {
+      "realm": "wholo",
+      "enabled": true,
+      "displayName": "Wholo",
+      "accessTokenLifespan": 900,
+      "ssoSessionMaxLifespan": 2592000,
+      "ssoSessionIdleTimeout": 2592000,
+      "clients": [
+        {
+          "clientId": "wholo-admin",
+          "name": "Wholo Admin",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "redirectUris": ["http://localhost:3020/*"],
+          "webOrigins": ["http://localhost:3020"],
+          "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": "http://localhost:3020/*"
+          }
+        },
+        {
+          "clientId": "wholo-portal",
+          "name": "Wholo Portal",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "redirectUris": ["http://localhost:3010/*"],
+          "webOrigins": ["http://localhost:3010"],
+          "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": "http://localhost:3010/*"
+          }
+        }
+      ]
+    }

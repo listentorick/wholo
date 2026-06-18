@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-keycloak
+  labels:
+    app: {{ include "wholo.fullname" . }}-keycloak
+data:
+  KC_DB: "postgres"
+  KC_DB_URL: {{ printf "jdbc:postgresql://%s:%d/keycloak" (include "wholo.postgresql.host" .) (int .Values.postgresql.port) | quote }}
+  KC_DB_USERNAME: {{ .Values.postgresql.username | quote }}
+  KC_HOSTNAME: "localhost"
+  KC_HOSTNAME_PORT: {{ .Values.keycloak.port | toString | quote }}
+  KC_HOSTNAME_STRICT: "false"
+  KC_HTTP_ENABLED: "true"
+  KC_HEALTH_ENABLED: "true"

@@ -118,3 +118,20 @@ admin:
       memory: "256Mi"
       cpu: "200m"
   adminApiUrl: "http://localhost:3002"
+
+keycloak:
+  image:
+    repository: wholo/keycloak
+    tag: local
+    pullPolicy: Never
+  adminUser: admin
+  adminPassword: admin
+  port: 8080
+  realm: wholo
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"

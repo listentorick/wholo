@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-keycloak
+  labels:
+    app: {{ include "wholo.fullname" . }}-keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-keycloak
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-keycloak
+    spec:
+      initContainers:
+        - name: db-init
+          image: {{ .Values.postgresql.image }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until pg_isready -h {{ include "wholo.postgresql.host" . }} -U {{ .Values.postgresql.username }}; do
+                echo "Waiting for PostgreSQL..."; sleep 2;
+              done
+              psql -h {{ include "wholo.postgresql.host" . }} -U {{ .Values.postgresql.username }} \
+                -d {{ .Values.postgresql.database }} \
+                -tc "SELECT 1 FROM pg_database WHERE datname = 'keycloak'" | grep -q 1 \
+                || psql -h {{ include "wholo.postgresql.host" . }} -U {{ .Values.postgresql.username }} \
+                -d {{ .Values.postgresql.database }} \
+                -c "CREATE DATABASE keycloak"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wholo.fullname" . }}-postgresql
+                  key: password
+      containers:
+        - name: keycloak
+          image: {{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-keycloak
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-keycloak
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 10
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+      volumes:
+        - name: realm-import
+          configMap:
+            name: {{ include "wholo.fullname" . }}-keycloak-realm
