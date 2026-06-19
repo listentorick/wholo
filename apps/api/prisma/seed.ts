@@ -29,10 +29,11 @@ async function main() {
 
   const user = await prisma.user.upsert({
     where: { email: 'peter@blackbird.com' },
-    update: {},
+    update: { keycloakId: 'kc-seed-user-1' },
     create: {
       id: 'seed-user-1',
       email: 'peter@blackbird.com',
+      keycloakId: 'kc-seed-user-1',
       passwordHash,
       firstName: 'Peter',
       lastName: 'Walsh',
@@ -53,10 +54,11 @@ async function main() {
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'james@vineandco.com' },
-    update: {},
+    update: { keycloakId: 'kc-seed-admin-1' },
     create: {
       id: 'seed-admin-1',
       email: 'james@vineandco.com',
+      keycloakId: 'kc-seed-admin-1',
       passwordHash: adminPasswordHash,
       firstName: 'James',
       lastName: 'Vine',
@@ -89,10 +91,11 @@ async function main() {
 
   const yhmpAdminUser = await prisma.user.upsert({
     where: { email: 'rick@yorkshirehandmadepies.co.uk' },
-    update: {},
+    update: { keycloakId: 'kc-seed-admin-2' },
     create: {
       id: 'seed-admin-2',
       email: 'rick@yorkshirehandmadepies.co.uk',
+      keycloakId: 'kc-seed-admin-2',
       passwordHash: yhmpAdminPasswordHash,
       firstName: 'Rick',
       lastName: 'Yorkshire',
@@ -119,9 +122,10 @@ async function main() {
 
   const garrattsUser = await prisma.user.upsert({
     where: { email: 'buyer@garratts.co.uk' },
-    update: {},
+    update: { keycloakId: 'kc-seed-garratts-1' },
     create: {
       email: 'buyer@garratts.co.uk',
+      keycloakId: 'kc-seed-garratts-1',
       passwordHash: garrattsPasswordHash,
       firstName: 'Garratts',
       lastName: 'Buyer',

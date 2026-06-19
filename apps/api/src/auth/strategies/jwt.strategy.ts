@@ -1,31 +1,44 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-
-interface JwtPayload {
-  sub: string;
-  email: string;
-  role: string;
-  organisationId: string;
-}
+import { passportJwtSecret } from 'jwks-rsa';
+import { UsersService } from '../../users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private usersService: UsersService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_SECRET', 'dev-secret'),
+      secretOrKeyProvider: passportJwtSecret({
+        cache: true,
+        rateLimit: true,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `${config.get<string>('KEYCLOAK_URL', 'http://localhost:8080')}/realms/${config.get<string>('KEYCLOAK_REALM', 'wholo')}/protocol/openid-connect/certs`,
+      }),
+      algorithms: ['RS256'],
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: { sub: string; email?: string }) {
+    let user = await this.usersService.findByKeycloakId(payload.sub);
+
+    // JIT link: first login for an existing user created before Keycloak migration
+    if (!user && payload.email) {
+      user = await this.usersService.linkKeycloakId(payload.email, payload.sub);
+    }
+
+    if (!user) throw new UnauthorizedException('No Wholo user found for this identity');
+    const membership = user.memberships[0];
     return {
-      sub: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      organisationId: payload.organisationId,
+      sub: user.id,
+      email: user.email,
+      role: membership?.role,
+      organisationId: membership?.organisationId,
     };
   }
 }

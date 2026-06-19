@@ -7,3 +7,6 @@ metadata:
 data:
   NEXT_PUBLIC_API_URL: {{ .Values.portal.apiUrl | quote }}
   HOSTNAME: "0.0.0.0"
+  NEXT_PUBLIC_KEYCLOAK_URL: {{ .Values.portal.keycloak.url | quote }}
+  NEXT_PUBLIC_KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
+  NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: {{ .Values.portal.keycloak.clientId | quote }}

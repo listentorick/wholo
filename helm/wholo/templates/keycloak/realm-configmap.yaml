@@ -10,6 +10,7 @@ data:
       "realm": "wholo",
       "enabled": true,
       "displayName": "Wholo",
+      "loginTheme": "wholo",
       "accessTokenLifespan": 900,
       "ssoSessionMaxLifespan": 2592000,
       "ssoSessionIdleTimeout": 2592000,
@@ -41,6 +42,56 @@ data:
             "pkce.code.challenge.method": "S256",
             "post.logout.redirect.uris": "http://localhost:3010/*"
           }
+        }
+      ],
+      "users": [
+        {
+          "id": "kc-seed-admin-1",
+          "username": "james@vineandco.com",
+          "email": "james@vineandco.com",
+          "firstName": "James",
+          "lastName": "Vine",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "admin123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-admin-2",
+          "username": "rick@yorkshirehandmadepies.co.uk",
+          "email": "rick@yorkshirehandmadepies.co.uk",
+          "firstName": "Rick",
+          "lastName": "Yorkshire",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-user-1",
+          "username": "peter@blackbird.com",
+          "email": "peter@blackbird.com",
+          "firstName": "Peter",
+          "lastName": "Walsh",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-garratts-1",
+          "username": "buyer@garratts.co.uk",
+          "email": "buyer@garratts.co.uk",
+          "firstName": "Garratts",
+          "lastName": "Buyer",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
         }
       ]
     }

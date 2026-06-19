@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { adminAuthApi, adminAssetImagesApi, ApiError } from '@wholo/admin-api-client';
 import type { AuthUser } from '@wholo/types';
 
@@ -9,7 +10,7 @@ interface AuthContextValue {
   accessToken: string | null;
   logoUrl: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: () => void;
   logout: () => void;
 }
 
@@ -25,8 +26,30 @@ async function fetchLogoUrl(
     const img = imgs[0];
     setLogoUrl(img?.variants['full'] ?? img?.variants['thumb'] ?? null);
   } catch {
-    // non-critical — logo simply won't show
+    // non-critical
   }
+}
+
+// Module-level state so init only happens once across React Strict Mode double-effects
+let initPromise: Promise<boolean> | null = null;
+
+async function getKeycloakAuth(): Promise<boolean> {
+  if (initPromise) return initPromise;
+
+  const { default: Keycloak } = await import('keycloak-js');
+  const kc = new Keycloak({
+    url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080',
+    realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
+    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-admin',
+  });
+
+  initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
+    // Store instance globally so login/logout can access it
+    (window as any).__kc = kc;
+    return authenticated;
+  });
+
+  return initPromise;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -34,40 +57,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => { routerRef.current = router; });
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('admin_access_token') : null;
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-    setAccessToken(token);
-    adminAuthApi
-      .me(token)
-      .then((u) => {
-        setUser(u);
-        fetchLogoUrl(token, u.organisationId, setLogoUrl);
-      })
-      .catch(() => {
-        localStorage.removeItem('admin_access_token');
-        setAccessToken(null);
+    getKeycloakAuth()
+      .then(async (authenticated) => {
+        const kc = (window as any).__kc;
+        if (!authenticated || !kc?.token) return;
+
+        const token: string = kc.token;
+        setAccessToken(token);
+
+        kc.onTokenExpired = () => {
+          kc.updateToken(30)
+            .then(() => setAccessToken(kc.token ?? null))
+            .catch(() => {
+              setUser(null);
+              setAccessToken(null);
+            });
+        };
+
+        const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
+        if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
+
+        try {
+          const profile = await adminAuthApi.me(token);
+          setUser(profile as AuthUser);
+          if ((profile as any).organisationId) {
+            fetchLogoUrl(token, (profile as any).organisationId, setLogoUrl);
+          }
+        } catch {
+          // Token valid but Wholo profile unavailable
+        }
+
+        // Client-side navigation so AuthProvider stays mounted and user state persists
+        if (postLoginRedirect && postLoginRedirect !== '/') {
+          routerRef.current.push(postLoginRedirect);
+        }
       })
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await adminAuthApi.login({ email, password });
-    setAccessToken(result.accessToken);
-    setUser(result.user);
-    localStorage.setItem('admin_access_token', result.accessToken);
-    fetchLogoUrl(result.accessToken, result.user.organisationId, setLogoUrl);
+  const login = useCallback(() => {
+    const kc = (window as any).__kc;
+    const params = new URLSearchParams(window.location.search);
+    const returnUrl = params.get('returnUrl') ?? '/';
+    sessionStorage.setItem('kc_post_login_redirect', returnUrl);
+    const redirectUri = window.location.origin + '/';
+    if (kc) {
+      kc.login({ redirectUri });
+    } else {
+      getKeycloakAuth().then(() => {
+        (window as any).__kc?.login({ redirectUri });
+      });
+    }
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     setAccessToken(null);
     setLogoUrl(null);
-    localStorage.removeItem('admin_access_token');
+    (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
   }, []);
 
   return (

@@ -7,7 +7,7 @@ metadata:
 data:
   PORT: "3002"
   NODE_ENV: "production"
-  JWT_EXPIRES_IN: {{ .Values.adminApi.jwt.expiresIn | quote }}
-  REFRESH_TOKEN_EXPIRES_DAYS: {{ .Values.adminApi.refreshToken.expiresDays | quote }}
   REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
   CENTRAL_API_URL: {{ .Values.adminApi.centralApiUrl | quote }}
+  KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
+  KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}

@@ -16,6 +16,7 @@
     "@wholo/admin-api-client": "workspace:*",
     "@wholo/types": "workspace:*",
     "clsx": "^2.1.1",
+    "keycloak-js": "^26.2.4",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

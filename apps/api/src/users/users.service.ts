@@ -1,25 +1,39 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async validateCredentials(email: string, password: string) {
-    const user = await this.prisma.user.findFirst({
-      where: { email, deletedAt: null },
-      include: { memberships: { include: { organisation: true } } },
-    });
-    if (!user) return null;
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) return null;
-    return user;
-  }
-
   async findById(id: string) {
     return this.prisma.user.findFirst({
       where: { id, deletedAt: null },
+      include: { memberships: { include: { organisation: true } } },
+    });
+  }
+
+  async findByKeycloakId(keycloakId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { keycloakId, deletedAt: null },
+      include: { memberships: { include: { organisation: true } } },
+    });
+    if (user) return user;
+
+    // JIT link: first Keycloak login for a user created before Keycloak migration
+    // Match by email is handled in the strategy via a separate email claim lookup.
+    // This method only handles the keycloakId lookup path.
+    return null;
+  }
+
+  async linkKeycloakId(email: string, keycloakId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { email, keycloakId: null, deletedAt: null },
+      include: { memberships: { include: { organisation: true } } },
+    });
+    if (!user) return null;
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: { keycloakId },
       include: { memberships: { include: { organisation: true } } },
     });
   }

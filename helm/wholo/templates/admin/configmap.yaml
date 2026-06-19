@@ -6,5 +6,8 @@ metadata:
     app: {{ include "wholo.fullname" . }}-admin
 data:
   NEXT_PUBLIC_ADMIN_API_URL: {{ .Values.admin.adminApiUrl | quote }}
+  NEXT_PUBLIC_KEYCLOAK_URL: {{ .Values.admin.keycloak.url | quote }}
+  NEXT_PUBLIC_KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
+  NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: {{ .Values.admin.keycloak.clientId | quote }}
   HOSTNAME: "0.0.0.0"
   PORT: "3020"

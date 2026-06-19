@@ -7,5 +7,6 @@ metadata:
 data:
   PORT: "3003"
   NODE_ENV: "production"
-  JWT_EXPIRES_IN: {{ .Values.portalApi.jwt.expiresIn | quote }}
   CENTRAL_API_URL: {{ .Values.portalApi.centralApiUrl | quote }}
+  KEYCLOAK_URL: {{ .Values.keycloak.url | default "http://wholo-keycloak:8080" | quote }}
+  KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}

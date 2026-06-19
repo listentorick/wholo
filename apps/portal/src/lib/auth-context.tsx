@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { authApi, ApiError } from '@wholo/api-client';
 import type { AuthUser } from '@wholo/types';
 
@@ -8,45 +9,96 @@ interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: () => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Module-level state so init only happens once across React Strict Mode double-effects
+let initPromise: Promise<boolean> | null = null;
+
+async function getKeycloakAuth(): Promise<boolean> {
+  if (initPromise) return initPromise;
+
+  const { default: Keycloak } = await import('keycloak-js');
+  const kc = new Keycloak({
+    url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080',
+    realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
+    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-portal',
+  });
+
+  initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
+    (window as any).__kc = kc;
+    return authenticated;
+  });
+
+  return initPromise;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const routerRef = useRef(router);
+  useEffect(() => { routerRef.current = router; });
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-    setAccessToken(token);
-    authApi
-      .me(token)
-      .then((u) => setUser(u))
-      .catch(() => {
-        localStorage.removeItem('access_token');
-        setAccessToken(null);
+    getKeycloakAuth()
+      .then(async (authenticated) => {
+        const kc = (window as any).__kc;
+        if (!authenticated || !kc?.token) return;
+
+        const token: string = kc.token;
+        setAccessToken(token);
+
+        kc.onTokenExpired = () => {
+          kc.updateToken(30)
+            .then(() => setAccessToken(kc.token ?? null))
+            .catch(() => {
+              setUser(null);
+              setAccessToken(null);
+            });
+        };
+
+        const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
+        if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
+
+        try {
+          const profile = await authApi.me(token);
+          setUser(profile as AuthUser);
+        } catch {
+          // Token valid but Wholo profile unavailable
+        }
+
+        // Client-side navigation so AuthProvider stays mounted and user state persists
+        if (postLoginRedirect && postLoginRedirect !== '/') {
+          routerRef.current.push(postLoginRedirect);
+        }
       })
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await authApi.login({ email, password });
-    setAccessToken(result.accessToken);
-    setUser(result.user);
-    localStorage.setItem('access_token', result.accessToken);
+  const login = useCallback(() => {
+    const kc = (window as any).__kc;
+    const params = new URLSearchParams(window.location.search);
+    const returnUrl = params.get('returnUrl') ?? '/';
+    sessionStorage.setItem('kc_post_login_redirect', returnUrl);
+    const redirectUri = window.location.origin + '/';
+    if (kc) {
+      kc.login({ redirectUri });
+    } else {
+      getKeycloakAuth().then(() => {
+        (window as any).__kc?.login({ redirectUri });
+      });
+    }
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     setAccessToken(null);
-    localStorage.removeItem('access_token');
+    (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
   }, []);
 
   return (

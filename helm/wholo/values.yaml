@@ -27,11 +27,6 @@ api:
     limits:
       memory: "512Mi"
       cpu: "500m"
-  jwt:
-    secret: "dev-secret-change-in-prod"
-    expiresIn: "15m"
-  refreshToken:
-    expiresDays: "30"
   r2:
     accountId: ""
     bucketName: ""
@@ -56,6 +51,9 @@ portal:
       memory: "256Mi"
       cpu: "200m"
   apiUrl: "http://localhost:3003"
+  keycloak:
+    url: "http://localhost:8080"
+    clientId: "wholo-portal"
 
 portalApi:
   image:
@@ -73,9 +71,6 @@ portalApi:
     limits:
       memory: "512Mi"
       cpu: "500m"
-  jwt:
-    secret: "dev-secret-change-in-prod"
-    expiresIn: "15m"
   centralApiUrl: "http://wholo-api:3001"
 
 adminApi:
@@ -94,11 +89,6 @@ adminApi:
     limits:
       memory: "512Mi"
       cpu: "500m"
-  jwt:
-    secret: "admin-dev-secret-change-in-prod"
-    expiresIn: "15m"
-  refreshToken:
-    expiresDays: "30"
   centralApiUrl: "http://wholo-api:3001"
 
 admin:
@@ -118,6 +108,9 @@ admin:
       memory: "256Mi"
       cpu: "200m"
   adminApiUrl: "http://localhost:3002"
+  keycloak:
+    url: "http://localhost:8080"
+    clientId: "wholo-admin"
 
 keycloak:
   image:
