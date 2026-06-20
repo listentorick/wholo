@@ -172,7 +172,7 @@ export class AdminDeliveryProfilesService {
   ) {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { id: tradeRelationshipId, distributorId, deletedAt: null },
-      select: { id: true, customerId: true },
+      select: { id: true },
     });
     if (!rel) throw new NotFoundException('Trade relationship not found');
 
@@ -185,13 +185,8 @@ export class AdminDeliveryProfilesService {
     }
 
     await this.prisma.traderCustomerSettings.upsert({
-      where: { distributorId_traderCustomerId: { distributorId, traderCustomerId: rel.customerId } },
-      create: {
-        distributorId,
-        traderCustomerId: rel.customerId,
-        tradeRelationshipId,
-        deliveryProfileId: dto.deliveryProfileId,
-      },
+      where: { tradeRelationshipId },
+      create: { tradeRelationshipId, deliveryProfileId: dto.deliveryProfileId },
       update: { deliveryProfileId: dto.deliveryProfileId },
     });
 

@@ -12,6 +12,7 @@ import { PriceListsModule } from './price-lists/price-lists.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
+import { OrderAsModule } from './order-as/order-as.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from './health.controller';
     AssetImagesModule,
     SettingsModule,
     DeliveryProfilesModule,
+    OrderAsModule,
   ],
   controllers: [HealthController],
 })

@@ -3,4 +3,6 @@ export { catalogueApi } from './catalogue';
 export { cartApi } from './cart';
 export { ordersApi } from './orders';
 export { deliveryApi } from './delivery';
+export { orderAsApi } from './order-as';
+export type { OrderAsExchangeResponse } from './order-as';
 export { ApiError } from './base';

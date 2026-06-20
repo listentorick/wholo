@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -31,10 +31,8 @@ export class ApiClientService {
 
     const data = await res.json();
     if (!res.ok) {
-      const message = data?.message ?? `Request failed: ${res.status}`;
-      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
-      err.status = res.status;
-      throw err;
+      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
+      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
     }
     return data as T;
   }
@@ -79,10 +77,8 @@ export class ApiClientService {
 
     const data = await res.json();
     if (!res.ok) {
-      const message = data?.message ?? `Request failed: ${res.status}`;
-      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
-      err.status = res.status;
-      throw err;
+      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
+      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
     }
     return data as T;
   }
@@ -97,10 +93,8 @@ export class ApiClientService {
     if (res.status === 204) return undefined as T;
     const data = await res.json();
     if (!res.ok) {
-      const message = data?.message ?? `Request failed: ${res.status}`;
-      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
-      err.status = res.status;
-      throw err;
+      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
+      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
     }
     return data as T;
   }
@@ -117,10 +111,8 @@ export class ApiClientService {
     if (res.status === 204) return undefined as T;
     const data = await res.json();
     if (!res.ok) {
-      const message = data?.message ?? `Request failed: ${res.status}`;
-      const err = new Error(Array.isArray(message) ? message.join(', ') : message) as any;
-      err.status = res.status;
-      throw err;
+      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
+      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
     }
     return data as T;
   }

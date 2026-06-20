@@ -259,7 +259,7 @@ export class AdminPriceListsService {
   async assignPriceList(tradeRelationshipId: string, distributorId: string, dto: AssignPriceListDto) {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { id: tradeRelationshipId, distributorId, deletedAt: null },
-      select: { id: true, customerId: true },
+      select: { id: true },
     });
     if (!rel) throw new NotFoundException('Trade relationship not found');
 
@@ -272,13 +272,8 @@ export class AdminPriceListsService {
     }
 
     await this.prisma.traderCustomerSettings.upsert({
-      where: { distributorId_traderCustomerId: { distributorId, traderCustomerId: rel.customerId } },
-      create: {
-        distributorId,
-        traderCustomerId: rel.customerId,
-        tradeRelationshipId,
-        priceListId: dto.priceListId,
-      },
+      where: { tradeRelationshipId },
+      create: { tradeRelationshipId, priceListId: dto.priceListId },
       update: { priceListId: dto.priceListId },
     });
 

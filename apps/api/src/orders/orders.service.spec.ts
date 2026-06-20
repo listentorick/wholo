@@ -38,7 +38,6 @@ describe('OrdersService — delivery date revalidation', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
-      traderCustomerSettings: { findUnique: jest.fn() },
       distributorSettings: { findUnique: jest.fn() },
       tradeRelationship: { findUnique: jest.fn() },
       order: { create: jest.fn() },
@@ -68,7 +67,6 @@ describe('OrdersService — delivery date revalidation', () => {
   function setupHappyPath() {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
     (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
     });

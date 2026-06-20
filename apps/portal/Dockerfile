@@ -14,6 +14,15 @@ COPY packages/types ./packages/types
 COPY packages/api-client ./packages/api-client
 COPY apps/portal ./apps/portal
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* vars must be present at build time to be embedded in the browser bundle
+ARG NEXT_PUBLIC_API_URL=http://localhost:3003
+ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
+ARG NEXT_PUBLIC_KEYCLOAK_REALM=wholo
+ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_KEYCLOAK_URL=${NEXT_PUBLIC_KEYCLOAK_URL}
+ENV NEXT_PUBLIC_KEYCLOAK_REALM=${NEXT_PUBLIC_KEYCLOAK_REALM}
+ENV NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=${NEXT_PUBLIC_KEYCLOAK_CLIENT_ID}
 RUN pnpm --filter @wholo/portal build
 
 FROM node:20-alpine AS runner

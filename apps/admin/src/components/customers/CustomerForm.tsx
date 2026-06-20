@@ -176,13 +176,15 @@ interface CustomerFormProps {
   onSubmit: (data: CreateCustomerRequest) => Promise<{ inviteUrl?: string | null } | void>;
   onDelete?: () => Promise<void>;
   onInvite?: () => Promise<InviteResponse>;
+  onOrderAs?: () => Promise<{ portalUrl: string }>;
 }
 
-export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, onInvite }: CustomerFormProps) {
+export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, onInvite, onOrderAs }: CustomerFormProps) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isInviting, setIsInviting] = useState(false);
+  const [isOrderingAs, setIsOrderingAs] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteResult, setInviteResult] = useState<InviteResponse | null>(null);
 
@@ -266,6 +268,19 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
       setApiError(err instanceof Error ? err.message : 'Failed to send invitation.');
     } finally {
       setIsInviting(false);
+    }
+  }
+
+  async function handleOrderAs() {
+    if (!onOrderAs) return;
+    setIsOrderingAs(true);
+    try {
+      const { portalUrl } = await onOrderAs();
+      window.open(portalUrl, '_blank', 'noopener');
+    } catch (err: unknown) {
+      setApiError(err instanceof Error ? err.message : 'Failed to start order session.');
+    } finally {
+      setIsOrderingAs(false);
     }
   }
 
@@ -547,6 +562,20 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
                 )}
               </div>
             </FormCard>
+
+            {/* Order on behalf of (edit mode only) */}
+            {mode === 'edit' && onOrderAs && (
+              <FormCard>
+                <button
+                  type="button"
+                  onClick={handleOrderAs}
+                  disabled={isOrderingAs}
+                  className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
+                >
+                  {isOrderingAs ? 'Opening…' : 'Order on behalf of customer'}
+                </button>
+              </FormCard>
+            )}
 
             {/* Danger zone (edit mode only) */}
             {mode === 'edit' && onDelete && (

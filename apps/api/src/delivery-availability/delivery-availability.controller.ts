@@ -4,6 +4,7 @@ import { OrganisationType } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DeliveryAvailabilityService } from './delivery-availability.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ORDER_AS_CONTEXT_KEY, OrderAsContext } from '../order-as/order-as.interceptor';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -31,6 +32,8 @@ export class DeliveryAvailabilityController {
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
-    return this.service.getAvailableDates(distributor.id, req.user.organisationId);
+    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
+    const customerId = orderAs?.customerId ?? req.user.organisationId;
+    return this.service.getAvailableDates(distributor.id, customerId);
   }
 }

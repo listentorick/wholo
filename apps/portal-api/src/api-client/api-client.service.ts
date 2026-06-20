@@ -1,5 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { orderAsStorage } from '../common/order-as-context';
 
 @Injectable()
 export class ApiClientService {
@@ -20,6 +21,8 @@ export class ApiClientService {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
+    const orderAsSession = orderAsStorage.getStore();
+    if (orderAsSession) headers['X-Order-As-Session'] = orderAsSession;
     const res = await fetch(url, {
       method,
       headers,

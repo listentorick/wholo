@@ -156,10 +156,7 @@ describe('AdminDeliveryProfilesService', () => {
 
   describe('assignDeliveryProfile', () => {
     it('upserts TraderCustomerSettings with deliveryProfileId', async () => {
-      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({
-        id: 'tr-1',
-        customerId: 'cust-1',
-      });
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({ id: 'tr-1' });
       (prisma.deliveryProfile.findFirst as jest.Mock).mockResolvedValue({ id: 'profile-1' });
       (prisma.traderCustomerSettings.upsert as jest.Mock).mockResolvedValue({});
 
@@ -167,16 +164,14 @@ describe('AdminDeliveryProfilesService', () => {
 
       expect(prisma.traderCustomerSettings.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
+          where: { tradeRelationshipId: 'tr-1' },
           update: { deliveryProfileId: 'profile-1' },
         }),
       );
     });
 
     it('clears deliveryProfileId when null is passed', async () => {
-      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({
-        id: 'tr-1',
-        customerId: 'cust-1',
-      });
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({ id: 'tr-1' });
       (prisma.traderCustomerSettings.upsert as jest.Mock).mockResolvedValue({});
 
       const result = await service.assignDeliveryProfile('tr-1', 'dist-1', { deliveryProfileId: null });
@@ -197,10 +192,7 @@ describe('AdminDeliveryProfilesService', () => {
     });
 
     it('throws NotFoundException when delivery profile not found for distributor', async () => {
-      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({
-        id: 'tr-1',
-        customerId: 'cust-1',
-      });
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({ id: 'tr-1' });
       (prisma.deliveryProfile.findFirst as jest.Mock).mockResolvedValue(null);
       await expect(
         service.assignDeliveryProfile('tr-1', 'dist-1', { deliveryProfileId: 'bad-profile' }),

@@ -45,7 +45,7 @@ const makeRel = (overrides = {}) => ({
   updatedAt: new Date('2024-01-01'),
   customer: { id: 'org-1', name: 'Acme', email: 'acme@example.com', phone: null },
   invitations: [],
-  traderCustomerSettings: [],
+  traderCustomerSettings: null,
   catalogues: [],
   ...overrides,
 });

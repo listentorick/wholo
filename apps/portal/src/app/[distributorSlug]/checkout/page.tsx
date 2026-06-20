@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
+import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { ordersApi, deliveryApi, ApiError } from '@wholo/api-client';
@@ -15,6 +16,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
+  const { orderAsMode, clearOrderAsSession } = useAuth();
   const { cartLoading, items, quantities, savingItems, syncItem, refreshCart } = useCart();
 
   const [poOpen, setPoOpen] = useState(false);
@@ -52,8 +54,15 @@ export default function CheckoutPage() {
         },
         accessToken,
       );
-      await refreshCart(); // re-sync from server (server cleared the cart on submission)
-      router.push(`/${distributorSlug}/orders/${order.id}`);
+      if (orderAsMode) {
+        // Session was consumed atomically with order creation — clear it from storage
+        // before any further requests fire (those would 401 with the stale token).
+        // Admin belongs back in the admin portal now.
+        clearOrderAsSession();
+      } else {
+        await refreshCart(); // re-sync from server (server cleared the cart on submission)
+        router.push(`/${distributorSlug}/orders/${order.id}`);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.problem.status === 422) {
         // Delivery date no longer valid — re-fetch available dates and prompt reselection

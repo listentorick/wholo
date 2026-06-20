@@ -5,17 +5,28 @@ import { useRouter } from 'next/navigation';
 import { authApi, ApiError } from '@wholo/api-client';
 import type { AuthUser } from '@wholo/types';
 
+const ORDER_AS_STORAGE_KEY = 'orderAs_session';
+
+interface OrderAsState {
+  sessionToken: string;
+  customerName: string;
+  returnUrl: string;
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
+  orderAsMode: boolean;
+  orderAsCustomerName: string | null;
   login: () => void;
   logout: () => void;
+  setOrderAsSession: (data: OrderAsState) => void;
+  clearOrderAsSession: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-// Module-level state so init only happens once across React Strict Mode double-effects
 let initPromise: Promise<boolean> | null = null;
 
 async function getKeycloakAuth(): Promise<boolean> {
@@ -40,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
   const router = useRouter();
   const routerRef = useRef(router);
   useEffect(() => { routerRef.current = router; });
@@ -72,7 +84,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Token valid but Wholo profile unavailable
         }
 
-        // Client-side navigation so AuthProvider stays mounted and user state persists
         if (postLoginRedirect && postLoginRedirect !== '/') {
           routerRef.current.push(postLoginRedirect);
         }
@@ -101,8 +112,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
   }, []);
 
+  const setOrderAsSession = useCallback((data: OrderAsState) => {
+    // Store session token in sessionStorage (per-tab, survives refresh, not shared across tabs)
+    sessionStorage.setItem(ORDER_AS_STORAGE_KEY, data.sessionToken);
+    setOrderAsStateInternal(data);
+  }, []);
+
+  const clearOrderAsSession = useCallback(() => {
+    const returnUrl = orderAsState?.returnUrl ?? '/';
+    sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
+    setOrderAsStateInternal(null);
+    window.location.href = returnUrl;
+  }, [orderAsState]);
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, isLoading, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      accessToken,
+      isLoading,
+      orderAsMode: orderAsState !== null,
+      orderAsCustomerName: orderAsState?.customerName ?? null,
+      login,
+      logout,
+      setOrderAsSession,
+      clearOrderAsSession,
+    }}>
       {children}
     </AuthContext.Provider>
   );

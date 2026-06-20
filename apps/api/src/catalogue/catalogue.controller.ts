@@ -7,6 +7,7 @@ import {
 } from '@nestjs/swagger';
 import { CatalogueService } from './catalogue.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
+import { ORDER_AS_CONTEXT_KEY, OrderAsContext } from '../order-as/order-as.interceptor';
 
 @ApiTags('Distributors')
 @Controller('distributors')
@@ -27,7 +28,8 @@ export class CatalogueController {
   @ApiOperation({ summary: 'Browse products in a distributor catalogue with customer-specific pricing' })
   @ApiOkResponse({ description: 'Paginated product list' })
   getProducts(@Req() req: Request, @Param('slug') slug: string, @Query() query: CatalogueQueryDto) {
-    const { organisationId } = req.user as { organisationId: string };
+    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
+    const organisationId = orderAs?.customerId ?? (req.user as { organisationId: string }).organisationId;
     return this.catalogueService.getProducts(slug, query, organisationId);
   }
 
@@ -38,7 +40,8 @@ export class CatalogueController {
   @ApiOkResponse({ description: 'Product detail' })
   @ApiNotFoundResponse({ description: 'Product not found' })
   getProduct(@Req() req: Request, @Param('slug') slug: string, @Param('productId') productId: string) {
-    const { organisationId } = req.user as { organisationId: string };
+    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
+    const organisationId = orderAs?.customerId ?? (req.user as { organisationId: string }).organisationId;
     return this.catalogueService.getProduct(slug, productId, organisationId);
   }
 }

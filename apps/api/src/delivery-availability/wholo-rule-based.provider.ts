@@ -47,25 +47,31 @@ export class WholoRuleBasedDeliveryAvailabilityProvider extends DeliveryAvailabi
     distributorId: string,
     traderCustomerId: string,
   ): Promise<DeliveryAvailabilityResponse> {
-    const settings = await this.prisma.traderCustomerSettings.findUnique({
-      where: { distributorId_traderCustomerId: { distributorId, traderCustomerId } },
+    const rel = await this.prisma.tradeRelationship.findUnique({
+      where: { distributorId_customerId: { distributorId, customerId: traderCustomerId } },
       select: {
-        deliveryProfileId: true,
-        deliveryProfile: {
+        traderCustomerSettings: {
           select: {
-            id: true,
-            defaultWeekdays: true,
-            defaultCutoffTime: true,
-            defaultCutoffProcessingDays: true,
-            speciallyEnabledDates: true,
-            speciallyDisabledDates: true,
-            cutoffRules: {
-              select: { weekday: true, cutoffTime: true, processingDaysBeforeDelivery: true },
+            deliveryProfileId: true,
+            deliveryProfile: {
+              select: {
+                id: true,
+                defaultWeekdays: true,
+                defaultCutoffTime: true,
+                defaultCutoffProcessingDays: true,
+                speciallyEnabledDates: true,
+                speciallyDisabledDates: true,
+                cutoffRules: {
+                  select: { weekday: true, cutoffTime: true, processingDaysBeforeDelivery: true },
+                },
+              },
             },
           },
         },
       },
     });
+
+    const settings = rel?.traderCustomerSettings;
 
     if (!settings?.deliveryProfileId || !settings.deliveryProfile) {
       return { dates: [], profileId: null };

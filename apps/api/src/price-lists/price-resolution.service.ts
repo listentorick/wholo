@@ -15,12 +15,12 @@ export class PriceResolutionService {
   constructor(private prisma: PrismaService) {}
 
   async resolvePriceListId(distributorId: string, customerId: string): Promise<string | null> {
-    const settings = await this.prisma.traderCustomerSettings.findUnique({
-      where: { distributorId_traderCustomerId: { distributorId, traderCustomerId: customerId } },
-      select: { priceListId: true },
+    const rel = await this.prisma.tradeRelationship.findUnique({
+      where: { distributorId_customerId: { distributorId, customerId } },
+      select: { traderCustomerSettings: { select: { priceListId: true } } },
     });
 
-    if (settings?.priceListId) return settings.priceListId;
+    if (rel?.traderCustomerSettings?.priceListId) return rel.traderCustomerSettings.priceListId;
 
     const defaultList = await this.prisma.priceList.findFirst({
       where: { distributorId, isDefault: true, active: true },

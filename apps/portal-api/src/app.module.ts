@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ApiClientModule } from './api-client/api-client.module';
 import { AuthModule } from './auth/auth.module';
@@ -7,6 +7,7 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { HealthController } from './health.controller';
+import { OrderAsContextMiddleware } from './common/middleware/order-as-context.middleware';
 
 @Module({
   imports: [
@@ -20,4 +21,8 @@ import { HealthController } from './health.controller';
   ],
   controllers: [HealthController],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(OrderAsContextMiddleware).forRoutes('*');
+  }
+}

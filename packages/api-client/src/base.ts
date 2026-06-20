@@ -11,10 +11,7 @@ export class ApiError extends Error {
 }
 
 function getBaseUrl(): string {
-  // process.env is available in Next.js (injected by webpack at build time)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const env = (globalThis as any).process?.env as Record<string, string | undefined> | undefined;
-  return env?.['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+  return process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
 }
 
 export async function apiFetch<T>(
@@ -28,6 +25,11 @@ export async function apiFetch<T>(
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  // Automatically attach the order-as session token when present (per-tab via sessionStorage)
+  if (typeof sessionStorage !== 'undefined') {
+    const orderAsSession = sessionStorage.getItem('orderAs_session');
+    if (orderAsSession) headers['X-Order-As-Session'] = orderAsSession;
   }
 
   const res = await fetch(`${getBaseUrl()}${path}`, { ...rest, headers });

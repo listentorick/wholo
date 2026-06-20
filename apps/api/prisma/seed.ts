@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   const distributor = await prisma.organisation.upsert({
     where: { id: 'seed-distributor-1' },
-    update: { slug: 'vine-and-co' },
+    update: {},
     create: {
       id: 'seed-distributor-1',
       name: 'Vine & Co',
@@ -78,7 +78,7 @@ async function main() {
   // Yorkshire Hand Made Pies distributor
   const yhmp = await prisma.organisation.upsert({
     where: { id: 'seed-distributor-2' },
-    update: { slug: 'yhmp' },
+    update: {},
     create: {
       id: 'seed-distributor-2',
       name: 'Yorkshire Hand Made Pies',

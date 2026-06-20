@@ -121,9 +121,10 @@ model Organisation {
   ordersAsDistributor             Order[]             @relation("DistributorOrders")
   ordersAsCustomer                Order[]             @relation("CustomerOrders")
   distributorSettings             DistributorSettings?
-  traderCustomerSettings          TraderCustomerSettings[] @relation("TraderCustomerSettingsCustomer")
   priceLists                      PriceList[]         @relation("DistributorPriceLists")
   deliveryProfiles                DeliveryProfile[]   @relation("DistributorDeliveryProfiles")
+  orderAsSessionsAsDistributor    OrderAsSession[]    @relation("OrderAsDistributor")
+  orderAsSessionsAsCustomer       OrderAsSession[]    @relation("OrderAsCustomer")
 
   @@map("organisations")
 }
@@ -141,6 +142,8 @@ model User {
   memberships   Membership[]
   refreshTokens RefreshToken[]
   cartOrders    CartOrder[]
+  orderAsSessions      OrderAsSession[]      @relation("AdminOrderAsSessions")
+  delegateOrders       Order[]               @relation("DelegateOrders")
 
   @@map("users")
 }
@@ -273,7 +276,8 @@ model TradeRelationship {
   customer         Organisation            @relation("CustomerRelationships", fields: [customerId], references: [id])
   invitations      CustomerInvitation[]
   catalogues       CustomerCatalogue[]
-  traderCustomerSettings TraderCustomerSettings[]
+  traderCustomerSettings TraderCustomerSettings?
+  orderAsSessions        OrderAsSession[]
 
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
@@ -378,11 +382,15 @@ model Order {
   cancelledByUserId    String?
   cancellationReason   String?
 
+  isOrderedByDelegate   Boolean  @default(false)
+  delegateAdminUserId   String?
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
   distributor    Organisation @relation("DistributorOrders", fields: [distributorId], references: [id])
   customer       Organisation @relation("CustomerOrders", fields: [traderCustomerId], references: [id])
+  delegateAdmin  User?        @relation("DelegateOrders", fields: [delegateAdminUserId], references: [id])
   lines          OrderLine[]
 
   @@index([distributorId, status])
@@ -440,18 +448,14 @@ model DistributorSettings {
 
 model TraderCustomerSettings {
   id                          String               @id @default(cuid())
-  distributorId               String
-  traderCustomerId            String
-  tradeRelationshipId         String?
+  tradeRelationshipId         String               @unique
   orderAcceptanceModeOverride OrderAcceptanceMode?
   priceListId                 String?
   deliveryProfileId           String?
-  tradeRelationship           TradeRelationship?   @relation(fields: [tradeRelationshipId], references: [id])
-  traderCustomer              Organisation         @relation("TraderCustomerSettingsCustomer", fields: [traderCustomerId], references: [id])
+  tradeRelationship           TradeRelationship    @relation(fields: [tradeRelationshipId], references: [id])
   priceList                   PriceList?           @relation(fields: [priceListId], references: [id])
   deliveryProfile             DeliveryProfile?     @relation(fields: [deliveryProfileId], references: [id])
 
-  @@unique([distributorId, traderCustomerId])
   @@map("trader_customer_settings")
 }
 
@@ -564,9 +568,6 @@ model PriceListRule {
   @@map("price_list_rules")
 }
 
-// ─── Asset Images ─────────────────────────────────────────────────────────────
-
-
 // ─── Delivery Profiles ───────────────────────────────────────────────────────
 
 model DeliveryProfile {
@@ -602,6 +603,42 @@ model DeliveryProfileCutoffRule {
   @@unique([deliveryProfileId, weekday])
   @@map("delivery_profile_cutoff_rules")
 }
+
+// ─── Order-as (order on behalf of customer) ──────────────────────────────────
+
+model OrderAsSession {
+  id                  String    @id  // crypto.randomBytes(24).toString('base64url')
+  adminUserId         String
+  tradeRelationshipId String
+  customerId          String    // denormalised from tradeRelationship.customerId for fast interceptor access
+  distributorId       String    // denormalised from tradeRelationship.distributorId for fast interceptor access
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  adminUser         User              @relation("AdminOrderAsSessions", fields: [adminUserId], references: [id])
+  tradeRelationship TradeRelationship @relation(fields: [tradeRelationshipId], references: [id], onDelete: Cascade)
+  customer          Organisation      @relation("OrderAsCustomer", fields: [customerId], references: [id])
+  distributor       Organisation      @relation("OrderAsDistributor", fields: [distributorId], references: [id])
+  deliveryTokens    OrderAsDeliveryToken[]
+
+  @@unique([adminUserId, tradeRelationshipId])
+  @@map("order_as_sessions")
+}
+
+model OrderAsDeliveryToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  sessionId String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  session   OrderAsSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("order_as_delivery_tokens")
+}
+
+// ─── Asset Images ─────────────────────────────────────────────────────────────
 
 model AssetImage {
   id              String   @id

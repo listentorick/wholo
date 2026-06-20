@@ -27,7 +27,7 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
     jest.setSystemTime(FIXED_NOW);
 
     const mockPrisma = {
-      traderCustomerSettings: { findUnique: jest.fn() },
+      tradeRelationship: { findUnique: jest.fn() },
       distributorSettings: { findUnique: jest.fn() },
     };
 
@@ -47,15 +47,14 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
   });
 
   it('returns empty dates when no delivery profile is assigned', async () => {
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue(null);
     const result = await provider.getAvailableDates('dist-1', 'cust-1');
     expect(result).toEqual({ dates: [], profileId: null });
   });
 
   it('returns empty dates when deliveryProfileId is null', async () => {
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: null,
-      deliveryProfile: null,
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: { deliveryProfileId: null, deliveryProfile: null },
     });
     const result = await provider.getAvailableDates('dist-1', 'cust-1');
     expect(result).toEqual({ dates: [], profileId: null });
@@ -67,9 +66,8 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
     // Processing days: Mon-Fri
     // Tomorrow = Tuesday (not in profile) → skip
     // Wednesday 12 June: cutoff = 1 processing day before = Tuesday 11 June 17:00 → valid (17:00 > now)
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile(),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: { deliveryProfileId: 'profile-1', deliveryProfile: buildProfile() },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -88,11 +86,13 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
 
   it('skips specially disabled dates', async () => {
     // Disable Wednesday 12 June
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        speciallyDisabledDates: [new Date('2024-06-12T00:00:00.000Z')],
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          speciallyDisabledDates: [new Date('2024-06-12T00:00:00.000Z')],
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -104,11 +104,13 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
 
   it('includes specially enabled dates outside normal weekdays', async () => {
     // Enable Sunday 16 June (not in Mon/Wed/Fri profile)
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        speciallyEnabledDates: [new Date('2024-06-16T00:00:00.000Z')],
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          speciallyEnabledDates: [new Date('2024-06-16T00:00:00.000Z')],
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -124,13 +126,15 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
     // But: if cutoff for a future date has passed (cutoff < now), it should be excluded
     // Set processing days to empty so cutoff ends up being the delivery date itself,
     // making it impossible to calculate a future cutoff — instead use 0 processing days
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        defaultWeekdays: [2], // Tuesday only
-        defaultCutoffTime: '08:00', // 08:00 UTC
-        defaultCutoffProcessingDays: 1,
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          defaultWeekdays: [2], // Tuesday only
+          defaultCutoffTime: '08:00', // 08:00 UTC
+          defaultCutoffProcessingDays: 1,
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -146,13 +150,15 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
     // Profile: Friday delivery, 2 processing days before, Mon-Fri
     // From Friday 14 June: back 2 days = Thursday 13, Wednesday 12
     // Cutoff = Wednesday 12 June at 17:00 UTC
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        defaultWeekdays: [5], // Friday only
-        defaultCutoffTime: '17:00',
-        defaultCutoffProcessingDays: 2,
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          defaultWeekdays: [5], // Friday only
+          defaultCutoffTime: '17:00',
+          defaultCutoffProcessingDays: 2,
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -167,14 +173,16 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
   it('uses per-weekday cutoff rule override instead of profile default', async () => {
     // Profile default: 1 processing day, 17:00
     // Friday override: 2 processing days, 15:00
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        defaultWeekdays: [5],
-        cutoffRules: [
-          { weekday: 5, cutoffTime: '15:00', processingDaysBeforeDelivery: 2 },
-        ],
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          defaultWeekdays: [5],
+          cutoffRules: [
+            { weekday: 5, cutoffTime: '15:00', processingDaysBeforeDelivery: 2 },
+          ],
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -189,13 +197,15 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
 
   it('returns at most 8 dates', async () => {
     // Profile has every day enabled
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({
-        defaultWeekdays: [0, 1, 2, 3, 4, 5, 6],
-        defaultCutoffProcessingDays: 0,
-        defaultCutoffTime: '23:59',
-      }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({
+          defaultWeekdays: [0, 1, 2, 3, 4, 5, 6],
+          defaultCutoffProcessingDays: 0,
+          defaultCutoffTime: '23:59',
+        }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       processingDays: [1, 2, 3, 4, 5],
@@ -206,9 +216,11 @@ describe('WholoRuleBasedDeliveryAvailabilityProvider', () => {
   });
 
   it('uses default processing days Mon-Fri when distributor settings not found', async () => {
-    (prisma.traderCustomerSettings.findUnique as jest.Mock).mockResolvedValue({
-      deliveryProfileId: 'profile-1',
-      deliveryProfile: buildProfile({ defaultWeekdays: [5] }),
+    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({
+      traderCustomerSettings: {
+        deliveryProfileId: 'profile-1',
+        deliveryProfile: buildProfile({ defaultWeekdays: [5] }),
+      },
     });
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue(null);
 

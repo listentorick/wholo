@@ -9,4 +9,5 @@ export { adminOrdersApi } from './orders';
 export { adminPriceListsApi } from './price-lists';
 export { adminDeliveryProfilesApi } from './delivery-profiles';
 export { adminSettingsApi } from './settings';
+export { adminOrderAsApi } from './order-as';
 export { ApiError } from './base';

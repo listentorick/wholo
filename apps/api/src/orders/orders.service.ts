@@ -90,7 +90,12 @@ export class OrdersService {
     private deliveryAvailability: DeliveryAvailabilityService,
   ) {}
 
-  async submitOrder(dto: SubmitOrderDto, placedByUserId: string, traderCustomerId: string) {
+  async submitOrder(
+    dto: SubmitOrderDto,
+    placedByUserId: string,
+    traderCustomerId: string,
+    orderAsSessionToken?: string,
+  ) {
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
       where: { slug: dto.distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
@@ -192,6 +197,10 @@ export class OrdersService {
           traderCustomerId,
           placedByUserId,
           orderNumber,
+          ...(orderAsSessionToken && {
+            isOrderedByDelegate: true,
+            delegateAdminUserId: placedByUserId,
+          }),
           currency: 'GBP',
           status: isAutoAccept ? OrderStatus.ACCEPTED : OrderStatus.SUBMITTED,
           acceptanceModeSnapshot: mode,
@@ -235,6 +244,11 @@ export class OrdersService {
       // Clear cart
       await tx.cartOrderLine.deleteMany({ where: { orderId: cart.id } });
       await tx.cartOrder.delete({ where: { id: cart.id } });
+
+      // End order-as session atomically with order creation
+      if (orderAsSessionToken) {
+        await tx.orderAsSession.deleteMany({ where: { id: orderAsSessionToken, adminUserId: placedByUserId } });
+      }
 
       // Outbox events
       const basePayload = {
@@ -380,10 +394,12 @@ export class OrdersService {
     distributorId: string,
     traderCustomerId: string,
   ): Promise<{ mode: OrderAcceptanceMode; source: AcceptanceModeSource }> {
-    const customerSettings = await this.prisma.traderCustomerSettings.findUnique({
-      where: { distributorId_traderCustomerId: { distributorId, traderCustomerId } },
-      select: { orderAcceptanceModeOverride: true },
+    const rel = await this.prisma.tradeRelationship.findUnique({
+      where: { distributorId_customerId: { distributorId, customerId: traderCustomerId } },
+      select: { traderCustomerSettings: { select: { orderAcceptanceModeOverride: true } } },
     });
+
+    const customerSettings = rel?.traderCustomerSettings;
 
     if (customerSettings?.orderAcceptanceModeOverride) {
       return {

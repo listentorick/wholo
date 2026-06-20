@@ -6,7 +6,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { CustomerForm } from '@/components/customers/CustomerForm';
-import { adminCustomersApi } from '@wholo/admin-api-client';
+import { adminCustomersApi, adminOrderAsApi } from '@wholo/admin-api-client';
 import type { Customer, UpdateCustomerRequest } from '@wholo/types';
 
 export default function EditCustomerPage() {
@@ -63,6 +63,11 @@ export default function EditCustomerPage() {
     return adminCustomersApi.invite(accessToken, customer.id);
   }
 
+  async function handleOrderAs() {
+    if (!accessToken || !customer) throw new Error('Not authenticated');
+    return adminOrderAsApi.createSession(accessToken, customer.id);
+  }
+
   return (
     <AdminLayout>
       <CustomerForm
@@ -72,6 +77,7 @@ export default function EditCustomerPage() {
         onSubmit={handleSubmit}
         onDelete={handleDelete}
         onInvite={handleInvite}
+        onOrderAs={handleOrderAs}
       />
     </AdminLayout>
   );

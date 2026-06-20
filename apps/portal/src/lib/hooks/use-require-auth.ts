@@ -9,7 +9,8 @@ export function useRequireAuth(returnUrl?: string) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (isLoading) return;
+    if (!user) {
       const path = returnUrl
         ? `/login?returnUrl=${encodeURIComponent(returnUrl)}`
         : '/login';
