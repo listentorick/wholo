@@ -45,7 +45,7 @@ export function CustomerConfirmStep({ org, existingCustomerId }: Props) {
             <div className="text-sm">
               <p className="font-medium text-amber-800">Already a customer</p>
               <Link
-                href={`/customers/${existingCustomerId}/edit`}
+                href={`/customers/${existingCustomerId}`}
                 className="text-amber-700 underline underline-offset-2 hover:text-amber-900 transition-colors"
               >
                 View existing relationship →

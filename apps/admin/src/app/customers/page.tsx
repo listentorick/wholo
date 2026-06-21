@@ -86,7 +86,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
     <>
     <tr className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors cursor-pointer">
       <td className="py-3 pl-5 pr-4">
-        <Link href={`/customers/${customer.id}/edit`} className="block">
+        <Link href={`/customers/${customer.id}`} className="block">
           <span className="block font-medium text-text text-sm group-hover:text-primary transition-colors">
             {customer.organisation.name}
           </span>
@@ -96,18 +96,18 @@ function CustomerRow({ customer }: { customer: Customer }) {
         </Link>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
-        <Link href={`/customers/${customer.id}/edit`} className="block">
+        <Link href={`/customers/${customer.id}`} className="block">
           {customer.accountNumber ?? '—'}
         </Link>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
-        <Link href={`/customers/${customer.id}/edit`} className="block">
+        <Link href={`/customers/${customer.id}`} className="block">
           {customer.organisation.phone ?? '—'}
         </Link>
       </td>
       <td className="py-3 px-4">
         {customer.catalogues.length === 0 ? (
-          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
         ) : (
           <div className="flex flex-wrap gap-1">
             {customer.catalogues.map((c) => (
@@ -133,7 +133,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
             {customer.priceList.name} →
           </button>
         ) : (
-          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
         )}
       </td>
       <td className="py-3 px-4">
@@ -146,11 +146,11 @@ function CustomerRow({ customer }: { customer: Customer }) {
             {customer.deliveryProfile.name} →
           </button>
         ) : (
-          <Link href={`/customers/${customer.id}/edit`} className="block text-sm text-muted">—</Link>
+          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
         )}
       </td>
       <td className="py-3 pl-4 pr-5">
-        <Link href={`/customers/${customer.id}/edit`} className="block">
+        <Link href={`/customers/${customer.id}`} className="block">
           <StatusBadge status={customer.status} />
         </Link>
       </td>

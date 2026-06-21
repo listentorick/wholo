@@ -246,9 +246,8 @@ export class AdminCustomersService {
     const formatted = this.formatCustomer(rel);
     const inviteUrl = dto.email ? `${portalUrl}/accept-invite?token=${token}` : null;
 
-    if (dto.email && inviteUrl) {
-      await this.mail.sendInvite(dto.email, distributor.name, inviteUrl);
-    }
+    // Email is sent only when the distributor explicitly triggers the invite endpoint.
+    // Sending automatically on create would confuse trade customers before pricing/catalogues are set up.
 
     return { ...formatted, inviteUrl };
   }

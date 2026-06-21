@@ -6,8 +6,6 @@ import { adminCustomersApi } from '@wholo/admin-api-client';
 
 interface Props {
   token: string;
-  email: string;
-  onEmailChange: (email: string) => void;
   selectedOrg: OrganisationSearchResult | null;
   onSelectOrg: (org: OrganisationSearchResult | null) => void;
   onCantFind: () => void;
@@ -23,24 +21,14 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 function formatAddress(org: OrganisationSearchResult): string {
-  return [org.addressLine1, org.addressCity, org.addressState]
-    .filter(Boolean)
-    .join(', ');
+  return [org.addressLine1, org.addressCity, org.addressState].filter(Boolean).join(', ');
 }
 
-export function CustomerSearchStep({
-  token,
-  email,
-  onEmailChange,
-  selectedOrg,
-  onSelectOrg,
-  onCantFind,
-}: Props) {
+export function CustomerSearchStep({ token, selectedOrg, onSelectOrg, onCantFind }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<OrganisationSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [open, setOpen] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
   const debouncedQuery = useDebounce(query, 300);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -85,43 +73,12 @@ export function CustomerSearchStep({
     if (selectedOrg) onSelectOrg(null);
   }
 
-  function validateEmail() {
-    if (!email) {
-      setEmailError('Contact email is required');
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setEmailError('Enter a valid email address');
-    } else {
-      setEmailError(null);
-    }
-  }
-
   return (
     <div>
       <div className="border-b border-border px-5 py-3.5">
         <h2 className="text-sm font-semibold text-text">Who are you adding?</h2>
       </div>
       <div className="p-5 space-y-4">
-        {/* Email */}
-        <div>
-          <label htmlFor="contact-email" className="block text-xs font-semibold uppercase tracking-wide text-text mb-1.5">
-            Contact email
-          </label>
-          <input
-            id="contact-email"
-            type="email"
-            value={email}
-            onChange={(e) => { onEmailChange(e.target.value); setEmailError(null); }}
-            onBlur={validateEmail}
-            placeholder="orders@example.com"
-            className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-          {emailError && <p className="mt-1.5 text-xs text-red-500">{emailError}</p>}
-          {!emailError && (
-            <p className="mt-1.5 text-xs text-muted">An invitation to connect will be sent to this address.</p>
-          )}
-        </div>
-
-        {/* Business name autocomplete */}
         <div ref={containerRef} className="relative">
           <label htmlFor="business-search" className="block text-xs font-semibold uppercase tracking-wide text-text mb-1.5">
             Choose a company
@@ -145,7 +102,6 @@ export function CustomerSearchStep({
             )}
           </div>
 
-          {/* Dropdown */}
           {open && (
             <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-white shadow-lg overflow-hidden">
               {results.length === 0 && !isSearching ? (
@@ -186,7 +142,6 @@ export function CustomerSearchStep({
                 })
               )}
 
-              {/* Can't find fallback */}
               <div className="border-t border-dashed border-border">
                 <button
                   type="button"
