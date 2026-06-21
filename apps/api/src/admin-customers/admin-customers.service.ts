@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
@@ -57,6 +58,7 @@ export class AdminCustomersService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    private mail: MailService,
   ) {}
 
   async findAll(distributorId: string, query: CustomerQueryDto) {
@@ -131,7 +133,6 @@ export class AdminCustomersService {
       select: {
         id: true,
         name: true,
-        legalName: true,
         addressLine1: true,
         addressLine2: true,
         addressCity: true,
@@ -158,6 +159,11 @@ export class AdminCustomersService {
     const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const distributor = await this.prisma.organisation.findUniqueOrThrow({
+      where: { id: distributorId },
+      select: { name: true },
+    });
 
     const rel = await this.prisma.$transaction(async (tx) => {
       let orgId: string;
@@ -240,6 +246,10 @@ export class AdminCustomersService {
     const formatted = this.formatCustomer(rel);
     const inviteUrl = dto.email ? `${portalUrl}/accept-invite?token=${token}` : null;
 
+    if (dto.email && inviteUrl) {
+      await this.mail.sendInvite(dto.email, distributor.name, inviteUrl);
+    }
+
     return { ...formatted, inviteUrl };
   }
 
@@ -304,7 +314,10 @@ export class AdminCustomersService {
   async invite(id: string, distributorId: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { id, distributorId, deletedAt: null },
-      include: { customer: { select: { email: true } } },
+      include: {
+        customer: { select: { email: true } },
+        distributor: { select: { name: true } },
+      },
     });
     if (!rel) throw new NotFoundException('Customer not found');
     if (!rel.customer.email) throw new BadRequestException('Customer has no email address');
@@ -329,8 +342,11 @@ export class AdminCustomersService {
       }),
     ]);
 
+    const inviteUrl = `${portalUrl}/accept-invite?token=${token}`;
+    await this.mail.sendInvite(rel.customer.email, rel.distributor.name, inviteUrl);
+
     return {
-      inviteUrl: `${portalUrl}/accept-invite?token=${token}`,
+      inviteUrl,
       expiresAt: expiresAt.toISOString(),
     };
   }

@@ -37,4 +37,18 @@ export class UsersService {
       include: { memberships: { include: { organisation: true } } },
     });
   }
+
+  async findOrCreateFromKeycloak(keycloakId: string, email: string, firstName: string, lastName: string) {
+    const byId = await this.prisma.user.findFirst({ where: { keycloakId, deletedAt: null } });
+    if (byId) return byId;
+
+    const byEmail = await this.prisma.user.findFirst({ where: { email, keycloakId: null, deletedAt: null } });
+    if (byEmail) {
+      return this.prisma.user.update({ where: { id: byEmail.id }, data: { keycloakId } });
+    }
+
+    return this.prisma.user.create({
+      data: { keycloakId, email, firstName: firstName || 'Unknown', lastName: lastName || '' },
+    });
+  }
 }

@@ -17,6 +17,8 @@ import { AssetImagesModule } from './asset-images/asset-images.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
 import { DeliveryAvailabilityModule } from './delivery-availability/delivery-availability.module';
 import { OrderAsModule } from './order-as/order-as.module';
+import { MailModule } from './mail/mail.module';
+import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
@@ -41,6 +43,8 @@ import './asset-images/branding-asset-types';
     DeliveryProfilesModule,
     DeliveryAvailabilityModule,
     OrderAsModule,
+    MailModule,
+    PortalInvitationsModule,
   ],
   controllers: [HealthController],
 })

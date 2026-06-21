@@ -33,6 +33,7 @@ api:
     publicBaseUrl: ""
     accessKeyId: ""
     secretAccessKey: ""
+  portalUrl: "http://localhost:3010"
 
 portal:
   image:
@@ -111,6 +112,9 @@ admin:
   keycloak:
     url: "http://localhost:8080"
     clientId: "wholo-admin"
+
+mailhog:
+  image: mailhog/mailhog:v1.0.1
 
 keycloak:
   image:

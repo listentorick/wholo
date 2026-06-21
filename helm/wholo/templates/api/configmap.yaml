@@ -13,3 +13,8 @@ data:
   R2_ACCOUNT_ID: {{ .Values.api.r2.accountId | quote }}
   R2_BUCKET_NAME: {{ .Values.api.r2.bucketName | quote }}
   R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}
+  PORTAL_URL: {{ .Values.api.portalUrl | default (printf "http://localhost:%d" (int .Values.portal.service.port)) | quote }}
+  SMTP_HOST: {{ printf "%s-mailhog" (include "wholo.fullname" .) | quote }}
+  SMTP_PORT: "1025"
+  SMTP_SECURE: "false"
+  SMTP_FROM: "noreply@wholo.com.au"

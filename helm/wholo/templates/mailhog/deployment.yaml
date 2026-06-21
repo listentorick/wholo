@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-mailhog
+  labels:
+    app: {{ include "wholo.fullname" . }}-mailhog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-mailhog
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-mailhog
+    spec:
+      containers:
+        - name: mailhog
+          image: {{ .Values.mailhog.image }}
+          ports:
+            - containerPort: 1025
+              name: smtp
+            - containerPort: 8025
+              name: ui

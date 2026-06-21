@@ -58,13 +58,6 @@ export function CustomerConfirmStep({ org, existingCustomerId }: Props) {
           <div className="border-l-[3px] border-l-primary px-4 py-4 space-y-4">
             <p className="text-base font-semibold text-text leading-snug">{org.name}</p>
 
-            {org.legalName && org.legalName !== org.name && (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Legal name</p>
-                <p className="text-sm text-text">{org.legalName}</p>
-              </div>
-            )}
-
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Address</p>
               <p className="text-sm text-text leading-relaxed">

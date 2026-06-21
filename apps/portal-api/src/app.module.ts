@@ -6,6 +6,7 @@ import { CatalogueModule } from './catalogue/catalogue.module';
 import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { DeliveryModule } from './delivery/delivery.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { HealthController } from './health.controller';
 import { OrderAsContextMiddleware } from './common/middleware/order-as-context.middleware';
 
@@ -18,6 +19,7 @@ import { OrderAsContextMiddleware } from './common/middleware/order-as-context.m
     CartModule,
     OrdersModule,
     DeliveryModule,
+    InvitationsModule,
   ],
   controllers: [HealthController],
 })

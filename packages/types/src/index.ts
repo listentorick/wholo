@@ -340,7 +340,6 @@ export interface CustomerOrganisation {
 export interface OrganisationSearchResult {
   id: string;
   name: string;
-  legalName: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
   addressCity: string | null;

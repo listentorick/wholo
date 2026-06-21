@@ -4,6 +4,7 @@ import { OrganisationType, TradeRelationshipStatus, InvitationStatus } from '@pr
 import { ConfigService } from '@nestjs/config';
 import { AdminCustomersService } from './admin-customers.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 
 const mockPrisma = {
   tradeRelationship: {
@@ -19,6 +20,7 @@ const mockPrisma = {
     create: jest.fn(),
     findMany: jest.fn(),
     findFirst: jest.fn(),
+    findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Acme Distributor' }),
     update: jest.fn(),
   },
   customerInvitation: {
@@ -29,6 +31,7 @@ const mockPrisma = {
 };
 
 const mockConfig = { get: jest.fn().mockReturnValue('http://portal.test') };
+const mockMail = { sendInvite: jest.fn().mockResolvedValue(undefined) };
 
 const makeOrg = (overrides = {}) => ({
   id: 'org-1',
@@ -79,6 +82,7 @@ describe('AdminCustomersService', () => {
         AdminCustomersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: MailService, useValue: mockMail },
       ],
     }).compile();
     service = module.get(AdminCustomersService);
@@ -335,7 +339,7 @@ describe('AdminCustomersService', () => {
   describe('invite', () => {
     it('revokes pending invites and creates a new one', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
-        makeRel({ customer: makeOrg({ email: 'acme@example.com' }) }),
+        makeRel({ customer: makeOrg({ email: 'acme@example.com' }), distributor: { name: 'Winos Pty Ltd' } }),
       );
       mockPrisma.$transaction.mockResolvedValue([{}, {}]);
 

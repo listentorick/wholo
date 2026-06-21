@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-mailhog
+  labels:
+    app: {{ include "wholo.fullname" . }}-mailhog
+spec:
+  selector:
+    app: {{ include "wholo.fullname" . }}-mailhog
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: 1025
+    - name: ui
+      port: 8025
+      targetPort: 8025
+      nodePort: 30825
+  type: NodePort
