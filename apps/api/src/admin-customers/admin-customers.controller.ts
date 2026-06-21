@@ -27,6 +27,17 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 export class AdminCustomersController {
   constructor(private readonly service: AdminCustomersService) {}
 
+  @Get('organisations/search')
+  @ApiOperation({ summary: 'Search trade customer organisations by name' })
+  @ApiOkResponse({ description: 'Matching organisations' })
+  searchOrganisations(
+    @Headers('x-distributor-id') distributorId: string,
+    @Query('q') q: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.searchOrganisations(distributorId, q ?? '', limit ? parseInt(limit, 10) : 10);
+  }
+
   @Get('customers')
   @ApiOperation({ summary: 'List trade customers for a distributor' })
   @ApiOkResponse({ description: 'Paginated list of customers' })

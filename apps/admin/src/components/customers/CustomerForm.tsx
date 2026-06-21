@@ -173,13 +173,14 @@ interface CustomerFormProps {
   mode: 'create' | 'edit';
   token: string;
   initialValues?: Customer;
+  initialEmail?: string;
   onSubmit: (data: CreateCustomerRequest) => Promise<{ inviteUrl?: string | null } | void>;
   onDelete?: () => Promise<void>;
   onInvite?: () => Promise<InviteResponse>;
   onOrderAs?: () => Promise<{ portalUrl: string }>;
 }
 
-export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, onInvite, onOrderAs }: CustomerFormProps) {
+export function CustomerForm({ mode, token, initialValues, initialEmail, onSubmit, onDelete, onInvite, onOrderAs }: CustomerFormProps) {
   const [apiError, setApiError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -196,7 +197,7 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
     resolver: zodResolver(schema),
     defaultValues: {
       name: initialValues?.organisation.name ?? '',
-      email: initialValues?.organisation.email ?? '',
+      email: initialValues?.organisation.email ?? initialEmail ?? '',
       phone: initialValues?.organisation.phone ?? '',
       accountNumber: initialValues?.accountNumber ?? '',
       creditLimit: initialValues?.creditLimit ?? '',
@@ -226,6 +227,12 @@ export function CustomerForm({ mode, token, initialValues, onSubmit, onDelete, o
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
         paymentTerms: data.paymentTerms || undefined,
+        addressLine1: data.deliveryLine1 || undefined,
+        addressLine2: data.deliveryLine2 || undefined,
+        addressCity: data.deliveryCity || undefined,
+        addressState: data.deliveryState || undefined,
+        addressPostcode: data.deliveryPostcode || undefined,
+        addressCountry: data.deliveryCountry || undefined,
         deliveryLine1: data.deliveryLine1 || undefined,
         deliveryLine2: data.deliveryLine2 || undefined,
         deliveryCity: data.deliveryCity || undefined,

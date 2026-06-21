@@ -1,5 +1,6 @@
 import type {
   Customer,
+  OrganisationSearchResult,
   PaginatedResponse,
   CustomerListParams,
   CreateCustomerRequest,
@@ -9,6 +10,11 @@ import type {
 import { apiFetch } from './base';
 
 export const adminCustomersApi = {
+  searchOrganisations(token: string, q: string, limit = 10): Promise<OrganisationSearchResult[]> {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    return apiFetch<OrganisationSearchResult[]>(`/api/v1/customers/organisations/search?${params.toString()}`, { token });
+  },
+
   list(token: string, params?: CustomerListParams): Promise<PaginatedResponse<Customer>> {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));

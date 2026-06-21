@@ -326,8 +326,28 @@ export enum InvitationStatus {
 export interface CustomerOrganisation {
   id: string;
   name: string;
+  legalName: string | null;
   email: string | null;
   phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostcode: string | null;
+  addressCountry: string | null;
+}
+
+export interface OrganisationSearchResult {
+  id: string;
+  name: string;
+  legalName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostcode: string | null;
+  addressCountry: string | null;
+  isExistingCustomer: boolean;
 }
 
 export interface LatestInvitation {
@@ -375,9 +395,17 @@ export interface CustomerListParams {
 }
 
 export interface CreateCustomerRequest {
-  name: string;
+  organisationId?: string;
+  name?: string;
+  legalName?: string;
   email?: string;
   phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressPostcode?: string;
+  addressCountry?: string;
   accountNumber?: string;
   creditLimit?: string;
   paymentTerms?: string;

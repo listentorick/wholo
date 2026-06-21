@@ -8,6 +8,12 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 export class CustomersService {
   constructor(private api: ApiClientService) {}
 
+  searchOrganisations(distributorId: string, q: string, limit?: number) {
+    const params = new URLSearchParams({ q });
+    if (limit != null) params.set('limit', String(limit));
+    return this.api.get(`/admin/organisations/search?${params.toString()}`, distributorId);
+  }
+
   findAll(distributorId: string, query: CustomerQueryDto) {
     const params = new URLSearchParams();
     if (query.limit != null) params.set('limit', String(query.limit));

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -23,7 +24,11 @@ interface CursorPayload {
 
 const relationshipInclude = {
   customer: {
-    select: { id: true, name: true, email: true, phone: true },
+    select: {
+      id: true, name: true, legalName: true, email: true, phone: true,
+      addressLine1: true, addressLine2: true, addressCity: true,
+      addressState: true, addressPostcode: true, addressCountry: true,
+    },
   },
   invitations: {
     where: { status: InvitationStatus.PENDING },
@@ -116,25 +121,84 @@ export class AdminCustomersService {
     return this.formatCustomer(rel);
   }
 
+  async searchOrganisations(distributorId: string, q: string, limit = 10) {
+    const orgs = await this.prisma.organisation.findMany({
+      where: {
+        type: OrganisationType.TRADE_CUSTOMER,
+        deletedAt: null,
+        name: { contains: q, mode: 'insensitive' },
+      },
+      select: {
+        id: true,
+        name: true,
+        legalName: true,
+        addressLine1: true,
+        addressLine2: true,
+        addressCity: true,
+        addressState: true,
+        addressPostcode: true,
+        addressCountry: true,
+        _count: {
+          select: {
+            tradeRelationshipsAsCustomer: { where: { distributorId, deletedAt: null } },
+          },
+        },
+      },
+      take: limit,
+      orderBy: { name: 'asc' },
+    });
+
+    return orgs.map(({ _count, ...org }) => ({
+      ...org,
+      isExistingCustomer: _count.tradeRelationshipsAsCustomer > 0,
+    }));
+  }
+
   async create(distributorId: string, dto: CreateCustomerDto) {
     const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const rel = await this.prisma.$transaction(async (tx) => {
-      const org = await tx.organisation.create({
-        data: {
-          name: dto.name,
-          email: dto.email,
-          phone: dto.phone,
-          type: OrganisationType.TRADE_CUSTOMER,
-        },
-      });
+      let orgId: string;
+
+      if (dto.organisationId) {
+        const existing = await tx.organisation.findFirst({
+          where: { id: dto.organisationId, type: OrganisationType.TRADE_CUSTOMER, deletedAt: null },
+        });
+        if (!existing) throw new NotFoundException('Organisation not found');
+
+        const existingRel = await tx.tradeRelationship.findUnique({
+          where: { distributorId_customerId: { distributorId, customerId: dto.organisationId } },
+        });
+        if (existingRel) throw new ConflictException('A relationship with this customer already exists');
+
+        orgId = dto.organisationId;
+      } else {
+        if (!dto.name?.trim()) throw new BadRequestException('name is required when not linking to an existing organisation');
+
+        const org = await tx.organisation.create({
+          data: {
+            name: dto.name,
+            legalName: dto.legalName,
+            email: dto.email,
+            phone: dto.phone,
+            addressLine1: dto.addressLine1,
+            addressLine2: dto.addressLine2,
+            addressCity: dto.addressCity,
+            addressState: dto.addressState,
+            addressPostcode: dto.addressPostcode,
+            addressCountry: dto.addressCountry,
+            type: OrganisationType.TRADE_CUSTOMER,
+          },
+        });
+        orgId = org.id;
+      }
 
       const relationship = await tx.tradeRelationship.create({
         data: {
           distributorId,
-          customerId: org.id,
+          customerId: orgId,
           status: TradeRelationshipStatus.PENDING_INVITE,
           accountNumber: dto.accountNumber,
           creditLimit: dto.creditLimit != null ? new Prisma.Decimal(dto.creditLimit) : null,
@@ -278,7 +342,19 @@ export class AdminCustomersService {
       organisationId: rel.customerId,
       distributorId: rel.distributorId,
       status: rel.status,
-      organisation: rel.customer,
+      organisation: {
+        id: rel.customer.id,
+        name: rel.customer.name,
+        legalName: rel.customer.legalName ?? null,
+        email: rel.customer.email ?? null,
+        phone: rel.customer.phone ?? null,
+        addressLine1: rel.customer.addressLine1 ?? null,
+        addressLine2: rel.customer.addressLine2 ?? null,
+        addressCity: rel.customer.addressCity ?? null,
+        addressState: rel.customer.addressState ?? null,
+        addressPostcode: rel.customer.addressPostcode ?? null,
+        addressCountry: rel.customer.addressCountry ?? null,
+      },
       accountNumber: rel.accountNumber,
       creditLimit: rel.creditLimit,
       paymentTerms: rel.paymentTerms,

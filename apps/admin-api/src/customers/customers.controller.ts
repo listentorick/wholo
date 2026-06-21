@@ -14,6 +14,16 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 export class CustomersController {
   constructor(private customersService: CustomersService) {}
 
+  @Get('organisations/search')
+  searchOrganisations(
+    @Req() req: Request,
+    @Query('q') q: string,
+    @Query('limit') limit?: string,
+  ) {
+    const { organisationId } = req.user as { organisationId: string };
+    return this.customersService.searchOrganisations(organisationId, q ?? '', limit ? parseInt(limit, 10) : undefined);
+  }
+
   @Get()
   findAll(@Req() req: Request, @Query() query: CustomerQueryDto) {
     const { organisationId } = req.user as { organisationId: string };

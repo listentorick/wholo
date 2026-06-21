@@ -1,9 +1,14 @@
 import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
 
 export class CreateCustomerDto {
+  @IsOptional()
+  @IsString()
+  organisationId?: string;
+
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  name: string;
+  name?: string;
 
   @IsOptional()
   @IsEmail()

@@ -2,9 +2,18 @@ import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-valid
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCustomerDto {
+  @IsOptional()
+  @IsString()
+  organisationId?: string;
+
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  name: string;
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  legalName?: string;
 
   @IsOptional()
   @IsEmail()
@@ -13,6 +22,30 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  addressLine1?: string;
+
+  @IsOptional()
+  @IsString()
+  addressLine2?: string;
+
+  @IsOptional()
+  @IsString()
+  addressCity?: string;
+
+  @IsOptional()
+  @IsString()
+  addressState?: string;
+
+  @IsOptional()
+  @IsString()
+  addressPostcode?: string;
+
+  @IsOptional()
+  @IsString()
+  addressCountry?: string;
 
   @IsOptional()
   @IsString()
