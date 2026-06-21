@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ConflictException, GoneException } from '@nestjs/common';
+import { NotFoundException, ConflictException, ForbiddenException, GoneException } from '@nestjs/common';
 import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client';
 import { PortalInvitationsService } from './portal-invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,6 +27,7 @@ const mockUsers = {
 const identity: KeycloakIdentity = {
   sub: 'kc-sub-123',
   email: 'buyer@example.com',
+  email_verified: true,
   given_name: 'Jane',
   family_name: 'Doe',
 };
@@ -34,6 +35,7 @@ const identity: KeycloakIdentity = {
 const makeInvitation = (overrides: Record<string, unknown> = {}) => ({
   id: 'inv-1',
   token: 'valid-token',
+  email: 'buyer@example.com',
   status: InvitationStatus.PENDING,
   expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   tradeRelationship: {
@@ -149,6 +151,29 @@ describe('PortalInvitationsService', () => {
       await service.acceptInvite(identity, 'valid-token');
 
       expect(mockUsers.findOrCreateFromKeycloak).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws ForbiddenException when JWT email does not match invitation email', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(
+        makeInvitation({ email: 'someone-else@example.com' }),
+      );
+
+      const wrongIdentity: KeycloakIdentity = { ...identity, email: 'attacker@example.com' };
+      await expect(service.acceptInvite(wrongIdentity, 'valid-token')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('accepts when invitation email matches case-insensitively', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(
+        makeInvitation({ email: 'Buyer@Example.Com' }),
+      );
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+      mockPrisma.membership.upsert.mockResolvedValue({});
+      mockPrisma.customerInvitation.update.mockResolvedValue({});
+      mockPrisma.tradeRelationship.update.mockResolvedValue({});
+
+      const result = await service.acceptInvite(identity, 'valid-token');
+
+      expect(result).toEqual({ distributorSlug: 'winos' });
     });
   });
 });

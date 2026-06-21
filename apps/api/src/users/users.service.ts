@@ -42,11 +42,10 @@ export class UsersService {
     const byId = await this.prisma.user.findFirst({ where: { keycloakId, deletedAt: null } });
     if (byId) return byId;
 
-    const byEmail = await this.prisma.user.findFirst({ where: { email, keycloakId: null, deletedAt: null } });
-    if (byEmail) {
-      return this.prisma.user.update({ where: { id: byEmail.id }, data: { keycloakId } });
-    }
-
+    // Never auto-link by email here — that path is reserved for admin JIT migration
+    // (linkKeycloakId, called from JwtStrategy). Auto-linking a verified email from a
+    // portal flow would allow account takeover if a different person registered the same
+    // address in Keycloak before the original user did.
     return this.prisma.user.create({
       data: { keycloakId, email, firstName: firstName || 'Unknown', lastName: lastName || '' },
     });

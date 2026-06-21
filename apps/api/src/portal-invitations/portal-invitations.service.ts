@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   GoneException,
 } from '@nestjs/common';
 import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client';
@@ -34,6 +35,12 @@ export class PortalInvitationsService {
     }
     if (invitation.status !== InvitationStatus.PENDING || invitation.expiresAt < new Date()) {
       throw new GoneException('Invitation has expired');
+    }
+
+    // Bind invitation to the specific email address it was sent to. A verified Keycloak
+    // identity with a different address cannot claim someone else's invite token.
+    if (identity.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      throw new ForbiddenException('This invitation was sent to a different email address');
     }
 
     const rel = invitation.tradeRelationship;
