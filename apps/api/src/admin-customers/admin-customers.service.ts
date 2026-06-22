@@ -32,10 +32,8 @@ const relationshipInclude = {
     },
   },
   invitations: {
-    where: { status: InvitationStatus.PENDING },
     orderBy: { createdAt: 'desc' as const },
-    take: 1,
-    select: { id: true, email: true, status: true, expiresAt: true, token: true },
+    select: { id: true, email: true, status: true, expiresAt: true, createdAt: true },
   },
   traderCustomerSettings: {
     select: {
@@ -329,7 +327,7 @@ export class AdminCustomersService {
 
     await this.prisma.$transaction([
       this.prisma.customerInvitation.updateMany({
-        where: { tradeRelationshipId: id, status: InvitationStatus.PENDING },
+        where: { tradeRelationshipId: id, email: target, status: InvitationStatus.PENDING },
         data: { status: InvitationStatus.REVOKED },
       }),
       this.prisma.customerInvitation.create({
@@ -353,7 +351,6 @@ export class AdminCustomersService {
   }
 
   private formatCustomer(rel: any) {
-    const latestInvitation = rel.invitations?.[0] ?? null;
     return {
       id: rel.id,
       organisationId: rel.customerId,
@@ -393,13 +390,13 @@ export class AdminCustomersService {
       deliveryProfileId: rel.traderCustomerSettings?.deliveryProfileId ?? null,
       deliveryProfile: rel.traderCustomerSettings?.deliveryProfile ?? null,
       catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
-      latestInvitation: latestInvitation
-        ? {
-            status: latestInvitation.status,
-            email: latestInvitation.email,
-            expiresAt: latestInvitation.expiresAt,
-          }
-        : null,
+      invitations: (rel.invitations ?? []).map((inv: any) => ({
+        id: inv.id,
+        email: inv.email,
+        status: inv.status,
+        expiresAt: inv.expiresAt,
+        createdAt: inv.createdAt,
+      })),
       createdAt: rel.createdAt,
       updatedAt: rel.updatedAt,
     };

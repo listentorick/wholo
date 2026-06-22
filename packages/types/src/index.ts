@@ -349,10 +349,12 @@ export interface OrganisationSearchResult {
   isExistingCustomer: boolean;
 }
 
-export interface LatestInvitation {
-  status: InvitationStatus;
+export interface CustomerInvitation {
+  id: string;
   email: string;
+  status: InvitationStatus;
   expiresAt: string;
+  createdAt: string;
 }
 
 export interface Customer {
@@ -382,7 +384,7 @@ export interface Customer {
   deliveryProfileId: string | null;
   deliveryProfile: { id: string; name: string } | null;
   catalogues: { id: string; name: string }[];
-  latestInvitation: LatestInvitation | null;
+  invitations: CustomerInvitation[];
   createdAt: string;
   updatedAt: string;
 }

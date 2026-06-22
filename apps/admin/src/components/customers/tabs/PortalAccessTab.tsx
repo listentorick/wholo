@@ -2,25 +2,45 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Customer } from '@wholo/types';
+import type { Customer, CustomerInvitation } from '@wholo/types';
 import { InvitationStatus, TradeRelationshipStatus } from '@wholo/types';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, TextInput } from './form-helpers';
 
-const INVITE_STATUS_LABELS: Record<InvitationStatus, { label: string; color: string }> = {
-  [InvitationStatus.PENDING]: { label: 'Pending', color: '#d97706' },
+const INVITE_STATUS: Record<InvitationStatus, { label: string; color: string }> = {
+  [InvitationStatus.PENDING]:  { label: 'Pending',  color: '#d97706' },
   [InvitationStatus.ACCEPTED]: { label: 'Accepted', color: '#16a34a' },
-  [InvitationStatus.EXPIRED]: { label: 'Expired', color: '#6b7280' },
-  [InvitationStatus.REVOKED]: { label: 'Revoked', color: '#6b7280' },
+  [InvitationStatus.EXPIRED]:  { label: 'Expired',  color: '#6b7280' },
+  [InvitationStatus.REVOKED]:  { label: 'Revoked',  color: '#6b7280' },
 };
 
 const STATUS_LABELS: Record<TradeRelationshipStatus, { label: string; bg: string; text: string }> = {
-  [TradeRelationshipStatus.PENDING_INVITE]: { label: 'Pending invite', bg: '#fef9c3', text: '#a16207' },
-  [TradeRelationshipStatus.PENDING_REQUEST]: { label: 'Pending request', bg: '#dbeafe', text: '#1d4ed8' },
-  [TradeRelationshipStatus.ACTIVE]: { label: 'Active', bg: '#dcfce7', text: '#15803d' },
-  [TradeRelationshipStatus.SUSPENDED]: { label: 'Suspended', bg: '#fee2e2', text: '#b91c1c' },
-  [TradeRelationshipStatus.INACTIVE]: { label: 'Inactive', bg: '#f3f4f6', text: '#6b7280' },
+  [TradeRelationshipStatus.PENDING_INVITE]:   { label: 'Pending invite',   bg: '#fef9c3', text: '#a16207' },
+  [TradeRelationshipStatus.PENDING_REQUEST]:  { label: 'Pending request',  bg: '#dbeafe', text: '#1d4ed8' },
+  [TradeRelationshipStatus.ACTIVE]:           { label: 'Active',           bg: '#dcfce7', text: '#15803d' },
+  [TradeRelationshipStatus.SUSPENDED]:        { label: 'Suspended',        bg: '#fee2e2', text: '#b91c1c' },
+  [TradeRelationshipStatus.INACTIVE]:         { label: 'Inactive',         bg: '#f3f4f6', text: '#6b7280' },
 };
+
+function InviteRow({ inv }: { inv: CustomerInvitation }) {
+  const meta = INVITE_STATUS[inv.status];
+  const date = new Date(inv.status === InvitationStatus.ACCEPTED ? inv.expiresAt : inv.expiresAt);
+  const label = inv.status === InvitationStatus.EXPIRED || inv.status === InvitationStatus.REVOKED
+    ? 'Expired'
+    : inv.status === InvitationStatus.ACCEPTED
+    ? 'Accepted'
+    : `Expires ${date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-2.5 border-b border-border last:border-0">
+      <span className="text-sm text-text truncate">{inv.email}</span>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-xs" style={{ color: meta.color }}>● {meta.label}</span>
+        <span className="text-xs text-muted">{label}</span>
+      </div>
+    </div>
+  );
+}
 
 interface Props {
   customer: Customer;
@@ -32,30 +52,19 @@ interface Props {
 
 export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Props) {
   const router = useRouter();
+
+  // Wizard state
   const [inviteEmail, setInviteEmail] = useState(customer.organisation.email ?? '');
-  const [isInviting, setIsInviting] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteSent, setInviteSent] = useState(false);
   const [isActivating, setIsActivating] = useState(false);
   const [activateError, setActivateError] = useState<string | null>(null);
 
-  const inv = customer.latestInvitation;
-  const statusMeta = STATUS_LABELS[customer.status];
-  const emailIsEmpty = !inviteEmail.trim();
+  // Tab state
+  const [newInviteEmail, setNewInviteEmail] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = useState(false);
 
-  async function handleSendInvite() {
-    setIsInviting(true);
-    setInviteError(null);
-    try {
-      await adminCustomersApi.invite(token, customer.id, inviteEmail.trim() || undefined);
-      setInviteSent(true);
-      onSaved?.();
-    } catch (err: unknown) {
-      setInviteError(err instanceof Error ? err.message : 'Failed to send invitation.');
-    } finally {
-      setIsInviting(false);
-    }
-  }
+  const statusMeta = STATUS_LABELS[customer.status];
 
   async function handleDoneAndActivate() {
     setIsActivating(true);
@@ -74,6 +83,24 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     }
   }
 
+  async function handleSendInvite() {
+    const email = newInviteEmail.trim();
+    if (!email) return;
+    setIsSending(true);
+    setSendError(null);
+    setSendSuccess(false);
+    try {
+      await adminCustomersApi.invite(token, customer.id, email);
+      setNewInviteEmail('');
+      setSendSuccess(true);
+      onSaved?.();
+    } catch (err: unknown) {
+      setSendError(err instanceof Error ? err.message : 'Failed to send invitation.');
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   if (mode === 'wizard') {
     return (
       <div>
@@ -84,7 +111,6 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
           <p className="text-sm text-muted">
             Enter the email address for this customer&apos;s portal access. An invitation will be sent when they are marked as active.
           </p>
-
           <div>
             <FieldLabel htmlFor="invite-email-wizard">Invitation email</FieldLabel>
             <TextInput
@@ -96,12 +122,10 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
               disabled={isActivating}
             />
           </div>
-
           {activateError && (
             <p className="text-sm font-medium text-red-500">{activateError}</p>
           )}
         </div>
-
         <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
           <button type="button" onClick={onBack} className="rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text">
             ← Back
@@ -133,19 +157,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
   return (
     <div className="space-y-5">
       <FormCard title="Portal access">
-        <div className="space-y-4">
-          <div>
-            <FieldLabel htmlFor="invite-email-tab">Invite email</FieldLabel>
-            <TextInput
-              id="invite-email-tab"
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
-              placeholder="orders@example.com"
-              disabled={isInviting}
-            />
-          </div>
-
+        <div className="space-y-5">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">Status</span>
             <span
@@ -157,60 +169,39 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
             </span>
           </div>
 
-          {inv ? (
-            <div className="space-y-3">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted">Invitation</span>
-                <span
-                  className="ml-3 text-xs font-medium"
-                  style={{ color: INVITE_STATUS_LABELS[inv.status].color }}
-                >
-                  {INVITE_STATUS_LABELS[inv.status].label}
-                </span>
-              </div>
-              <p className="text-sm text-muted">
-                Sent to <span className="font-medium text-text">{inv.email}</span>
-              </p>
-              <p className="text-xs text-muted">
-                Expires{' '}
-                {new Date(inv.expiresAt).toLocaleDateString('en-AU', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </p>
-              {inviteSent && (
-                <p className="text-xs font-medium text-green-600">New invitation sent.</p>
-              )}
-              {inviteError && (
-                <p className="text-xs font-medium text-red-500">{inviteError}</p>
-              )}
+          <div className="space-y-2">
+            <FieldLabel htmlFor="new-invite-email">Send portal invitation</FieldLabel>
+            <div className="flex gap-2">
+              <TextInput
+                id="new-invite-email"
+                type="email"
+                value={newInviteEmail}
+                onChange={(e) => { setNewInviteEmail(e.target.value); setSendError(null); setSendSuccess(false); }}
+                placeholder="orders@example.com"
+                disabled={isSending}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendInvite(); } }}
+              />
               <button
                 type="button"
                 onClick={handleSendInvite}
-                disabled={isInviting || emailIsEmpty}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
+                disabled={isSending || !newInviteEmail.trim()}
+                className="shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
               >
-                {isInviting ? 'Sending…' : 'Resend invitation'}
+                {isSending ? 'Sending…' : 'Send invite'}
               </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-muted">No invitation has been sent yet.</p>
-              {inviteSent && (
-                <p className="text-xs font-medium text-green-600">Invitation sent to {inviteEmail.trim()}.</p>
-              )}
-              {inviteError && (
-                <p className="text-xs font-medium text-red-500">{inviteError}</p>
-              )}
-              <button
-                type="button"
-                onClick={handleSendInvite}
-                disabled={isInviting || emailIsEmpty || inviteSent}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-              >
-                {isInviting ? 'Sending…' : 'Send invitation'}
-              </button>
+            {sendSuccess && <p className="text-xs font-medium text-green-600">Invitation sent.</p>}
+            {sendError && <p className="text-xs font-medium text-red-500">{sendError}</p>}
+          </div>
+
+          {customer.invitations.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Invitation history</p>
+              <div>
+                {customer.invitations.map((inv) => (
+                  <InviteRow key={inv.id} inv={inv} />
+                ))}
+              </div>
             </div>
           )}
         </div>

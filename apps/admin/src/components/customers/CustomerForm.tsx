@@ -292,7 +292,7 @@ export function CustomerForm({ mode, token, initialValues, initialEmail, onSubmi
   }
 
   const disabled = isSubmitting;
-  const inv = initialValues?.latestInvitation;
+  const inv = initialValues?.invitations?.[0] ?? null;
   const statusMeta = initialValues ? STATUS_LABELS[initialValues.status] : null;
 
   return (
