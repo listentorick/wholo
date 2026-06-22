@@ -310,7 +310,7 @@ export class AdminCustomersService {
     });
   }
 
-  async invite(id: string, distributorId: string) {
+  async invite(id: string, distributorId: string, email?: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { id, distributorId, deletedAt: null },
       include: {
@@ -319,7 +319,9 @@ export class AdminCustomersService {
       },
     });
     if (!rel) throw new NotFoundException('Customer not found');
-    if (!rel.customer.email) throw new BadRequestException('Customer has no email address');
+
+    const target = email || rel.customer.email;
+    if (!target) throw new BadRequestException('Customer has no email address');
 
     const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
     const token = randomBytes(32).toString('hex');
@@ -334,7 +336,7 @@ export class AdminCustomersService {
         data: {
           tradeRelationshipId: id,
           distributorId,
-          email: rel.customer.email,
+          email: target,
           token,
           expiresAt,
         },
@@ -342,7 +344,7 @@ export class AdminCustomersService {
     ]);
 
     const inviteUrl = `${portalUrl}/accept-invite?token=${token}`;
-    await this.mail.sendInvite(rel.customer.email, rel.distributor.name, inviteUrl);
+    await this.mail.sendInvite(target, rel.distributor.name, inviteUrl);
 
     return {
       inviteUrl,

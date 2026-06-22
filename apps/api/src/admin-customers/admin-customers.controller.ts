@@ -102,7 +102,8 @@ export class AdminCustomersController {
   invite(
     @Headers('x-distributor-id') distributorId: string,
     @Param('id') id: string,
+    @Body() body: { email?: string },
   ) {
-    return this.service.invite(id, distributorId);
+    return this.service.invite(id, distributorId, body.email);
   }
 }

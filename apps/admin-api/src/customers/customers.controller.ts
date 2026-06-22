@@ -57,9 +57,9 @@ export class CustomersController {
 
   @Post(':id/invite')
   @HttpCode(HttpStatus.OK)
-  invite(@Req() req: Request, @Param('id') id: string) {
+  invite(@Req() req: Request, @Param('id') id: string, @Body() body: { email?: string }) {
     const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.invite(id, organisationId);
+    return this.customersService.invite(id, organisationId, body.email);
   }
 
   @Get(':id/catalogues')

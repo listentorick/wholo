@@ -39,8 +39,8 @@ export class CustomersService {
     return this.api.delete(`/admin/customers/${id}`, distributorId);
   }
 
-  invite(id: string, distributorId: string) {
-    return this.api.post(`/admin/customers/${id}/invite`, distributorId);
+  invite(id: string, distributorId: string, email?: string) {
+    return this.api.post(`/admin/customers/${id}/invite`, distributorId, { email });
   }
 
   getCatalogues(id: string, distributorId: string) {

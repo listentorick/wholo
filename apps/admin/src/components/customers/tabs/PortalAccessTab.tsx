@@ -47,10 +47,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     setIsInviting(true);
     setInviteError(null);
     try {
-      if (inviteEmail.trim() !== (customer.organisation.email ?? '')) {
-        await adminCustomersApi.update(token, customer.id, { email: inviteEmail.trim() });
-      }
-      await adminCustomersApi.invite(token, customer.id);
+      await adminCustomersApi.invite(token, customer.id, inviteEmail.trim() || undefined);
       setInviteSent(true);
       onSaved?.();
     } catch (err: unknown) {
@@ -65,8 +62,9 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     setActivateError(null);
     try {
       await adminCustomersApi.update(token, customer.id, { status: TradeRelationshipStatus.ACTIVE });
-      if (customer.organisation.email) {
-        try { await adminCustomersApi.invite(token, customer.id); } catch { /* skip if invite fails */ }
+      const email = inviteEmail.trim() || undefined;
+      if (email || customer.organisation.email) {
+        try { await adminCustomersApi.invite(token, customer.id, email); } catch { /* no email — skip */ }
       }
       router.push(`/customers/${customer.id}`);
     } catch (err: unknown) {
@@ -84,8 +82,21 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
         </div>
         <div className="p-5 space-y-4">
           <p className="text-sm text-muted">
-            This customer will receive an invitation to the portal when they are marked as active. You can also send or resend invitations at any time from the Portal Access tab.
+            Enter the email address for this customer&apos;s portal access. An invitation will be sent when they are marked as active.
           </p>
+
+          <div>
+            <FieldLabel htmlFor="invite-email-wizard">Invitation email</FieldLabel>
+            <TextInput
+              id="invite-email-wizard"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => { setInviteEmail(e.target.value); setActivateError(null); }}
+              placeholder="orders@example.com"
+              disabled={isActivating}
+            />
+          </div>
+
           {activateError && (
             <p className="text-sm font-medium text-red-500">{activateError}</p>
           )}
@@ -98,19 +109,19 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleDoneAndActivate}
+              onClick={() => router.push(`/customers/${customer.id}`)}
               disabled={isActivating}
               className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
             >
-              {isActivating ? 'Activating…' : 'Done and mark as active'}
+              Done and activate later
             </button>
             <button
               type="button"
-              onClick={() => router.push(`/customers/${customer.id}`)}
+              onClick={handleDoneAndActivate}
               disabled={isActivating}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
-              Done
+              {isActivating ? 'Activating…' : 'Done and mark as active'}
             </button>
           </div>
         </div>

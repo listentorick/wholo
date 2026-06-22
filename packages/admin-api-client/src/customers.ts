@@ -48,7 +48,11 @@ export const adminCustomersApi = {
     return apiFetch<void>(`/api/v1/customers/${id}`, { method: 'DELETE', token });
   },
 
-  invite(token: string, id: string): Promise<InviteResponse> {
-    return apiFetch<InviteResponse>(`/api/v1/customers/${id}/invite`, { method: 'POST', token });
+  invite(token: string, id: string, email?: string): Promise<InviteResponse> {
+    return apiFetch<InviteResponse>(`/api/v1/customers/${id}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+      token,
+    });
   },
 };
