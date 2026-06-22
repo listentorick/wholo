@@ -32,19 +32,22 @@ interface Props {
 
 export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Props) {
   const router = useRouter();
+  const [inviteEmail, setInviteEmail] = useState(customer.organisation.email ?? '');
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
 
   const inv = customer.latestInvitation;
-  const orgEmail = customer.organisation.email;
   const statusMeta = STATUS_LABELS[customer.status];
+  const emailIsEmpty = !inviteEmail.trim();
 
   async function handleSendInvite() {
-    if (!orgEmail) return;
     setIsInviting(true);
     setInviteError(null);
     try {
+      if (inviteEmail.trim() !== (customer.organisation.email ?? '')) {
+        await adminCustomersApi.update(token, customer.id, { email: inviteEmail.trim() });
+      }
       await adminCustomersApi.invite(token, customer.id);
       setInviteSent(true);
       onSaved?.();
@@ -58,7 +61,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     }
   }
 
-  function handleSkip() {
+  function handleDone() {
     router.push(`/customers/${customer.id}`);
   }
 
@@ -73,22 +76,20 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
             Send an invitation so this customer can log in to place orders, view invoices, and track deliveries.
           </p>
 
-          {orgEmail ? (
-            <div>
-              <FieldLabel>Invitation email</FieldLabel>
-              <TextInput value={orgEmail} disabled readOnly />
-              <p className="mt-1.5 text-xs text-muted">
-                The invitation will be sent to this address. Update it in the Overview tab if needed.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              No email on file. Add an email in the Overview tab before sending an invitation.
-            </div>
-          )}
+          <div>
+            <FieldLabel htmlFor="invite-email-wizard">Invitation email</FieldLabel>
+            <TextInput
+              id="invite-email-wizard"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
+              placeholder="orders@example.com"
+              disabled={isInviting || inviteSent}
+            />
+          </div>
 
           {inviteSent && (
-            <p className="text-sm font-medium text-green-600">Invitation sent to {orgEmail}.</p>
+            <p className="text-sm font-medium text-green-600">Invitation sent to {inviteEmail.trim()}.</p>
           )}
           {inviteError && (
             <p className="text-sm font-medium text-red-500">{inviteError}</p>
@@ -102,18 +103,18 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleSkip}
+              onClick={handleDone}
               className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
             >
-              Skip for now
+              Done
             </button>
             <button
               type="button"
               onClick={handleSendInvite}
-              disabled={isInviting || !orgEmail || inviteSent}
+              disabled={isInviting || emailIsEmpty || inviteSent}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
-              {isInviting ? 'Sending…' : 'Send invitation →'}
+              {isInviting ? 'Sending…' : 'Send invitation'}
             </button>
           </div>
         </div>
@@ -126,6 +127,18 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     <div className="space-y-5">
       <FormCard title="Portal access">
         <div className="space-y-4">
+          <div>
+            <FieldLabel htmlFor="invite-email-tab">Invite email</FieldLabel>
+            <TextInput
+              id="invite-email-tab"
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
+              placeholder="orders@example.com"
+              disabled={isInviting}
+            />
+          </div>
+
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">Status</span>
             <span
@@ -165,40 +178,32 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
               {inviteError && (
                 <p className="text-xs font-medium text-red-500">{inviteError}</p>
               )}
-              {orgEmail && (
-                <button
-                  type="button"
-                  onClick={handleSendInvite}
-                  disabled={isInviting}
-                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
-                >
-                  {isInviting ? 'Sending…' : 'Resend invitation'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleSendInvite}
+                disabled={isInviting || emailIsEmpty}
+                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
+              >
+                {isInviting ? 'Sending…' : 'Resend invitation'}
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted">No invitation has been sent yet.</p>
               {inviteSent && (
-                <p className="text-xs font-medium text-green-600">Invitation sent to {orgEmail}.</p>
+                <p className="text-xs font-medium text-green-600">Invitation sent to {inviteEmail.trim()}.</p>
               )}
               {inviteError && (
                 <p className="text-xs font-medium text-red-500">{inviteError}</p>
               )}
-              {orgEmail ? (
-                <button
-                  type="button"
-                  onClick={handleSendInvite}
-                  disabled={isInviting || inviteSent}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-                >
-                  {isInviting ? 'Sending…' : 'Send invitation'}
-                </button>
-              ) : (
-                <p className="text-xs text-muted">
-                  Add an email address in the Overview tab to send an invitation.
-                </p>
-              )}
+              <button
+                type="button"
+                onClick={handleSendInvite}
+                disabled={isInviting || emailIsEmpty || inviteSent}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+              >
+                {isInviting ? 'Sending…' : 'Send invitation'}
+              </button>
             </div>
           )}
         </div>
