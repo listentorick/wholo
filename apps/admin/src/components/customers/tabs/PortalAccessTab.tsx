@@ -36,6 +36,8 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSent, setInviteSent] = useState(false);
+  const [isActivating, setIsActivating] = useState(false);
+  const [activateError, setActivateError] = useState<string | null>(null);
 
   const inv = customer.latestInvitation;
   const statusMeta = STATUS_LABELS[customer.status];
@@ -51,9 +53,6 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
       await adminCustomersApi.invite(token, customer.id);
       setInviteSent(true);
       onSaved?.();
-      if (mode === 'wizard') {
-        router.push(`/customers/${customer.id}`);
-      }
     } catch (err: unknown) {
       setInviteError(err instanceof Error ? err.message : 'Failed to send invitation.');
     } finally {
@@ -61,8 +60,20 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     }
   }
 
-  function handleDone() {
-    router.push(`/customers/${customer.id}`);
+  async function handleDoneAndActivate() {
+    setIsActivating(true);
+    setActivateError(null);
+    try {
+      await adminCustomersApi.update(token, customer.id, { status: TradeRelationshipStatus.ACTIVE });
+      if (customer.organisation.email) {
+        try { await adminCustomersApi.invite(token, customer.id); } catch { /* skip if invite fails */ }
+      }
+      router.push(`/customers/${customer.id}`);
+    } catch (err: unknown) {
+      setActivateError(err instanceof Error ? err.message : 'Failed to activate customer.');
+    } finally {
+      setIsActivating(false);
+    }
   }
 
   if (mode === 'wizard') {
@@ -73,26 +84,10 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
         </div>
         <div className="p-5 space-y-4">
           <p className="text-sm text-muted">
-            Send an invitation so this customer can log in to place orders, view invoices, and track deliveries.
+            This customer will receive an invitation to the portal when they are marked as active. You can also send or resend invitations at any time from the Portal Access tab.
           </p>
-
-          <div>
-            <FieldLabel htmlFor="invite-email-wizard">Invitation email</FieldLabel>
-            <TextInput
-              id="invite-email-wizard"
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => { setInviteEmail(e.target.value); setInviteError(null); }}
-              placeholder="orders@example.com"
-              disabled={isInviting || inviteSent}
-            />
-          </div>
-
-          {inviteSent && (
-            <p className="text-sm font-medium text-green-600">Invitation sent to {inviteEmail.trim()}.</p>
-          )}
-          {inviteError && (
-            <p className="text-sm font-medium text-red-500">{inviteError}</p>
+          {activateError && (
+            <p className="text-sm font-medium text-red-500">{activateError}</p>
           )}
         </div>
 
@@ -103,18 +98,19 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleDone}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
+              onClick={handleDoneAndActivate}
+              disabled={isActivating}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
             >
-              Done
+              {isActivating ? 'Activating…' : 'Done and mark as active'}
             </button>
             <button
               type="button"
-              onClick={handleSendInvite}
-              disabled={isInviting || emailIsEmpty || inviteSent}
+              onClick={() => router.push(`/customers/${customer.id}`)}
+              disabled={isActivating}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
             >
-              {isInviting ? 'Sending…' : 'Send invitation'}
+              Done
             </button>
           </div>
         </div>
