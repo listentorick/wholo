@@ -14,24 +14,29 @@ import { PortalAccessTab } from '@/components/customers/tabs/PortalAccessTab';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import type { OrganisationSearchResult, Customer } from '@wholo/types';
 
-type Step = 'search' | 'confirm' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access';
+type Step = 'search' | 'confirm' | 'create-new' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access';
 
-const STEP_LABELS: Record<Step, string> = {
+const INDICATOR_STEPS = ['search', 'account', 'delivery', 'catalogue-pricing', 'portal-access'] as const;
+
+const INDICATOR_LABELS: Record<typeof INDICATOR_STEPS[number], string> = {
   search: 'Find business',
-  confirm: 'Confirm',
   account: 'Account',
   delivery: 'Delivery',
   'catalogue-pricing': 'Catalogue & Pricing',
   'portal-access': 'Portal Access',
 };
 
-const ORDERED_STEPS: Step[] = ['search', 'confirm', 'account', 'delivery', 'catalogue-pricing', 'portal-access'];
+function stepToIndicator(step: Step): typeof INDICATOR_STEPS[number] {
+  if (step === 'search' || step === 'confirm' || step === 'create-new') return 'search';
+  return step as typeof INDICATOR_STEPS[number];
+}
 
 function StepIndicator({ current }: { current: Step }) {
-  const currentIdx = ORDERED_STEPS.indexOf(current);
+  const display = stepToIndicator(current);
+  const currentIdx = INDICATOR_STEPS.indexOf(display);
   return (
     <div className="flex items-center gap-2 mb-5 overflow-x-auto">
-      {ORDERED_STEPS.map((step, idx) => (
+      {INDICATOR_STEPS.map((step, idx) => (
         <div key={step} className="flex items-center gap-2 shrink-0">
           <span
             className={[
@@ -39,9 +44,9 @@ function StepIndicator({ current }: { current: Step }) {
               idx < currentIdx ? 'text-primary' : idx === currentIdx ? 'text-text font-semibold' : 'text-muted',
             ].join(' ')}
           >
-            {STEP_LABELS[step]}
+            {INDICATOR_LABELS[step]}
           </span>
-          {idx < ORDERED_STEPS.length - 1 && (
+          {idx < INDICATOR_STEPS.length - 1 && (
             <span className="text-border text-xs">›</span>
           )}
         </div>
@@ -56,7 +61,9 @@ export default function NewCustomerPage() {
 
   const [step, setStep] = useState<Step>('search');
   const [selectedOrg, setSelectedOrg] = useState<OrganisationSearchResult | null>(null);
+  const [newBusinessName, setNewBusinessName] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [isNewBusiness, setIsNewBusiness] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -68,17 +75,15 @@ export default function NewCustomerPage() {
     );
   }
 
-  const canAdvance = selectedOrg !== null;
-
-  async function handleSetUp() {
+  // Create relationship for an existing org (found via search)
+  async function handleSetUpExisting() {
     if (!accessToken || !selectedOrg) return;
     setIsSubmitting(true);
     setApiError(null);
     try {
-      const result = await adminCustomersApi.create(accessToken, {
-        organisationId: selectedOrg.id,
-      });
+      const result = await adminCustomersApi.create(accessToken, { organisationId: selectedOrg.id });
       setCustomer(result);
+      setIsNewBusiness(false);
       setStep('account');
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
@@ -87,9 +92,27 @@ export default function NewCustomerPage() {
     }
   }
 
+  // Create a brand-new org + relationship (manual entry path)
+  async function handleSetUpNew() {
+    if (!accessToken || !newBusinessName.trim()) return;
+    setIsSubmitting(true);
+    setApiError(null);
+    try {
+      const result = await adminCustomersApi.create(accessToken, { name: newBusinessName.trim() });
+      setCustomer(result);
+      setIsNewBusiness(true);
+      setStep('account');
+    } catch (err: unknown) {
+      setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const accountBackStep: Step = isNewBusiness ? 'create-new' : 'confirm';
+
   return (
     <AdminLayout>
-      {/* Page header */}
       <div className="mb-5 flex items-center gap-4">
         <Link
           href="/customers"
@@ -113,7 +136,7 @@ export default function NewCustomerPage() {
               token={accessToken ?? ''}
               selectedOrg={selectedOrg}
               onSelectOrg={setSelectedOrg}
-              onCantFind={() => {/* not supported in new wizard */}}
+              onCantFind={() => { setSelectedOrg(null); setStep('create-new'); }}
             />
             <div className="flex items-center justify-end gap-3 border-t border-border px-5 py-4">
               <Link
@@ -124,11 +147,60 @@ export default function NewCustomerPage() {
               </Link>
               <button
                 type="button"
-                disabled={!canAdvance}
+                disabled={selectedOrg === null}
                 onClick={() => setStep('confirm')}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next →
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'create-new' && (
+          <>
+            <div className="border-b border-border px-5 py-3.5">
+              <h2 className="text-sm font-semibold text-text">Add a new business</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label htmlFor="new-business-name" className="block text-xs font-semibold uppercase tracking-wide text-text mb-1.5">
+                  Business name
+                </label>
+                <input
+                  id="new-business-name"
+                  type="text"
+                  value={newBusinessName}
+                  onChange={(e) => { setNewBusinessName(e.target.value); setApiError(null); }}
+                  placeholder="The Rusty Anchor Bar & Grill"
+                  autoFocus
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <p className="text-xs text-muted">
+                This creates a new business record. You can add their full details in the next steps.
+              </p>
+              {apiError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {apiError}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
+              <button
+                type="button"
+                onClick={() => { setStep('search'); setApiError(null); }}
+                className="rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || !newBusinessName.trim()}
+                onClick={handleSetUpNew}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+              >
+                {isSubmitting ? 'Setting up…' : 'Set up →'}
               </button>
             </div>
           </>
@@ -153,7 +225,7 @@ export default function NewCustomerPage() {
               <button
                 type="button"
                 disabled={isSubmitting}
-                onClick={handleSetUp}
+                onClick={handleSetUpExisting}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
               >
                 {isSubmitting ? 'Setting up…' : 'Set up →'}
@@ -168,7 +240,7 @@ export default function NewCustomerPage() {
             token={accessToken ?? ''}
             mode="wizard"
             onNext={() => setStep('delivery')}
-            onBack={() => setStep('confirm')}
+            onBack={() => setStep(accountBackStep)}
           />
         )}
 
