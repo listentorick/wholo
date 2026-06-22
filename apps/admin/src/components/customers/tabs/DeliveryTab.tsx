@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer } from '@wholo/types';
-import { adminCustomersApi } from '@wholo/admin-api-client';
+import type { DeliveryProfileSummary } from '@wholo/types';
+import { adminCustomersApi, adminDeliveryProfilesApi } from '@wholo/admin-api-client';
 import { CustomerDeliveryProfile } from '../CustomerDeliveryProfile';
 import { FormCard, AddressGrid, WizardSectionHeading } from './form-helpers';
 
@@ -16,6 +17,7 @@ const schema = z.object({
   deliveryState: z.string().optional(),
   deliveryPostcode: z.string().optional(),
   deliveryCountry: z.string().optional(),
+  deliveryProfileId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -33,6 +35,15 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<DeliveryProfileSummary[]>([]);
+
+  useEffect(() => {
+    if (mode !== 'wizard') return;
+    adminDeliveryProfilesApi
+      .list(token, { limit: 100 })
+      .then((res) => setProfiles(res.data.filter((p) => p.active)))
+      .catch(() => {});
+  }, [token, mode]);
 
   const { register, handleSubmit } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -43,6 +54,7 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
       deliveryState: customer.deliveryState ?? '',
       deliveryPostcode: customer.deliveryPostcode ?? '',
       deliveryCountry: customer.deliveryCountry ?? '',
+      deliveryProfileId: customer.deliveryProfileId ?? '',
     },
   });
 
@@ -59,11 +71,14 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
         deliveryPostcode: data.deliveryPostcode || undefined,
         deliveryCountry: data.deliveryCountry || undefined,
       });
-      if (mode === 'tab') {
+      if (mode === 'wizard') {
+        await adminDeliveryProfilesApi.assignToCustomer(token, customer.id, {
+          deliveryProfileId: data.deliveryProfileId || null,
+        });
+        onNext?.();
+      } else {
         setSuccess(true);
         onSaved?.();
-      } else {
-        onNext?.();
       }
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
@@ -84,14 +99,18 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
             <p className="text-xs text-muted -mt-1">Leave blank to use the customer&apos;s registered address.</p>
             <AddressGrid prefix="delivery" register={register} disabled={saving} />
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             <WizardSectionHeading>Delivery profile</WizardSectionHeading>
-            <CustomerDeliveryProfile
-              customerId={customer.id}
-              token={token}
-              currentProfileId={customer.deliveryProfileId}
-              currentProfileName={customer.deliveryProfile?.name ?? null}
-            />
+            <select
+              {...register('deliveryProfileId')}
+              disabled={saving}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50"
+            >
+              <option value="">— No delivery profile —</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
