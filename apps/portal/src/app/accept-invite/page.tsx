@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { invitationsApi, ApiError } from '@wholo/api-client';
 
-type Status = 'loading' | 'error' | 'accepted' | 'already-accepted';
+type Status = 'loading' | 'unauthenticated' | 'error' | 'accepted' | 'already-accepted';
 
 function WholoLogo() {
   return (
@@ -31,15 +31,21 @@ function Spinner({ label }: { label: string }) {
   );
 }
 
+const INVITE_TOKEN_STORAGE_KEY = 'wholo_pending_invite_token';
+
 function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { accessToken, isLoading, loginWithRedirect } = useAuth();
+  const { accessToken, isLoading, loginWithRedirect, registerWithRedirect } = useAuth();
 
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const token = searchParams.get('token');
+  // Token comes from the URL, or from sessionStorage after a Keycloak redirect
+  // (keycloak-js cleans up its own params but can also strip non-OAuth query params
+  // depending on the Keycloak version and redirect mode).
+  const urlToken = searchParams.get('token');
+  const token = urlToken ?? (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(INVITE_TOKEN_STORAGE_KEY) : null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -51,9 +57,13 @@ function AcceptInviteContent() {
     }
 
     if (!accessToken) {
-      loginWithRedirect(window.location.href);
+      // Show landing page — don't auto-redirect to Keycloak.
+      // Let the user choose to create an account or sign in.
+      setStatus('unauthenticated');
       return;
     }
+
+    sessionStorage.removeItem(INVITE_TOKEN_STORAGE_KEY);
 
     invitationsApi.accept(accessToken, token)
       .then((result) => {
@@ -74,10 +84,63 @@ function AcceptInviteContent() {
         }
         setStatus('error');
       });
-  }, [isLoading, accessToken, token, loginWithRedirect, router]);
+  }, [isLoading, accessToken, token, router]);
+
+  const handleCreateAccount = useCallback(() => {
+    if (token) sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
+    registerWithRedirect(`${window.location.origin}/accept-invite${token ? `?token=${token}` : ''}`);
+  }, [token, registerWithRedirect]);
+
+  const handleSignIn = useCallback(() => {
+    if (token) sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
+    loginWithRedirect(`${window.location.origin}/accept-invite${token ? `?token=${token}` : ''}`);
+  }, [token, loginWithRedirect]);
 
   if (status === 'loading' || status === 'accepted' || status === 'already-accepted') {
     return <Spinner label={status === 'loading' ? 'Setting up your account…' : 'All done! Redirecting…'} />;
+  }
+
+  if (status === 'unauthenticated') {
+    return (
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: '24px' }}>
+        <div style={{ maxWidth: '400px', textAlign: 'center' }}>
+          <WholoLogo />
+          <h1 style={{ fontFamily: 'system-ui, sans-serif', fontSize: '22px', fontWeight: 700, color: '#111', margin: '0 0 12px' }}>
+            You&apos;ve been invited to join Wholo
+          </h1>
+          <p style={{ fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#6b7280', lineHeight: '1.6', margin: '0 0 28px' }}>
+            Create an account or sign in to accept your invitation and start ordering.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button
+              type="button"
+              onClick={handleCreateAccount}
+              style={{
+                display: 'block', width: '100%', padding: '12px 24px',
+                backgroundColor: '#D97036', color: '#fff', border: 'none',
+                borderRadius: '8px', fontFamily: 'system-ui, sans-serif',
+                fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Create account
+            </button>
+            <button
+              type="button"
+              onClick={handleSignIn}
+              style={{
+                display: 'block', width: '100%', padding: '12px 24px',
+                backgroundColor: 'transparent', color: '#374151',
+                border: '1px solid #d1d5db', borderRadius: '8px',
+                fontFamily: 'system-ui, sans-serif', fontSize: '15px',
+                fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -21,6 +21,7 @@ interface AuthContextValue {
   orderAsCustomerName: string | null;
   login: () => void;
   loginWithRedirect: (redirectUri: string) => void;
+  registerWithRedirect: (redirectUri: string) => void;
   logout: () => void;
   setOrderAsSession: (data: OrderAsState) => void;
   clearOrderAsSession: () => void;
@@ -118,6 +119,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const registerWithRedirect = useCallback((redirectUri: string) => {
+    const kc = (window as any).__kc;
+    if (kc) {
+      kc.register({ redirectUri });
+    } else {
+      getKeycloakAuth().then(() => {
+        (window as any).__kc?.register({ redirectUri });
+      });
+    }
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     setAccessToken(null);
@@ -146,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       orderAsCustomerName: orderAsState?.customerName ?? null,
       login,
       loginWithRedirect,
+      registerWithRedirect,
       logout,
       setOrderAsSession,
       clearOrderAsSession,

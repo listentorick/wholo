@@ -1,9 +1,11 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { IsString } from 'class-validator';
 import { Request } from 'express';
 import { InvitationsService } from './invitations.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 class AcceptInviteBody {
+  @IsString()
   token: string;
 }
 

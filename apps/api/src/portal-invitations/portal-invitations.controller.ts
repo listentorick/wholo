@@ -9,7 +9,7 @@ class AcceptInviteDto {
   token: string;
 }
 
-@Controller('api/v1/portal/invitations')
+@Controller('portal/invitations')
 export class PortalInvitationsController {
   constructor(private service: PortalInvitationsService) {}
 

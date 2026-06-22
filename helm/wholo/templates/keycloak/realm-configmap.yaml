@@ -14,6 +14,20 @@ data:
       "accessTokenLifespan": 900,
       "ssoSessionMaxLifespan": 2592000,
       "ssoSessionIdleTimeout": 2592000,
+      "registrationAllowed": true,
+      "registrationEmailAsUsername": true,
+      "loginWithEmailAllowed": true,
+      "verifyEmail": true,
+      "resetPasswordAllowed": true,
+      "smtpServer": {
+        "host": "wholo-mailhog",
+        "port": "1025",
+        "from": "noreply@wholo.com.au",
+        "fromDisplayName": "Wholo",
+        "ssl": "false",
+        "starttls": "false",
+        "auth": "false"
+      },
       "clients": [
         {
           "clientId": "wholo-admin",
