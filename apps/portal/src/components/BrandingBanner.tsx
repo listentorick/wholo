@@ -11,6 +11,7 @@ interface Props {
 
 export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPast }: Props) {
   const bannerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const gradientStart = dominantColor ?? '#e8ddd0';
 
   useEffect(() => {
@@ -24,6 +25,16 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
     return () => observer.disconnect();
   }, [onScrolledPast]);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!imgRef.current) return;
+      imgRef.current.style.transform = `translateY(${-window.scrollY * 0.15}px)`;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <>
       <style>{`
@@ -33,7 +44,7 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
         }
         .anim-banner { animation: scaleIn 0.5s ease both 0.1s; }
 
-        .home-banner { width: 100%; height: 38vh; min-height: 180px; position: relative; }
+        .home-banner { width: 100%; height: 38vh; min-height: 180px; position: relative; overflow: hidden; }
         @media (min-width: 481px)  { .home-banner { max-height: 260px; } }
         @media (min-width: 768px)  { .home-banner { height: 42vh; max-height: 360px; } }
         @media (min-width: 1024px) { .home-banner { height: 30vh; max-height: 420px; } }
@@ -77,14 +88,22 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
           style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
         />
 
-        {/* Banner image layer — on top when set */}
+        {/* Banner image layer — parallaxes within container */}
         {bannerUrl && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={imgRef}
               src={bannerUrl}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover"
+              style={{
+                position: 'absolute',
+                width: '100%',
+                height: '150%',
+                top: '-25%',
+                objectFit: 'cover',
+                willChange: 'transform',
+              }}
               draggable={false}
             />
             <div
@@ -94,7 +113,7 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
           </>
         )}
 
-        {/* Logo circle */}
+        {/* Logo circle — stays fixed relative to container, not the parallax image */}
         <div className="logo-circle">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
