@@ -19,6 +19,7 @@ import { DeliveryAvailabilityModule } from './delivery-availability/delivery-ava
 import { OrderAsModule } from './order-as/order-as.module';
 import { MailModule } from './mail/mail.module';
 import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
+import { PortalModule } from './portal/portal.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
@@ -45,6 +46,7 @@ import './asset-images/branding-asset-types';
     OrderAsModule,
     MailModule,
     PortalInvitationsModule,
+    PortalModule,
   ],
   controllers: [HealthController],
 })

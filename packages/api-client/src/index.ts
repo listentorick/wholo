@@ -5,5 +5,6 @@ export { ordersApi } from './orders';
 export { deliveryApi } from './delivery';
 export { orderAsApi } from './order-as';
 export { invitationsApi } from './invitations';
+export { portalApi } from './portal';
 export type { OrderAsExchangeResponse } from './order-as';
 export { ApiError } from './base';

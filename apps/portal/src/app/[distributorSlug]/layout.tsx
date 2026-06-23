@@ -3,7 +3,8 @@
 import { useParams } from 'next/navigation';
 import { CartProvider } from '@/lib/cart-context';
 import { DistributorProvider } from '@/lib/distributor-context';
-import { DistributorNav } from '@/components/DistributorNav';
+import { NavigationSidebar } from '@/components/NavigationSidebar';
+import { DistributorHeader } from '@/components/DistributorHeader';
 import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
 
@@ -13,11 +14,14 @@ export default function DistributorLayout({ children }: { children: React.ReactN
   return (
     <DistributorProvider distributorSlug={distributorSlug}>
       <CartProvider distributorSlug={distributorSlug}>
-        <div className="flex min-h-screen flex-col bg-white">
-          <OrderAsHandler />
-          <OrderAsBanner />
-          <DistributorNav distributorSlug={distributorSlug} />
-          {children}
+        <div className="flex min-h-screen">
+          <NavigationSidebar distributorSlug={distributorSlug} />
+          <main className="flex flex-1 flex-col min-w-0 bg-white pt-14 md:pt-0">
+            <DistributorHeader distributorSlug={distributorSlug} />
+            <OrderAsHandler />
+            <OrderAsBanner />
+            {children}
+          </main>
         </div>
       </CartProvider>
     </DistributorProvider>

@@ -283,6 +283,16 @@ export interface DistributorInfo {
   bannerDominantColor: string | null;
 }
 
+export interface PortalDistributorSummary {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  email: string | null;
+  phone: string | null;
+  orderCount: number;
+}
+
 export interface CatalogueProductsResponse {
   distributor: { id: string; name: string };
   data: CatalogueProduct[];

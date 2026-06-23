@@ -1,219 +1,144 @@
 'use client';
 
+import { useState, useEffect, useMemo } from 'react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { useAuth } from '@/lib/auth-context';
+import { NavigationSidebar } from '@/components/NavigationSidebar';
+import { DistributorCard } from '@/components/DistributorCard';
+import { portalApi } from '@wholo/api-client';
+import type { PortalDistributorSummary } from '@wholo/types';
 
-const actions = [
-  {
-    label: 'New Order',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.25} stroke="currentColor" className="h-7 w-7">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="12" y1="8" x2="12" y2="16" />
-        <line x1="8" y1="12" x2="16" y2="12" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Favourites',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.25} stroke="currentColor" className="h-7 w-7">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Orders',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.25} stroke="currentColor" className="h-7 w-7">
-        <rect x="4" y="3" width="16" height="18" rx="2" />
-        <line x1="8" y1="8" x2="16" y2="8" />
-        <line x1="8" y1="12" x2="16" y2="12" />
-        <line x1="8" y1="16" x2="12" y2="16" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Standing Orders',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" strokeWidth={1.25} stroke="currentColor" className="h-7 w-7">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-  },
-];
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 text-[#9CA3AF]">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
+function CompassIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
+    </svg>
+  );
+}
 
 export default function HomePage() {
-  const { user, isLoading } = useRequireAuth();
-  const { logout } = useAuth();
+  const { user, accessToken, isLoading: authLoading } = useRequireAuth();
+  const [distributors, setDistributors] = useState<PortalDistributorSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState('');
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!accessToken) return;
+    setLoading(true);
+    portalApi
+      .getMyDistributors(accessToken)
+      .then(setDistributors)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [accessToken]);
 
-  if (!user) return null;
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return distributors;
+    return distributors.filter((d) => d.name.toLowerCase().includes(q));
+  }, [distributors, query]);
+
+  if (authLoading) return null;
 
   return (
-    <>
-      <style>{`
-        @keyframes fadeDown {
-          from { opacity: 0; transform: translateY(-8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.94); }
-          to   { opacity: 1; transform: scale(1); }
-        }
-        .anim-nav    { animation: fadeDown 0.4s ease both; }
-        .anim-banner { animation: scaleIn 0.5s ease both 0.1s; }
-        .anim-welcome{ animation: fadeUp  0.4s ease both 0.25s; }
-        .anim-tile-0 { animation: fadeUp  0.4s ease both 0.32s; }
-        .anim-tile-1 { animation: fadeUp  0.4s ease both 0.38s; }
-        .anim-tile-2 { animation: fadeUp  0.4s ease both 0.44s; }
-        .anim-tile-3 { animation: fadeUp  0.4s ease both 0.50s; }
-        .action-tile { transition: background 0.15s, transform 0.15s; }
-        .action-tile:active { background: #f9f9f9; transform: scale(0.97); }
+    <div className="flex min-h-screen">
+      <NavigationSidebar contextName={user?.organisationName} />
 
-        /* Nav and banner are always full viewport width — they sit outside
-           the content shell so no max-width ever clips them. */
-        .home-nav    { padding-left: 16px; padding-right: 16px; }
-        .home-banner { width: 100%; height: 38vh; min-height: 180px; }
+      <main className="flex flex-1 flex-col min-w-0 bg-white pt-14 md:pt-0">
+        {/* Desktop top nav bar — no cart */}
+        <header className="hidden md:flex sticky top-0 z-20 items-center bg-white border-b border-[#E5E7EB] h-14 px-6">
+          <span className="text-sm font-medium text-[#1A1A1A]">{user?.organisationName}</span>
+        </header>
 
-        /* Content shell centres the welcome text and tile grid.
-           On phones it is full width; on larger screens it is a
-           centred card. */
-        .home-content { width: 100%; }
+        <div className="px-4 md:px-8 py-8 max-w-3xl mx-auto w-full">
 
-        /* ── Phone breakpoints ─────────────────────────────────── */
+          {/* Greeting */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-[#1A1A1A]">
+              Hi, {user?.firstName} 👋
+            </h1>
+          </div>
 
-        /* Phone baseline — iPhone 12 Pro (390 px) and narrower */
-        @media (max-width: 480px) {
-          .home-banner  { height: 38vh; }
-          .tile-icon    { width: 52px; height: 52px; }
-          .tile-label   { font-size: 11px; }
-          .tile-btn     { padding-top: 36px; padding-bottom: 36px; }
-        }
+          {/* My Suppliers */}
+          <section className="mb-10">
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-4">My Suppliers</h2>
 
-        /* iPhone 14 Pro Max — 430 px */
-        @media (min-width: 428px) and (max-width: 430px) {
-          .home-banner  { height: 40vh; }
-          .tile-icon    { width: 58px; height: 58px; }
-          .tile-label   { font-size: 12px; }
-          .tile-btn     { padding-top: 44px; padding-bottom: 44px; }
-          .welcome-text { font-size: 18px; }
-        }
+            {/* Search */}
+            <div className="relative mb-4">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                <SearchIcon />
+              </span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search suppliers…"
+                className="w-full border border-[#E5E7EB] bg-white py-2.5 pl-10 pr-4 text-sm text-[#1A1A1A] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#D97036] focus:border-[#D97036]"
+              />
+            </div>
 
-        /* Pixel 7 — 412 px */
-        @media (min-width: 411px) and (max-width: 412px) {
-          .home-banner  { height: 39vh; }
-          .tile-icon    { width: 56px; height: 56px; }
-          .tile-label   { font-size: 11.5px; }
-          .tile-btn     { padding-top: 40px; padding-bottom: 40px; }
-        }
+            {/* Cards */}
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="h-24 bg-[#F3F4F6] animate-pulse" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center">
+                {query ? (
+                  <>
+                    <p className="text-sm font-medium text-[#1A1A1A]">No suppliers match &ldquo;{query}&rdquo;</p>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">Try a different search term</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-[#1A1A1A]">No suppliers yet</p>
+                    <p className="mt-1 text-xs text-[#9CA3AF]">
+                      Your suppliers will appear here once access is granted
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filtered.map((d) => (
+                  <DistributorCard key={d.id} distributor={d} />
+                ))}
+              </div>
+            )}
+          </section>
 
-        /* ── Tablet and above (≥ 481 px) ──────────────────────── */
+          {/* Divider */}
+          <div className="h-px bg-[#E5E7EB] mb-10" />
 
-        /* Content (welcome + tiles) centres as a card.
-           Nav and banner remain full width — they are outside this shell. */
-        @media (min-width: 481px) {
-          .home-content { max-width: 390px; margin-left: auto; margin-right: auto; }
-          .home-banner  { max-height: 260px; }
-        }
-
-        /* iPad mini (768 px) — banner gets more height to fill
-           the wider viewport proportionally */
-        @media (min-width: 768px) {
-          .home-nav     { padding-left: 24px; padding-right: 24px; }
-          .home-banner  { height: 42vh; max-height: 360px; }
-        }
-      `}</style>
-
-      <div className="flex min-h-screen flex-col bg-white">
-
-        {/* Nav — always full viewport width */}
-        <nav className="home-nav anim-nav flex w-full items-center justify-between py-3.5 bg-white border-b border-[#E5E7EB]">
-          <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-              <line x1="3" y1="6"  x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-
-          <button className="flex items-center gap-1.5 text-sm font-medium tracking-wide text-[#1A1A1A]">
-            {user.organisationName}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 text-[#9CA3AF]">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          <button className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]" aria-label="Cart">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-              <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <path d="M16 10a4 4 0 01-8 0" />
-            </svg>
-          </button>
-        </nav>
-
-        {/* Banner — always full viewport width */}
-        <div className="home-banner anim-banner relative">
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(160deg, #e8ddd0 0%, #d4c5b0 40%, #c9b99a 100%)' }}
-          />
-          <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
-            <filter id="grain">
-              <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-            <rect width="100%" height="100%" filter="url(#grain)" />
-          </svg>
-          <div
-            className="absolute inset-0"
-            style={{ background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.12) 100%)' }}
-          />
-        </div>
-
-        {/* Content — welcome + tiles, centred on tablet+ */}
-        <div className="home-content flex flex-col flex-1">
-
-          {/* Welcome */}
-          <div className="anim-welcome flex flex-col items-center pt-7 pb-6">
-            <p className="welcome-text text-[17px] font-light tracking-wide text-[#1A1A1A]">
-              Welcome back {user.firstName}&nbsp;!
+          {/* Find new suppliers */}
+          <section>
+            <h2 className="text-base font-semibold text-[#1A1A1A] mb-1">Find new suppliers</h2>
+            <p className="text-sm text-[#9CA3AF] mb-4">
+              Browse the marketplace to discover distributors and request access
             </p>
-            <div className="mt-2.5 h-px w-8 bg-accent" />
-          </div>
-
-          {/* Action grid */}
-          <div className="grid grid-cols-2 gap-px bg-[#E5E7EB] border-t border-[#E5E7EB] flex-1">
-            {actions.map((action, i) => (
-              <button
-                key={action.label}
-                className={`action-tile tile-btn anim-tile-${i} flex flex-col items-center justify-center gap-3 bg-white text-[#9CA3AF] hover:text-[#1A1A1A]`}
-              >
-                <span className="tile-icon flex items-center justify-center rounded-full border border-[#E5E7EB] text-[#9CA3AF]">
-                  {action.icon}
-                </span>
-                <span className="tile-label font-normal tracking-wide text-[#9CA3AF]">
-                  {action.label}
-                </span>
-              </button>
-            ))}
-          </div>
+            <button
+              disabled
+              className="inline-flex items-center gap-2 border border-[#E5E7EB] px-4 py-2.5 text-sm font-medium text-[#9CA3AF] cursor-not-allowed"
+              title="Coming soon"
+            >
+              <CompassIcon />
+              Browse marketplace
+            </button>
+          </section>
 
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 }

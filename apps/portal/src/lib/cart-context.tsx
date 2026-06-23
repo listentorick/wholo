@@ -17,7 +17,7 @@ interface CartContextValue {
   refreshCart: () => Promise<void>;
 }
 
-const CartContext = createContext<CartContextValue | null>(null);
+export const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({
   distributorSlug,
@@ -112,4 +112,8 @@ export function useCart(): CartContextValue {
   const ctx = useContext(CartContext);
   if (!ctx) throw new Error('useCart must be used within CartProvider');
   return ctx;
+}
+
+export function useCartSafe(): CartContextValue | null {
+  return useContext(CartContext);
 }
