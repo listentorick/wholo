@@ -199,6 +199,7 @@ function CustomerPageInner() {
           customer={customer}
           token={accessToken ?? ''}
           mode="tab"
+          onSaved={fetchCustomer}
         />
       )}
       {activeTab === 'portal-access' && (

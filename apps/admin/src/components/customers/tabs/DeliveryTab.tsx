@@ -7,7 +7,6 @@ import { z } from 'zod';
 import type { Customer } from '@wholo/types';
 import type { DeliveryProfileSummary } from '@wholo/types';
 import { adminCustomersApi, adminDeliveryProfilesApi } from '@wholo/admin-api-client';
-import { CustomerDeliveryProfile } from '../CustomerDeliveryProfile';
 import { FormCard, AddressGrid, WizardSectionHeading } from './form-helpers';
 
 const schema = z.object({
@@ -17,7 +16,6 @@ const schema = z.object({
   deliveryState: z.string().optional(),
   deliveryPostcode: z.string().optional(),
   deliveryCountry: z.string().optional(),
-  deliveryProfileId: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -36,14 +34,18 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<DeliveryProfileSummary[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState(customer.deliveryProfileId ?? '');
 
   useEffect(() => {
-    if (mode !== 'wizard') return;
     adminDeliveryProfilesApi
       .list(token, { limit: 100 })
       .then((res) => setProfiles(res.data.filter((p) => p.active)))
       .catch(() => {});
-  }, [token, mode]);
+  }, [token]);
+
+  useEffect(() => {
+    setSelectedProfileId(customer.deliveryProfileId ?? '');
+  }, [customer.deliveryProfileId]);
 
   const { register, handleSubmit } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -54,7 +56,6 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
       deliveryState: customer.deliveryState ?? '',
       deliveryPostcode: customer.deliveryPostcode ?? '',
       deliveryCountry: customer.deliveryCountry ?? '',
-      deliveryProfileId: customer.deliveryProfileId ?? '',
     },
   });
 
@@ -71,10 +72,10 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
         deliveryPostcode: data.deliveryPostcode || undefined,
         deliveryCountry: data.deliveryCountry || undefined,
       });
+      await adminDeliveryProfilesApi.assignToCustomer(token, customer.id, {
+        deliveryProfileId: selectedProfileId || null,
+      });
       if (mode === 'wizard') {
-        await adminDeliveryProfilesApi.assignToCustomer(token, customer.id, {
-          deliveryProfileId: data.deliveryProfileId || null,
-        });
         onNext?.();
       } else {
         setSuccess(true);
@@ -102,7 +103,8 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
           <div className="space-y-2">
             <WizardSectionHeading>Delivery profile</WizardSectionHeading>
             <select
-              {...register('deliveryProfileId')}
+              value={selectedProfileId}
+              onChange={(e) => setSelectedProfileId(e.target.value)}
               disabled={saving}
               className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50"
             >
@@ -133,33 +135,37 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
   }
 
   return (
-    <div className="space-y-5">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <FormCard title="Delivery address">
-          <p className="mb-4 text-xs text-muted">Leave blank to use the customer&apos;s registered address.</p>
-          <AddressGrid prefix="delivery" register={register} disabled={saving} />
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-            {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
-          </div>
-        </FormCard>
-      </form>
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      <FormCard title="Delivery address">
+        <p className="mb-4 text-xs text-muted">Leave blank to use the customer&apos;s registered address.</p>
+        <AddressGrid prefix="delivery" register={register} disabled={saving} />
+      </FormCard>
 
       <FormCard title="Delivery profile">
-        <CustomerDeliveryProfile
-          customerId={customer.id}
-          token={token}
-          currentProfileId={customer.deliveryProfileId}
-          currentProfileName={customer.deliveryProfile?.name ?? null}
-        />
+        <select
+          value={selectedProfileId}
+          onChange={(e) => setSelectedProfileId(e.target.value)}
+          disabled={saving}
+          className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-50"
+        >
+          <option value="">— No delivery profile —</option>
+          {profiles.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
       </FormCard>
-    </div>
+
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
+        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </form>
   );
 }

@@ -182,7 +182,9 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
         <AddressGrid prefix="billing" register={register} disabled={disabled} />
       </FormCard>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
+        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
         <button
           type="submit"
           disabled={disabled}
@@ -190,8 +192,6 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
         >
           {saving ? 'Saving…' : 'Save'}
         </button>
-        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
       </div>
     </form>
   );

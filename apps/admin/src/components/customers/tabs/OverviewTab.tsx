@@ -85,7 +85,7 @@ export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
 
   return (
     <div className="space-y-5">
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form id="overview-form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormCard title="Business details">
           <div className="space-y-4">
             <div>
@@ -143,19 +143,20 @@ export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
             )}
           </div>
 
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-            {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
-          </div>
         </FormCard>
       </form>
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
+        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
+        <button
+          form="overview-form"
+          type="submit"
+          disabled={saving}
+          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
 
       {onDelete && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-5">
