@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { PageSubHeader } from '@/components/PageSubHeader';
 import { ordersApi } from '@wholo/api-client';
 import type { OrderSummary, OrderStatus } from '@wholo/types';
 
@@ -112,8 +111,6 @@ export default function OrdersPage() {
         .ol-row:hover { background: #FAFAFA; }
         @media (min-width: 481px) { .ol-shell { max-width: 480px; margin-left: auto; margin-right: auto; } }
       `}</style>
-
-      <PageSubHeader backHref={`/${distributorSlug}`} backLabel="Home" title="Orders" />
 
       <div className="ol-shell w-full flex flex-col flex-1">
         {loading ? (

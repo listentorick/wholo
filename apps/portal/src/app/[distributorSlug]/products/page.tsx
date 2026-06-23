@@ -7,7 +7,6 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { catalogueApi } from '@wholo/api-client';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
-import { PageSubHeader } from '@/components/PageSubHeader';
 
 function formatPrice(price: string | null): string {
   if (price === null) return 'Price on request';
@@ -102,8 +101,6 @@ export default function CataloguePage() {
           .cat-shell { max-width: 480px; margin-left: auto; margin-right: auto; }
         }
       `}</style>
-
-      <PageSubHeader backLabel="Home" backHref={`/${distributorSlug}`} title="All Products" />
 
       {/* Product list */}
       <div className="cat-shell flex-1 w-full">
