@@ -44,10 +44,9 @@ describe('BrandingBanner', () => {
     const { container } = render(
       <BrandingBanner logoUrl={null} bannerUrl="https://cdn.example.com/banner.webp" dominantColor={null} onScrolledPast={vi.fn()} />,
     );
-    const imgs = container.querySelectorAll('img');
-    const img = Array.from(imgs).find((el) => el.src.includes('banner.webp')) as HTMLImageElement | undefined;
-    expect(img).toBeDefined();
-    expect(img!.src).toContain('banner.webp');
+    const img = container.querySelector('img.absolute') as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.src).toContain('banner.webp');
   });
 
   it('renders logo when logoUrl is set', () => {
