@@ -24,6 +24,8 @@ export class AdminSettingsService {
       defaultOrderAcceptanceMode: settings.defaultOrderAcceptanceMode,
       marketplaceVisible: settings.marketplaceVisible,
       marketplaceDescription: settings.marketplaceDescription,
+      tagline: settings.tagline,
+      aboutText: settings.aboutText,
       orderNotificationEmails: settings.orderNotificationEmails,
       processingDays: settings.processingDays,
     };

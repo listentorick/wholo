@@ -48,9 +48,8 @@ export function DiscoverySettingsForm({ settings, onSave }: Props) {
   }
 
   return (
-    <section id="discovery">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <FormCard
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormCard
           title="Discovery & marketplace"
           description="Control whether your business appears in the Wholo distributor marketplace."
         >
@@ -89,8 +88,7 @@ export function DiscoverySettingsForm({ settings, onSave }: Props) {
               </div>
             </div>
           </div>
-        </FormCard>
-      </form>
-    </section>
+      </FormCard>
+    </form>
   );
 }

@@ -52,9 +52,8 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
   }
 
   return (
-    <section id="business">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <FormCard title="Business details" description="Your distributor's public-facing business information.">
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <FormCard title="Business details" description="Your distributor's public-facing business information.">
           <div className="space-y-4">
             <div>
               <FieldLabel htmlFor="name">Business name</FieldLabel>
@@ -94,7 +93,6 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
             </div>
           </div>
         </FormCard>
-      </form>
-    </section>
+    </form>
   );
 }

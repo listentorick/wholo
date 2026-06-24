@@ -32,7 +32,12 @@ export class CatalogueService {
   async getDistributor(distributorSlug: string) {
     const distributor = await this.prisma.organisation.findFirst({
       where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true, name: true, slug: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        distributorSettings: { select: { tagline: true, aboutText: true } },
+      },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
@@ -46,7 +51,11 @@ export class CatalogueService {
     ]);
 
     return {
-      ...distributor,
+      id: distributor.id,
+      name: distributor.name,
+      slug: distributor.slug,
+      tagline: distributor.distributorSettings?.tagline ?? null,
+      aboutText: distributor.distributorSettings?.aboutText ?? null,
       logoUrl: logoImage
         ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
         : null,

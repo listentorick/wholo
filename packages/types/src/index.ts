@@ -186,6 +186,7 @@ export interface OrderListParams {
   limit?: number;
   cursor?: string;
   status?: OrderStatus;
+  distributorSlug?: string;
   statusExclude?: OrderStatus;
   customerName?: string;
   deliveryDateAfter?: string;
@@ -281,6 +282,8 @@ export interface DistributorInfo {
   logoUrl: string | null;
   bannerUrl: string | null;
   bannerDominantColor: string | null;
+  tagline: string | null;
+  aboutText: string | null;
 }
 
 export interface PortalDistributorSummary {
@@ -618,6 +621,8 @@ export interface DistributorSettings {
   defaultOrderAcceptanceMode: OrderAcceptanceMode;
   marketplaceVisible: boolean;
   marketplaceDescription: string | null;
+  tagline: string | null;
+  aboutText: string | null;
   orderNotificationEmails: string[];
   processingDays: number[];
 }

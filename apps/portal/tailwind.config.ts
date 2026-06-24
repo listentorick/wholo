@@ -16,9 +16,17 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            a: { color: '#D97036' },
+            'a:hover': { color: '#C4622A' },
+          },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [require('@tailwindcss/typography')],
 };
 
 export default config;

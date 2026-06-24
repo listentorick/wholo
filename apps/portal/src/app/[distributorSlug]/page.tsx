@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
+import { useDistributor } from '@/lib/distributor-context';
 import { portalApi } from '@wholo/api-client';
 
 export default function DistributorHomePage() {
@@ -11,6 +13,7 @@ export default function DistributorHomePage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
+  const { distributor } = useDistributor();
   const [hasRelationship, setHasRelationship] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -31,35 +34,38 @@ export default function DistributorHomePage() {
 
   if (!user) return null;
 
-  return (
-    <div className="px-5 py-8 max-w-lg mx-auto w-full">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-[#1A1A1A] mb-1">Winos</h1>
-        <p className="text-sm text-[#D97036] tracking-wide">Passionate about wine since 1987</p>
-      </div>
+  const hasContent = distributor?.tagline || distributor?.aboutText;
 
-      <div className="space-y-4 text-sm text-[#4B5563] leading-relaxed">
-        <p>
-          Winos is one of Australia's most respected boutique wine distributors, proudly supplying restaurants, bars, and independent retailers with carefully sourced wines from small-batch producers across Victoria, South Australia, and Western Australia.
-        </p>
-        <p>
-          Founded by sommelier Marcus Reid in 1987, Winos began as a passion project connecting chefs with the winemakers they couldn't find anywhere else. Today, we represent over 60 family-owned wineries and maintain direct relationships with every producer in our portfolio.
-        </p>
-        <p>
-          We deliver across metropolitan Melbourne and regional Victoria every Tuesday and Thursday, with same-week turnaround on all standard orders. Our account team is available six days a week to help with recommendations, allocations, and event consulting.
-        </p>
+  return (
+    <>
+      <div className={`px-5 py-8 max-w-lg mx-auto w-full ${hasRelationship === false ? 'pb-24' : ''}`}>
+        {hasContent && (
+          <div className="mb-6">
+            {distributor?.tagline && (
+              <p className="text-sm text-[#D97036] tracking-wide">{distributor.tagline}</p>
+            )}
+          </div>
+        )}
+
+        {distributor?.aboutText && (
+          <div className="prose prose-sm prose-gray">
+            <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
+          </div>
+        )}
       </div>
 
       {hasRelationship === false && (
-        <div className="mt-8">
-          <button
-            className="bg-[#D97036] text-white px-6 py-3 text-sm font-medium"
-            onClick={() => {}}
-          >
-            Connect with this business
-          </button>
+        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E5E7EB] bg-white px-5 py-4">
+          <div className="max-w-lg mx-auto">
+            <button
+              className="w-full bg-[#D97036] text-white py-3 text-sm font-medium hover:bg-[#C4622A] transition-colors"
+              onClick={() => {}}
+            >
+              Connect with this business
+            </button>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -55,8 +55,7 @@ export function NotificationsForm({ settings, onSave }: Props) {
   }
 
   return (
-    <section id="notifications">
-      <FormCard
+    <FormCard
         title="Notifications"
         description="Email addresses that receive a notification when a new order is submitted."
       >
@@ -122,7 +121,6 @@ export function NotificationsForm({ settings, onSave }: Props) {
             </div>
           </div>
         </div>
-      </FormCard>
-    </section>
+    </FormCard>
   );
 }

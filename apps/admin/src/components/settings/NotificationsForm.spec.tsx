@@ -12,7 +12,10 @@ const baseSettings: DistributorSettings = {
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
+  tagline: null,
+  aboutText: null,
   orderNotificationEmails: ['existing@acme.com'],
+  processingDays: [1, 2, 3, 4, 5],
 };
 
 describe('NotificationsForm', () => {

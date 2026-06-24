@@ -105,6 +105,13 @@ model Organisation {
   type                            OrganisationType
   email                           String?
   phone                           String?
+  legalName                       String?
+  addressLine1                    String?
+  addressLine2                    String?
+  addressCity                     String?
+  addressState                    String?
+  addressPostcode                 String?
+  addressCountry                  String?
   createdAt                       DateTime            @default(now())
   updatedAt                       DateTime            @updatedAt
   deletedAt                       DateTime?
@@ -439,6 +446,8 @@ model DistributorSettings {
   defaultOrderAcceptanceMode OrderAcceptanceMode @default(MANUAL)
   marketplaceVisible         Boolean             @default(false)
   marketplaceDescription     String?
+  tagline                    String?
+  aboutText                  String?
   orderNotificationEmails    String[]            @default([])
   processingDays             Int[]               @default([1, 2, 3, 4, 5])
   distributor                Organisation        @relation(fields: [distributorId], references: [id])

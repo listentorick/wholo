@@ -41,6 +41,14 @@ export class UpdateSettingsDto {
   marketplaceDescription?: string;
 
   @IsOptional()
+  @IsString()
+  tagline?: string;
+
+  @IsOptional()
+  @IsString()
+  aboutText?: string;
+
+  @IsOptional()
   @IsArray()
   @IsEmail({}, { each: true })
   orderNotificationEmails?: string[];

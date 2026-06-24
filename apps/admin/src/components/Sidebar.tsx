@@ -106,17 +106,6 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
-  {
-    label: 'Branding',
-    href: '/branding',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <circle cx="13.5" cy="6.5" r="2.5" />
-        <path d="M17 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z" />
-        <polyline points="5 15 9 11 12 14 15 11 19 15" />
-      </svg>
-    ),
-  },
 ];
 
 interface SidebarProps {
