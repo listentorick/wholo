@@ -69,7 +69,7 @@ describe('NavigationSidebar', () => {
 
   it('renders account nav items', () => {
     renderSidebar();
-    expect(screen.getByText('Edit Profile')).toBeTruthy();
+    expect(screen.getByText('Settings')).toBeTruthy();
     expect(screen.getByText('Change Password')).toBeTruthy();
   });
 
