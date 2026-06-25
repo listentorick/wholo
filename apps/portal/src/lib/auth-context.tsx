@@ -19,7 +19,7 @@ interface AuthContextValue {
   isLoading: boolean;
   orderAsMode: boolean;
   orderAsCustomerName: string | null;
-  login: (returnUrl?: string) => void;
+  login: () => void;
   loginWithRedirect: (redirectUri: string) => void;
   registerWithRedirect: (redirectUri: string) => void;
   logout: () => void;
@@ -56,7 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
   const router = useRouter();
   const routerRef = useRef(router);
-  const redirectingRef = useRef(false);
   useEffect(() => { routerRef.current = router; });
 
   useEffect(() => {
@@ -88,17 +87,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (postLoginRedirect && postLoginRedirect !== '/') {
-          redirectingRef.current = true;
           routerRef.current.push(postLoginRedirect);
         }
       })
-      .finally(() => { if (!redirectingRef.current) setIsLoading(false); });
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback((returnUrlOverride?: string) => {
+  const login = useCallback(() => {
     const kc = (window as any).__kc;
     const params = new URLSearchParams(window.location.search);
-    const returnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
+    const returnUrl = params.get('returnUrl') ?? '/';
     sessionStorage.setItem('kc_post_login_redirect', returnUrl);
     const redirectUri = window.location.origin + '/';
     if (kc) {
@@ -165,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setOrderAsSession,
       clearOrderAsSession,
     }}>
-      {isLoading ? null : children}
+      {children}
     </AuthContext.Provider>
   );
 }
