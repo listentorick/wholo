@@ -48,61 +48,13 @@ async function getKeycloakAuth(): Promise<boolean> {
   return initPromise;
 }
 
-// Synchronously determine auth state before first render.
-// window.__kc exists → same React session, already authenticated (client-side nav).
-// No __kc + ?code= in URL → Keycloak callback, need to process code.
-// No __kc + no ?code= → fresh page load, will always need a Keycloak redirect.
-function getInitialAuthCase(): 'ready' | 'callback' | 'redirect' {
-  if (typeof window === 'undefined') return 'callback'; // SSR: treat as callback (safe default)
-  if ((window as any).__kc) return 'ready';
-  const search = window.location.search;
-  if (search.includes('code=') && search.includes('session_state=')) return 'callback';
-  return 'redirect';
-}
-
-function FullPageSpinner() {
-  return (
-    <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-      <div style={{ width: '24px', height: '24px', border: '2px solid #e5e7eb', borderTopColor: '#D97036', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  );
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const authCase = useRef(getInitialAuthCase());
-  // 'ready' → isLoading starts false (already authenticated, client-side nav)
-  // 'callback' or 'redirect' → isLoading starts true
-  const [isLoading, setIsLoading] = useState(authCase.current !== 'ready');
+  const [isLoading, setIsLoading] = useState(true);
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
 
   useEffect(() => {
-    if (authCase.current === 'ready') {
-      // Already have a kc instance from this React session — just sync user state.
-      const kc = (window as any).__kc;
-      if (kc?.token) {
-        setAccessToken(kc.token);
-        authApi.me(kc.token)
-          .then((profile) => setUser(profile as AuthUser))
-          .catch(() => {});
-      }
-      return;
-    }
-
-    if (authCase.current === 'redirect') {
-      // Fresh page load with no code — skip kc.init(), go straight to Keycloak.
-      const returnUrl = window.location.pathname + window.location.search;
-      const redirectUri = window.location.origin + returnUrl;
-      getKeycloakAuth().then(() => {
-        (window as any).__kc?.login({ redirectUri });
-      });
-      // isLoading stays true; we're leaving the page.
-      return;
-    }
-
-    // 'callback' — Keycloak returned with ?code=. Run full init to process it.
     getKeycloakAuth()
       .then(async (authenticated) => {
         const kc = (window as any).__kc;
@@ -199,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setOrderAsSession,
       clearOrderAsSession,
     }}>
-      {isLoading ? <FullPageSpinner /> : children}
+      {children}
     </AuthContext.Provider>
   );
 }
