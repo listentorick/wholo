@@ -133,3 +133,79 @@ describe('OrdersService — delivery date revalidation', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('OrdersService — listCustomerOrders', () => {
+  let service: OrdersService;
+  let prisma: jest.Mocked<PrismaService>;
+
+  beforeEach(async () => {
+    const mockPrisma = {
+      organisation: { findFirst: jest.fn() },
+      cartOrder: { findUnique: jest.fn() },
+      distributorSettings: { findUnique: jest.fn() },
+      tradeRelationship: { findUnique: jest.fn() },
+      order: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
+      orderLine: { createMany: jest.fn() },
+      cartOrderLine: { deleteMany: jest.fn() },
+      $queryRaw: jest.fn(),
+      $transaction: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+      ],
+    }).compile();
+
+    service = module.get(OrdersService);
+    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+  });
+
+  it('filters by distributorId when distributorSlug is provided', async () => {
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: DISTRIBUTOR_ID });
+
+    await service.listCustomerOrders(CUSTOMER_ID, { distributorSlug: 'winos' });
+
+    expect(prisma.organisation.findFirst).toHaveBeenCalledWith({
+      where: { slug: 'winos', type: OrganisationType.DISTRIBUTOR },
+      select: { id: true },
+    });
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ traderCustomerId: CUSTOMER_ID, distributorId: DISTRIBUTOR_ID }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('does not filter by distributorId when no distributorSlug is provided', async () => {
+    await service.listCustomerOrders(CUSTOMER_ID, {});
+
+    expect(prisma.organisation.findFirst).not.toHaveBeenCalled();
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ traderCustomerId: CUSTOMER_ID }),
+          ]),
+        }),
+      }),
+    );
+    const call = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+    expect(call.where.AND[0]).not.toHaveProperty('distributorId');
+  });
+
+  it('throws NotFoundException when distributorSlug does not match a distributor', async () => {
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      service.listCustomerOrders(CUSTOMER_ID, { distributorSlug: 'unknown-slug' }),
+    ).rejects.toThrow(NotFoundException);
+  });
+});

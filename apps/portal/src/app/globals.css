@@ -8,7 +8,7 @@
     box-sizing: border-box;
   }
   body {
-    @apply font-sans text-[#1A1A1A] bg-white;
+    @apply font-sans text-foreground bg-white;
     -webkit-font-smoothing: antialiased;
   }
 }

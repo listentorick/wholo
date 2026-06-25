@@ -22,6 +22,7 @@ export const ordersApi = {
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
     if (params.status) qs.set('status', params.status);
+    if (params.distributorSlug) qs.set('distributorSlug', params.distributorSlug);
     return apiFetch<PaginatedResponse<OrderSummary>>(`/api/v1/orders?${qs.toString()}`, { token });
   },
 

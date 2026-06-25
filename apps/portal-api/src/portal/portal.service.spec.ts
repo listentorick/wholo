@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PortalService } from './portal.service';
 
-const mockApi = { get: jest.fn() };
+const mockApi = { get: jest.fn(), patch: jest.fn() };
 
 describe('PortalService (portal-api)', () => {
   let service: PortalService;
@@ -32,5 +32,22 @@ describe('PortalService (portal-api)', () => {
     mockApi.get.mockResolvedValue(data);
     const result = await service.getMyDistributors('tok-123');
     expect(result).toEqual(data);
+  });
+
+  describe('getMyProfile', () => {
+    it('calls GET /portal/me/profile with the token', async () => {
+      mockApi.get.mockResolvedValue({ name: 'Acme' });
+      await service.getMyProfile('tok-123');
+      expect(mockApi.get).toHaveBeenCalledWith('/portal/me/profile', 'tok-123');
+    });
+  });
+
+  describe('updateMyProfile', () => {
+    it('calls PATCH /portal/me/profile with token and body', async () => {
+      const body = { name: 'New Name' };
+      mockApi.patch.mockResolvedValue({ name: 'New Name' });
+      await service.updateMyProfile('tok-123', body);
+      expect(mockApi.patch).toHaveBeenCalledWith('/portal/me/profile', 'tok-123', body);
+    });
   });
 });

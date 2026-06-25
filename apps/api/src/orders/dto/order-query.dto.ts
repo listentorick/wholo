@@ -19,4 +19,8 @@ export class OrderQueryDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   status?: OrderStatus;
+
+  @IsOptional()
+  @IsString()
+  distributorSlug?: string;
 }

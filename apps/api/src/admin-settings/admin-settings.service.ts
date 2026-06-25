@@ -21,6 +21,12 @@ export class AdminSettingsService {
       email: org.email,
       phone: org.phone,
       slug: org.slug,
+      addressLine1: org.addressLine1,
+      addressLine2: org.addressLine2,
+      addressCity: org.addressCity,
+      addressState: org.addressState,
+      addressPostcode: org.addressPostcode,
+      addressCountry: org.addressCountry,
       defaultOrderAcceptanceMode: settings.defaultOrderAcceptanceMode,
       marketplaceVisible: settings.marketplaceVisible,
       marketplaceDescription: settings.marketplaceDescription,
@@ -32,10 +38,15 @@ export class AdminSettingsService {
   }
 
   async update(distributorId: string, dto: UpdateSettingsDto) {
-    const { name, email, phone, slug, ...settingsFields } = dto;
+    const {
+      name, email, phone, slug,
+      addressLine1, addressLine2, addressCity, addressState, addressPostcode, addressCountry,
+      ...settingsFields
+    } = dto;
 
     const orgPatch = Object.fromEntries(
-      Object.entries({ name, email, phone, slug }).filter(([, v]) => v !== undefined),
+      Object.entries({ name, email, phone, slug, addressLine1, addressLine2, addressCity, addressState, addressPostcode, addressCountry })
+        .filter(([, v]) => v !== undefined),
     );
 
     const settingsPatch = Object.fromEntries(

@@ -20,6 +20,12 @@ const mockOrg = {
   email: 'hello@acme.com',
   phone: '+61400000000',
   slug: 'acme-wines',
+  addressLine1: '42 Foveaux Street',
+  addressLine2: null,
+  addressCity: 'Surry Hills',
+  addressState: 'NSW',
+  addressPostcode: '2010',
+  addressCountry: 'Australia',
 };
 
 const mockSettings = {
@@ -56,6 +62,12 @@ describe('AdminSettingsService', () => {
         email: 'hello@acme.com',
         phone: '+61400000000',
         slug: 'acme-wines',
+        addressLine1: '42 Foveaux Street',
+        addressLine2: null,
+        addressCity: 'Surry Hills',
+        addressState: 'NSW',
+        addressPostcode: '2010',
+        addressCountry: 'Australia',
         defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
         marketplaceVisible: false,
         marketplaceDescription: null,
@@ -117,6 +129,32 @@ describe('AdminSettingsService', () => {
             orderNotificationEmails: ['orders@acme.com'],
           }),
         }),
+      );
+    });
+
+    it('writes address fields to orgPatch', async () => {
+      mockPrisma.organisation.update.mockResolvedValue(mockOrg);
+
+      await service.update('dist-1', {
+        addressLine1: '1 New Street',
+        addressCity: 'Melbourne',
+        addressState: 'VIC',
+        addressPostcode: '3000',
+        addressCountry: 'Australia',
+      });
+
+      expect(mockPrisma.organisation.update).toHaveBeenCalledWith({
+        where: { id: 'dist-1' },
+        data: {
+          addressLine1: '1 New Street',
+          addressCity: 'Melbourne',
+          addressState: 'VIC',
+          addressPostcode: '3000',
+          addressCountry: 'Australia',
+        },
+      });
+      expect(mockPrisma.distributorSettings.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ create: expect.objectContaining({ distributorId: 'dist-1' }) }),
       );
     });
 

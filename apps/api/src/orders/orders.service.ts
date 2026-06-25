@@ -135,21 +135,25 @@ export class OrdersService {
       }
     }
 
-    // Snapshot address from TradeRelationship
+    // Snapshot addresses: billing from Organisation, delivery from TradeRelationship
     const tradeRel = await this.prisma.tradeRelationship.findUnique({
       where: { distributorId_customerId: { distributorId: distributor.id, customerId: traderCustomerId } },
       select: {
-        billingLine1: true, billingLine2: true, billingCity: true,
-        billingState: true, billingPostcode: true, billingCountry: true,
         deliveryLine1: true, deliveryLine2: true, deliveryCity: true,
         deliveryState: true, deliveryPostcode: true, deliveryCountry: true,
+        customer: {
+          select: {
+            billingLine1: true, billingLine2: true, billingCity: true,
+            billingState: true, billingPostcode: true, billingCountry: true,
+          },
+        },
       },
     });
 
     const billingAddressSnapshot = tradeRel ? {
-      line1: tradeRel.billingLine1, line2: tradeRel.billingLine2,
-      city: tradeRel.billingCity, state: tradeRel.billingState,
-      postcode: tradeRel.billingPostcode, country: tradeRel.billingCountry,
+      line1: tradeRel.customer.billingLine1, line2: tradeRel.customer.billingLine2,
+      city: tradeRel.customer.billingCity, state: tradeRel.customer.billingState,
+      postcode: tradeRel.customer.billingPostcode, country: tradeRel.customer.billingCountry,
     } : null;
 
     const deliveryAddressSnapshot = tradeRel ? {
@@ -283,8 +287,19 @@ export class OrdersService {
     const limit = query.limit ?? 20;
     const take = limit + 1;
 
+    let distributorId: string | undefined;
+    if (query.distributorSlug) {
+      const distributor = await this.prisma.organisation.findFirst({
+        where: { slug: query.distributorSlug, type: OrganisationType.DISTRIBUTOR },
+        select: { id: true },
+      });
+      if (!distributor) throw new NotFoundException('Distributor not found');
+      distributorId = distributor.id;
+    }
+
     const baseWhere: Prisma.OrderWhereInput = {
       traderCustomerId,
+      ...(distributorId && { distributorId }),
       ...(query.status && { status: query.status }),
     };
 

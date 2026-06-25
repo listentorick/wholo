@@ -62,7 +62,7 @@ export default function OrdersPage() {
   const fetchOrders = useCallback(async (cursor?: string) => {
     if (!accessToken) return;
     try {
-      const res = await ordersApi.listOrders({ limit: 20, ...(cursor ? { cursor } : {}) }, accessToken);
+      const res = await ordersApi.listOrders({ limit: 20, distributorSlug, ...(cursor ? { cursor } : {}) }, accessToken);
       if (cursor) {
         setOrders((prev) => [...prev, ...res.data]);
       } else {
@@ -73,7 +73,7 @@ export default function OrdersPage() {
     } catch {
       setError('Failed to load orders');
     }
-  }, [accessToken]);
+  }, [accessToken, distributorSlug]);
 
   useEffect(() => {
     if (authLoading || !accessToken) return;

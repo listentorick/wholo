@@ -284,6 +284,14 @@ export interface DistributorInfo {
   bannerDominantColor: string | null;
   tagline: string | null;
   aboutText: string | null;
+  email: string | null;
+  phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostcode: string | null;
+  addressCountry: string | null;
 }
 
 export interface PortalDistributorSummary {
@@ -348,6 +356,25 @@ export interface CustomerOrganisation {
   addressState: string | null;
   addressPostcode: string | null;
   addressCountry: string | null;
+  billingLine1: string | null;
+  billingLine2: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingPostcode: string | null;
+  billingCountry: string | null;
+}
+
+export interface MyProfileResponse {
+  name: string;
+  legalName: string | null;
+  email: string | null;
+  phone: string | null;
+  billingLine1: string | null;
+  billingLine2: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingPostcode: string | null;
+  billingCountry: string | null;
 }
 
 export interface OrganisationSearchResult {
@@ -618,6 +645,12 @@ export interface DistributorSettings {
   email: string | null;
   phone: string | null;
   slug: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  addressCity: string | null;
+  addressState: string | null;
+  addressPostcode: string | null;
+  addressCountry: string | null;
   defaultOrderAcceptanceMode: OrderAcceptanceMode;
   marketplaceVisible: boolean;
   marketplaceDescription: string | null;

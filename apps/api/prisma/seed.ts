@@ -78,12 +78,23 @@ async function main() {
   // Yorkshire Hand Made Pies distributor
   const yhmp = await prisma.organisation.upsert({
     where: { id: 'seed-distributor-2' },
-    update: {},
+    update: {
+      addressLine1: '12 Westgate',
+      addressCity: 'Wakefield',
+      addressState: 'West Yorkshire',
+      addressPostcode: 'WF1 1JZ',
+      addressCountry: 'United Kingdom',
+    },
     create: {
       id: 'seed-distributor-2',
       name: 'Yorkshire Hand Made Pies',
       slug: 'yhmp',
       type: OrganisationType.DISTRIBUTOR,
+      addressLine1: '12 Westgate',
+      addressCity: 'Wakefield',
+      addressState: 'West Yorkshire',
+      addressPostcode: 'WF1 1JZ',
+      addressCountry: 'United Kingdom',
     },
   });
 
@@ -147,6 +158,154 @@ async function main() {
     data: { status: 'ACTIVE' },
   });
 
+  // Rogers Bakery
+  const rogersBakery = await prisma.organisation.upsert({
+    where: { id: 'seed-distributor-3' },
+    update: {},
+    create: {
+      id: 'seed-distributor-3',
+      name: 'Rogers Bakery',
+      slug: 'rogers-bakery',
+      type: OrganisationType.DISTRIBUTOR,
+    },
+  });
+
+  const rogersBakeryAdminHash = await bcrypt.hash('password123', 10);
+
+  const rogersBakeryAdmin = await prisma.user.upsert({
+    where: { email: 'admin@rogersbakery.com' },
+    update: {},
+    create: {
+      id: 'seed-admin-3',
+      email: 'admin@rogersbakery.com',
+      keycloakId: 'kc-seed-admin-3',
+      passwordHash: rogersBakeryAdminHash,
+      firstName: 'Roger',
+      lastName: 'Baker',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: rogersBakeryAdmin.id, organisationId: rogersBakery.id } },
+    update: {},
+    create: {
+      userId: rogersBakeryAdmin.id,
+      organisationId: rogersBakery.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
+  // Goo Cheese
+  const gooCheese = await prisma.organisation.upsert({
+    where: { id: 'seed-distributor-4' },
+    update: {},
+    create: {
+      id: 'seed-distributor-4',
+      name: 'Goo Cheese',
+      slug: 'goo-cheese',
+      type: OrganisationType.DISTRIBUTOR,
+    },
+  });
+
+  const gooCheeseAdminHash = await bcrypt.hash('password123', 10);
+
+  const gooCheeseAdmin = await prisma.user.upsert({
+    where: { email: 'admin@goo-cheese.co.uk' },
+    update: {},
+    create: {
+      id: 'seed-admin-4',
+      email: 'admin@goo-cheese.co.uk',
+      keycloakId: 'kc-seed-admin-4',
+      passwordHash: gooCheeseAdminHash,
+      firstName: 'Goo',
+      lastName: 'Admin',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: gooCheeseAdmin.id, organisationId: gooCheese.id } },
+    update: {},
+    create: {
+      userId: gooCheeseAdmin.id,
+      organisationId: gooCheese.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
+  // Crofters Foods
+  const croftersFoods = await prisma.organisation.upsert({
+    where: { id: 'seed-distributor-5' },
+    update: {},
+    create: {
+      id: 'seed-distributor-5',
+      name: 'Crofters Foods',
+      slug: 'crofters-foods',
+      type: OrganisationType.DISTRIBUTOR,
+    },
+  });
+
+  const croftersFoodsAdminHash = await bcrypt.hash('password123', 10);
+
+  const croftersFoodsAdmin = await prisma.user.upsert({
+    where: { email: 'admin@croftersfoods.co.uk' },
+    update: {},
+    create: {
+      id: 'seed-admin-5',
+      email: 'admin@croftersfoods.co.uk',
+      keycloakId: 'kc-seed-admin-5',
+      passwordHash: croftersFoodsAdminHash,
+      firstName: 'Crofters',
+      lastName: 'Admin',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: croftersFoodsAdmin.id, organisationId: croftersFoods.id } },
+    update: {},
+    create: {
+      userId: croftersFoodsAdmin.id,
+      organisationId: croftersFoods.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
+  // Cryer and Stott
+  const cryerAndStott = await prisma.organisation.upsert({
+    where: { id: 'seed-distributor-6' },
+    update: {},
+    create: {
+      id: 'seed-distributor-6',
+      name: 'Cryer and Stott',
+      slug: 'cryer-and-stott',
+      type: OrganisationType.DISTRIBUTOR,
+    },
+  });
+
+  const cryerAndStottAdminHash = await bcrypt.hash('password123', 10);
+
+  const cryerAndStottAdmin = await prisma.user.upsert({
+    where: { email: 'admin@cryerandstott.co.uk' },
+    update: {},
+    create: {
+      id: 'seed-admin-6',
+      email: 'admin@cryerandstott.co.uk',
+      keycloakId: 'kc-seed-admin-6',
+      passwordHash: cryerAndStottAdminHash,
+      firstName: 'Cryer',
+      lastName: 'Admin',
+    },
+  });
+
+  await prisma.membership.upsert({
+    where: { userId_organisationId: { userId: cryerAndStottAdmin.id, organisationId: cryerAndStott.id } },
+    update: {},
+    create: {
+      userId: cryerAndStottAdmin.id,
+      organisationId: cryerAndStott.id,
+      role: Role.DISTRIBUTOR_ADMIN,
+    },
+  });
+
   // Product types for Vine & Co
   const productTypeData = [
     { id: 'seed-pt-wine', name: 'Wine', code: 'wine', displayOrder: 1 },
@@ -193,7 +352,11 @@ async function main() {
     `Seeded: distributor "${distributor.name}", ` +
     `user "${user.email}", admin "${adminUser.email}", ` +
     `${productTypeData.length} product types, ${supplierData.length} suppliers, ` +
-    `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}"`,
+    `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}", ` +
+    `distributor "${rogersBakery.name}", admin "${rogersBakeryAdmin.email}", ` +
+    `distributor "${gooCheese.name}", admin "${gooCheeseAdmin.email}", ` +
+    `distributor "${croftersFoods.name}", admin "${croftersFoodsAdmin.email}", ` +
+    `distributor "${cryerAndStott.name}", admin "${cryerAndStottAdmin.email}"`,
   );
 }
 

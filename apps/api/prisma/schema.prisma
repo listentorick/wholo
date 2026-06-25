@@ -112,6 +112,12 @@ model Organisation {
   addressState                    String?
   addressPostcode                 String?
   addressCountry                  String?
+  billingLine1                    String?
+  billingLine2                    String?
+  billingCity                     String?
+  billingState                    String?
+  billingPostcode                 String?
+  billingCountry                  String?
   createdAt                       DateTime            @default(now())
   updatedAt                       DateTime            @updatedAt
   deletedAt                       DateTime?
@@ -270,12 +276,6 @@ model TradeRelationship {
   deliveryState    String?
   deliveryPostcode String?
   deliveryCountry  String?
-  billingLine1     String?
-  billingLine2     String?
-  billingCity      String?
-  billingState     String?
-  billingPostcode  String?
-  billingCountry   String?
   deletedAt        DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt

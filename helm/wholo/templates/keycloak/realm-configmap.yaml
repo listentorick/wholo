@@ -106,6 +106,54 @@ data:
           "credentials": [
             { "type": "password", "value": "password123", "temporary": false }
           ]
+        },
+        {
+          "id": "kc-seed-admin-3",
+          "username": "admin@rogersbakery.com",
+          "email": "admin@rogersbakery.com",
+          "firstName": "Roger",
+          "lastName": "Baker",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-admin-4",
+          "username": "admin@goo-cheese.co.uk",
+          "email": "admin@goo-cheese.co.uk",
+          "firstName": "Goo",
+          "lastName": "Admin",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-admin-5",
+          "username": "admin@croftersfoods.co.uk",
+          "email": "admin@croftersfoods.co.uk",
+          "firstName": "Crofters",
+          "lastName": "Admin",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
+        },
+        {
+          "id": "kc-seed-admin-6",
+          "username": "admin@cryerandstott.co.uk",
+          "email": "admin@cryerandstott.co.uk",
+          "firstName": "Cryer",
+          "lastName": "Admin",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            { "type": "password", "value": "password123", "temporary": false }
+          ]
         }
       ]
     }

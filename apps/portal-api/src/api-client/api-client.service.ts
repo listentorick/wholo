@@ -61,4 +61,8 @@ export class ApiClientService {
   put<T>(path: string, token: string | null | undefined, body?: unknown): Promise<T> {
     return this.request<T>('PUT', path, token, body);
   }
+
+  patch<T>(path: string, token: string | null | undefined, body?: unknown): Promise<T> {
+    return this.request<T>('PATCH', path, token, body);
+  }
 }

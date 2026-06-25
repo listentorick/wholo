@@ -31,6 +31,14 @@ const makeDecimal = (value: string): DecimalLike => ({
 const baseDistributor = {
   id: DISTRIBUTOR_ID,
   name: 'Test Distributor',
+  email: null,
+  phone: null,
+  addressLine1: null,
+  addressLine2: null,
+  addressCity: null,
+  addressState: null,
+  addressPostcode: null,
+  addressCountry: null,
 };
 
 const makeProduct = (id: string) => ({
@@ -125,6 +133,25 @@ describe('CatalogueService', () => {
       const result = await service.getDistributor(DISTRIBUTOR_SLUG);
       expect(result.bannerUrl).toBe('https://cdn.example.com/distributors/dist-1/branding/banner/img-2/mobile.webp');
       expect(result.bannerDominantColor).toBe('#3d6e3c');
+    });
+
+    it('returns contact fields from organisation', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({
+        ...baseDistributor,
+        slug: DISTRIBUTOR_SLUG,
+        email: 'hello@winos.com',
+        phone: '+61290000000',
+        addressLine1: '1 Wine St',
+        addressCity: 'Sydney',
+        addressState: 'NSW',
+        addressPostcode: '2000',
+        addressCountry: 'Australia',
+      });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.email).toBe('hello@winos.com');
+      expect(result.phone).toBe('+61290000000');
+      expect(result.addressLine1).toBe('1 Wine St');
+      expect(result.addressCity).toBe('Sydney');
     });
 
     it('throws NotFoundException when distributor does not exist', async () => {

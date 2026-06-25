@@ -8,4 +8,12 @@ export class PortalService {
   getMyDistributors(token: string) {
     return this.api.get('/portal/me/distributors', token);
   }
+
+  getMyProfile(token: string) {
+    return this.api.get('/portal/me/profile', token);
+  }
+
+  updateMyProfile(token: string, body: unknown) {
+    return this.api.patch('/portal/me/profile', token, body);
+  }
 }

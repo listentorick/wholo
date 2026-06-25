@@ -12,6 +12,12 @@ const schema = z.object({
   email: z.string().email('Enter a valid email').or(z.literal('')).optional(),
   phone: z.string().optional(),
   slug: z.string().optional(),
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  addressCity: z.string().optional(),
+  addressState: z.string().optional(),
+  addressPostcode: z.string().optional(),
+  addressCountry: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -32,6 +38,12 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
       email: settings.email ?? '',
       phone: settings.phone ?? '',
       slug: settings.slug ?? '',
+      addressLine1: settings.addressLine1 ?? '',
+      addressLine2: settings.addressLine2 ?? '',
+      addressCity: settings.addressCity ?? '',
+      addressState: settings.addressState ?? '',
+      addressPostcode: settings.addressPostcode ?? '',
+      addressCountry: settings.addressCountry ?? '',
     },
   });
 
@@ -44,6 +56,12 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
         email: data.email || undefined,
         phone: data.phone || undefined,
         slug: data.slug || undefined,
+        addressLine1: data.addressLine1 || undefined,
+        addressLine2: data.addressLine2 || undefined,
+        addressCity: data.addressCity || undefined,
+        addressState: data.addressState || undefined,
+        addressPostcode: data.addressPostcode || undefined,
+        addressCountry: data.addressCountry || undefined,
       });
       setSuccess(true);
     } catch {
@@ -83,6 +101,40 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
                   Portal URL: <span className="font-mono">…/d/{settings.slug}</span>
                 </p>
               )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Business address</p>
+              <div className="space-y-4">
+                <div>
+                  <FieldLabel htmlFor="addressLine1">Address line 1</FieldLabel>
+                  <TextInput id="addressLine1" placeholder="123 Main Street" {...register('addressLine1')} />
+                </div>
+                <div>
+                  <FieldLabel htmlFor="addressLine2">Address line 2</FieldLabel>
+                  <TextInput id="addressLine2" placeholder="Suite 4" {...register('addressLine2')} />
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel htmlFor="addressCity">City</FieldLabel>
+                    <TextInput id="addressCity" placeholder="Sydney" {...register('addressCity')} />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="addressState">State / region</FieldLabel>
+                    <TextInput id="addressState" placeholder="NSW" {...register('addressState')} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <FieldLabel htmlFor="addressPostcode">Postcode</FieldLabel>
+                    <TextInput id="addressPostcode" placeholder="2000" {...register('addressPostcode')} />
+                  </div>
+                  <div>
+                    <FieldLabel htmlFor="addressCountry">Country</FieldLabel>
+                    <TextInput id="addressCountry" placeholder="Australia" {...register('addressCountry')} />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-1">
