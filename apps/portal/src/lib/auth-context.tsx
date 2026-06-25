@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { authApi, ApiError } from '@wholo/api-client';
 import type { AuthUser } from '@wholo/types';
 
@@ -19,7 +18,7 @@ interface AuthContextValue {
   isLoading: boolean;
   orderAsMode: boolean;
   orderAsCustomerName: string | null;
-  login: () => void;
+  login: (returnUrl?: string) => void;
   loginWithRedirect: (redirectUri: string) => void;
   registerWithRedirect: (redirectUri: string) => void;
   logout: () => void;
@@ -54,9 +53,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
-  const router = useRouter();
-  const routerRef = useRef(router);
-  useEffect(() => { routerRef.current = router; });
 
   useEffect(() => {
     getKeycloakAuth()
@@ -76,29 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
         };
 
-        const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
-        if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
-
         try {
           const profile = await authApi.me(token);
           setUser(profile as AuthUser);
         } catch {
           // Token valid but Wholo profile unavailable
         }
-
-        if (postLoginRedirect && postLoginRedirect !== '/') {
-          routerRef.current.push(postLoginRedirect);
-        }
       })
       .finally(() => setIsLoading(false));
   }, []);
 
-  const login = useCallback(() => {
+  const login = useCallback((returnUrlOverride?: string) => {
     const kc = (window as any).__kc;
     const params = new URLSearchParams(window.location.search);
-    const returnUrl = params.get('returnUrl') ?? '/';
-    sessionStorage.setItem('kc_post_login_redirect', returnUrl);
-    const redirectUri = window.location.origin + '/';
+    const returnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
+    const redirectUri = window.location.origin + returnUrl;
     if (kc) {
       kc.login({ redirectUri });
     } else {

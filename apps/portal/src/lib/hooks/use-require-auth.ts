@@ -1,22 +1,17 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 
 export function useRequireAuth(returnUrl?: string) {
-  const { user, accessToken, isLoading } = useAuth();
-  const router = useRouter();
+  const { user, accessToken, isLoading, login } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
     if (!user) {
-      const path = returnUrl
-        ? `/login?returnUrl=${encodeURIComponent(returnUrl)}`
-        : '/login';
-      router.replace(path);
+      login(returnUrl);
     }
-  }, [user, isLoading, router, returnUrl]);
+  }, [user, isLoading, login, returnUrl]);
 
   return { user, accessToken, isLoading };
 }
