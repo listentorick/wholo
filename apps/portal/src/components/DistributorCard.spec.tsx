@@ -65,4 +65,23 @@ describe('DistributorCard', () => {
     render(<DistributorCard distributor={{ ...baseDistributor, phone: null }} />);
     expect(screen.queryByText('+61 2 9000 0000')).toBeNull();
   });
+
+  describe('locked state', () => {
+    it('does not render a button when locked', () => {
+      render(<DistributorCard distributor={baseDistributor} locked />);
+      expect(screen.queryByRole('button')).toBeNull();
+    });
+
+    it('does not navigate when the locked card is clicked', () => {
+      mockPush.mockClear();
+      const { container } = render(<DistributorCard distributor={baseDistributor} locked />);
+      fireEvent.click(container.firstChild as Element);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('still renders distributor name when locked', () => {
+      render(<DistributorCard distributor={baseDistributor} locked />);
+      expect(screen.getByText('Winos')).toBeTruthy();
+    });
+  });
 });

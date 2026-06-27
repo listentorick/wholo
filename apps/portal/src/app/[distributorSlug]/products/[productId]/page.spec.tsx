@@ -18,6 +18,10 @@ vi.mock('@/lib/cart-context', () => ({
   useCart: vi.fn(),
 }));
 
+vi.mock('@/lib/distributor-context', () => ({
+  useDistributor: vi.fn(),
+}));
+
 vi.mock('@wholo/api-client', () => ({
   catalogueApi: {
     getProduct: vi.fn(),
@@ -29,6 +33,7 @@ vi.mock('@wholo/api-client', () => ({
 import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
+import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -81,6 +86,7 @@ beforeEach(() => {
     isLoading: false,
   });
   (useCart as ReturnType<typeof vi.fn>).mockReturnValue(mockCart);
+  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: true });
   (catalogueApi.getProduct as ReturnType<typeof vi.fn>).mockResolvedValue(mockProduct);
 });
 
@@ -256,5 +262,17 @@ describe('ProductDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Product could not be loaded.')).toBeTruthy();
     });
+  });
+
+  it('hides stepper and add button when no active trade relationship', async () => {
+    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: false });
+
+    render(<ProductDetailPage />);
+
+    await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
+
+    expect(screen.queryByLabelText('Increase quantity')).toBeNull();
+    expect(screen.queryByLabelText('Decrease quantity')).toBeNull();
+    expect(screen.queryByText('Add')).toBeNull();
   });
 });

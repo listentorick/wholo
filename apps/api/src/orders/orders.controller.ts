@@ -29,7 +29,7 @@ export class OrdersController {
   submitOrder(@Body() dto: SubmitOrderDto, @Req() req: RequestWithUser) {
     const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
     const customerId = orderAs?.customerId ?? req.user.organisationId;
-    return this.ordersService.submitOrder(dto, req.user.sub, customerId, orderAs?.sessionToken);
+    return this.ordersService.submitOrder(dto, req.user.sub, customerId, orderAs?.sessionToken, orderAs?.distributorId);
   }
 
   @Get()

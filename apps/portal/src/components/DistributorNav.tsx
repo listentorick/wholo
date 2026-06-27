@@ -8,10 +8,9 @@ interface Props {
 }
 
 const TABS = [
-  { label: 'About',      href: (slug: string) => `/${slug}`,             exact: true  },
-  { label: 'Shop',       href: (slug: string) => `/${slug}/products`,    exact: false },
-  { label: 'Orders',     href: (slug: string) => `/${slug}/orders`,      exact: false },
-  { label: 'Favourites', href: (slug: string) => `/${slug}/favourites`,  exact: false },
+  { label: 'About',  href: (slug: string) => `/${slug}`,          exact: true  },
+  { label: 'Shop',   href: (slug: string) => `/${slug}/products`, exact: false },
+  { label: 'Orders', href: (slug: string) => `/${slug}/orders`,   exact: false },
 ];
 
 export function DistributorNav({ distributorSlug }: Props) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { CartProvider } from '@/lib/cart-context';
 import { DistributorProvider, useDistributor } from '@/lib/distributor-context';
 import { NavigationSidebar } from '@/components/NavigationSidebar';
@@ -9,6 +9,7 @@ import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
 import { DistributorNav } from '@/components/DistributorNav';
 import { BrandingBanner } from '@/components/BrandingBanner';
+import { DistributorPageHeader } from '@/components/DistributorPageHeader';
 
 function DistributorMain({
   distributorSlug,
@@ -18,6 +19,8 @@ function DistributorMain({
   children: React.ReactNode;
 }) {
   const { distributor, setBannerScrolledPast } = useDistributor();
+  const pathname = usePathname();
+  const isAboutPage = pathname === `/${distributorSlug}`;
 
   return (
     <main className="flex flex-1 flex-col min-w-0 bg-white pt-14 md:pt-0">
@@ -25,13 +28,17 @@ function DistributorMain({
       <OrderAsHandler />
       <OrderAsBanner />
       <DistributorNav distributorSlug={distributorSlug} />
-      <BrandingBanner
-        logoUrl={distributor?.logoUrl ?? null}
-        bannerUrl={distributor?.bannerUrl ?? null}
-        dominantColor={distributor?.bannerDominantColor ?? null}
-        onScrolledPast={setBannerScrolledPast}
-      />
-      <div style={{ paddingTop: distributor?.logoUrl ? '44px' : undefined }}>
+      {isAboutPage ? (
+        <BrandingBanner
+          logoUrl={distributor?.logoUrl ?? null}
+          bannerUrl={distributor?.bannerUrl ?? null}
+          dominantColor={distributor?.bannerDominantColor ?? null}
+          onScrolledPast={setBannerScrolledPast}
+        />
+      ) : (
+        <DistributorPageHeader distributorSlug={distributorSlug} />
+      )}
+      <div style={{ paddingTop: isAboutPage && distributor?.logoUrl ? '44px' : undefined }}>
         {children}
       </div>
     </main>

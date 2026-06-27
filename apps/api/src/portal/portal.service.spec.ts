@@ -59,9 +59,11 @@ describe('PortalService', () => {
     it('returns distributor summary with logo url and order count', async () => {
       mockPrisma.tradeRelationship.findMany.mockResolvedValue([
         {
+          minimumOrderSpend: null,
           distributor: {
             id: 'dist-1', name: 'Winos', slug: 'winos',
             email: 'orders@winos.com', phone: '+61290000000',
+            distributorSettings: null,
           },
         },
       ]);
@@ -86,7 +88,7 @@ describe('PortalService', () => {
 
     it('returns null logoUrl when no logo image exists', async () => {
       mockPrisma.tradeRelationship.findMany.mockResolvedValue([
-        { distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null } },
+        { minimumOrderSpend: null, distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null, distributorSettings: null } },
       ]);
       mockPrisma.assetImage.findFirst.mockResolvedValue(null);
       mockPrisma.order.count.mockResolvedValue(0);
@@ -95,9 +97,48 @@ describe('PortalService', () => {
       expect(result[0].logoUrl).toBeNull();
     });
 
+    it('returns relationship minimumOrderSpend override when set', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([
+        {
+          minimumOrderSpend: { toString: () => '150.00' },
+          distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null, distributorSettings: { minimumOrderSpend: { toString: () => '200.00' } } },
+        },
+      ]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+      mockPrisma.order.count.mockResolvedValue(0);
+
+      const result = await service.getMyDistributors('cust-1');
+      expect(result[0].minimumOrderSpend).toBe(150);
+    });
+
+    it('falls back to distributor minimumOrderSpend when no relationship override', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([
+        {
+          minimumOrderSpend: null,
+          distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null, distributorSettings: { minimumOrderSpend: { toString: () => '200.00' } } },
+        },
+      ]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+      mockPrisma.order.count.mockResolvedValue(0);
+
+      const result = await service.getMyDistributors('cust-1');
+      expect(result[0].minimumOrderSpend).toBe(200);
+    });
+
+    it('returns null minimumOrderSpend when neither relationship nor distributor has one set', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([
+        { minimumOrderSpend: null, distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null, distributorSettings: null } },
+      ]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+      mockPrisma.order.count.mockResolvedValue(0);
+
+      const result = await service.getMyDistributors('cust-1');
+      expect(result[0].minimumOrderSpend).toBeNull();
+    });
+
     it('counts orders for the correct distributor and customer', async () => {
       mockPrisma.tradeRelationship.findMany.mockResolvedValue([
-        { distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null } },
+        { minimumOrderSpend: null, distributor: { id: 'dist-1', name: 'Winos', slug: 'winos', email: null, phone: null, distributorSettings: null } },
       ]);
       mockPrisma.assetImage.findFirst.mockResolvedValue(null);
       mockPrisma.order.count.mockResolvedValue(5);

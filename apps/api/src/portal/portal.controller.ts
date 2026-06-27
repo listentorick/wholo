@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PortalService } from './portal.service';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { ORDER_AS_CONTEXT_KEY, OrderAsContext } from '../order-as/order-as.interceptor';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -19,7 +20,9 @@ export class PortalController {
   @ApiOperation({ summary: 'List distributors the authenticated trade customer has access to' })
   @ApiOkResponse({ description: 'List of accessible distributors with contact info and order count' })
   getMyDistributors(@Req() req: RequestWithUser) {
-    return this.portalService.getMyDistributors(req.user.organisationId);
+    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
+    const organisationId = orderAs?.customerId ?? req.user.organisationId;
+    return this.portalService.getMyDistributors(organisationId);
   }
 
   @Get('me/profile')

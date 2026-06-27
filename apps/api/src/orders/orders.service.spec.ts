@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnprocessableEntityException, NotFoundException } from '@nestjs/common';
+import { UnprocessableEntityException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { CartOrderStatus, OrganisationType, OrderStatus, OrderAcceptanceMode, AcceptanceModeSource } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +17,7 @@ function makeDistributor() {
 function makeCart(lines: unknown[] = [{ id: 'line-1' }]) {
   return {
     id: 'cart-1',
+    distributorId: DISTRIBUTOR_ID,
     lines: lines.map((l: any) => ({
       id: l.id ?? 'line-1',
       productId: 'prod-1',
@@ -131,6 +132,22 @@ describe('OrdersService — delivery date revalidation', () => {
     await expect(
       service.submitOrder({ distributorSlug: 'bad-slug' }, USER_ID, CUSTOMER_ID),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('throws ForbiddenException when order-as distributorId does not match cart distributorId', async () => {
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, 'other-dist-id'),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('does not throw when order-as distributorId matches cart distributorId', async () => {
+    setupHappyPath();
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, DISTRIBUTOR_ID),
+    ).resolves.toBeDefined();
   });
 });
 

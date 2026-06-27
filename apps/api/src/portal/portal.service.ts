@@ -85,14 +85,18 @@ export class PortalService {
         deletedAt: null,
       },
       select: {
+        minimumOrderSpend: true,
         distributor: {
-          select: { id: true, name: true, slug: true, email: true, phone: true },
+          select: {
+            id: true, name: true, slug: true, email: true, phone: true,
+            distributorSettings: { select: { minimumOrderSpend: true } },
+          },
         },
       },
     });
 
     return Promise.all(
-      relationships.map(async ({ distributor }) => {
+      relationships.map(async ({ distributor, minimumOrderSpend: relationshipMinSpend }) => {
         const [logoImage, orderCount] = await Promise.all([
           this.prisma.assetImage.findFirst({
             where: { assetType: 'distributor-logo', entityId: distributor.id },
@@ -102,6 +106,7 @@ export class PortalService {
           }),
         ]);
 
+        const effectiveMinSpend = relationshipMinSpend ?? distributor.distributorSettings?.minimumOrderSpend ?? null;
         return {
           id: distributor.id,
           name: distributor.name,
@@ -112,6 +117,7 @@ export class PortalService {
           logoUrl: logoImage
             ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
             : null,
+          minimumOrderSpend: effectiveMinSpend != null ? parseFloat(effectiveMinSpend.toString()) : null,
         };
       }),
     );

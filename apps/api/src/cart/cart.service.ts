@@ -1,9 +1,10 @@
 import {
   Injectable,
   NotFoundException,
+  ForbiddenException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma, OrganisationType, CartOrderStatus } from '@prisma/client';
+import { Prisma, OrganisationType, CartOrderStatus, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { UpsertCartItemDto } from './dto/upsert-cart-item.dto';
@@ -25,8 +26,15 @@ export class CartService {
     return this.formatCart(order);
   }
 
-  async upsertItem(dto: UpsertCartItemDto, customerId: string, userId: string) {
+  async upsertItem(dto: UpsertCartItemDto, customerId: string, userId: string, orderAsDistributorId?: string) {
     const distributor = await this.resolveDistributor(dto.distributorSlug);
+
+    const relationship = await this.prisma.tradeRelationship.findFirst({
+      where: { distributorId: distributor.id, customerId, status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
+      select: { id: true },
+    });
+    if (!relationship) throw new ForbiddenException('No active trade relationship');
+
     const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
 
     if (dto.quantity === 0) {
@@ -36,10 +44,14 @@ export class CartService {
     } else {
       const product = await this.prisma.product.findFirst({
         where: { id: dto.productId, distributorId: distributor.id, deletedAt: null },
-        select: { id: true, price: true },
+        select: { id: true, price: true, distributorId: true },
       });
 
       if (!product) throw new NotFoundException('Product not found');
+
+      if (orderAsDistributorId && product.distributorId !== orderAsDistributorId) {
+        throw new ForbiddenException('Order-as session is not authorised for this distributor');
+      }
 
       const resolved = await this.priceResolution.resolvePrice(
         distributor.id,

@@ -44,7 +44,7 @@ export class CatalogueService {
         addressState: true,
         addressPostcode: true,
         addressCountry: true,
-        distributorSettings: { select: { tagline: true, aboutText: true } },
+        distributorSettings: { select: { tagline: true, aboutText: true, minimumOrderSpend: true } },
       },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
@@ -72,6 +72,9 @@ export class CatalogueService {
       addressCountry: distributor.addressCountry ?? null,
       tagline: distributor.distributorSettings?.tagline ?? null,
       aboutText: distributor.distributorSettings?.aboutText ?? null,
+      minimumOrderSpend: distributor.distributorSettings?.minimumOrderSpend != null
+        ? parseFloat(distributor.distributorSettings.minimumOrderSpend.toString())
+        : null,
       logoUrl: logoImage
         ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
         : null,
@@ -89,9 +92,12 @@ export class CatalogueService {
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
-    // When a customer is authenticated, filter products to their assigned catalogues only.
+    // Unauthenticated → no products. Authenticated with no relationship → all active products.
+    // Authenticated customer → only their assigned catalogue products.
     let catalogueProductIdFilter: string[] | undefined;
-    if (customerOrgId) {
+    if (!customerOrgId) {
+      catalogueProductIdFilter = [];
+    } else {
       const relationship = await this.prisma.tradeRelationship.findFirst({
         where: { distributorId: distributor.id, customerId: customerOrgId, deletedAt: null },
         select: { id: true },
@@ -114,9 +120,8 @@ export class CatalogueService {
           for (const p of a.catalogue.products) ids.add(p.productId);
         }
         catalogueProductIdFilter = [...ids];
-      } else {
-        catalogueProductIdFilter = [];
       }
+      // else: authenticated, no relationship → catalogueProductIdFilter stays undefined → all active products
     }
 
     const limit = query.limit ?? 50;
@@ -288,7 +293,9 @@ export class CatalogueService {
     if (!distributor) throw new NotFoundException('Distributor not found');
 
     let catalogueProductIdFilter: string[] | undefined;
-    if (customerOrgId) {
+    if (!customerOrgId) {
+      catalogueProductIdFilter = [];
+    } else {
       const relationship = await this.prisma.tradeRelationship.findFirst({
         where: { distributorId: distributor.id, customerId: customerOrgId, deletedAt: null },
         select: { id: true },
@@ -307,9 +314,8 @@ export class CatalogueService {
           for (const p of a.catalogue.products) ids.add(p.productId);
         }
         catalogueProductIdFilter = [...ids];
-      } else {
-        catalogueProductIdFilter = [];
       }
+      // else: authenticated, no relationship → show all products for browsing
     }
 
     const product = await this.prisma.product.findFirst({

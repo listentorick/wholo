@@ -160,15 +160,13 @@ export default function DistributorHomePage() {
       </div>
 
       {hasRelationship === false && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-white px-5 py-4">
-          <div className="max-w-lg mx-auto">
-            <button
-              className="w-full bg-accent text-white py-3 text-sm font-medium hover:bg-accent-hover transition-colors"
-              onClick={() => {}}
-            >
-              Connect with this business
-            </button>
-          </div>
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center pb-6 pointer-events-none">
+          <button
+            className="pointer-events-auto bg-accent text-white px-8 py-3 text-sm font-medium hover:bg-accent-hover transition-colors shadow-lg"
+            onClick={() => {}}
+          >
+            Connect with this business
+          </button>
         </div>
       )}
     </>

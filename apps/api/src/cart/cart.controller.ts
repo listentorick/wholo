@@ -31,6 +31,6 @@ export class CartController {
   upsertItem(@Body() dto: UpsertCartItemDto, @Req() req: RequestWithUser) {
     const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
     const customerId = orderAs?.customerId ?? req.user.organisationId;
-    return this.cartService.upsertItem(dto, customerId, req.user.sub);
+    return this.cartService.upsertItem(dto, customerId, req.user.sub, orderAs?.distributorId);
   }
 }

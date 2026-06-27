@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { cartApi } from '@wholo/api-client';
 import type { CartItem } from '@wholo/types';
 import { useAuth } from './auth-context';
+import { useDistributor } from './distributor-context';
 
 interface CartContextValue {
   cartLoading: boolean;
@@ -27,6 +28,7 @@ export function CartProvider({
   children: React.ReactNode;
 }) {
   const { user, accessToken } = useAuth();
+  const { hasRelationship } = useDistributor();
   const [cartLoading, setCartLoading] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -67,7 +69,7 @@ export function CartProvider({
 
   const syncItem = useCallback(
     async (productId: string, quantity: number) => {
-      if (!accessToken) return;
+      if (!accessToken || hasRelationship === false) return;
       setSavingItems((prev) => new Set([...prev, productId]));
 
       setInCart((prev) => new Set([...prev, productId]));
@@ -90,7 +92,7 @@ export function CartProvider({
         });
       }
     },
-    [accessToken, distributorSlug, reconcile],
+    [accessToken, hasRelationship, distributorSlug, reconcile],
   );
 
   const refreshCart = useCallback(async () => {

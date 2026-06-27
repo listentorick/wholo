@@ -23,12 +23,12 @@ vi.mock('next/link', () => ({
 }));
 
 describe('DistributorNav', () => {
-  it('renders all four tab labels', () => {
+  it('renders three tab labels', () => {
     render(<DistributorNav distributorSlug="winos" />);
     expect(screen.getByText('About')).toBeDefined();
     expect(screen.getByText('Shop')).toBeDefined();
     expect(screen.getByText('Orders')).toBeDefined();
-    expect(screen.getByText('Favourites')).toBeDefined();
+    expect(screen.queryByText('Favourites')).toBeNull();
   });
 
   it('links to the correct hrefs', () => {
@@ -36,7 +36,6 @@ describe('DistributorNav', () => {
     expect(screen.getByText('About').closest('a')?.getAttribute('href')).toBe('/winos');
     expect(screen.getByText('Shop').closest('a')?.getAttribute('href')).toBe('/winos/products');
     expect(screen.getByText('Orders').closest('a')?.getAttribute('href')).toBe('/winos/orders');
-    expect(screen.getByText('Favourites').closest('a')?.getAttribute('href')).toBe('/winos/favourites');
   });
 
   it('marks About as active when on the root slug path', () => {

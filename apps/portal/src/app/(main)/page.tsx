@@ -25,7 +25,7 @@ function CompassIcon() {
 }
 
 export default function HomePage() {
-  const { user, accessToken, isLoading: authLoading } = useRequireAuth();
+  const { user, accessToken, isLoading: authLoading, orderAsMode, orderAsDistributorId } = useRequireAuth();
   const [distributors, setDistributors] = useState<PortalDistributorSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -103,7 +103,11 @@ export default function HomePage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {filtered.map((d) => (
-                <DistributorCard key={d.id} distributor={d} />
+                <DistributorCard
+                  key={d.id}
+                  distributor={d}
+                  locked={orderAsMode && d.id !== orderAsDistributorId}
+                />
               ))}
             </div>
           )}

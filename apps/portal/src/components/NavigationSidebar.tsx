@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useCartSafe } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
+import { UserMenuButton } from './UserMenuButton';
 
 interface NavItem {
   href: string;
@@ -64,10 +65,9 @@ function SignOutIcon() {
 
 function CartIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 mt-0.5">
-      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <path d="M16 10a4 4 0 01-8 0" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mt-0.5">
+      <path d="M6 9C6 4.5 18 4.5 18 9" />
+      <path d="M2 9h20l-2 10a2 2 0 01-2 2H6a2 2 0 01-2-2L2 9z" />
     </svg>
   );
 }
@@ -260,22 +260,23 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
 
         <span className="text-sm font-medium tracking-wide text-[#1A1A1A]">{distributorName}</span>
 
-        {distributorSlug ? (
-          <button
-            onClick={() => router.push(`/${distributorSlug}/checkout`)}
-            className="relative flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
-            aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`}
-          >
-            {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-1 text-[11px] font-semibold leading-none text-[#1A1A1A]">
-                {cartCount}
-              </span>
-            )}
-            <CartIcon />
-          </button>
-        ) : (
-          <div className="h-9 w-9" />
-        )}
+        <div className="flex items-center gap-0.5">
+          {distributorSlug ? (
+            <button
+              onClick={() => router.push(`/${distributorSlug}/checkout`)}
+              className="relative flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
+              aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`}
+            >
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-1 text-[11px] font-semibold leading-none text-[#1A1A1A]">
+                  {cartCount}
+                </span>
+              )}
+              <CartIcon />
+            </button>
+          ) : null}
+          <UserMenuButton />
+        </div>
       </header>
 
       {/* Mobile backdrop */}
@@ -295,7 +296,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           'w-4/5 transition-transform duration-300 ease-out',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           // Desktop: sticky column, width transitions smoothly, no transform
-          'md:sticky md:top-0 md:z-auto md:h-screen md:translate-x-0',
+          'md:sticky md:top-0 md:z-40 md:h-screen md:translate-x-0',
           'md:transition-[width] md:duration-300 md:ease-in-out',
           isCollapsed ? 'md:w-16' : 'md:w-64',
         ].join(' ')}

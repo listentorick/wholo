@@ -95,6 +95,7 @@ export class OrdersService {
     placedByUserId: string,
     traderCustomerId: string,
     orderAsSessionToken?: string,
+    orderAsDistributorId?: string,
   ) {
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
@@ -122,6 +123,10 @@ export class OrdersService {
 
     if (!cart) throw new UnprocessableEntityException('No active cart found for this distributor');
     if (cart.lines.length === 0) throw new UnprocessableEntityException('Cart is empty');
+
+    if (orderAsDistributorId && cart.distributorId !== orderAsDistributorId) {
+      throw new ForbiddenException('Order-as session is not authorised for this distributor');
+    }
 
     // Resolve acceptance mode
     const { mode, source } = await this.resolveAcceptanceMode(distributor.id, traderCustomerId);

@@ -50,7 +50,7 @@ export default function OrdersPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/orders`);
+  const { user, accessToken, isLoading: authLoading, orderAsMode } = useRequireAuth(pathname ?? `/${distributorSlug}/orders`);
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export default function OrdersPage() {
     if (authLoading || !accessToken) return;
     setLoading(true);
     fetchOrders().finally(() => setLoading(false));
-  }, [authLoading, accessToken, fetchOrders]);
+  }, [authLoading, accessToken, fetchOrders, orderAsMode]);
 
   const handleLoadMore = async () => {
     if (!nextCursor || loadingMore) return;

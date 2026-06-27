@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
+import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import type { CatalogueProductDetail } from '@wholo/types';
 import { PageSubHeader } from '@/components/PageSubHeader';
@@ -26,6 +27,7 @@ export default function ProductDetailPage() {
     pathname ?? `/${distributorSlug}/products/${productId}`,
   );
   const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
+  const { hasRelationship } = useDistributor();
 
   const [product, setProduct] = useState<CatalogueProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,41 +171,43 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Quantity stepper + add/update */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <button
-              className="stepper-btn"
-              aria-label="Decrease quantity"
-              onClick={() => adjustQty(productId, -1)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
+          {hasRelationship === true && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <button
+                className="stepper-btn"
+                aria-label="Decrease quantity"
+                onClick={() => adjustQty(productId, -1)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
 
-            <span style={{ minWidth: 22, textAlign: 'center', fontSize: 14, fontWeight: 500, color: '#1A1A1A', userSelect: 'none' }}>
-              {qty}
-            </span>
+              <span style={{ minWidth: 22, textAlign: 'center', fontSize: 14, fontWeight: 500, color: '#1A1A1A', userSelect: 'none' }}>
+                {qty}
+              </span>
 
-            <button
-              className="stepper-btn"
-              aria-label="Increase quantity"
-              onClick={() => adjustQty(productId, 1)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5"  y1="12" x2="19" y2="12" />
-              </svg>
-            </button>
+              <button
+                className="stepper-btn"
+                aria-label="Increase quantity"
+                onClick={() => adjustQty(productId, 1)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5"  y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
 
-            <button
-              className="order-btn"
-              disabled={saving || !hasPrice}
-              onClick={() => syncItem(productId, qty)}
-              style={{ marginLeft: 4 }}
-            >
-              {saving ? '…' : added ? 'Update' : 'Add'}
-            </button>
-          </div>
+              <button
+                className="order-btn"
+                disabled={saving || !hasPrice}
+                onClick={() => syncItem(productId, qty)}
+                style={{ marginLeft: 4 }}
+              >
+                {saving ? '…' : added ? 'Update' : 'Add'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Divider */}

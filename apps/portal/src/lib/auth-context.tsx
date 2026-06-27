@@ -10,6 +10,7 @@ interface OrderAsState {
   sessionToken: string;
   customerName: string;
   returnUrl: string;
+  distributorId: string;
 }
 
 interface AuthContextValue {
@@ -18,6 +19,7 @@ interface AuthContextValue {
   isLoading: boolean;
   orderAsMode: boolean;
   orderAsCustomerName: string | null;
+  orderAsDistributorId: string | null;
   login: (returnUrl?: string) => void;
   loginWithRedirect: (redirectUri: string) => void;
   registerWithRedirect: (redirectUri: string) => void;
@@ -119,9 +121,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    setUser(null);
-    setAccessToken(null);
-    (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
+    sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
+    const kc = (window as any).__kc;
+    try {
+      kc.logout({ redirectUri: window.location.origin + '/login' });
+    } catch {
+      setUser(null);
+      setAccessToken(null);
+      window.location.href = '/login';
+    }
   }, []);
 
   const setOrderAsSession = useCallback((data: OrderAsState) => {
@@ -144,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       orderAsMode: orderAsState !== null,
       orderAsCustomerName: orderAsState?.customerName ?? null,
+      orderAsDistributorId: orderAsState?.distributorId ?? null,
       login,
       loginWithRedirect,
       registerWithRedirect,

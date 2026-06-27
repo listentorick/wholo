@@ -329,7 +329,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp', large: 'key/large.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBe('https://cdn.example.com/key/catalogue.webp');
     });
@@ -339,7 +339,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', large: 'key/large.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBe('https://cdn.example.com/key/large.webp');
     });
@@ -347,7 +347,7 @@ describe('CatalogueService', () => {
     it('returns imageUrl null when no primary image exists', async () => {
       mockPrisma.assetImage.findFirst.mockResolvedValue(null);
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBeNull();
     });
@@ -357,7 +357,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBeNull();
     });
@@ -367,13 +367,13 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.thumbnailUrl).toBe('https://cdn.example.com/key/thumb.webp');
     });
 
     it('scopes product query to distributor id', async () => {
-      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.product.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -383,7 +383,7 @@ describe('CatalogueService', () => {
     });
 
     it('scopes assetImage query to distributor id', async () => {
-      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1);
+      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.assetImage.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({

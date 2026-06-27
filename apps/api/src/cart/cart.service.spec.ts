@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CartOrderStatus, OrganisationType } from '@prisma/client';
 import { CartService } from './cart.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,8 +15,8 @@ function makeDistributor() {
   return { id: DISTRIBUTOR_ID };
 }
 
-function makeProduct(overrides: Partial<{ id: string; price: unknown }> = {}) {
-  return { id: PRODUCT_ID, price: { toFixed: () => '10.00' }, ...overrides };
+function makeProduct(overrides: Partial<{ id: string; price: unknown; distributorId: string }> = {}) {
+  return { id: PRODUCT_ID, price: { toFixed: () => '10.00' }, distributorId: DISTRIBUTOR_ID, ...overrides };
 }
 
 function makeCart(lines: unknown[] = []) {
@@ -47,6 +47,7 @@ describe('CartService', () => {
   beforeEach(async () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
+      tradeRelationship: { findFirst: jest.fn() },
       cartOrder: { upsert: jest.fn(), findUniqueOrThrow: jest.fn() },
       cartOrderLine: { upsert: jest.fn(), deleteMany: jest.fn() },
       product: { findFirst: jest.fn() },
@@ -111,6 +112,7 @@ describe('CartService', () => {
 
     beforeEach(() => {
       (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({ id: 'rel-1' });
       (prisma.cartOrder.upsert as jest.Mock).mockResolvedValue(makeCart());
       (prisma.cartOrder.findUniqueOrThrow as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
     });
@@ -169,10 +171,33 @@ describe('CartService', () => {
       await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
     });
 
+    it('throws ForbiddenException when no active trade relationship exists', async () => {
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(ForbiddenException);
+    });
+
     it('throws NotFoundException when product does not belong to the distributor', async () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ForbiddenException when order-as distributorId does not match product distributorId', async () => {
+      (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ distributorId: DISTRIBUTOR_ID }));
+
+      await expect(
+        service.upsertItem(dto, CUSTOMER_ID, USER_ID, 'other-dist-id'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('succeeds when order-as distributorId matches product distributorId', async () => {
+      (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ distributorId: DISTRIBUTOR_ID }));
+      (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.upsertItem(dto, CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
+      ).resolves.toBeDefined();
     });
   });
 });

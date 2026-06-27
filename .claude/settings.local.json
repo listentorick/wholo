@@ -23,7 +23,14 @@
       "Bash(wait)",
       "Bash(DATABASE_URL=\"postgresql://wholo:wholo@localhost:5432/wholo\" npx prisma generate)",
       "Bash(npx tsc *)",
-      "Bash(pnpm --filter portal exec tsc --noEmit)"
+      "Bash(pnpm --filter portal exec tsc --noEmit)",
+      "Bash(DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo kubectl exec *)",
+      "Bash(curl *)",
+      "Bash(kubectl describe *)",
+      "Bash(kubectl delete pod *)",
+      "Bash(git *)",
+      "Bash(pnpm --filter @wholo/api build)",
+      "Bash(pnpm --filter @wholo/admin-api build)"
     ]
   }
 }

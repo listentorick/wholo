@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
+import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
 
@@ -20,6 +21,7 @@ export default function CataloguePage() {
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
+  const { hasRelationship } = useDistributor();
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
@@ -103,7 +105,7 @@ export default function CataloguePage() {
       `}</style>
 
       {/* Product list */}
-      <div className="cat-shell flex-1 w-full">
+      <div className="cat-shell flex-1 w-full p-5">
 
         {fetchError ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-2">
@@ -124,7 +126,7 @@ export default function CataloguePage() {
               return (
                 <li
                   key={product.id}
-                  className="cat-product-row flex items-center border-b border-[#E5E7EB]"
+                  className="cat-product-row flex items-center border-b border-[#E5E7EB] pb-5"
                   style={{ animationDelay: `${delay}s` }}
                 >
                   <Link href={`/${distributorSlug}/products/${product.id}`} className="shrink-0 focus:outline-none">
@@ -160,43 +162,45 @@ export default function CataloguePage() {
                       {formatPrice(product.resolvedPrice ?? product.price)}
                     </span>
 
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        className="stepper-btn"
-                        aria-label="Decrease quantity"
-                        onClick={() => adjustQty(product.id, -1)}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                          <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                      </button>
+                    {hasRelationship === true && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          className="stepper-btn"
+                          aria-label="Decrease quantity"
+                          onClick={() => adjustQty(product.id, -1)}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                          </svg>
+                        </button>
 
-                      <span
-                        className="text-sm font-medium text-[#1A1A1A] select-none"
-                        style={{ minWidth: 18, textAlign: 'center' }}
-                      >
-                        {qty}
-                      </span>
+                        <span
+                          className="text-sm font-medium text-[#1A1A1A] select-none"
+                          style={{ minWidth: 18, textAlign: 'center' }}
+                        >
+                          {qty}
+                        </span>
 
-                      <button
-                        className="stepper-btn"
-                        aria-label="Increase quantity"
-                        onClick={() => adjustQty(product.id, 1)}
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                          <line x1="12" y1="5" x2="12" y2="19" />
-                          <line x1="5"  y1="12" x2="19" y2="12" />
-                        </svg>
-                      </button>
+                        <button
+                          className="stepper-btn"
+                          aria-label="Increase quantity"
+                          onClick={() => adjustQty(product.id, 1)}
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5"  y1="12" x2="19" y2="12" />
+                          </svg>
+                        </button>
 
-                      <button
-                        className="order-btn"
-                        disabled={saving || (product.resolvedPrice === null && product.price === null)}
-                        onClick={() => syncItem(product.id, qty)}
-                      >
-                        {saving ? '…' : added ? 'Update' : 'Add'}
-                      </button>
-                    </div>
+                        <button
+                          className="order-btn"
+                          disabled={saving || (product.resolvedPrice === null && product.price === null)}
+                          onClick={() => syncItem(product.id, qty)}
+                        >
+                          {saving ? '…' : added ? 'Update' : 'Add'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </li>
               );
