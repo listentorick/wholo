@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, MinLength } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, IsDecimal, MinLength } from 'class-validator';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -70,4 +70,8 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsArray()
   processingDays?: number[];
+
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  minimumOrderSpend?: string;
 }

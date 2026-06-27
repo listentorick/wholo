@@ -34,6 +34,10 @@ const mockSettings = {
   marketplaceVisible: false,
   marketplaceDescription: null,
   orderNotificationEmails: [],
+  minimumOrderSpend: null,
+  tagline: null,
+  aboutText: null,
+  processingDays: [],
 };
 
 describe('AdminSettingsService', () => {
@@ -72,6 +76,10 @@ describe('AdminSettingsService', () => {
         marketplaceVisible: false,
         marketplaceDescription: null,
         orderNotificationEmails: [],
+        minimumOrderSpend: null,
+        tagline: null,
+        aboutText: null,
+        processingDays: [],
       });
       expect(mockPrisma.distributorSettings.upsert).toHaveBeenCalledWith({
         where: { distributorId: 'dist-1' },
@@ -163,6 +171,24 @@ describe('AdminSettingsService', () => {
 
       expect(result).toHaveProperty('name');
       expect(result).toHaveProperty('defaultOrderAcceptanceMode');
+    });
+
+    it('converts minimumOrderSpend string to Decimal in settingsPatch', async () => {
+      await service.update('dist-1', { minimumOrderSpend: '50.00' });
+
+      const upsertCall = mockPrisma.distributorSettings.upsert.mock.calls[0][0];
+      expect(upsertCall.update.minimumOrderSpend).toBeDefined();
+      expect(upsertCall.update.minimumOrderSpend.toString()).toBe('50');
+    });
+
+    it('includes minimumOrderSpend in find() result', async () => {
+      mockPrisma.distributorSettings.upsert.mockResolvedValue({
+        ...mockSettings,
+        minimumOrderSpend: { toString: () => '75.50' },
+      });
+
+      const result = await service.find('dist-1');
+      expect(result.minimumOrderSpend).toBe('75.50');
     });
   });
 });

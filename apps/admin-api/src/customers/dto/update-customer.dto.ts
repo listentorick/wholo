@@ -28,6 +28,10 @@ export class UpdateCustomerDto {
   creditLimit?: string;
 
   @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  minimumOrderSpend?: string;
+
+  @IsOptional()
   @IsString()
   paymentTerms?: string;
 

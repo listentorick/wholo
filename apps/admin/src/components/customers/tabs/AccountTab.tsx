@@ -17,6 +17,13 @@ const schema = z.object({
       (v) => !v || (/^\d+(\.\d{0,2})?$/.test(v) && parseFloat(v) >= 0),
       'Enter a valid amount (e.g. 5000.00)',
     ),
+  minimumOrderSpend: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || (/^\d+(\.\d{0,2})?$/.test(v) && parseFloat(v) >= 0),
+      'Enter a valid amount (e.g. 50.00)',
+    ),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
   billingLine1: z.string().optional(),
@@ -52,6 +59,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
     defaultValues: {
       accountNumber: customer.accountNumber ?? '',
       creditLimit: customer.creditLimit ?? '',
+      minimumOrderSpend: customer.minimumOrderSpend ?? '',
       paymentTerms: customer.paymentTerms ?? '',
       notes: customer.notes ?? '',
       billingLine1: customer.billingLine1 ?? '',
@@ -71,6 +79,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
       await adminCustomersApi.update(token, customer.id, {
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
+        minimumOrderSpend: data.minimumOrderSpend || undefined,
         paymentTerms: data.paymentTerms || undefined,
         notes: data.notes || undefined,
         billingLine1: data.billingLine1 || undefined,
@@ -115,6 +124,14 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
                 <TextInput id="creditLimit" type="text" inputMode="decimal" placeholder="0.00" disabled={disabled} style={{ paddingLeft: '1.75rem' }} {...register('creditLimit')} />
               </div>
               <FieldError message={errors.creditLimit?.message} />
+            </div>
+            <div>
+              <FieldLabel htmlFor="minimumOrderSpend">Minimum order</FieldLabel>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
+                <TextInput id="minimumOrderSpend" type="text" inputMode="decimal" placeholder="0.00" disabled={disabled} style={{ paddingLeft: '1.75rem' }} {...register('minimumOrderSpend')} />
+              </div>
+              <FieldError message={errors.minimumOrderSpend?.message} />
             </div>
             <div>
               <FieldLabel htmlFor="paymentTerms">Payment terms</FieldLabel>
@@ -166,6 +183,14 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
               <TextInput id="creditLimit" type="text" inputMode="decimal" placeholder="0.00" disabled={disabled} style={{ paddingLeft: '1.75rem' }} {...register('creditLimit')} />
             </div>
             <FieldError message={errors.creditLimit?.message} />
+          </div>
+          <div>
+            <FieldLabel htmlFor="minimumOrderSpend">Minimum order</FieldLabel>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
+              <TextInput id="minimumOrderSpend" type="text" inputMode="decimal" placeholder="0.00" disabled={disabled} style={{ paddingLeft: '1.75rem' }} {...register('minimumOrderSpend')} />
+            </div>
+            <FieldError message={errors.minimumOrderSpend?.message} />
           </div>
           <div>
             <FieldLabel htmlFor="paymentTerms">Payment terms</FieldLabel>

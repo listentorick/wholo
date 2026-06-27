@@ -10,6 +10,13 @@ import { FormCard } from '../shared';
 
 const schema = z.object({
   defaultOrderAcceptanceMode: z.nativeEnum(OrderAcceptanceMode),
+  minimumOrderSpend: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || (/^\d+(\.\d{0,2})?$/.test(v) && parseFloat(v) >= 0),
+      'Enter a valid amount (e.g. 50.00)',
+    ),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -54,6 +61,7 @@ export function OrdersTab({ settings, onSave }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       defaultOrderAcceptanceMode: settings.defaultOrderAcceptanceMode,
+      minimumOrderSpend: settings.minimumOrderSpend ?? '',
     },
   });
 
@@ -71,6 +79,7 @@ export function OrdersTab({ settings, onSave }: Props) {
       await onSave({
         defaultOrderAcceptanceMode: data.defaultOrderAcceptanceMode,
         processingDays,
+        minimumOrderSpend: data.minimumOrderSpend || undefined,
       });
       setSuccess(true);
     } catch {
@@ -127,6 +136,29 @@ export function OrdersTab({ settings, onSave }: Props) {
               </button>
             );
           })}
+        </div>
+      </FormCard>
+
+      <FormCard title="Minimum order" description="The minimum order value required for a customer to submit an order. Can be overridden per customer.">
+        <div>
+          <label htmlFor="minimumOrderSpend" className="mb-1.5 block text-sm font-medium text-text">
+            Minimum spend
+          </label>
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
+            <input
+              id="minimumOrderSpend"
+              type="text"
+              inputMode="decimal"
+              placeholder="0.00"
+              style={{ paddingLeft: '1.75rem' }}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none"
+              {...register('minimumOrderSpend')}
+            />
+          </div>
+          {errors.minimumOrderSpend && (
+            <p className="mt-1 text-xs text-red-500">{errors.minimumOrderSpend.message}</p>
+          )}
         </div>
       </FormCard>
 

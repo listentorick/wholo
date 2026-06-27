@@ -56,6 +56,7 @@ const makeRel = (overrides = {}) => ({
   status: TradeRelationshipStatus.ACTIVE,
   accountNumber: null,
   creditLimit: null,
+  minimumOrderSpend: null,
   paymentTerms: null,
   notes: null,
   deliveryLine1: null, deliveryLine2: null, deliveryCity: null,
@@ -181,6 +182,15 @@ describe('AdminCustomersService', () => {
     it('throws NotFoundException for wrong distributor', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
       await expect(service.findOne('rel-1', 'dist-2')).rejects.toThrow(NotFoundException);
+    });
+
+    it('includes minimumOrderSpend in formatted customer', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({ minimumOrderSpend: { toString: () => '150.00', toJSON: () => '150.00' } }),
+      );
+
+      const result = await service.findOne('rel-1', 'dist-1');
+      expect(result.minimumOrderSpend).not.toBeUndefined();
     });
   });
 

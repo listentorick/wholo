@@ -214,6 +214,7 @@ export class AdminCustomersService {
           status: TradeRelationshipStatus.PENDING_INVITE,
           accountNumber: dto.accountNumber,
           creditLimit: dto.creditLimit != null ? new Prisma.Decimal(dto.creditLimit) : null,
+          minimumOrderSpend: dto.minimumOrderSpend != null ? new Prisma.Decimal(dto.minimumOrderSpend) : null,
           paymentTerms: dto.paymentTerms,
           notes: dto.notes,
           deliveryLine1: dto.deliveryLine1,
@@ -282,6 +283,10 @@ export class AdminCustomersService {
           ...(dto.creditLimit !== undefined && {
             creditLimit:
               dto.creditLimit != null ? new Prisma.Decimal(dto.creditLimit) : null,
+          }),
+          ...(dto.minimumOrderSpend !== undefined && {
+            minimumOrderSpend:
+              dto.minimumOrderSpend != null ? new Prisma.Decimal(dto.minimumOrderSpend) : null,
           }),
           ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
@@ -373,6 +378,7 @@ export class AdminCustomersService {
       },
       accountNumber: rel.accountNumber,
       creditLimit: rel.creditLimit,
+      minimumOrderSpend: rel.minimumOrderSpend,
       paymentTerms: rel.paymentTerms,
       notes: rel.notes,
       deliveryLine1: rel.deliveryLine1,

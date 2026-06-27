@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
@@ -34,6 +35,7 @@ export class AdminSettingsService {
       aboutText: settings.aboutText,
       orderNotificationEmails: settings.orderNotificationEmails,
       processingDays: settings.processingDays,
+      minimumOrderSpend: settings.minimumOrderSpend?.toString() ?? null,
     };
   }
 
@@ -41,7 +43,8 @@ export class AdminSettingsService {
     const {
       name, email, phone, slug,
       addressLine1, addressLine2, addressCity, addressState, addressPostcode, addressCountry,
-      ...settingsFields
+      minimumOrderSpend: rawMinSpend,
+      ...restSettingsFields
     } = dto;
 
     const orgPatch = Object.fromEntries(
@@ -49,9 +52,12 @@ export class AdminSettingsService {
         .filter(([, v]) => v !== undefined),
     );
 
-    const settingsPatch = Object.fromEntries(
-      Object.entries(settingsFields).filter(([, v]) => v !== undefined),
+    const settingsPatch: Record<string, unknown> = Object.fromEntries(
+      Object.entries(restSettingsFields).filter(([, v]) => v !== undefined),
     );
+    if (rawMinSpend !== undefined) {
+      settingsPatch.minimumOrderSpend = rawMinSpend != null ? new Prisma.Decimal(rawMinSpend) : null;
+    }
 
     await this.prisma.$transaction(async (tx) => {
       if (Object.keys(orgPatch).length > 0) {

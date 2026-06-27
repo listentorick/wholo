@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsArray,
   IsInt,
+  IsDecimal,
   MinLength,
 } from 'class-validator';
 import { OrderAcceptanceMode } from '@prisma/client';
@@ -81,4 +82,8 @@ export class UpdateSettingsDto {
   @IsArray()
   @IsInt({ each: true })
   processingDays?: number[];
+
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  minimumOrderSpend?: string;
 }

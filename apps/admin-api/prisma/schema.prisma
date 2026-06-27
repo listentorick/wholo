@@ -261,15 +261,16 @@ model TradeRelationship {
   customerId       String
   status           TradeRelationshipStatus @default(PENDING_INVITE)
   accountNumber    String?
-  creditLimit      Decimal?                @db.Decimal(10, 2)
-  paymentTerms     String?
-  notes            String?
-  deliveryLine1    String?
-  deliveryLine2    String?
-  deliveryCity     String?
-  deliveryState    String?
-  deliveryPostcode String?
-  deliveryCountry  String?
+  creditLimit          Decimal?                @db.Decimal(10, 2)
+  minimumOrderSpend    Decimal?                @db.Decimal(10, 2)
+  paymentTerms         String?
+  notes                String?
+  deliveryLine1        String?
+  deliveryLine2        String?
+  deliveryCity         String?
+  deliveryState        String?
+  deliveryPostcode     String?
+  deliveryCountry      String?
   billingLine1     String?
   billingLine2     String?
   billingCity      String?
@@ -450,6 +451,7 @@ model DistributorSettings {
   aboutText                  String?
   orderNotificationEmails    String[]            @default([])
   processingDays             Int[]               @default([1, 2, 3, 4, 5])
+  minimumOrderSpend          Decimal?            @db.Decimal(10, 2)
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")

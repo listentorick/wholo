@@ -292,6 +292,7 @@ export interface DistributorInfo {
   addressState: string | null;
   addressPostcode: string | null;
   addressCountry: string | null;
+  minimumOrderSpend: number | null;
 }
 
 export interface PortalDistributorSummary {
@@ -302,6 +303,7 @@ export interface PortalDistributorSummary {
   email: string | null;
   phone: string | null;
   orderCount: number;
+  minimumOrderSpend: number | null;
 }
 
 export interface CatalogueProductsResponse {
@@ -405,6 +407,7 @@ export interface Customer {
   organisation: CustomerOrganisation;
   accountNumber: string | null;
   creditLimit: string | null;
+  minimumOrderSpend: string | null;
   paymentTerms: string | null;
   notes: string | null;
   deliveryLine1: string | null;
@@ -449,6 +452,7 @@ export interface CreateCustomerRequest {
   addressCountry?: string;
   accountNumber?: string;
   creditLimit?: string;
+  minimumOrderSpend?: string;
   paymentTerms?: string;
   notes?: string;
   deliveryLine1?: string;
@@ -658,6 +662,7 @@ export interface DistributorSettings {
   aboutText: string | null;
   orderNotificationEmails: string[];
   processingDays: number[];
+  minimumOrderSpend: string | null;
 }
 
 export type UpdateDistributorSettingsRequest = Partial<DistributorSettings>;
