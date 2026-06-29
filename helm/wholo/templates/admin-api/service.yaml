@@ -9,5 +9,6 @@ spec:
   selector:
     app: {{ include "wholo.fullname" . }}-admin-api
   ports:
-    - port: {{ .Values.adminApi.service.port }}
-      targetPort: 3002
+    - name: http
+      port: {{ .Values.adminApi.service.port }}
+      targetPort: 3020

@@ -24,7 +24,7 @@ spec:
           image: {{ .Values.adminApi.image.repository }}:{{ .Values.adminApi.image.tag }}
           imagePullPolicy: {{ .Values.adminApi.image.pullPolicy }}
           ports:
-            - containerPort: 3002
+            - containerPort: 3020
           envFrom:
             - configMapRef:
                 name: {{ include "wholo.fullname" . }}-admin-api
@@ -33,13 +33,13 @@ spec:
           livenessProbe:
             httpGet:
               path: /api/v1/health
-              port: 3002
+              port: 3020
             initialDelaySeconds: 15
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /api/v1/health
-              port: 3002
+              port: 3020
             initialDelaySeconds: 10
             periodSeconds: 5
           resources:

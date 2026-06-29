@@ -11,9 +11,7 @@ export class ApiError extends Error {
 }
 
 function getBaseUrl(): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const env = (globalThis as any).process?.env as Record<string, string | undefined> | undefined;
-  return env?.['NEXT_PUBLIC_ADMIN_API_URL'] ?? 'http://localhost:3002';
+  return '';
 }
 
 export async function apiFetch<T>(

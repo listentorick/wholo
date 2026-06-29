@@ -61,36 +61,15 @@ adminApi:
   replicaCount: 1
   service:
     type: LoadBalancer
-    port: 3002
-  resources:
-    requests:
-      memory: "256Mi"
-      cpu: "100m"
-    limits:
-      memory: "512Mi"
-      cpu: "500m"
-  centralApiUrl: "http://wholo-api:3001"
-
-admin:
-  image:
-    repository: wholo/admin
-    tag: local
-    pullPolicy: Never
-  replicaCount: 1
-  service:
-    type: LoadBalancer
     port: 3020
   resources:
     requests:
-      memory: "128Mi"
-      cpu: "50m"
+      memory: "384Mi"
+      cpu: "100m"
     limits:
-      memory: "256Mi"
-      cpu: "200m"
-  adminApiUrl: "http://localhost:3002"
-  keycloak:
-    url: "http://localhost:8080"
-    clientId: "wholo-admin"
+      memory: "768Mi"
+      cpu: "500m"
+  centralApiUrl: "http://wholo-api:3001"
 
 mailhog:
   image: mailhog/mailhog:v1.0.1

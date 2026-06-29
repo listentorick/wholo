@@ -2,7 +2,6 @@ import path from 'path';
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
   transpilePackages: ['@wholo/admin-api-client', '@wholo/types'],
   webpack(config) {
     config.resolve.alias = {

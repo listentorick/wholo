@@ -5,9 +5,9 @@ metadata:
   labels:
     app: {{ include "wholo.fullname" . }}-admin-api
 data:
-  PORT: "3002"
+  PORT: "3020"
   NODE_ENV: "production"
-  REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
   CENTRAL_API_URL: {{ .Values.adminApi.centralApiUrl | quote }}
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
+  NEXT_APP_DIR: "/app/admin"
