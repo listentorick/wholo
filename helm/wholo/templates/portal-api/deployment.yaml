@@ -24,7 +24,7 @@ spec:
           image: {{ .Values.portalApi.image.repository }}:{{ .Values.portalApi.image.tag }}
           imagePullPolicy: {{ .Values.portalApi.image.pullPolicy }}
           ports:
-            - containerPort: 3003
+            - containerPort: 3010
           envFrom:
             - configMapRef:
                 name: {{ include "wholo.fullname" . }}-portal-api
@@ -33,13 +33,13 @@ spec:
           livenessProbe:
             httpGet:
               path: /api/v1/health
-              port: 3003
+              port: 3010
             initialDelaySeconds: 15
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /api/v1/health
-              port: 3003
+              port: 3010
             initialDelaySeconds: 10
             periodSeconds: 5
           resources:

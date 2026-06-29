@@ -9,5 +9,6 @@ spec:
   selector:
     app: {{ include "wholo.fullname" . }}-portal-api
   ports:
-    - port: {{ .Values.portalApi.service.port }}
-      targetPort: 3003
+    - name: http
+      port: {{ .Values.portalApi.service.port }}
+      targetPort: 3010

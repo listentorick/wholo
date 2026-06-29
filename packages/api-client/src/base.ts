@@ -11,7 +11,10 @@ export class ApiError extends Error {
 }
 
 function getBaseUrl(): string {
-  return process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001';
+  // Same-origin relative URL — works in both browser and Next.js custom server context.
+  // In local dev with portal running standalone (port 3000), set NEXT_PUBLIC_API_URL to
+  // override (e.g. http://localhost:3003) so calls reach the portal-api.
+  return process.env['NEXT_PUBLIC_API_URL'] ?? '';
 }
 
 export async function apiFetch<T>(

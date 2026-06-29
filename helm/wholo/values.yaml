@@ -33,28 +33,7 @@ api:
     publicBaseUrl: ""
     accessKeyId: ""
     secretAccessKey: ""
-  portalUrl: "http://localhost:3010"
-
-portal:
-  image:
-    repository: wholo/portal
-    tag: local
-    pullPolicy: Never
-  replicaCount: 1
-  service:
-    type: LoadBalancer
-    port: 3010
-  resources:
-    requests:
-      memory: "128Mi"
-      cpu: "50m"
-    limits:
-      memory: "256Mi"
-      cpu: "200m"
-  apiUrl: "http://localhost:3003"
-  keycloak:
-    url: "http://localhost:8080"
-    clientId: "wholo-portal"
+  portalUrl: "http://wholo-portal-api:3010"
 
 portalApi:
   image:
@@ -64,13 +43,13 @@ portalApi:
   replicaCount: 1
   service:
     type: LoadBalancer
-    port: 3003
+    port: 3010
   resources:
     requests:
-      memory: "256Mi"
+      memory: "384Mi"
       cpu: "100m"
     limits:
-      memory: "512Mi"
+      memory: "768Mi"
       cpu: "500m"
   centralApiUrl: "http://wholo-api:3001"
 
