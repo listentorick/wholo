@@ -23,7 +23,7 @@ function DistributorMain({
   const isAboutPage = pathname === `/${distributorSlug}`;
 
   return (
-    <main className="flex flex-1 flex-col min-w-0 bg-white pt-14 md:pt-0">
+    <main className="flex flex-1 flex-col min-h-screen min-w-0 bg-white pt-14 md:pt-0">
       <DistributorHeader distributorSlug={distributorSlug} />
       <OrderAsHandler />
       <OrderAsBanner />
@@ -51,7 +51,7 @@ export default function DistributorLayout({ children }: { children: React.ReactN
   return (
     <DistributorProvider distributorSlug={distributorSlug}>
       <CartProvider distributorSlug={distributorSlug}>
-        <div className="flex min-h-screen">
+        <div className="flex">
           <NavigationSidebar distributorSlug={distributorSlug} />
           <DistributorMain distributorSlug={distributorSlug}>
             {children}
