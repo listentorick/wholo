@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Sign In — Wholo</title>
+  <title>New Password — Wholo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${url.resourcesPath}/css/login.css">
@@ -18,7 +18,7 @@
         <div class="wh-diamond"></div>
         <span class="wh-title">Wholo</span>
       </div>
-      <p class="wh-subtitle">Sign In</p>
+      <p class="wh-subtitle">New Password</p>
       <div class="wh-divider"></div>
     </div>
 
@@ -26,48 +26,38 @@
       <p class="wh-error">${kcSanitize(message.summary)}</p>
     </#if>
 
-    <form id="kc-form-login" action="${url.loginAction}" method="post">
+    <form id="kc-passwd-update-form" action="${url.loginAction}" method="post">
+
+      <input type="hidden" id="username" name="username" value="${(auth.attemptedUsername)!''}" autocomplete="username" />
 
       <div class="wh-field">
-        <label for="username">Email</label>
+        <label for="password-new">New Password</label>
         <input
-          type="email"
-          id="username"
-          name="username"
-          value="${(login.username)!''}"
-          autocomplete="email"
-          placeholder="you@example.com"
+          type="password"
+          id="password-new"
+          name="password-new"
+          autocomplete="new-password"
+          placeholder="••••••••"
           autofocus
         />
       </div>
 
       <div class="wh-field wh-field--last">
-        <label for="password">Password</label>
+        <label for="password-confirm">Confirm Password</label>
         <input
           type="password"
-          id="password"
-          name="password"
-          autocomplete="current-password"
+          id="password-confirm"
+          name="password-confirm"
+          autocomplete="new-password"
           placeholder="••••••••"
         />
       </div>
 
-      <input
-        type="hidden"
-        id="id-hidden-input"
-        name="credentialId"
-        <#if auth.selectedCredential?has_content>value="${auth.selectedCredential}"</#if>
-      />
-
-      <button class="wh-btn" type="submit" name="login">
-        Log In
+      <button class="wh-btn" type="submit">
+        Update Password
       </button>
 
     </form>
-
-    <#if realm.resetPasswordAllowed>
-      <a class="wh-link" href="${url.loginResetCredentialsUrl}">Forgot password?</a>
-    </#if>
 
   </div>
 

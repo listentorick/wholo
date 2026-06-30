@@ -155,3 +155,29 @@ input[type="password"]:focus {
   border-color: #C4622A;
   color: #ffffff;
 }
+
+/* ─── Info / success message ────────────────────────────── */
+
+.wh-info {
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: #16A34A;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ─── Secondary links ───────────────────────────────────── */
+
+.wh-link {
+  display: block;
+  text-align: center;
+  margin-top: 20px;
+  font-size: 12px;
+  color: #9BA3AE;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+}
+
+.wh-link:hover {
+  color: #D97036;
+}
