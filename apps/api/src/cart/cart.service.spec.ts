@@ -48,7 +48,7 @@ describe('CartService', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       tradeRelationship: { findFirst: jest.fn() },
-      cartOrder: { upsert: jest.fn(), findUniqueOrThrow: jest.fn() },
+      cartOrder: { upsert: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
       cartOrderLine: { upsert: jest.fn(), deleteMany: jest.fn() },
       product: { findFirst: jest.fn() },
     };
@@ -74,19 +74,19 @@ describe('CartService', () => {
     it('returns formatted cart for the given distributor/customer/user', async () => {
       const cart = makeCart([makeCartLine()]);
       (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
-      (prisma.cartOrder.upsert as jest.Mock).mockResolvedValue(cart);
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(cart);
 
       const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
 
       expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ slug: 'dist-slug', type: OrganisationType.DISTRIBUTOR }) }),
       );
-      expect(prisma.cartOrder.upsert).toHaveBeenCalledWith(
+      expect(prisma.cartOrder.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { distributorId_customerId_userId_status: { distributorId: DISTRIBUTOR_ID, customerId: CUSTOMER_ID, userId: USER_ID, status: CartOrderStatus.DRAFT } },
-          create: { distributorId: DISTRIBUTOR_ID, customerId: CUSTOMER_ID, userId: USER_ID, status: CartOrderStatus.DRAFT },
         }),
       );
+      expect(prisma.cartOrder.upsert).not.toHaveBeenCalled();
       expect(result.orderId).toBe(CART_ID);
       expect(result.items).toHaveLength(1);
     });
@@ -99,11 +99,22 @@ describe('CartService', () => {
 
     it('returns empty cart when no lines exist', async () => {
       (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
-      (prisma.cartOrder.upsert as jest.Mock).mockResolvedValue(makeCart([]));
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
 
       const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
 
       expect(result.items).toHaveLength(0);
+    });
+
+    it('returns a synthesized empty cart without creating a row when no draft exists yet', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+
+      expect(result.orderId).toBeNull();
+      expect(result.items).toHaveLength(0);
+      expect(prisma.cartOrder.upsert).not.toHaveBeenCalled();
     });
   });
 
@@ -157,12 +168,25 @@ describe('CartService', () => {
     });
 
     it('removes the line when quantity is 0', async () => {
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
+
       await service.upsertItem({ ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
 
       expect(prisma.cartOrderLine.deleteMany).toHaveBeenCalledWith({
         where: { orderId: CART_ID, productId: PRODUCT_ID },
       });
       expect(prisma.cartOrderLine.upsert).not.toHaveBeenCalled();
+    });
+
+    it('no-ops without creating a cart when removing from a nonexistent cart', async () => {
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.upsertItem({ ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
+
+      expect(prisma.cartOrder.upsert).not.toHaveBeenCalled();
+      expect(prisma.cartOrderLine.deleteMany).not.toHaveBeenCalled();
+      expect(result.orderId).toBeNull();
+      expect(result.items).toHaveLength(0);
     });
 
     it('throws NotFoundException when distributor slug is unknown', async () => {

@@ -22,8 +22,8 @@ export class CartService {
 
   async getCart(distributorSlug: string, customerId: string, userId: string) {
     const distributor = await this.resolveDistributor(distributorSlug);
-    const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
-    return this.formatCart(order);
+    const order = await this.findDraft(distributor.id, customerId, userId);
+    return this.formatCart(order ?? { id: null, lines: [] });
   }
 
   async upsertItem(dto: UpsertCartItemDto, customerId: string, userId: string, orderAsDistributorId?: string) {
@@ -35,57 +35,66 @@ export class CartService {
     });
     if (!relationship) throw new ForbiddenException('No active trade relationship');
 
+    if (dto.quantity === 0) {
+      const existing = await this.findDraft(distributor.id, customerId, userId);
+      if (!existing) return this.formatCart({ id: null, lines: [] });
+
+      await this.prisma.cartOrderLine.deleteMany({
+        where: { orderId: existing.id, productId: dto.productId },
+      });
+
+      const updated = await this.prisma.cartOrder.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { lines: { include: cartLineInclude } },
+      });
+      return this.formatCart(updated);
+    }
+
     const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
 
-    if (dto.quantity === 0) {
-      await this.prisma.cartOrderLine.deleteMany({
-        where: { orderId: order.id, productId: dto.productId },
-      });
-    } else {
-      const product = await this.prisma.product.findFirst({
-        where: { id: dto.productId, distributorId: distributor.id, deletedAt: null },
-        select: { id: true, price: true, distributorId: true },
-      });
+    const product = await this.prisma.product.findFirst({
+      where: { id: dto.productId, distributorId: distributor.id, deletedAt: null },
+      select: { id: true, price: true, distributorId: true },
+    });
 
-      if (!product) throw new NotFoundException('Product not found');
+    if (!product) throw new NotFoundException('Product not found');
 
-      if (orderAsDistributorId && product.distributorId !== orderAsDistributorId) {
-        throw new ForbiddenException('Order-as session is not authorised for this distributor');
-      }
-
-      const resolved = await this.priceResolution.resolvePrice(
-        distributor.id,
-        customerId,
-        dto.productId,
-        dto.quantity,
-      );
-
-      // Fall back to the base product price when no price list rule applies.
-      const unitPrice: Prisma.Decimal =
-        resolved?.unitPrice ??
-        (product.price as Prisma.Decimal | null) ??
-        (() => { throw new UnprocessableEntityException('No price available for this product'); })();
-
-      await this.prisma.cartOrderLine.upsert({
-        where: { orderId_productId: { orderId: order.id, productId: dto.productId } },
-        create: {
-          orderId: order.id,
-          productId: dto.productId,
-          quantity: dto.quantity,
-          unitPrice,
-          resolvedPriceListId: resolved?.priceListId ?? null,
-          resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
-          priceResolvedAt: new Date(),
-        },
-        update: {
-          quantity: dto.quantity,
-          unitPrice,
-          resolvedPriceListId: resolved?.priceListId ?? null,
-          resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
-          priceResolvedAt: new Date(),
-        },
-      });
+    if (orderAsDistributorId && product.distributorId !== orderAsDistributorId) {
+      throw new ForbiddenException('Order-as session is not authorised for this distributor');
     }
+
+    const resolved = await this.priceResolution.resolvePrice(
+      distributor.id,
+      customerId,
+      dto.productId,
+      dto.quantity,
+    );
+
+    // Fall back to the base product price when no price list rule applies.
+    const unitPrice: Prisma.Decimal =
+      resolved?.unitPrice ??
+      (product.price as Prisma.Decimal | null) ??
+      (() => { throw new UnprocessableEntityException('No price available for this product'); })();
+
+    await this.prisma.cartOrderLine.upsert({
+      where: { orderId_productId: { orderId: order.id, productId: dto.productId } },
+      create: {
+        orderId: order.id,
+        productId: dto.productId,
+        quantity: dto.quantity,
+        unitPrice,
+        resolvedPriceListId: resolved?.priceListId ?? null,
+        resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
+        priceResolvedAt: new Date(),
+      },
+      update: {
+        quantity: dto.quantity,
+        unitPrice,
+        resolvedPriceListId: resolved?.priceListId ?? null,
+        resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
+        priceResolvedAt: new Date(),
+      },
+    });
 
     const updated = await this.prisma.cartOrder.findUniqueOrThrow({
       where: { id: order.id },
@@ -104,6 +113,13 @@ export class CartService {
     return distributor;
   }
 
+  private async findDraft(distributorId: string, customerId: string, userId: string) {
+    return this.prisma.cartOrder.findUnique({
+      where: { distributorId_customerId_userId_status: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT } },
+      include: { lines: { include: cartLineInclude } },
+    });
+  }
+
   private async findOrCreateDraft(distributorId: string, customerId: string, userId: string) {
     return this.prisma.cartOrder.upsert({
       where: { distributorId_customerId_userId_status: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT } },
@@ -114,7 +130,7 @@ export class CartService {
   }
 
   private formatCart(order: {
-    id: string;
+    id: string | null;
     lines: Array<{
       productId: string;
       quantity: number;

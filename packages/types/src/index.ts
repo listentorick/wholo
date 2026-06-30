@@ -47,7 +47,7 @@ export interface CartItem {
 }
 
 export interface CartResponse {
-  orderId: string;
+  orderId: string | null;
   items: CartItem[];
 }
 
