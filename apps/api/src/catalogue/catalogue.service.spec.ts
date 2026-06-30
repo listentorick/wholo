@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { OrganisationType, PriceListRuleSelectorType, PriceListRuleValueType, ProductStatus } from '@prisma/client';
+import { OrganisationType, Prisma, ProductStatus } from '@prisma/client';
 import { CatalogueService } from './catalogue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
@@ -13,20 +13,6 @@ const PRODUCT_ID_2 = 'prod-2';
 const CUSTOMER_ORG_ID = 'cust-1';
 const RELATIONSHIP_ID = 'rel-1';
 const NOW = new Date('2025-01-15T00:00:00Z');
-
-interface DecimalLike {
-  toFixed: (d: number) => string;
-  div: (d: number) => DecimalLike;
-  mul: (other: DecimalLike) => DecimalLike;
-  minus: (other: DecimalLike) => DecimalLike;
-}
-
-const makeDecimal = (value: string): DecimalLike => ({
-  toFixed: (d: number) => parseFloat(value).toFixed(d),
-  div: (d: number) => makeDecimal((parseFloat(value) / d).toString()),
-  mul: (other: DecimalLike) => makeDecimal((parseFloat(value) * parseFloat(other.toFixed(10))).toString()),
-  minus: (other: DecimalLike) => makeDecimal((parseFloat(value) - parseFloat(other.toFixed(10))).toString()),
-});
 
 const baseDistributor = {
   id: DISTRIBUTOR_ID,
@@ -69,6 +55,7 @@ const mockPrisma = {
 const mockPriceResolution = {
   resolvePriceListId: jest.fn(),
   resolvePrice: jest.fn(),
+  resolvePricesForProducts: jest.fn(),
 };
 
 const mockR2Storage = {
@@ -101,6 +88,8 @@ describe('CatalogueService', () => {
     mockPrisma.customerCatalogue.findMany.mockResolvedValue([]);
     mockPrisma.priceListRule.findMany.mockResolvedValue([]);
     mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
+    mockPriceResolution.resolvePrice.mockResolvedValue(null);
+    mockPriceResolution.resolvePricesForProducts.mockResolvedValue(new Map());
   });
 
   describe('getDistributor', () => {
@@ -283,6 +272,52 @@ describe('CatalogueService', () => {
       expect(result.pagination.nextCursor).not.toBeNull();
       expect(result.data).toHaveLength(50);
     });
+
+    it('does not call resolvePricesForProducts for unauthenticated requests', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, {});
+
+      expect(mockPriceResolution.resolvePricesForProducts).not.toHaveBeenCalled();
+    });
+
+    it('calls resolvePricesForProducts with the correct productIds for authenticated requests', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1), makeProduct(PRODUCT_ID_2)]);
+      mockPrisma.product.count.mockResolvedValue(2);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      expect(mockPriceResolution.resolvePricesForProducts).toHaveBeenCalledWith(
+        DISTRIBUTOR_ID,
+        CUSTOMER_ORG_ID,
+        [PRODUCT_ID_1, PRODUCT_ID_2],
+      );
+    });
+
+    it('sets resolvedPrice on products that appear in the price map', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1), makeProduct(PRODUCT_ID_2)]);
+      mockPrisma.product.count.mockResolvedValue(2);
+      mockPriceResolution.resolvePricesForProducts.mockResolvedValue(
+        new Map([[PRODUCT_ID_1, new Prisma.Decimal('18.50')]]),
+      );
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      const p1 = result.data.find((p) => p.id === PRODUCT_ID_1);
+      const p2 = result.data.find((p) => p.id === PRODUCT_ID_2);
+      expect(p1?.resolvedPrice).toBe('18.50');
+      expect(p2?.resolvedPrice).toBeNull();
+    });
+
+    it('sets resolvedPrice null for all products when price map is empty', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      expect(result.data[0].resolvedPrice).toBeNull();
+    });
   });
 
   describe('getProduct', () => {
@@ -392,40 +427,30 @@ describe('CatalogueService', () => {
       );
     });
 
-    it('returns resolvedPrice for a FIXED_PRICE rule', async () => {
-      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
-      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
-        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
-      ]);
-      mockPriceResolution.resolvePriceListId.mockResolvedValue('price-list-1');
-      mockPrisma.priceListRule.findMany.mockResolvedValue([
-        {
-          selectorType: PriceListRuleSelectorType.PRODUCT,
-          productId: PRODUCT_ID_1,
-          minQuantity: 1,
-          valueType: PriceListRuleValueType.FIXED_PRICE,
-          unitPrice: makeDecimal('15.00'),
-          discountPercentage: null,
-          discountBaseType: null,
-          basePriceListId: null,
-        },
-      ]);
+    it('returns resolvedPrice from resolvePrice when a rule matches', async () => {
+      mockPriceResolution.resolvePrice.mockResolvedValue({
+        unitPrice: new Prisma.Decimal('15.00'),
+        priceListId: 'price-list-1',
+        priceListRuleId: 'rule-1',
+      });
 
       const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.resolvedPrice).toBe('15.00');
+      expect(mockPriceResolution.resolvePrice).toHaveBeenCalledWith(
+        DISTRIBUTOR_ID, CUSTOMER_ORG_ID, PRODUCT_ID_1, 1,
+      );
     });
 
-    it('returns resolvedPrice null when customer has no price list', async () => {
-      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
-      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
-        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
-      ]);
-      mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
-
+    it('returns resolvedPrice null when resolvePrice returns null', async () => {
       const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.resolvedPrice).toBeNull();
+    });
+
+    it('does not call resolvePrice for unauthenticated requests (product is not visible)', async () => {
+      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+      expect(mockPriceResolution.resolvePrice).not.toHaveBeenCalled();
     });
   });
 });

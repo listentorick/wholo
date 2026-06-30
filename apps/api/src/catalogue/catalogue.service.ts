@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, OrganisationType, ProductStatus, PriceListRuleDiscountBaseType, PriceListRuleSelectorType, PriceListRuleValueType } from '@prisma/client';
+import { Prisma, OrganisationType, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
@@ -163,99 +163,32 @@ export class CatalogueService {
     const hasMore = items.length > limit;
     const rawData = hasMore ? items.slice(0, -1) : items;
 
-    // All catalogue products are always shown. For authenticated customers, populate
-    // resolvedPrices from their price list where a rule exists. Products with no
-    // matching rule fall back to the base product price on the frontend.
-    const data = rawData;
-    const resolvedPrices = new Map<string, string>();
-
     const thumbnailUrls = new Map<string, string>();
+    const resolvedPrices = new Map<string, Prisma.Decimal>();
+
     if (rawData.length > 0) {
       const productIds = rawData.map((p) => p.id);
-      const images = await this.prisma.assetImage.findMany({
-        where: {
-          assetType: 'product-image',
-          entityId: { in: productIds },
-          distributorId: distributor.id,
-          isPrimary: true,
-        },
-        select: { entityId: true, variants: true },
-      });
+      const [images, priceMap] = await Promise.all([
+        this.prisma.assetImage.findMany({
+          where: {
+            assetType: 'product-image',
+            entityId: { in: productIds },
+            distributorId: distributor.id,
+            isPrimary: true,
+          },
+          select: { entityId: true, variants: true },
+        }),
+        customerOrgId
+          ? this.priceResolution.resolvePricesForProducts(distributor.id, customerOrgId, productIds)
+          : Promise.resolve(new Map<string, Prisma.Decimal>()),
+      ]);
+
       for (const img of images) {
         const variants = img.variants as AssetImageVariants;
         const thumbKey = variants?.thumb ?? null;
         if (thumbKey) thumbnailUrls.set(img.entityId, this.r2Storage.getPublicUrl(thumbKey));
       }
-    }
-
-    if (customerOrgId) {
-      const priceListId = await this.priceResolution.resolvePriceListId(distributor.id, customerOrgId);
-
-      if (priceListId) {
-        const rules = await this.prisma.priceListRule.findMany({
-          where: { priceListId, active: true },
-          select: {
-            selectorType: true,
-            productId: true,
-            minQuantity: true,
-            valueType: true,
-            unitPrice: true,
-            discountPercentage: true,
-            discountBaseType: true,
-            basePriceListId: true,
-          },
-        });
-
-        const toDecimal = (v: unknown): Prisma.Decimal | null =>
-          v != null && typeof v === 'object' && 'toFixed' in (v as object)
-            ? (v as Prisma.Decimal)
-            : null;
-
-        const priceResolutionService = this.priceResolution;
-        await Promise.all(
-          rawData.map(async (product) => {
-            const candidates = rules.filter(
-              (r) =>
-                r.minQuantity <= 1 &&
-                (r.selectorType === PriceListRuleSelectorType.ALL_PRODUCTS ||
-                  (r.selectorType === PriceListRuleSelectorType.PRODUCT && r.productId === product.id)),
-            );
-
-            if (candidates.length === 0) return; // no rule → base price used on frontend
-
-            candidates.sort((a, b) => {
-              const selectorOrder =
-                (a.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1) -
-                (b.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1);
-              if (selectorOrder !== 0) return selectorOrder;
-              return b.minQuantity - a.minQuantity;
-            });
-
-            const matched = candidates[0];
-
-            if (matched.valueType === PriceListRuleValueType.FIXED_PRICE) {
-              const d = toDecimal(matched.unitPrice);
-              if (!d) return; // malformed rule → fall back to base price
-              resolvedPrices.set(product.id, d.toFixed(2));
-            } else {
-              // PERCENTAGE_DISCOUNT
-              let base: Prisma.Decimal | null = null;
-              if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRODUCT_PRICE) {
-                base = toDecimal(product.price);
-              } else if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRICE_LIST && matched.basePriceListId) {
-                const baseResolved = await priceResolutionService.resolvePrice(
-                  distributor.id, customerOrgId!, product.id, 1, 0, matched.basePriceListId,
-                );
-                base = baseResolved?.unitPrice ?? null;
-              }
-              if (!base || !matched.discountPercentage) return; // can't compute → fall back to base price
-              const pct = toDecimal(matched.discountPercentage)!;
-              const multiplier = new Prisma.Decimal(1).minus(pct.div(100));
-              resolvedPrices.set(product.id, base.mul(multiplier).toFixed(2));
-            }
-          }),
-        );
-      }
+      for (const [id, price] of priceMap) resolvedPrices.set(id, price);
     }
 
     const nextCursor = hasMore && rawData.length > 0
@@ -266,7 +199,7 @@ export class CatalogueService {
 
     return {
       distributor: { id: distributor.id, name: distributor.name },
-      data: data.map((p) => ({
+      data: rawData.map((p) => ({
         ...p,
         price: p.price
           ? typeof p.price === 'object' && 'toFixed' in (p.price as object)
@@ -278,7 +211,7 @@ export class CatalogueService {
             ? (p.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
             : String(p.compareAtPrice)
           : null,
-        resolvedPrice: resolvedPrices.get(p.id) ?? null,
+        resolvedPrice: resolvedPrices.get(p.id)?.toFixed(2) ?? null,
         thumbnailUrl: thumbnailUrls.get(p.id) ?? null,
       })),
       pagination: { nextCursor, hasMore, total },
@@ -352,67 +285,10 @@ export class CatalogueService {
     let resolvedPrice: string | null = null;
 
     if (customerOrgId) {
-      const priceListId = await this.priceResolution.resolvePriceListId(distributor.id, customerOrgId);
-
-      if (priceListId) {
-        const rules = await this.prisma.priceListRule.findMany({
-          where: { priceListId, active: true },
-          select: {
-            selectorType: true,
-            productId: true,
-            minQuantity: true,
-            valueType: true,
-            unitPrice: true,
-            discountPercentage: true,
-            discountBaseType: true,
-            basePriceListId: true,
-          },
-        });
-
-        const toDecimal = (v: unknown): Prisma.Decimal | null =>
-          v != null && typeof v === 'object' && 'toFixed' in (v as object)
-            ? (v as Prisma.Decimal)
-            : null;
-
-        const candidates = rules.filter(
-          (r) =>
-            r.minQuantity <= 1 &&
-            (r.selectorType === PriceListRuleSelectorType.ALL_PRODUCTS ||
-              (r.selectorType === PriceListRuleSelectorType.PRODUCT && r.productId === product.id)),
-        );
-
-        if (candidates.length > 0) {
-          candidates.sort((a, b) => {
-            const selectorOrder =
-              (a.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1) -
-              (b.selectorType === PriceListRuleSelectorType.PRODUCT ? 0 : 1);
-            if (selectorOrder !== 0) return selectorOrder;
-            return b.minQuantity - a.minQuantity;
-          });
-
-          const matched = candidates[0];
-
-          if (matched.valueType === PriceListRuleValueType.FIXED_PRICE) {
-            const d = toDecimal(matched.unitPrice);
-            if (d) resolvedPrice = d.toFixed(2);
-          } else {
-            let base: Prisma.Decimal | null = null;
-            if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRODUCT_PRICE) {
-              base = toDecimal(product.price);
-            } else if (matched.discountBaseType === PriceListRuleDiscountBaseType.PRICE_LIST && matched.basePriceListId) {
-              const baseResolved = await this.priceResolution.resolvePrice(
-                distributor.id, customerOrgId, product.id, 1, 0, matched.basePriceListId,
-              );
-              base = baseResolved?.unitPrice ?? null;
-            }
-            if (base && matched.discountPercentage) {
-              const pct = toDecimal(matched.discountPercentage)!;
-              const multiplier = new Prisma.Decimal(1).minus(pct.div(100));
-              resolvedPrice = base.mul(multiplier).toFixed(2);
-            }
-          }
-        }
-      }
+      const resolved = await this.priceResolution.resolvePrice(
+        distributor.id, customerOrgId, product.id, 1,
+      );
+      resolvedPrice = resolved?.unitPrice.toFixed(2) ?? null;
     }
 
     return {
