@@ -169,26 +169,28 @@ export class OrdersService {
 
     // Compute totals (tax = 0 for Phase 1)
     const lines = cart.lines.map((line) => {
-      const unitPrice = line.unitPrice as { toFixed: (n: number) => string };
-      const unit = parseFloat(unitPrice.toFixed(2));
-      const subtotal = unit * line.quantity;
+      const unitPrice = line.unitPrice as Prisma.Decimal;
+      const subtotalAmount = unitPrice.mul(line.quantity);
       return {
         productId: line.productId,
         skuSnapshot: line.product.sku,
         productNameSnapshot: line.product.name,
-        unitPriceSnapshot: new Prisma.Decimal(unit),
+        unitPriceSnapshot: unitPrice,
         quantityOrdered: line.quantity,
-        subtotalAmount: new Prisma.Decimal(subtotal),
+        subtotalAmount,
         taxAmount: new Prisma.Decimal(0),
-        totalAmount: new Prisma.Decimal(subtotal),
+        totalAmount: subtotalAmount,
         priceListIdSnapshot: line.resolvedPriceListId ?? null,
         priceListRuleIdSnapshot: line.resolvedPriceListRuleId ?? null,
       };
     });
 
-    const subtotalAmount = lines.reduce((s, l) => s + parseFloat(l.subtotalAmount.toString()), 0);
-    const taxAmount = 0;
-    const totalAmount = subtotalAmount + taxAmount;
+    const subtotalAmount = lines.reduce(
+      (sum, l) => sum.plus(l.subtotalAmount),
+      new Prisma.Decimal(0),
+    );
+    const taxAmount = new Prisma.Decimal(0);
+    const totalAmount = subtotalAmount.plus(taxAmount);
 
     // Generate order number
     const seqResult = await this.prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
@@ -214,9 +216,9 @@ export class OrdersService {
           status: isAutoAccept ? OrderStatus.ACCEPTED : OrderStatus.SUBMITTED,
           acceptanceModeSnapshot: mode,
           acceptanceModeSourceSnapshot: source,
-          subtotalAmount: new Prisma.Decimal(subtotalAmount),
-          taxAmount: new Prisma.Decimal(taxAmount),
-          totalAmount: new Prisma.Decimal(totalAmount),
+          subtotalAmount,
+          taxAmount,
+          totalAmount,
           billingAddressSnapshot: billingAddressSnapshot ?? Prisma.JsonNull,
           deliveryAddressSnapshot: deliveryAddressSnapshot ?? Prisma.JsonNull,
           requestedDeliveryDate: dto.requestedDeliveryDate ? new Date(dto.requestedDeliveryDate) : null,

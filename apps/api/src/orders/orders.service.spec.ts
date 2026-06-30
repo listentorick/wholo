@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnprocessableEntityException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { CartOrderStatus, OrganisationType, OrderStatus, OrderAcceptanceMode, AcceptanceModeSource } from '@prisma/client';
+import { CartOrderStatus, OrganisationType, OrderStatus, OrderAcceptanceMode, AcceptanceModeSource, Prisma } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -22,10 +22,10 @@ function makeCart(lines: unknown[] = [{ id: 'line-1' }]) {
       id: l.id ?? 'line-1',
       productId: 'prod-1',
       quantity: 2,
-      unitPrice: { toFixed: () => '10.00' },
+      unitPrice: new Prisma.Decimal('12.23'),
       resolvedPriceListId: null,
       resolvedPriceListRuleId: null,
-      product: { id: 'prod-1', name: 'Wine', sku: 'SKU-1', price: { toFixed: () => '10.00' } },
+      product: { id: 'prod-1', name: 'Wine', sku: 'SKU-1', price: new Prisma.Decimal('12.23') },
     })),
   };
 }
