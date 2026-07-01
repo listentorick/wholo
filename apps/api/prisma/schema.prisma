@@ -290,6 +290,7 @@ model TradeRelationship {
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
   @@index([distributorId, status])
+  @@index([customerId, status])
   @@map("trade_relationships")
 }
 

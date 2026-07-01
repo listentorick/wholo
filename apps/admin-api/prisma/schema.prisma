@@ -112,6 +112,12 @@ model Organisation {
   addressState                    String?
   addressPostcode                 String?
   addressCountry                  String?
+  billingLine1                    String?
+  billingLine2                    String?
+  billingCity                     String?
+  billingState                    String?
+  billingPostcode                 String?
+  billingCountry                  String?
   createdAt                       DateTime            @default(now())
   updatedAt                       DateTime            @updatedAt
   deletedAt                       DateTime?
@@ -264,19 +270,13 @@ model TradeRelationship {
   creditLimit          Decimal?                @db.Decimal(10, 2)
   minimumOrderSpend    Decimal?                @db.Decimal(10, 2)
   paymentTerms         String?
-  notes                String?
-  deliveryLine1        String?
-  deliveryLine2        String?
-  deliveryCity         String?
-  deliveryState        String?
-  deliveryPostcode     String?
-  deliveryCountry      String?
-  billingLine1     String?
-  billingLine2     String?
-  billingCity      String?
-  billingState     String?
-  billingPostcode  String?
-  billingCountry   String?
+  notes            String?
+  deliveryLine1    String?
+  deliveryLine2    String?
+  deliveryCity     String?
+  deliveryState    String?
+  deliveryPostcode String?
+  deliveryCountry  String?
   deletedAt        DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
@@ -290,6 +290,7 @@ model TradeRelationship {
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
   @@index([distributorId, status])
+  @@index([customerId, status])
   @@map("trade_relationships")
 }
 
