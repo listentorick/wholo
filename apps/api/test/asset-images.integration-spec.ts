@@ -13,14 +13,19 @@ import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
-import { OrganisationType, ProductStatus } from '@prisma/client';
+import { OrganisationType, ProductStatus, Role } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { R2StorageService } from '../src/asset-images/r2-storage.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
+import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const DIST_A = 'test-img-dist-a';
 const DIST_B = 'test-img-dist-b';
+const ADMIN_A = 'test-img-admin-a';
+const ADMIN_A_KEYCLOAK_ID = 'kc-test-img-admin-a';
+const ADMIN_B = 'test-img-admin-b';
+const ADMIN_B_KEYCLOAK_ID = 'kc-test-img-admin-b';
 
 const mockR2 = {
   upload: jest.fn().mockResolvedValue(undefined),
@@ -31,6 +36,9 @@ const mockR2 = {
 describe('Asset Images (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let jwtServer: JwtTestServer;
+  let tokenA: string;
+  let tokenB: string;
   let png200: Buffer;
   let productAId: string;
   let productBId: string;
@@ -41,6 +49,8 @@ describe('Asset Images (integration)', () => {
     })
       .png()
       .toBuffer();
+
+    jwtServer = await startJwtTestServer();
 
     const module = await Test.createTestingModule({
       imports: [AppModule],
@@ -67,13 +77,39 @@ describe('Asset Images (integration)', () => {
       create: { id: DIST_B, name: 'Image Test Distributor B', type: OrganisationType.DISTRIBUTOR },
       update: {},
     });
+    const adminA = await prisma.user.upsert({
+      where: { id: ADMIN_A },
+      create: { id: ADMIN_A, email: 'img-admin-a@integration.test', keycloakId: ADMIN_A_KEYCLOAK_ID, firstName: 'Img', lastName: 'AdminA' },
+      update: { keycloakId: ADMIN_A_KEYCLOAK_ID },
+    });
+    const adminB = await prisma.user.upsert({
+      where: { id: ADMIN_B },
+      create: { id: ADMIN_B, email: 'img-admin-b@integration.test', keycloakId: ADMIN_B_KEYCLOAK_ID, firstName: 'Img', lastName: 'AdminB' },
+      update: { keycloakId: ADMIN_B_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: adminA.id, organisationId: DIST_A } },
+      create: { userId: adminA.id, organisationId: DIST_A, role: Role.DISTRIBUTOR_ADMIN },
+      update: {},
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: adminB.id, organisationId: DIST_B } },
+      create: { userId: adminB.id, organisationId: DIST_B, role: Role.DISTRIBUTOR_ADMIN },
+      update: {},
+    });
+
+    tokenA = jwtServer.signToken({ sub: ADMIN_A_KEYCLOAK_ID, email: 'img-admin-a@integration.test' });
+    tokenB = jwtServer.signToken({ sub: ADMIN_B_KEYCLOAK_ID, email: 'img-admin-b@integration.test' });
   });
 
   afterAll(async () => {
     await prisma.assetImage.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.membership.deleteMany({ where: { userId: { in: [ADMIN_A, ADMIN_B] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [ADMIN_A, ADMIN_B] } } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
     await app.close();
+    await jwtServer.close();
   });
 
   beforeEach(async () => {
@@ -94,11 +130,11 @@ describe('Asset Images (integration)', () => {
     mockR2.getPublicUrl.mockImplementation((key: string) => `https://cdn.example.com/${key}`);
   });
 
-  describe('POST /api/v1/admin/asset-images', () => {
+  describe('POST /api/v1/admin/distributors/:distributorId/asset-images', () => {
     it('returns 400 for unknown assetType', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'unknown-type')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'test.png', contentType: 'image/png' });
@@ -108,8 +144,8 @@ describe('Asset Images (integration)', () => {
 
     it('returns 404 when uploading to another distributor\'s product', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productBId)
         .attach('file', png200, { filename: 'test.png', contentType: 'image/png' });
@@ -119,8 +155,8 @@ describe('Asset Images (integration)', () => {
 
     it('returns 201 with correct data on valid upload', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
@@ -139,15 +175,15 @@ describe('Asset Images (integration)', () => {
 
     it('second upload is not primary and has sortOrder 1', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo2.png', contentType: 'image/png' });
@@ -160,8 +196,8 @@ describe('Asset Images (integration)', () => {
     it('returns 415 for unsupported file type', async () => {
       const gifBuffer = Buffer.from('GIF89a');
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', gifBuffer, { filename: 'anim.gif', contentType: 'image/gif' });
@@ -171,8 +207,8 @@ describe('Asset Images (integration)', () => {
 
     it('creates a DB record with correct keys stored', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
@@ -185,20 +221,33 @@ describe('Asset Images (integration)', () => {
       expect(keys.thumb).toContain(productAId);
       expect(keys.thumb).not.toContain('https://');
     });
+
+    it('returns 403 when requesting a distributor the caller has no membership for', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_B}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .field('assetType', 'product-image')
+        .field('entityId', productBId)
+        .attach('file', png200, { filename: 'test.png', contentType: 'image/png' });
+
+      expect(res.status).toBe(403);
+    });
   });
 
-  describe('GET /api/v1/admin/asset-images', () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/asset-images', () => {
     it('returns empty array for another distributor\'s entity', async () => {
       await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
 
+      // DIST_B's own admin, authorized for DIST_B, querying productA's images
+      // (which belong to DIST_A) — service-level scoping must still return empty.
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/asset-images?assetType=product-image&entityId=${productAId}`)
-        .set('x-distributor-id', DIST_B);
+        .get(`/api/v1/admin/distributors/${DIST_B}/asset-images?assetType=product-image&entityId=${productAId}`)
+        .set('Authorization', `Bearer ${tokenB}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(0);
@@ -207,16 +256,16 @@ describe('Asset Images (integration)', () => {
     it('returns images ordered by sortOrder', async () => {
       for (let i = 0; i < 2; i++) {
         await request(app.getHttpServer())
-          .post('/api/v1/admin/asset-images')
-          .set('x-distributor-id', DIST_A)
+          .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+          .set('Authorization', `Bearer ${tokenA}`)
           .field('assetType', 'product-image')
           .field('entityId', productAId)
           .attach('file', png200, { filename: `photo${i}.png`, contentType: 'image/png' });
       }
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/asset-images?assetType=product-image&entityId=${productAId}`)
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/asset-images?assetType=product-image&entityId=${productAId}`)
+        .set('Authorization', `Bearer ${tokenA}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(2);
@@ -224,26 +273,28 @@ describe('Asset Images (integration)', () => {
     });
   });
 
-  describe('DELETE /api/v1/admin/asset-images/:id', () => {
+  describe('DELETE /api/v1/admin/distributors/:distributorId/asset-images/:id', () => {
     it('returns 404 when deleting another distributor\'s image', async () => {
       const upload = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
 
+      // DIST_B's own admin, authorized for DIST_B, trying to delete an image
+      // that belongs to DIST_A — service-level ownership check must reject.
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/asset-images/${upload.body.id}`)
-        .set('x-distributor-id', DIST_B);
+        .delete(`/api/v1/admin/distributors/${DIST_B}/asset-images/${upload.body.id}`)
+        .set('Authorization', `Bearer ${tokenB}`);
 
       expect(res.status).toBe(404);
     });
 
     it('returns 204 and removes DB record and calls r2.delete', async () => {
       const upload = await request(app.getHttpServer())
-        .post('/api/v1/admin/asset-images')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .field('assetType', 'product-image')
         .field('entityId', productAId)
         .attach('file', png200, { filename: 'photo.png', contentType: 'image/png' });
@@ -252,8 +303,8 @@ describe('Asset Images (integration)', () => {
       jest.clearAllMocks();
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/asset-images/${imageId}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/asset-images/${imageId}`)
+        .set('Authorization', `Bearer ${tokenA}`);
 
       expect(res.status).toBe(204);
       expect(mockR2.delete).toHaveBeenCalledTimes(3); // thumb, catalogue, large
@@ -264,8 +315,8 @@ describe('Asset Images (integration)', () => {
     it('promotes next image to primary when primary is deleted', async () => {
       for (let i = 0; i < 2; i++) {
         await request(app.getHttpServer())
-          .post('/api/v1/admin/asset-images')
-          .set('x-distributor-id', DIST_A)
+          .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+          .set('Authorization', `Bearer ${tokenA}`)
           .field('assetType', 'product-image')
           .field('entityId', productAId)
           .attach('file', png200, { filename: `photo${i}.png`, contentType: 'image/png' });
@@ -279,20 +330,20 @@ describe('Asset Images (integration)', () => {
       const secondId = images[1].id;
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/admin/asset-images/${primaryId}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/asset-images/${primaryId}`)
+        .set('Authorization', `Bearer ${tokenA}`);
 
       const promoted = await prisma.assetImage.findFirst({ where: { id: secondId } });
       expect(promoted!.isPrimary).toBe(true);
     });
   });
 
-  describe('PUT /api/v1/admin/asset-images/reorder', () => {
+  describe('PUT /api/v1/admin/distributors/:distributorId/asset-images/reorder', () => {
     it('updates sortOrder correctly', async () => {
       for (let i = 0; i < 2; i++) {
         await request(app.getHttpServer())
-          .post('/api/v1/admin/asset-images')
-          .set('x-distributor-id', DIST_A)
+          .post(`/api/v1/admin/distributors/${DIST_A}/asset-images`)
+          .set('Authorization', `Bearer ${tokenA}`)
           .field('assetType', 'product-image')
           .field('entityId', productAId)
           .attach('file', png200, { filename: `photo${i}.png`, contentType: 'image/png' });
@@ -305,8 +356,8 @@ describe('Asset Images (integration)', () => {
       const [first, second] = images;
 
       const res = await request(app.getHttpServer())
-        .put('/api/v1/admin/asset-images/reorder')
-        .set('x-distributor-id', DIST_A)
+        .put(`/api/v1/admin/distributors/${DIST_A}/asset-images/reorder`)
+        .set('Authorization', `Bearer ${tokenA}`)
         .send({ assetType: 'product-image', entityId: productAId, imageIds: [second.id, first.id] });
 
       expect(res.status).toBe(200);

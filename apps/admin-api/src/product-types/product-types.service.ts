@@ -5,7 +5,7 @@ import { ApiClientService } from '../api-client/api-client.service';
 export class ProductTypesService {
   constructor(private api: ApiClientService) {}
 
-  findAll(distributorId: string) {
-    return this.api.get('/admin/product-types', distributorId);
+  findAll(distributorId: string, token: string) {
+    return this.api.get(`/admin/distributors/${distributorId}/product-types`, token);
   }
 }

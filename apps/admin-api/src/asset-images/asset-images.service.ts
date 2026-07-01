@@ -10,23 +10,24 @@ export class AssetImagesService {
     assetType: string,
     entityId: string,
     file: Express.Multer.File,
+    token: string,
   ): Promise<unknown> {
     const form = new FormData();
     form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname);
     form.append('assetType', assetType);
     form.append('entityId', entityId);
-    return this.api.postMultipart('/admin/asset-images', distributorId, form);
+    return this.api.postMultipart(`/admin/distributors/${distributorId}/asset-images`, token, form);
   }
 
-  list(distributorId: string, assetType: string, entityId: string): Promise<unknown> {
+  list(distributorId: string, assetType: string, entityId: string, token: string): Promise<unknown> {
     return this.api.get(
-      `/admin/asset-images?assetType=${encodeURIComponent(assetType)}&entityId=${encodeURIComponent(entityId)}`,
-      distributorId,
+      `/admin/distributors/${distributorId}/asset-images?assetType=${encodeURIComponent(assetType)}&entityId=${encodeURIComponent(entityId)}`,
+      token,
     );
   }
 
-  delete(distributorId: string, imageId: string): Promise<unknown> {
-    return this.api.delete(`/admin/asset-images/${imageId}`, distributorId);
+  delete(distributorId: string, imageId: string, token: string): Promise<unknown> {
+    return this.api.delete(`/admin/distributors/${distributorId}/asset-images/${imageId}`, token);
   }
 
   reorder(
@@ -34,8 +35,9 @@ export class AssetImagesService {
     assetType: string,
     entityId: string,
     imageIds: string[],
+    token: string,
   ): Promise<unknown> {
-    return this.api.put('/admin/asset-images/reorder', distributorId, {
+    return this.api.put(`/admin/distributors/${distributorId}/asset-images/reorder`, token, {
       assetType,
       entityId,
       imageIds,

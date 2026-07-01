@@ -5,8 +5,9 @@ const config: Config = {
   rootDir: '.',
   testRegex: 'test/.*\\.integration-spec\\.ts$',
   transform: {
-    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
+    '^.+\\.[tj]s$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.json' }],
   },
+  transformIgnorePatterns: ['node_modules/(?!(jose)/)'],
   testEnvironment: 'node',
   testTimeout: 30000,
 };

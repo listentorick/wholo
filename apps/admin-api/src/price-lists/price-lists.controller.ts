@@ -18,51 +18,51 @@ export class PriceListsController {
 
   @Get()
   findAll(@Req() req: Request, @Query() query: PriceListQueryDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.findAll(organisationId, query);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.findAll(organisationId, query, token);
   }
 
   @Post()
   create(@Req() req: Request, @Body() dto: CreatePriceListDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.create(organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.create(organisationId, dto, token);
   }
 
   @Get(':id')
   findOne(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.findOne(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.findOne(organisationId, id, token);
   }
 
   @Patch(':id')
   update(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdatePriceListDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.update(organisationId, id, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.update(organisationId, id, dto, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.remove(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.remove(organisationId, id, token);
   }
 
   @Post(':id/set-default')
   setDefault(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.setDefault(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.setDefault(organisationId, id, token);
   }
 
   @Get(':id/rules')
   listRules(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.listRules(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.listRules(organisationId, id, token);
   }
 
   @Post(':id/rules')
   createRule(@Req() req: Request, @Param('id') id: string, @Body() dto: CreatePriceListRuleDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.createRule(organisationId, id, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.createRule(organisationId, id, dto, token);
   }
 
   @Patch(':id/rules/:ruleId')
@@ -72,8 +72,8 @@ export class PriceListsController {
     @Param('ruleId') ruleId: string,
     @Body() dto: UpdatePriceListRuleDto,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.updateRule(organisationId, id, ruleId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.updateRule(organisationId, id, ruleId, dto, token);
   }
 
   @Delete(':id/rules/:ruleId')
@@ -83,7 +83,7 @@ export class PriceListsController {
     @Param('id') id: string,
     @Param('ruleId') ruleId: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.priceListsService.removeRule(organisationId, id, ruleId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.priceListsService.removeRule(organisationId, id, ruleId, token);
   }
 }

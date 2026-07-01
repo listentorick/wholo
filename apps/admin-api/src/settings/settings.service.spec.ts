@@ -33,24 +33,24 @@ describe('SettingsService (BFF)', () => {
   });
 
   describe('find', () => {
-    it('calls api.get with correct path and distributorId', async () => {
+    it('calls api.get with correct path and bearer token', async () => {
       mockApi.get.mockResolvedValue(mockSettingsResponse);
 
-      const result = await service.find('dist-1');
+      const result = await service.find('dist-1', 'token-1');
 
-      expect(mockApi.get).toHaveBeenCalledWith('/admin/settings', 'dist-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/admin/distributors/dist-1/settings', 'token-1');
       expect(result).toEqual(mockSettingsResponse);
     });
   });
 
   describe('update', () => {
-    it('calls api.patch with correct path, distributorId, and body', async () => {
+    it('calls api.patch with correct path, body, and bearer token', async () => {
       const dto = { name: 'New Name', marketplaceVisible: true };
       mockApi.patch.mockResolvedValue({ ...mockSettingsResponse, ...dto });
 
-      await service.update('dist-1', dto);
+      await service.update('dist-1', dto, 'token-1');
 
-      expect(mockApi.patch).toHaveBeenCalledWith('/admin/settings', 'dist-1', dto);
+      expect(mockApi.patch).toHaveBeenCalledWith('/admin/distributors/dist-1/settings', 'token-1', dto);
     });
   });
 });

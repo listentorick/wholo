@@ -1,11 +1,13 @@
 import {
   Controller, Get, Post, Patch, Delete,
-  Param, Body, Query, Headers, HttpCode, HttpStatus,
+  Param, Body, Query, HttpCode, HttpStatus, UseGuards,
 } from '@nestjs/common';
 import {
-  ApiHeader, ApiTags, ApiOperation,
+  ApiBearerAuth, ApiParam, ApiTags, ApiOperation,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AdminPriceListsService } from './admin-price-lists.service';
 import { CreatePriceListDto } from './dto/create-price-list.dto';
 import { UpdatePriceListDto } from './dto/update-price-list.dto';
@@ -15,8 +17,10 @@ import { UpdatePriceListRuleDto } from './dto/update-price-list-rule.dto';
 import { AssignPriceListDto } from './dto/assign-price-list.dto';
 
 @ApiTags('Admin / Price Lists')
-@ApiHeader({ name: 'x-distributor-id', required: true, description: 'Distributor organisation ID' })
-@Controller('admin')
+@ApiBearerAuth()
+@ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
+@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@Controller('admin/distributors/:distributorId')
 export class AdminPriceListsController {
   constructor(private service: AdminPriceListsService) {}
 
@@ -25,14 +29,14 @@ export class AdminPriceListsController {
   @Get('price-lists')
   @ApiOperation({ summary: 'List price lists for a distributor' })
   @ApiOkResponse({ description: 'Paginated list of price lists' })
-  findAll(@Headers('x-distributor-id') distributorId: string, @Query() query: PriceListQueryDto) {
+  findAll(@Param('distributorId') distributorId: string, @Query() query: PriceListQueryDto) {
     return this.service.findAll(distributorId, query);
   }
 
   @Post('price-lists')
   @ApiOperation({ summary: 'Create a price list' })
   @ApiCreatedResponse({ description: 'Price list created' })
-  create(@Headers('x-distributor-id') distributorId: string, @Body() dto: CreatePriceListDto) {
+  create(@Param('distributorId') distributorId: string, @Body() dto: CreatePriceListDto) {
     return this.service.create(distributorId, dto);
   }
 
@@ -40,7 +44,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Get a single price list with its rules' })
   @ApiOkResponse({ description: 'Price list detail' })
   @ApiNotFoundResponse({ description: 'Price list not found' })
-  findOne(@Headers('x-distributor-id') distributorId: string, @Param('id') id: string) {
+  findOne(@Param('distributorId') distributorId: string, @Param('id') id: string) {
     return this.service.findOne(id, distributorId);
   }
 
@@ -49,7 +53,7 @@ export class AdminPriceListsController {
   @ApiOkResponse({ description: 'Price list updated' })
   @ApiNotFoundResponse({ description: 'Price list not found' })
   update(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Body() dto: UpdatePriceListDto,
   ) {
@@ -61,7 +65,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Delete a price list' })
   @ApiNoContentResponse({ description: 'Price list deleted' })
   @ApiNotFoundResponse({ description: 'Price list not found' })
-  remove(@Headers('x-distributor-id') distributorId: string, @Param('id') id: string) {
+  remove(@Param('distributorId') distributorId: string, @Param('id') id: string) {
     return this.service.remove(id, distributorId);
   }
 
@@ -69,7 +73,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Set a price list as the distributor default' })
   @ApiOkResponse({ description: 'Default price list updated' })
   @ApiNotFoundResponse({ description: 'Price list not found' })
-  setDefault(@Headers('x-distributor-id') distributorId: string, @Param('id') id: string) {
+  setDefault(@Param('distributorId') distributorId: string, @Param('id') id: string) {
     return this.service.setDefault(id, distributorId);
   }
 
@@ -78,7 +82,7 @@ export class AdminPriceListsController {
   @Get('price-lists/:id/rules')
   @ApiOperation({ summary: 'List pricing rules for a price list' })
   @ApiOkResponse({ description: 'List of price list rules' })
-  listRules(@Headers('x-distributor-id') distributorId: string, @Param('id') id: string) {
+  listRules(@Param('distributorId') distributorId: string, @Param('id') id: string) {
     return this.service.listRules(id, distributorId);
   }
 
@@ -86,7 +90,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Create a pricing rule' })
   @ApiCreatedResponse({ description: 'Rule created' })
   createRule(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Body() dto: CreatePriceListRuleDto,
   ) {
@@ -97,7 +101,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Update a pricing rule' })
   @ApiOkResponse({ description: 'Rule updated' })
   updateRule(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Param('ruleId') ruleId: string,
     @Body() dto: UpdatePriceListRuleDto,
@@ -110,7 +114,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Delete a pricing rule' })
   @ApiNoContentResponse({ description: 'Rule deleted' })
   removeRule(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Param('ruleId') ruleId: string,
   ) {
@@ -123,7 +127,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Get pricing across all price lists for a product' })
   @ApiOkResponse({ description: 'Pricing breakdown per price list' })
   getProductPricing(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('productId') productId: string,
   ) {
     return this.service.getPricingForProduct(productId, distributorId);
@@ -135,7 +139,7 @@ export class AdminPriceListsController {
   @ApiOperation({ summary: 'Assign or clear the price list for a trade relationship' })
   @ApiOkResponse({ description: 'Price list assignment updated' })
   assignPriceList(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('trId') trId: string,
     @Body() dto: AssignPriceListDto,
   ) {

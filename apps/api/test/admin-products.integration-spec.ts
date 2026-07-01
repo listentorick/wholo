@@ -11,19 +11,26 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, ProductStatus } from '@prisma/client';
+import { OrganisationType, ProductStatus, Role } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
+import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const DIST_A = 'test-integration-dist-a';
 const DIST_B = 'test-integration-dist-b';
+const ADMIN_A = 'test-products-admin-a';
+const ADMIN_A_KEYCLOAK_ID = 'kc-test-products-admin-a';
 
 describe('Admin Products (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let jwtServer: JwtTestServer;
+  let token: string;
 
   beforeAll(async () => {
+    jwtServer = await startJwtTestServer();
+
     const module = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -47,14 +54,35 @@ describe('Admin Products (integration)', () => {
       create: { id: DIST_B, name: 'Integration Test Distributor B', type: OrganisationType.DISTRIBUTOR },
       update: {},
     });
+    const admin = await prisma.user.upsert({
+      where: { id: ADMIN_A },
+      create: {
+        id: ADMIN_A,
+        email: 'products-admin@integration.test',
+        keycloakId: ADMIN_A_KEYCLOAK_ID,
+        firstName: 'Products',
+        lastName: 'Admin',
+      },
+      update: { keycloakId: ADMIN_A_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: admin.id, organisationId: DIST_A } },
+      create: { userId: admin.id, organisationId: DIST_A, role: Role.DISTRIBUTOR_ADMIN },
+      update: {},
+    });
+
+    token = jwtServer.signToken({ sub: ADMIN_A_KEYCLOAK_ID, email: 'products-admin@integration.test' });
   });
 
   afterAll(async () => {
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.productType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.supplier.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.membership.deleteMany({ where: { userId: ADMIN_A } });
+    await prisma.user.deleteMany({ where: { id: ADMIN_A } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
     await app.close();
+    await jwtServer.close();
   });
 
   beforeEach(async () => {
@@ -63,9 +91,9 @@ describe('Admin Products (integration)', () => {
     await prisma.supplier.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
-  // ── GET /admin/products ────────────────────────────────────────────────────
+  // ── GET /admin/distributors/:distributorId/products ────────────────────────
 
-  describe('GET /api/v1/admin/products', () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/products', () => {
     it('returns only the requesting distributor\'s products', async () => {
       const productA = await prisma.product.create({
         data: { distributorId: DIST_A, name: 'Product A', status: ProductStatus.ACTIVE },
@@ -75,8 +103,8 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/admin/products')
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/products`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -89,25 +117,33 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/admin/products')
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/products`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(0);
     });
+
+    it('returns 403 when requesting a distributor the caller has no membership for', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_B}/products`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
   });
 
-  // ── GET /admin/products/:id ────────────────────────────────────────────────
+  // ── GET /admin/distributors/:distributorId/products/:id ────────────────────
 
-  describe('GET /api/v1/admin/products/:id', () => {
-    it('returns 404 when the product belongs to a different distributor', async () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/products/:id', () => {
+    it('returns 404 when the product belongs to a different distributor than the one in the path', async () => {
       const productB = await prisma.product.create({
         data: { distributorId: DIST_B, name: 'Product B', status: ProductStatus.ACTIVE },
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/products/${productB.id}`)
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/products/${productB.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
     });
@@ -118,8 +154,8 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/products/${productA.id}`)
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/products/${productA.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(productA.id);
@@ -127,13 +163,13 @@ describe('Admin Products (integration)', () => {
     });
   });
 
-  // ── POST /admin/products ───────────────────────────────────────────────────
+  // ── POST /admin/distributors/:distributorId/products ───────────────────────
 
-  describe('POST /api/v1/admin/products', () => {
+  describe('POST /api/v1/admin/distributors/:distributorId/products', () => {
     it('stamps the created product with the requesting distributor id, not user-supplied input', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/products')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/products`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'New Product', status: 'DRAFT' });
 
       expect(res.status).toBe(201);
@@ -144,17 +180,17 @@ describe('Admin Products (integration)', () => {
     });
   });
 
-  // ── PATCH /admin/products/:id ──────────────────────────────────────────────
+  // ── PATCH /admin/distributors/:distributorId/products/:id ──────────────────
 
-  describe('PATCH /api/v1/admin/products/:id', () => {
+  describe('PATCH /api/v1/admin/distributors/:distributorId/products/:id', () => {
     it('returns 403 and leaves the product unchanged when it belongs to a different distributor', async () => {
       const productB = await prisma.product.create({
         data: { distributorId: DIST_B, name: 'Original Name', status: ProductStatus.ACTIVE },
       });
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/v1/admin/products/${productB.id}`)
-        .set('x-distributor-id', DIST_A)
+        .patch(`/api/v1/admin/distributors/${DIST_A}/products/${productB.id}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Stolen update' });
 
       expect(res.status).toBe(403);
@@ -164,17 +200,17 @@ describe('Admin Products (integration)', () => {
     });
   });
 
-  // ── DELETE /admin/products/:id ─────────────────────────────────────────────
+  // ── DELETE /admin/distributors/:distributorId/products/:id ─────────────────
 
-  describe('DELETE /api/v1/admin/products/:id', () => {
+  describe('DELETE /api/v1/admin/distributors/:distributorId/products/:id', () => {
     it('returns 403 and does not soft-delete when the product belongs to a different distributor', async () => {
       const productB = await prisma.product.create({
         data: { distributorId: DIST_B, name: 'Product B', status: ProductStatus.ACTIVE },
       });
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/products/${productB.id}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/products/${productB.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
 
@@ -188,8 +224,8 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/products/${productA.id}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/products/${productA.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(204);
 
@@ -198,9 +234,9 @@ describe('Admin Products (integration)', () => {
     });
   });
 
-  // ── GET /admin/product-types ───────────────────────────────────────────────
+  // ── GET /admin/distributors/:distributorId/product-types ───────────────────
 
-  describe('GET /api/v1/admin/product-types', () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/product-types', () => {
     it('returns only product types belonging to the requesting distributor', async () => {
       await prisma.productType.create({
         data: { distributorId: DIST_A, name: 'Wine A', code: 'wine-a', displayOrder: 1 },
@@ -210,8 +246,8 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/admin/product-types')
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/product-types`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);
@@ -219,9 +255,9 @@ describe('Admin Products (integration)', () => {
     });
   });
 
-  // ── GET /admin/suppliers ───────────────────────────────────────────────────
+  // ── GET /admin/distributors/:distributorId/suppliers ────────────────────────
 
-  describe('GET /api/v1/admin/suppliers', () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/suppliers', () => {
     it('returns only suppliers belonging to the requesting distributor', async () => {
       await prisma.supplier.create({
         data: { distributorId: DIST_A, name: 'Supplier A' },
@@ -231,8 +267,8 @@ describe('Admin Products (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/admin/suppliers')
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/suppliers`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveLength(1);

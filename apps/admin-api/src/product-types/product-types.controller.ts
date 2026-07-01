@@ -10,7 +10,7 @@ export class ProductTypesController {
 
   @Get()
   findAll(@Req() req: Request) {
-    const user = req.user as { organisationId: string };
-    return this.productTypesService.findAll(user.organisationId);
+    const user = req.user as { organisationId: string; token: string };
+    return this.productTypesService.findAll(user.organisationId, user.token);
   }
 }

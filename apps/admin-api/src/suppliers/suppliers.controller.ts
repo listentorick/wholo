@@ -10,7 +10,7 @@ export class SuppliersController {
 
   @Get()
   findAll(@Req() req: Request) {
-    const user = req.user as { organisationId: string };
-    return this.suppliersService.findAll(user.organisationId);
+    const user = req.user as { organisationId: string; token: string };
+    return this.suppliersService.findAll(user.organisationId, user.token);
   }
 }

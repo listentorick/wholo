@@ -11,13 +11,13 @@ export class SettingsController {
 
   @Get()
   find(@Req() req: Request) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.find(organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.find(organisationId, token);
   }
 
   @Patch()
   update(@Req() req: Request, @Body() dto: UpdateSettingsDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.update(organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.update(organisationId, dto, token);
   }
 }

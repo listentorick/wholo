@@ -3,27 +3,31 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiHeader, ApiTags, ApiOperation,
+  ApiParam, ApiTags, ApiOperation, ApiBearerAuth,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse,
   ApiNotFoundResponse, ApiBadRequestResponse,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AdminCustomersService } from './admin-customers.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
 
 @ApiTags('Admin / Customers')
-@ApiHeader({ name: 'x-distributor-id', required: true, description: 'Distributor organisation ID' })
-@Controller('admin')
+@ApiBearerAuth()
+@ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
+@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@Controller('admin/distributors/:distributorId')
 export class AdminCustomersController {
   constructor(private readonly service: AdminCustomersService) {}
 
@@ -31,7 +35,7 @@ export class AdminCustomersController {
   @ApiOperation({ summary: 'Search trade customer organisations by name' })
   @ApiOkResponse({ description: 'Matching organisations' })
   searchOrganisations(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Query('q') q: string,
     @Query('limit') limit?: string,
   ) {
@@ -42,7 +46,7 @@ export class AdminCustomersController {
   @ApiOperation({ summary: 'List trade customers for a distributor' })
   @ApiOkResponse({ description: 'Paginated list of customers' })
   findAll(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Query() query: CustomerQueryDto,
   ) {
     return this.service.findAll(distributorId, query);
@@ -53,7 +57,7 @@ export class AdminCustomersController {
   @ApiOkResponse({ description: 'Customer detail' })
   @ApiNotFoundResponse({ description: 'Customer not found' })
   findOne(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
   ) {
     return this.service.findOne(id, distributorId);
@@ -63,7 +67,7 @@ export class AdminCustomersController {
   @ApiOperation({ summary: 'Create a new trade customer and optional portal invite' })
   @ApiCreatedResponse({ description: 'Customer created' })
   create(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Body() dto: CreateCustomerDto,
   ) {
     return this.service.create(distributorId, dto);
@@ -74,7 +78,7 @@ export class AdminCustomersController {
   @ApiOkResponse({ description: 'Customer updated' })
   @ApiNotFoundResponse({ description: 'Customer not found' })
   update(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Body() dto: UpdateCustomerDto,
   ) {
@@ -87,7 +91,7 @@ export class AdminCustomersController {
   @ApiNoContentResponse({ description: 'Customer deleted' })
   @ApiNotFoundResponse({ description: 'Customer not found' })
   remove(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
   ) {
     return this.service.remove(id, distributorId);
@@ -100,7 +104,7 @@ export class AdminCustomersController {
   @ApiNotFoundResponse({ description: 'Customer not found' })
   @ApiBadRequestResponse({ description: 'Customer has no email address' })
   invite(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
     @Body() body: { email?: string },
   ) {

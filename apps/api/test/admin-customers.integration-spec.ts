@@ -9,19 +9,26 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
+import { OrganisationType, TradeRelationshipStatus, Role } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
+import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const DIST_A = 'test-customers-dist-a';
 const DIST_B = 'test-customers-dist-b';
+const ADMIN_A = 'test-customers-admin-a';
+const ADMIN_A_KEYCLOAK_ID = 'kc-test-customers-admin-a';
 
 describe('Admin Customers (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let jwtServer: JwtTestServer;
+  let token: string;
 
   beforeAll(async () => {
+    jwtServer = await startJwtTestServer();
+
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
@@ -41,6 +48,24 @@ describe('Admin Customers (integration)', () => {
       create: { id: DIST_B, name: 'Customers Test Distributor B', type: OrganisationType.DISTRIBUTOR },
       update: {},
     });
+    const admin = await prisma.user.upsert({
+      where: { id: ADMIN_A },
+      create: {
+        id: ADMIN_A,
+        email: 'customers-admin@integration.test',
+        keycloakId: ADMIN_A_KEYCLOAK_ID,
+        firstName: 'Customers',
+        lastName: 'Admin',
+      },
+      update: { keycloakId: ADMIN_A_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: admin.id, organisationId: DIST_A } },
+      create: { userId: admin.id, organisationId: DIST_A, role: Role.DISTRIBUTOR_ADMIN },
+      update: {},
+    });
+
+    token = jwtServer.signToken({ sub: ADMIN_A_KEYCLOAK_ID, email: 'customers-admin@integration.test' });
   });
 
   afterAll(async () => {
@@ -50,8 +75,11 @@ describe('Admin Customers (integration)', () => {
     });
     await prisma.customerInvitation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.membership.deleteMany({ where: { userId: ADMIN_A } });
+    await prisma.user.deleteMany({ where: { id: ADMIN_A } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B, ...rels.map((r) => r.customerId)] } } });
     await app.close();
+    await jwtServer.close();
   });
 
   beforeEach(async () => {
@@ -82,30 +110,38 @@ describe('Admin Customers (integration)', () => {
 
   // ── GET /admin/customers ───────────────────────────────────────────────────
 
-  describe('GET /api/v1/admin/customers', () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/customers', () => {
     it('returns only the requesting distributor\'s customers', async () => {
       const relA = await createCustomer(DIST_A, 'Customer A');
       await createCustomer(DIST_B, 'Customer B');
 
       const res = await request(app.getHttpServer())
-        .get('/api/v1/admin/customers')
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].id).toBe(relA.id);
     });
+
+    it('returns 403 when requesting a distributor the caller has no membership for', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_B}/customers`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
   });
 
-  // ── GET /admin/customers/:id ───────────────────────────────────────────────
+  // ── GET /admin/distributors/:distributorId/customers/:id ───────────────────
 
-  describe('GET /api/v1/admin/customers/:id', () => {
-    it('returns 404 when customer belongs to a different distributor', async () => {
+  describe('GET /api/v1/admin/distributors/:distributorId/customers/:id', () => {
+    it('returns 404 when customer belongs to a different distributor than the one in the path', async () => {
       const relB = await createCustomer(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/customers/${relB.id}`)
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
     });
@@ -114,8 +150,8 @@ describe('Admin Customers (integration)', () => {
       const relA = await createCustomer(DIST_A);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/customers/${relA.id}`)
-        .set('x-distributor-id', DIST_A);
+        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${relA.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(relA.id);
@@ -123,13 +159,13 @@ describe('Admin Customers (integration)', () => {
     });
   });
 
-  // ── POST /admin/customers ──────────────────────────────────────────────────
+  // ── POST /admin/distributors/:distributorId/customers ──────────────────────
 
-  describe('POST /api/v1/admin/customers', () => {
+  describe('POST /api/v1/admin/distributors/:distributorId/customers', () => {
     it('stamps the created customer with the requesting distributor id', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/admin/customers')
-        .set('x-distributor-id', DIST_A)
+        .post(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ name: 'New Customer' });
 
       expect(res.status).toBe(201);
@@ -140,30 +176,30 @@ describe('Admin Customers (integration)', () => {
     });
   });
 
-  // ── PATCH /admin/customers/:id ─────────────────────────────────────────────
+  // ── PATCH /admin/distributors/:distributorId/customers/:id ─────────────────
 
-  describe('PATCH /api/v1/admin/customers/:id', () => {
+  describe('PATCH /api/v1/admin/distributors/:distributorId/customers/:id', () => {
     it('returns 404 and leaves customer unchanged when it belongs to a different distributor', async () => {
       const relB = await createCustomer(DIST_B, 'Original Name');
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/v1/admin/customers/${relB.id}`)
-        .set('x-distributor-id', DIST_A)
+        .patch(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
+        .set('Authorization', `Bearer ${token}`)
         .send({ notes: 'Stolen update' });
 
       expect(res.status).toBe(404);
     });
   });
 
-  // ── DELETE /admin/customers/:id ────────────────────────────────────────────
+  // ── DELETE /admin/distributors/:distributorId/customers/:id ────────────────
 
-  describe('DELETE /api/v1/admin/customers/:id', () => {
+  describe('DELETE /api/v1/admin/distributors/:distributorId/customers/:id', () => {
     it('returns 404 and does not soft-delete when customer belongs to different distributor', async () => {
       const relB = await createCustomer(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/customers/${relB.id}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
 
@@ -175,8 +211,8 @@ describe('Admin Customers (integration)', () => {
       const relA = await createCustomer(DIST_A);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/customers/${relA.id}`)
-        .set('x-distributor-id', DIST_A);
+        .delete(`/api/v1/admin/distributors/${DIST_A}/customers/${relA.id}`)
+        .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(204);
 

@@ -6,11 +6,11 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 export class SettingsService {
   constructor(private readonly api: ApiClientService) {}
 
-  find(distributorId: string) {
-    return this.api.get('/admin/settings', distributorId);
+  find(distributorId: string, token: string) {
+    return this.api.get(`/admin/distributors/${distributorId}/settings`, token);
   }
 
-  update(distributorId: string, dto: UpdateSettingsDto) {
-    return this.api.patch('/admin/settings', distributorId, dto);
+  update(distributorId: string, dto: UpdateSettingsDto, token: string) {
+    return this.api.patch(`/admin/distributors/${distributorId}/settings`, token, dto);
   }
 }

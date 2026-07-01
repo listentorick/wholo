@@ -12,36 +12,33 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import * as jwt from 'jsonwebtoken';
-import { OrganisationType, ProductStatus, TradeRelationshipStatus } from '@prisma/client';
+import { OrganisationType, ProductStatus, TradeRelationshipStatus, Role } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
+import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const DIST_A      = 'integ-cat-detail-dist-a';
 const DIST_A_SLUG = 'integ-cat-detail-dist-a-slug';
 const DIST_B      = 'integ-cat-detail-dist-b';
 const DIST_B_SLUG = 'integ-cat-detail-dist-b-slug';
 const CUSTOMER    = 'integ-cat-detail-customer';
-const JWT_SECRET  = process.env.JWT_SECRET ?? 'dev-secret';
-
-function makeToken(organisationId: string) {
-  return jwt.sign(
-    { sub: organisationId, email: 'test@integration.com', role: 'TRADE_CUSTOMER', organisationId },
-    JWT_SECRET,
-    { expiresIn: '1h' },
-  );
-}
+const CUSTOMER_USER = 'integ-cat-detail-customer-user';
+const CUSTOMER_KEYCLOAK_ID = 'kc-integ-cat-detail-customer-user';
 
 describe('Catalogue Product Detail (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let jwtServer: JwtTestServer;
+  let token: string;
   let productAId: string;
   let productBId: string;
   let relationshipId: string;
   let catalogueId: string;
 
   beforeAll(async () => {
+    jwtServer = await startJwtTestServer();
+
     const module = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -69,6 +66,24 @@ describe('Catalogue Product Detail (integration)', () => {
       create: { id: CUSTOMER, name: 'Integration Cat Detail Customer', type: OrganisationType.TRADE_CUSTOMER },
       update: {},
     });
+    const customerUser = await prisma.user.upsert({
+      where: { id: CUSTOMER_USER },
+      create: {
+        id: CUSTOMER_USER,
+        email: 'cat-detail-customer@integration.test',
+        keycloakId: CUSTOMER_KEYCLOAK_ID,
+        firstName: 'Cat Detail',
+        lastName: 'Customer',
+      },
+      update: { keycloakId: CUSTOMER_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: customerUser.id, organisationId: CUSTOMER } },
+      create: { userId: customerUser.id, organisationId: CUSTOMER, role: Role.TRADE_CUSTOMER },
+      update: {},
+    });
+
+    token = jwtServer.signToken({ sub: CUSTOMER_KEYCLOAK_ID, email: 'cat-detail-customer@integration.test' });
   });
 
   afterAll(async () => {
@@ -78,8 +93,11 @@ describe('Catalogue Product Detail (integration)', () => {
     await prisma.catalogue.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.membership.deleteMany({ where: { userId: CUSTOMER_USER } });
+    await prisma.user.deleteMany({ where: { id: CUSTOMER_USER } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B, CUSTOMER] } } });
     await app.close();
+    await jwtServer.close();
   });
 
   beforeEach(async () => {
@@ -121,7 +139,6 @@ describe('Catalogue Product Detail (integration)', () => {
 
   describe('GET /api/v1/distributors/:slug/products/:productId', () => {
     it('returns 200 for a product in the customer\'s assigned catalogue', async () => {
-      const token = makeToken(CUSTOMER);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
@@ -139,19 +156,20 @@ describe('Catalogue Product Detail (integration)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('returns 404 when the product belongs to a different distributor\'s slug', async () => {
-      const token = makeToken(CUSTOMER);
+    it('returns 200 for a distributor the customer has no trade relationship with (browsing/discovery is allowed)', async () => {
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_B_SLUG}/products/${productBId}`)
         .set('Authorization', `Bearer ${token}`);
 
-      // DIST_B slug resolves to DIST_B, but customer has no relationship with DIST_B
-      expect(res.status).toBe(404);
+      // No relationship only restricts ordering and customer-specific pricing,
+      // not browsing — the Distributor Discovery Portal requires customers be
+      // able to view products of distributors they aren't yet connected to.
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(productBId);
     });
 
     it('returns 404 when accessing a DIST_B product via DIST_A slug', async () => {
-      const token = makeToken(CUSTOMER);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productBId}`)
@@ -164,7 +182,6 @@ describe('Catalogue Product Detail (integration)', () => {
       const unlistedProduct = await prisma.product.create({
         data: { distributorId: DIST_A, name: 'Unlisted Product', status: ProductStatus.ACTIVE },
       });
-      const token = makeToken(CUSTOMER);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${unlistedProduct.id}`)
@@ -174,7 +191,6 @@ describe('Catalogue Product Detail (integration)', () => {
     });
 
     it('returns 404 for a non-existent product id', async () => {
-      const token = makeToken(CUSTOMER);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/non-existent-id`)
@@ -202,7 +218,6 @@ describe('Catalogue Product Detail (integration)', () => {
         },
       });
 
-      const token = makeToken(CUSTOMER);
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
         .set('Authorization', `Bearer ${token}`);
@@ -212,7 +227,6 @@ describe('Catalogue Product Detail (integration)', () => {
     });
 
     it('returns imageUrl null when no primary image exists', async () => {
-      const token = makeToken(CUSTOMER);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)

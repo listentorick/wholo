@@ -13,12 +13,11 @@ export class OrderAsService {
     this.portalUrl = config.get<string>('PORTAL_URL', 'http://localhost:3010');
   }
 
-  async createSession(distributorId: string, adminUserId: string, tradeRelationshipId: string) {
+  async createSession(distributorId: string, tradeRelationshipId: string, token: string) {
     const result = await this.api.post<{ deliveryToken: string; distributorSlug: string }>(
-      '/order-as/sessions',
-      distributorId,
+      `/admin/distributors/${distributorId}/order-as/sessions`,
+      token,
       { tradeRelationshipId },
-      adminUserId,
     );
     return { portalUrl: `${this.portalUrl}/${result.distributorSlug}?orderAs=${result.deliveryToken}` };
   }

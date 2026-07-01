@@ -16,32 +16,32 @@ export class CataloguesController {
 
   @Get()
   findAll(@Req() req: Request, @Query() query: CatalogueQueryDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.cataloguesService.findAll(organisationId, query);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.cataloguesService.findAll(organisationId, query, token);
   }
 
   @Get(':id')
   findOne(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.cataloguesService.findOne(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.cataloguesService.findOne(organisationId, id, token);
   }
 
   @Post()
   create(@Req() req: Request, @Body() dto: CreateCatalogueDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.cataloguesService.create(organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.cataloguesService.create(organisationId, dto, token);
   }
 
   @Patch(':id')
   update(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdateCatalogueDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.cataloguesService.update(organisationId, id, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.cataloguesService.update(organisationId, id, dto, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.cataloguesService.remove(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.cataloguesService.remove(organisationId, id, token);
   }
 }

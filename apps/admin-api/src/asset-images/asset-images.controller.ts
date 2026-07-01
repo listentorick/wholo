@@ -34,11 +34,11 @@ export class AssetImagesController {
     @Body('entityId') entityId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
     if (!file) throw new BadRequestException('No file provided');
     if (!assetType) throw new BadRequestException('assetType is required');
     if (!entityId) throw new BadRequestException('entityId is required');
-    return this.service.upload(organisationId, assetType, entityId, file);
+    return this.service.upload(organisationId, assetType, entityId, file, token);
   }
 
   @Get()
@@ -47,17 +47,17 @@ export class AssetImagesController {
     @Query('assetType') assetType: string,
     @Query('entityId') entityId: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
     if (!assetType) throw new BadRequestException('assetType is required');
     if (!entityId) throw new BadRequestException('entityId is required');
-    return this.service.list(organisationId, assetType, entityId);
+    return this.service.list(organisationId, assetType, entityId, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   delete(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.delete(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.delete(organisationId, id, token);
   }
 
   @Put('reorder')
@@ -67,7 +67,7 @@ export class AssetImagesController {
     @Body('entityId') entityId: string,
     @Body('imageIds') imageIds: string[],
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.reorder(organisationId, assetType, entityId, imageIds);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.reorder(organisationId, assetType, entityId, imageIds, token);
   }
 }

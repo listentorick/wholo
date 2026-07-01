@@ -20,38 +20,38 @@ export class ProductsController {
 
   @Get()
   findAll(@Req() req: Request, @Query() query: ProductQueryDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.productsService.findAll(organisationId, query);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.productsService.findAll(organisationId, query, token);
   }
 
   @Get(':id')
   findOne(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.productsService.findOne(id, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.productsService.findOne(id, organisationId, token);
   }
 
   @Post()
   create(@Req() req: Request, @Body() dto: CreateProductDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.productsService.create(organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.productsService.create(organisationId, dto, token);
   }
 
   @Patch(':id')
   update(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdateProductDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.productsService.update(id, organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.productsService.update(id, organisationId, dto, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.productsService.remove(id, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.productsService.remove(id, organisationId, token);
   }
 
   @Get(':id/pricing')
   getProductPricing(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.api.get(`/admin/products/${id}/pricing`, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.api.get(`/admin/distributors/${organisationId}/products/${id}/pricing`, token);
   }
 }

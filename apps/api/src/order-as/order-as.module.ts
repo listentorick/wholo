@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
-import { OrderAsController } from './order-as.controller';
+import { OrderAsController, OrderAsAdminController } from './order-as.controller';
 import { OrderAsService } from './order-as.service';
 import { OrderAsInterceptor } from './order-as.interceptor';
 
 @Module({
-  controllers: [OrderAsController],
+  controllers: [OrderAsController, OrderAsAdminController],
   providers: [
     OrderAsService,
     {

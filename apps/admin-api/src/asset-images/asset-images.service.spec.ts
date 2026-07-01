@@ -38,11 +38,11 @@ describe('AssetImagesService (BFF)', () => {
 
   describe('upload', () => {
     it('builds FormData with file, assetType, entityId and calls postMultipart', async () => {
-      await service.upload('dist-a', 'product-image', 'product-1', mockFile);
+      await service.upload('dist-a', 'product-image', 'product-1', mockFile, 'token-1');
 
       expect(mockApi.postMultipart).toHaveBeenCalledWith(
-        '/admin/asset-images',
-        'dist-a',
+        '/admin/distributors/dist-a/asset-images',
+        'token-1',
         expect.any(FormData),
       );
     });
@@ -50,27 +50,27 @@ describe('AssetImagesService (BFF)', () => {
 
   describe('list', () => {
     it('calls api.get with encoded query params', async () => {
-      await service.list('dist-a', 'product-image', 'product-1');
+      await service.list('dist-a', 'product-image', 'product-1', 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/admin/asset-images?assetType=product-image&entityId=product-1',
-        'dist-a',
+        '/admin/distributors/dist-a/asset-images?assetType=product-image&entityId=product-1',
+        'token-1',
       );
     });
   });
 
   describe('delete', () => {
     it('calls api.delete with imageId', async () => {
-      await service.delete('dist-a', 'img-uuid');
-      expect(mockApi.delete).toHaveBeenCalledWith('/admin/asset-images/img-uuid', 'dist-a');
+      await service.delete('dist-a', 'img-uuid', 'token-1');
+      expect(mockApi.delete).toHaveBeenCalledWith('/admin/distributors/dist-a/asset-images/img-uuid', 'token-1');
     });
   });
 
   describe('reorder', () => {
     it('calls api.put with correct body', async () => {
-      await service.reorder('dist-a', 'product-image', 'product-1', ['id-2', 'id-1']);
+      await service.reorder('dist-a', 'product-image', 'product-1', ['id-2', 'id-1'], 'token-1');
       expect(mockApi.put).toHaveBeenCalledWith(
-        '/admin/asset-images/reorder',
-        'dist-a',
+        '/admin/distributors/dist-a/asset-images/reorder',
+        'token-1',
         { assetType: 'product-image', entityId: 'product-1', imageIds: ['id-2', 'id-1'] },
       );
     });

@@ -57,6 +57,7 @@ describe('JwtStrategy', () => {
         email: 'james@vineandco.com',
         role: 'DISTRIBUTOR_ADMIN',
         organisationId: 'org-1',
+        organisationIds: ['org-1'],
       });
       expect(result.sub).toBe('wholo-user-1');
     });
@@ -102,6 +103,7 @@ describe('JwtStrategy', () => {
       const result = await strategy.validate({ sub: 'kc-sub-abc' });
       expect(result.role).toBeUndefined();
       expect(result.organisationId).toBeUndefined();
+      expect(result.organisationIds).toEqual([]);
     });
   });
 });

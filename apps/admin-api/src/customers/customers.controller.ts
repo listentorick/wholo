@@ -20,52 +20,52 @@ export class CustomersController {
     @Query('q') q: string,
     @Query('limit') limit?: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.searchOrganisations(organisationId, q ?? '', limit ? parseInt(limit, 10) : undefined);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.searchOrganisations(organisationId, q ?? '', token, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Get()
   findAll(@Req() req: Request, @Query() query: CustomerQueryDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.findAll(organisationId, query);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.findAll(organisationId, query, token);
   }
 
   @Get(':id')
   findOne(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.findOne(id, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.findOne(id, organisationId, token);
   }
 
   @Post()
   create(@Req() req: Request, @Body() dto: CreateCustomerDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.create(organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.create(organisationId, dto, token);
   }
 
   @Patch(':id')
   update(@Req() req: Request, @Param('id') id: string, @Body() dto: UpdateCustomerDto) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.update(id, organisationId, dto);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.update(id, organisationId, dto, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.remove(id, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.remove(id, organisationId, token);
   }
 
   @Post(':id/invite')
   @HttpCode(HttpStatus.OK)
   invite(@Req() req: Request, @Param('id') id: string, @Body() body: { email?: string }) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.invite(id, organisationId, body.email);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.invite(id, organisationId, token, body.email);
   }
 
   @Get(':id/catalogues')
   getCatalogues(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.getCatalogues(id, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.getCatalogues(id, organisationId, token);
   }
 
   @Post(':id/catalogues/:catalogueId')
@@ -74,8 +74,8 @@ export class CustomersController {
     @Param('id') id: string,
     @Param('catalogueId') catalogueId: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.assignCatalogue(id, catalogueId, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.assignCatalogue(id, catalogueId, organisationId, token);
   }
 
   @Delete(':id/catalogues/:catalogueId')
@@ -85,8 +85,8 @@ export class CustomersController {
     @Param('id') id: string,
     @Param('catalogueId') catalogueId: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.unassignCatalogue(id, catalogueId, organisationId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.unassignCatalogue(id, catalogueId, organisationId, token);
   }
 
   @Patch(':id/price-list')
@@ -95,8 +95,8 @@ export class CustomersController {
     @Param('id') id: string,
     @Body() body: { priceListId: string | null },
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.assignPriceList(id, organisationId, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.assignPriceList(id, organisationId, body, token);
   }
 
   @Patch(':id/delivery-profile')
@@ -105,7 +105,7 @@ export class CustomersController {
     @Param('id') id: string,
     @Body() body: { deliveryProfileId: string | null },
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.customersService.assignDeliveryProfile(id, organisationId, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.assignDeliveryProfile(id, organisationId, body, token);
   }
 }

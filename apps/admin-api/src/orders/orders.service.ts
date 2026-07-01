@@ -8,7 +8,7 @@ import { CancelOrderDto } from './dto/cancel-order.dto';
 export class OrdersService {
   constructor(private api: ApiClientService) {}
 
-  listOrders(distributorId: string, query: OrderQueryDto) {
+  listOrders(distributorId: string, query: OrderQueryDto, token: string) {
     const params = new URLSearchParams();
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.cursor) params.set('cursor', query.cursor);
@@ -20,22 +20,22 @@ export class OrdersService {
     if (query.sortBy) params.set('sortBy', query.sortBy);
     if (query.sortOrder) params.set('sortOrder', query.sortOrder);
     const qs = params.toString();
-    return this.api.get(`/admin/orders${qs ? `?${qs}` : ''}`, distributorId);
+    return this.api.get(`/admin/distributors/${distributorId}/orders${qs ? `?${qs}` : ''}`, token);
   }
 
-  getOrder(orderId: string, distributorId: string) {
-    return this.api.get(`/admin/orders/${orderId}`, distributorId);
+  getOrder(orderId: string, distributorId: string, token: string) {
+    return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}`, token);
   }
 
-  acceptOrder(orderId: string, distributorId: string, userId: string) {
-    return this.api.post(`/admin/orders/${orderId}/accept`, distributorId, undefined, userId);
+  acceptOrder(orderId: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/accept`, token);
   }
 
-  rejectOrder(orderId: string, distributorId: string, userId: string, dto: RejectOrderDto) {
-    return this.api.post(`/admin/orders/${orderId}/reject`, distributorId, dto, userId);
+  rejectOrder(orderId: string, distributorId: string, dto: RejectOrderDto, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/reject`, token, dto);
   }
 
-  cancelOrder(orderId: string, distributorId: string, userId: string, dto: CancelOrderDto) {
-    return this.api.post(`/admin/orders/${orderId}/cancel`, distributorId, dto, userId);
+  cancelOrder(orderId: string, distributorId: string, dto: CancelOrderDto, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/cancel`, token, dto);
   }
 }

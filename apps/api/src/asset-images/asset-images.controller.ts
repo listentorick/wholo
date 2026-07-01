@@ -4,7 +4,6 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -12,22 +11,28 @@ import {
   Put,
   Query,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBearerAuth,
   ApiConsumes,
-  ApiHeader,
+  ApiParam,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AssetImagesService } from './asset-images.service';
 import { UploadAssetImageDto } from './dto/upload-asset-image.dto';
 import { ReorderAssetImagesDto } from './dto/reorder-asset-images.dto';
 
 @ApiTags('Admin / Asset Images')
-@ApiHeader({ name: 'x-distributor-id', required: true, description: 'Distributor organisation ID' })
-@Controller('admin/asset-images')
+@ApiBearerAuth()
+@ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
+@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@Controller('admin/distributors/:distributorId/asset-images')
 export class AssetImagesController {
   constructor(private readonly service: AssetImagesService) {}
 
@@ -37,7 +42,7 @@ export class AssetImagesController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload an image for an asset' })
   upload(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Body() dto: UploadAssetImageDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
@@ -53,7 +58,7 @@ export class AssetImagesController {
   @Get()
   @ApiOperation({ summary: 'List images for an asset' })
   list(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Query('assetType') assetType: string,
     @Query('entityId') entityId: string,
   ) {
@@ -66,7 +71,7 @@ export class AssetImagesController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an image' })
   delete(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Param('id') id: string,
   ) {
     return this.service.delete(id, distributorId);
@@ -75,7 +80,7 @@ export class AssetImagesController {
   @Put('reorder')
   @ApiOperation({ summary: 'Reorder images for an asset' })
   reorder(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Body() dto: ReorderAssetImagesDto,
   ) {
     return this.service.reorder(dto.assetType, dto.entityId, distributorId, dto.imageIds);

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrderAsService } from './order-as.service';
 
 interface RequestWithUser {
-  user: { sub: string; organisationId: string; role: string };
+  user: { sub: string; organisationId: string; role: string; token: string };
 }
 
 @UseGuards(JwtAuthGuard)
@@ -23,8 +23,8 @@ export class OrderAsController {
     }
     return this.orderAsService.createSession(
       req.user.organisationId,
-      req.user.sub,
       tradeRelationshipId,
+      req.user.token,
     );
   }
 }

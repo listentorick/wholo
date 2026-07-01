@@ -1,18 +1,22 @@
-import { Body, Controller, Get, Headers, Patch } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { ApiParam, ApiOperation, ApiOkResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AdminSettingsService } from './admin-settings.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
 
 @ApiTags('Admin / Settings')
-@ApiHeader({ name: 'x-distributor-id', required: true, description: 'Distributor organisation ID' })
-@Controller('admin/settings')
+@ApiBearerAuth()
+@ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
+@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@Controller('admin/distributors/:distributorId/settings')
 export class AdminSettingsController {
   constructor(private readonly service: AdminSettingsService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get distributor settings' })
   @ApiOkResponse({ description: 'Distributor settings' })
-  find(@Headers('x-distributor-id') distributorId: string) {
+  find(@Param('distributorId') distributorId: string) {
     return this.service.find(distributorId);
   }
 
@@ -20,7 +24,7 @@ export class AdminSettingsController {
   @ApiOperation({ summary: 'Update distributor settings' })
   @ApiOkResponse({ description: 'Updated settings' })
   update(
-    @Headers('x-distributor-id') distributorId: string,
+    @Param('distributorId') distributorId: string,
     @Body() dto: UpdateSettingsDto,
   ) {
     return this.service.update(distributorId, dto);

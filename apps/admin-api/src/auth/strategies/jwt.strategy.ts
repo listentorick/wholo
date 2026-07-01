@@ -36,7 +36,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const token = (req as any).headers['authorization']?.replace(/^Bearer\s+/i, '');
     let profile: WholoProfile;
     try {
-      profile = await this.apiClient.getAsBearer<WholoProfile>('/auth/me', token);
+      profile = await this.apiClient.get<WholoProfile>('/auth/me', token);
     } catch {
       throw new UnauthorizedException('No Wholo user found for this identity');
     }

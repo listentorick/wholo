@@ -13,45 +13,45 @@ export class DeliveryProfilesController {
 
   @Get()
   findAll(@Req() req: Request, @Query() query: Record<string, string>) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.findAll(organisationId, query);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.findAll(organisationId, query, token);
   }
 
   @Post()
   create(@Req() req: Request, @Body() body: unknown) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.create(organisationId, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.create(organisationId, body, token);
   }
 
   @Get(':id')
   findOne(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.findOne(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.findOne(organisationId, id, token);
   }
 
   @Patch(':id')
   update(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.update(organisationId, id, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.update(organisationId, id, body, token);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.remove(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.remove(organisationId, id, token);
   }
 
   @Get(':id/cutoff-rules')
   listCutoffRules(@Req() req: Request, @Param('id') id: string) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.listCutoffRules(organisationId, id);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.listCutoffRules(organisationId, id, token);
   }
 
   @Post(':id/cutoff-rules')
   createCutoffRule(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.createCutoffRule(organisationId, id, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.createCutoffRule(organisationId, id, body, token);
   }
 
   @Patch(':id/cutoff-rules/:ruleId')
@@ -61,8 +61,8 @@ export class DeliveryProfilesController {
     @Param('ruleId') ruleId: string,
     @Body() body: unknown,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.updateCutoffRule(organisationId, id, ruleId, body);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.updateCutoffRule(organisationId, id, ruleId, body, token);
   }
 
   @Delete(':id/cutoff-rules/:ruleId')
@@ -72,7 +72,7 @@ export class DeliveryProfilesController {
     @Param('id') id: string,
     @Param('ruleId') ruleId: string,
   ) {
-    const { organisationId } = req.user as { organisationId: string };
-    return this.service.removeCutoffRule(organisationId, id, ruleId);
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.removeCutoffRule(organisationId, id, ruleId, token);
   }
 }

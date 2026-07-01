@@ -23,10 +23,10 @@ const mockPayload = { sub: 'kc-seed-admin-1', email: 'james@vineandco.com' };
 
 describe('JwtStrategy (admin-api)', () => {
   let strategy: JwtStrategy;
-  let mockApiClient: { getAsBearer: jest.Mock };
+  let mockApiClient: { get: jest.Mock };
 
   beforeEach(async () => {
-    mockApiClient = { getAsBearer: jest.fn() };
+    mockApiClient = { get: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,7 +51,7 @@ describe('JwtStrategy (admin-api)', () => {
   });
 
   it('returns user context with organisationId on successful profile fetch', async () => {
-    mockApiClient.getAsBearer.mockResolvedValueOnce(mockProfile);
+    mockApiClient.get.mockResolvedValueOnce(mockProfile);
 
     const result = await strategy.validate(mockReq as any, mockPayload);
 
@@ -62,13 +62,13 @@ describe('JwtStrategy (admin-api)', () => {
       organisationId: 'seed-distributor-1',
       role: 'DISTRIBUTOR_ADMIN',
     });
-    expect(mockApiClient.getAsBearer).toHaveBeenCalledWith('/auth/me', 'test-token-abc');
+    expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', 'test-token-abc');
   });
 
   it('throws UnauthorizedException when apps/api returns an error response', async () => {
     const err = new Error('Unauthorized') as any;
     err.status = 401;
-    mockApiClient.getAsBearer.mockRejectedValueOnce(err);
+    mockApiClient.get.mockRejectedValueOnce(err);
 
     await expect(strategy.validate(mockReq as any, mockPayload)).rejects.toThrow(
       UnauthorizedException,
@@ -76,7 +76,7 @@ describe('JwtStrategy (admin-api)', () => {
   });
 
   it('throws UnauthorizedException on network error (apps/api unreachable)', async () => {
-    mockApiClient.getAsBearer.mockRejectedValueOnce(new TypeError('fetch failed'));
+    mockApiClient.get.mockRejectedValueOnce(new TypeError('fetch failed'));
 
     await expect(strategy.validate(mockReq as any, mockPayload)).rejects.toThrow(
       UnauthorizedException,

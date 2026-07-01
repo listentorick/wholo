@@ -6,6 +6,6 @@ export class AuthService {
   constructor(private api: ApiClientService) {}
 
   me(bearerToken: string) {
-    return this.api.getAsBearer('/auth/me', bearerToken);
+    return this.api.get('/auth/me', bearerToken);
   }
 }
