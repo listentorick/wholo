@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-worker
+  labels:
+    app: {{ include "wholo.fullname" . }}-worker
+spec:
+  # Fixed at 1: the outbox publisher must be the only relay (ADR-047).
+  # BullMQ jobId dedupe is the backstop, not a licence to scale this out.
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-worker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-worker
+    spec:
+      containers:
+        - name: worker
+          image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["node", "dist/worker.js"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-api
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}

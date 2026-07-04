@@ -265,7 +265,12 @@ export class OrdersService {
       const basePayload = {
         orderId: newOrder.id,
         distributorId: distributor.id,
+        // tenantId duplicates distributorId: distributor is the tenant boundary (ADR-010)
+        tenantId: distributor.id,
         traderCustomerId,
+        placedByUserId,
+        isOrderedByDelegate: !!orderAsSessionToken,
+        acceptanceModeSnapshot: mode,
         orderNumber,
         occurredAt: now.toISOString(),
       };

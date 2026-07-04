@@ -34,6 +34,7 @@ describe('OrdersService — delivery date revalidation', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
   let deliveryAvailability: jest.Mocked<DeliveryAvailabilityService>;
+  let outbox: jest.Mocked<OutboxService>;
 
   beforeEach(async () => {
     const mockPrisma = {
@@ -63,6 +64,7 @@ describe('OrdersService — delivery date revalidation', () => {
     service = module.get(OrdersService);
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
     deliveryAvailability = module.get(DeliveryAvailabilityService) as jest.Mocked<DeliveryAvailabilityService>;
+    outbox = module.get(OutboxService) as jest.Mocked<OutboxService>;
   });
 
   function setupHappyPath() {
@@ -79,6 +81,7 @@ describe('OrdersService — delivery date revalidation', () => {
         orderLine: { createMany: jest.fn().mockResolvedValue({}) },
         cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
         cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+        orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
         outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
       }),
     );
@@ -148,6 +151,41 @@ describe('OrdersService — delivery date revalidation', () => {
     await expect(
       service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, DISTRIBUTOR_ID),
     ).resolves.toBeDefined();
+  });
+
+  it('writes an OrderSubmitted event with tenant, placing user and acceptance context', async () => {
+    setupHappyPath();
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(outbox.writeEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'Order',
+      'order-1',
+      'OrderSubmitted',
+      expect.objectContaining({
+        orderId: 'order-1',
+        distributorId: DISTRIBUTOR_ID,
+        tenantId: DISTRIBUTOR_ID,
+        traderCustomerId: CUSTOMER_ID,
+        placedByUserId: USER_ID,
+        isOrderedByDelegate: false,
+        acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL,
+        orderNumber: expect.stringMatching(/^ORD-\d{4}-\d{5}$/),
+      }),
+    );
+  });
+
+  it('flags isOrderedByDelegate in the OrderSubmitted event for order-as submissions', async () => {
+    setupHappyPath();
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
+
+    expect(outbox.writeEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'Order',
+      'order-1',
+      'OrderSubmitted',
+      expect.objectContaining({ isOrderedByDelegate: true }),
+    );
   });
 });
 

@@ -83,6 +83,27 @@ enum OutboxEventStatus {
   FAILED
 }
 
+enum NotificationType {
+  ORDER_PLACED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WEB_PUSH
+  IN_APP
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum NotificationAudience {
+  DISTRIBUTOR
+  CUSTOMER
+}
+
 enum PriceListRuleSelectorType {
   ALL_PRODUCTS
   PRODUCT
@@ -401,6 +422,7 @@ model Order {
   customer       Organisation @relation("CustomerOrders", fields: [traderCustomerId], references: [id])
   delegateAdmin  User?        @relation("DelegateOrders", fields: [delegateAdminUserId], references: [id])
   lines          OrderLine[]
+  notifications  Notification[]
 
   @@index([distributorId, status])
   @@index([traderCustomerId, status])
@@ -488,6 +510,48 @@ model OutboxEvent {
 
   @@index([status, createdAt])
   @@map("outbox_events")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+// Notification = something happened; NotificationDelivery = an attempt to tell
+// someone via a specific channel. Unique constraints provide business
+// idempotency against at-least-once outbox/queue delivery.
+
+model Notification {
+  id            String           @id @default(cuid())
+  type          NotificationType
+  distributorId String
+  orderId       String?
+  dedupeKey     String           @unique
+  payload       Json
+  createdAt     DateTime         @default(now())
+
+  order      Order?                 @relation(fields: [orderId], references: [id])
+  deliveries NotificationDelivery[]
+
+  @@index([distributorId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String                     @id @default(cuid())
+  notificationId String
+  channel        NotificationChannel
+  audience       NotificationAudience
+  recipient      String
+  status         NotificationDeliveryStatus @default(PENDING)
+  attemptCount   Int                        @default(0)
+  sentAt         DateTime?
+  failedAt       DateTime?
+  errorMessage   String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  @@unique([notificationId, channel, recipient])
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
 }
 
 // ─── Catalogues ───────────────────────────────────────────────────────────────

@@ -34,6 +34,22 @@ api:
     accessKeyId: ""
     secretAccessKey: ""
   portalUrl: "http://wholo-portal-api:3010"
+  # Must be reachable from a recipient's browser (used in email links) —
+  # do not point this at internal service DNS.
+  adminUrl: "http://localhost:3020"
+
+# Outbox publisher + queue consumers. Runs the api image with a different
+# entry point. Must stay at 1 replica: the outbox relay relies on being the
+# only publisher (ADR-047).
+worker:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
 
 portalApi:
   image:
