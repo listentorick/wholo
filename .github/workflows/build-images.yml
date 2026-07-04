@@ -30,26 +30,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # context: the monorepo images build from the repo root (they copy
+          # workspace packages); the keycloak image builds from its own dir.
           - name: api
             dockerfile: apps/api/Dockerfile
+            context: .
             build-args: ""
           # NEXT_PUBLIC_* values are baked into the Next.js bundle at image
           # build time, so BFF images are environment-specific: these are
           # LIVE images. Local dev keeps building its own :local images.
           - name: portal-api
             dockerfile: apps/portal-api/Dockerfile
+            context: .
             build-args: |
               NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
               NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
           - name: admin-api
             dockerfile: apps/admin-api/Dockerfile
+            context: .
             build-args: |
               NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
               NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-admin
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
+            context: apps/keycloak
             build-args: ""
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +74,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
           build-args: ${{ matrix.build-args }}
