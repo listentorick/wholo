@@ -1,0 +1,94 @@
+# Live environment (self-hosted k3s) — see docs/deployment/live-k3s.md
+#
+# Copy to values.live.yaml (gitignored), replace every <domain>, <sha> and
+# CHANGE_ME, then deploy with:
+#   helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml
+#
+# Notes:
+# - portal-api/admin-api images bake NEXT_PUBLIC_KEYCLOAK_* into the JS bundle
+#   at build time. They must have been built by CI with
+#   LIVE_KEYCLOAK_URL=https://auth.<domain> — the chart cannot fix a wrong
+#   baked-in URL.
+# - Pin an immutable sha- tag from the build-images workflow; never :latest.
+
+imagePullSecrets:
+  - name: ghcr-pull   # created once per the runbook (GHCR packages are private)
+
+postgresql:
+  password: "CHANGE_ME_strong_password"
+  storageSize: 5Gi
+  backup:
+    enabled: true
+    storageSize: 3Gi
+
+redis:
+  storageSize: 1Gi
+
+api:
+  image:
+    repository: ghcr.io/listentorick/wholo/api
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+  seedJob:
+    enabled: false          # never seed demo data into live
+  portalUrl: "https://portal.<domain>"
+  adminUrl: "https://admin.<domain>"
+  smtp:
+    from: "noreply@<domain>"
+  r2:
+    accountId: "CHANGE_ME"
+    bucketName: "CHANGE_ME"
+    publicBaseUrl: "CHANGE_ME"
+    accessKeyId: "CHANGE_ME"
+    secretAccessKey: "CHANGE_ME"
+
+portalApi:
+  image:
+    repository: ghcr.io/listentorick/wholo/portal-api
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+
+adminApi:
+  image:
+    repository: ghcr.io/listentorick/wholo/admin-api
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+
+mailhog:
+  service:
+    # The MailHog UI has no auth — keep it off the internet. View it with:
+    #   kubectl -n wholo port-forward svc/wholo-mailhog 8025:8025
+    type: ClusterIP
+
+keycloak:
+  image:
+    repository: ghcr.io/listentorick/wholo/keycloak
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+  adminPassword: "CHANGE_ME_strong_password"
+  startCommand: start       # production mode
+  hostname: "https://auth.<domain>"
+  hostnamePort: ""          # unused when hostname is a full URL
+  proxyHeaders: xforwarded  # TLS terminates at Traefik
+  seedUsers: false          # demo users must never reach a public auth server
+  adminClientUrl: "https://admin.<domain>"
+  portalClientUrl: "https://portal.<domain>"
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    portal: portal.<domain>
+    admin: admin.<domain>
+    api: api.<domain>
+    auth: auth.<domain>

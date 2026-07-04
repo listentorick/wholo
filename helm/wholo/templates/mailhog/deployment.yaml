@@ -22,3 +22,5 @@ spec:
               name: smtp
             - containerPort: 8025
               name: ui
+          resources:
+            {{- toYaml .Values.mailhog.resources | nindent 12 }}

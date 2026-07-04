@@ -9,6 +9,10 @@ spec:
   selector:
     matchLabels:
       app: {{ include "wholo.fullname" . }}-redis
+  # Recreate: the RWO node-local volume can't be mounted by old and new pods
+  # at once, so a rolling update would deadlock.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -33,6 +37,8 @@ spec:
               command: ["redis-cli", "ping"]
             initialDelaySeconds: 5
             periodSeconds: 5
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:

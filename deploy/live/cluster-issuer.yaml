@@ -1,0 +1,37 @@
+# One-time cluster-scoped infrastructure for the live k3s cluster.
+# Applied manually (not part of the Helm chart) because it depends on
+# cert-manager CRDs and is shared cluster-wide:
+#   kubectl apply -f deploy/live/cluster-issuer.yaml
+#
+# While iterating on DNS/ingress, prefer the staging issuer (below) to avoid
+# Let's Encrypt production rate limits, then switch the ingress annotation to
+# letsencrypt-prod once certificates issue cleanly.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: rick.walsh@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: rick.walsh@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

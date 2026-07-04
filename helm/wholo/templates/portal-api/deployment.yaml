@@ -19,6 +19,7 @@ spec:
       labels:
         app: {{ include "wholo.fullname" . }}-portal-api
     spec:
+      {{- include "wholo.imagePullSecrets" . }}
       containers:
         - name: portal-api
           image: {{ .Values.portalApi.image.repository }}:{{ .Values.portalApi.image.tag }}

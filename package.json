@@ -15,6 +15,7 @@
     "db:seed": "pnpm --filter @wholo/api exec tsx prisma/seed.ts",
     "helm:deps": "helm dependency update helm/wholo",
     "helm:install": "helm upgrade --install wholo helm/wholo -f helm/wholo/values.local.yaml",
+    "helm:install:live": "helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml",
     "helm:uninstall": "helm uninstall wholo",
     "k8s:build": "docker build -t wholo/api:local -f apps/api/Dockerfile . && docker build -t wholo/portal:local -f apps/portal/Dockerfile . && docker build -t wholo/admin-api:local -f apps/admin-api/Dockerfile . && docker build -t wholo/admin:local -f apps/admin/Dockerfile . && docker build -t wholo/portal-api:local -f apps/portal-api/Dockerfile .",
     "k8s:pf:postgres": "kubectl port-forward svc/wholo-postgresql 5432:5432",

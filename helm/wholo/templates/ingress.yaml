@@ -1,0 +1,62 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wholo.fullname" . }}
+  labels:
+    app: {{ include "wholo.fullname" . }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.portal | quote }}
+        - {{ .Values.ingress.hosts.admin | quote }}
+        - {{ .Values.ingress.hosts.api | quote }}
+        - {{ .Values.ingress.hosts.auth | quote }}
+      secretName: {{ include "wholo.fullname" . }}-tls
+  rules:
+    - host: {{ .Values.ingress.hosts.portal | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wholo.fullname" . }}-portal-api
+                port:
+                  number: {{ .Values.portalApi.service.port }}
+    - host: {{ .Values.ingress.hosts.admin | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wholo.fullname" . }}-admin-api
+                port:
+                  number: {{ .Values.adminApi.service.port }}
+    - host: {{ .Values.ingress.hosts.api | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wholo.fullname" . }}-api
+                port:
+                  number: {{ .Values.api.service.port }}
+    - host: {{ .Values.ingress.hosts.auth | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wholo.fullname" . }}-keycloak
+                port:
+                  number: {{ .Values.keycloak.port }}
+{{- end }}

@@ -9,6 +9,10 @@ spec:
   selector:
     matchLabels:
       app: {{ include "wholo.fullname" . }}-postgresql
+  # Recreate: the RWO node-local volume can't be mounted by old and new pods
+  # at once, so a rolling update would deadlock.
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -42,6 +46,8 @@ spec:
               command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
             initialDelaySeconds: 5
             periodSeconds: 5
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:

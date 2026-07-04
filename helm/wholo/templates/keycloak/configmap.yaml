@@ -8,8 +8,13 @@ data:
   KC_DB: "postgres"
   KC_DB_URL: {{ printf "jdbc:postgresql://%s:%d/keycloak" (include "wholo.postgresql.host" .) (int .Values.postgresql.port) | quote }}
   KC_DB_USERNAME: {{ .Values.postgresql.username | quote }}
-  KC_HOSTNAME: "localhost"
-  KC_HOSTNAME_PORT: {{ .Values.keycloak.port | toString | quote }}
+  KC_HOSTNAME: {{ .Values.keycloak.hostname | default "localhost" | quote }}
+  {{- with .Values.keycloak.hostnamePort }}
+  KC_HOSTNAME_PORT: {{ . | toString | quote }}
+  {{- end }}
   KC_HOSTNAME_STRICT: "false"
   KC_HTTP_ENABLED: "true"
   KC_HEALTH_ENABLED: "true"
+  {{- with .Values.keycloak.proxyHeaders }}
+  KC_PROXY_HEADERS: {{ . | quote }}
+  {{- end }}

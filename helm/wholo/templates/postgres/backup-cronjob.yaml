@@ -1,0 +1,64 @@
+{{- if .Values.postgresql.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wholo.fullname" . }}-pg-backups
+  labels:
+    app: {{ include "wholo.fullname" . }}-pg-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.postgresql.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.backup.storageSize }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "wholo.fullname" . }}-pg-backup
+  labels:
+    app: {{ include "wholo.fullname" . }}-pg-backup
+spec:
+  schedule: {{ .Values.postgresql.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ include "wholo.fullname" . }}-pg-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: {{ .Values.postgresql.image }}
+              command:
+                - /bin/sh
+                - -c
+                # pg_dumpall captures every database on the server, i.e. both
+                # wholo and keycloak. Keeps the newest 7 dumps.
+                - |
+                  set -e
+                  ts=$(date +%Y%m%d-%H%M%S)
+                  pg_dumpall -h {{ include "wholo.postgresql.host" . }} -U {{ .Values.postgresql.username }} \
+                    | gzip > /backups/wholo-$ts.sql.gz
+                  ls -1t /backups/wholo-*.sql.gz | tail -n +8 | xargs -r rm --
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "wholo.fullname" . }}-postgresql
+                      key: password
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ include "wholo.fullname" . }}-pg-backups
+{{- end }}

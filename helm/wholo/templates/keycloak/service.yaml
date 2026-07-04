@@ -5,7 +5,7 @@ metadata:
   labels:
     app: {{ include "wholo.fullname" . }}-keycloak
 spec:
-  type: LoadBalancer
+  type: {{ .Values.keycloak.service.type | default "LoadBalancer" }}
   selector:
     app: {{ include "wholo.fullname" . }}-keycloak
   ports:

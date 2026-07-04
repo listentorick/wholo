@@ -1,3 +1,4 @@
+{{- if .Values.api.seedJob.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -15,6 +16,7 @@ spec:
       labels:
         app: {{ include "wholo.fullname" . }}-seed
     spec:
+      {{- include "wholo.imagePullSecrets" . }}
       restartPolicy: OnFailure
       containers:
         - name: seed
@@ -26,3 +28,4 @@ spec:
                 name: {{ include "wholo.fullname" . }}-api
             - secretRef:
                 name: {{ include "wholo.fullname" . }}-api
+{{- end }}

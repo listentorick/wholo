@@ -20,7 +20,7 @@ data:
       "verifyEmail": true,
       "resetPasswordAllowed": true,
       "smtpServer": {
-        "host": "wholo-mailhog",
+        "host": {{ .Values.keycloak.smtpHost | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }},
         "port": "1025",
         "from": "noreply@wholo.com.au",
         "fromDisplayName": "Wholo",
@@ -36,11 +36,11 @@ data:
           "publicClient": true,
           "standardFlowEnabled": true,
           "directAccessGrantsEnabled": true,
-          "redirectUris": ["http://localhost:3020/*"],
-          "webOrigins": ["http://localhost:3020"],
+          "redirectUris": [{{ printf "%s/*" .Values.keycloak.adminClientUrl | quote }}],
+          "webOrigins": [{{ .Values.keycloak.adminClientUrl | quote }}],
           "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": "http://localhost:3020/*"
+            "post.logout.redirect.uris": {{ printf "%s/*" .Values.keycloak.adminClientUrl | quote }}
           }
         },
         {
@@ -50,14 +50,14 @@ data:
           "publicClient": true,
           "standardFlowEnabled": true,
           "directAccessGrantsEnabled": true,
-          "redirectUris": ["http://localhost:3010/*"],
-          "webOrigins": ["http://localhost:3010"],
+          "redirectUris": [{{ printf "%s/*" .Values.keycloak.portalClientUrl | quote }}],
+          "webOrigins": [{{ .Values.keycloak.portalClientUrl | quote }}],
           "attributes": {
             "pkce.code.challenge.method": "S256",
-            "post.logout.redirect.uris": "http://localhost:3010/*"
+            "post.logout.redirect.uris": {{ printf "%s/*" .Values.keycloak.portalClientUrl | quote }}
           }
         }
-      ],
+      ]{{- if .Values.keycloak.seedUsers }},
       "users": [
         {
           "id": "kc-seed-admin-1",
@@ -156,4 +156,5 @@ data:
           ]
         }
       ]
+      {{- end }}
     }

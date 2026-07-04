@@ -8,6 +8,6 @@ data:
   PORT: "3010"
   NODE_ENV: "production"
   CENTRAL_API_URL: {{ .Values.portalApi.centralApiUrl | quote }}
-  KEYCLOAK_URL: {{ .Values.keycloak.url | default "http://wholo-keycloak:8080" | quote }}
+  KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
   NEXT_APP_DIR: "/app/portal"

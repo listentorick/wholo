@@ -14,5 +14,7 @@ spec:
     - name: ui
       port: 8025
       targetPort: 8025
+      {{- if eq (.Values.mailhog.service.type | default "NodePort") "NodePort" }}
       nodePort: 30825
-  type: NodePort
+      {{- end }}
+  type: {{ .Values.mailhog.service.type | default "NodePort" }}

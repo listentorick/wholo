@@ -1,0 +1,78 @@
+name: build-images
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # Informational for now — does not gate image publishing. Flip the build
+  # job to `needs: [test]` once this has a green track record.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo test
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: apps/api/Dockerfile
+            build-args: ""
+          # NEXT_PUBLIC_* values are baked into the Next.js bundle at image
+          # build time, so BFF images are environment-specific: these are
+          # LIVE images. Local dev keeps building its own :local images.
+          - name: portal-api
+            dockerfile: apps/portal-api/Dockerfile
+            build-args: |
+              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
+              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
+              NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
+          - name: admin-api
+            dockerfile: apps/admin-api/Dockerfile
+            build-args: |
+              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
+              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
+              NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-admin
+          - name: keycloak
+            dockerfile: apps/keycloak/Dockerfile
+            build-args: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: ${{ matrix.build-args }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

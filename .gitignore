@@ -5,6 +5,7 @@ build/
 .env
 .env.local
 helm/wholo/values.local.yaml
+helm/wholo/values.live.yaml
 helm/wholo/charts/
 *.tgz
 

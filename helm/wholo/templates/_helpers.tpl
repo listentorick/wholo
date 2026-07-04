@@ -32,3 +32,14 @@ Expand the name of the chart.
 {{- define "wholo.keycloak.host" -}}
 {{- printf "%s-keycloak" (include "wholo.fullname" .) }}
 {{- end }}
+
+{{/*
+Pod-spec-level imagePullSecrets block, pre-indented for the standard
+Deployment/Job pod spec depth. Renders nothing when the list is empty.
+*/}}
+{{- define "wholo.imagePullSecrets" -}}
+{{- with .Values.imagePullSecrets }}
+{{ "imagePullSecrets:" | indent 6 }}
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- end }}

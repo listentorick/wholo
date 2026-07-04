@@ -19,6 +19,7 @@ spec:
       labels:
         app: {{ include "wholo.fullname" . }}-api
     spec:
+      {{- include "wholo.imagePullSecrets" . }}
       initContainers:
         - name: migrate
           image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}

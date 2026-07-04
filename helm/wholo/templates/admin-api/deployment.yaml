@@ -19,6 +19,7 @@ spec:
       labels:
         app: {{ include "wholo.fullname" . }}-admin-api
     spec:
+      {{- include "wholo.imagePullSecrets" . }}
       containers:
         - name: admin-api
           image: {{ .Values.adminApi.image.repository }}:{{ .Values.adminApi.image.tag }}

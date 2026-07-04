@@ -1,3 +1,7 @@
+# Pull secrets for private registries (e.g. ghcr.io in live). Empty for
+# local dev, where images are built straight into the Docker Desktop daemon.
+imagePullSecrets: []
+
 postgresql:
   image: postgres:16-alpine
   port: 5432
@@ -5,11 +9,35 @@ postgresql:
   username: wholo
   password: wholo
   storageSize: 1Gi
+  # Empty = cluster default StorageClass (Docker Desktop: hostpath, k3s: local-path)
+  storageClass: ""
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  # Nightly pg_dumpall to a dedicated PVC. Protects against app-level
+  # corruption and accidental deletion — not node-disk loss (dumps live on
+  # the same cluster's node-local storage).
+  backup:
+    enabled: false
+    schedule: "0 2 * * *"
+    storageSize: 2Gi
 
 redis:
   image: redis:7-alpine
   port: 6379
   storageSize: 512Mi
+  storageClass: ""
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
 
 api:
   image:
@@ -37,6 +65,11 @@ api:
   # Must be reachable from a recipient's browser (used in email links) —
   # do not point this at internal service DNS.
   adminUrl: "http://localhost:3020"
+  # Defaults target the in-cluster MailHog; override for a real provider.
+  smtp: {}
+  # Seeds demo data on every install/upgrade. Must be disabled in live.
+  seedJob:
+    enabled: true
 
 # Outbox publisher + queue consumers. Runs the api image with a different
 # entry point. Must stay at 1 replica: the outbox relay relies on being the
@@ -89,6 +122,17 @@ adminApi:
 
 mailhog:
   image: mailhog/mailhog:v1.0.1
+  service:
+    # NodePort 30825 for the UI in local dev; live uses ClusterIP and
+    # port-forward (the UI has no auth — never expose it publicly).
+    type: NodePort
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "10m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
 
 keycloak:
   image:
@@ -99,6 +143,25 @@ keycloak:
   adminPassword: admin
   port: 8080
   realm: wholo
+  service:
+    type: LoadBalancer
+  # "start-dev" for local; "start" (production mode) in live.
+  startCommand: start-dev
+  # KC_HOSTNAME. Live sets a full URL (https://auth.<domain>), which makes
+  # hostnamePort irrelevant — set hostnamePort: "" there.
+  hostname: "localhost"
+  hostnamePort: "8080"
+  # Set to "xforwarded" when running behind a TLS-terminating proxy (Traefik).
+  proxyHeaders: ""
+  # Base URLs the browser uses to reach the admin/portal apps; drive the
+  # realm clients' redirect URIs and web origins. Realm import only happens
+  # on first boot — changing these later requires the Keycloak console.
+  adminClientUrl: "http://localhost:3020"
+  portalClientUrl: "http://localhost:3010"
+  # SMTP host for realm emails (verification, reset). Empty = in-cluster MailHog.
+  smtpHost: ""
+  # Demo users with weak passwords, for local dev only. Never enable in live.
+  seedUsers: true
   resources:
     requests:
       memory: "512Mi"
@@ -106,3 +169,13 @@ keycloak:
     limits:
       memory: "1Gi"
       cpu: "1000m"
+
+ingress:
+  enabled: false
+  className: traefik
+  annotations: {}
+  hosts:
+    portal: ""
+    admin: ""
+    api: ""
+    auth: ""

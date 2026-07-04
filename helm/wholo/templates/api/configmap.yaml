@@ -15,7 +15,7 @@ data:
   R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}
   PORTAL_URL: {{ .Values.api.portalUrl | quote }}
   ADMIN_URL: {{ .Values.api.adminUrl | quote }}
-  SMTP_HOST: {{ printf "%s-mailhog" (include "wholo.fullname" .) | quote }}
-  SMTP_PORT: "1025"
-  SMTP_SECURE: "false"
-  SMTP_FROM: "noreply@wholo.com.au"
+  SMTP_HOST: {{ .Values.api.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}
+  SMTP_PORT: {{ .Values.api.smtp.port | default "1025" | toString | quote }}
+  SMTP_SECURE: {{ .Values.api.smtp.secure | default "false" | toString | quote }}
+  SMTP_FROM: {{ .Values.api.smtp.from | default "noreply@wholo.com.au" | quote }}
