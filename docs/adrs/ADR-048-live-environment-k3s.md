@@ -27,10 +27,12 @@ working unchanged.
    trigger).
 2. **Image pipeline**: GitHub Actions (`.github/workflows/build-images.yml`)
    builds the four chart images (`api`, `portal-api`, `admin-api`, `keycloak`)
-   on every push to `master` and publishes them as **private** GHCR packages
+   on every push to `master` and publishes them as **public** GHCR packages
    (`ghcr.io/listentorick/wholo/*`), tagged `sha-<shortsha>` (immutable,
-   deployed) and `latest` (convenience). The cluster pulls with a
-   `read:packages` PAT secret.
+   deployed) and `latest` (convenience). Public because the source repo is
+   already public (private images would protect nothing) and public packages
+   have no storage quota; no pull secret is needed. The chart still supports
+   `imagePullSecrets` should the repo ever go private.
 3. **Environment-specific BFF images**: `NEXT_PUBLIC_KEYCLOAK_*` is baked into
    the Next.js bundles at image build time (consequence of the BFF/frontend
    colocation in ADR-044/045), so published portal/admin images are built with
