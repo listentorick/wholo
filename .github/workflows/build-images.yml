@@ -43,15 +43,15 @@ jobs:
             dockerfile: apps/portal-api/Dockerfile
             context: .
             build-args: |
-              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
-              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
+              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL || 'http://localhost:8080' }}
+              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM || 'wholo' }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
           - name: admin-api
             dockerfile: apps/admin-api/Dockerfile
             context: .
             build-args: |
-              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL }}
-              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM }}
+              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL || 'http://localhost:8080' }}
+              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM || 'wholo' }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-admin
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
