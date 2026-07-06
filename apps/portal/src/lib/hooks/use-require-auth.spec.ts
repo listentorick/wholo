@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import { useRequireAuth } from './use-require-auth';
 import { useAuth } from '../auth-context';
 

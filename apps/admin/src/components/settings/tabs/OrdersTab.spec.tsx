@@ -9,6 +9,12 @@ const baseSettings: DistributorSettings = {
   email: null,
   phone: null,
   slug: null,
+  addressLine1: null,
+  addressLine2: null,
+  addressCity: null,
+  addressState: null,
+  addressPostcode: null,
+  addressCountry: null,
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
@@ -16,6 +22,7 @@ const baseSettings: DistributorSettings = {
   aboutText: null,
   orderNotificationEmails: [],
   processingDays: [1, 2, 3, 4, 5],
+  minimumOrderSpend: null,
 };
 
 describe('OrdersTab', () => {

@@ -17,6 +17,7 @@ const baseDistributor: PortalDistributorSummary = {
   email: 'orders@winos.com',
   phone: '+61 2 9000 0000',
   orderCount: 14,
+  minimumOrderSpend: null,
 };
 
 describe('DistributorCard', () => {
