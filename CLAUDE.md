@@ -40,6 +40,15 @@ Three primary actor types:
 
 **Auth architecture**: `apps/api` is the single auth authority. BFFs proxy login to apps/api and forward the issued JWT. BFFs validate inbound JWTs locally using a shared `JWT_SECRET`. Future: dedicated auth service + client credentials for BFF→API calls.
 
+## Primary API layout — known debt (being reshaped slowly)
+
+The current route layout of `apps/api` is acknowledged as messy and is being incrementally brought into shape. Do **not** mass-refactor it unprompted, but do not entrench the current patterns when adding endpoints either.
+
+- **The `admin/...` route prefix concept is wrong.** Whether a caller may invoke an endpoint is an authn/authz concern (roles/scopes on the credential), not a URL-namespace concern. Existing `admin/distributors/:distributorId/...` routes stay for now; new endpoints should not extend this admin-namespace pattern.
+- **Target shape**: resource-oriented paths that address resources fully and explicitly by ID (e.g. a customer contextualised to a distributor is `distributors/:distributorId/customers/:customerId`). `apps/api` is designed to service applications and agents (eventually via client credentials), not just user-JWT browser sessions.
+- **No identity-relative aliases (`me`) in `apps/api`.** "Me" semantics belong at the user edge — the BFFs (`portal-api`, `admin-api`) adapt user context into explicit resource calls. The server always enforces that a path id matches what the credential is authorized for; client-supplied ids are claims, never trusted.
+- **Prefer coarse resources over fine-grained field endpoints** (e.g. return the customer-in-context resource, not a `/delivery-address` micro-endpoint).
+
 ## Architecture Principles (from PRD)
 
 - **Mobile-first**: all core workflows (ordering, stock receiving, delivery confirmation, signature capture) must work well on mobile.
