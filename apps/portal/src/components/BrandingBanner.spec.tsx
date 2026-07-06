@@ -68,6 +68,22 @@ describe('BrandingBanner', () => {
     expect(img).toBeNull();
   });
 
+  it('reserves space below the banner for the hanging logo circle when logoUrl is set', () => {
+    const { container } = render(
+      <BrandingBanner logoUrl="https://cdn.example.com/logo.webp" bannerUrl={null} dominantColor={null} onScrolledPast={vi.fn()} />,
+    );
+    const banner = container.querySelector('.home-banner') as HTMLElement;
+    expect(banner.style.marginBottom).toBe('44px');
+  });
+
+  it('reserves no extra space when there is no logo', () => {
+    const { container } = render(
+      <BrandingBanner logoUrl={null} bannerUrl={null} dominantColor={null} onScrolledPast={vi.fn()} />,
+    );
+    const banner = container.querySelector('.home-banner') as HTMLElement;
+    expect(banner.style.marginBottom).toBe('');
+  });
+
   it('registers an IntersectionObserver on mount', () => {
     render(
       <BrandingBanner logoUrl={null} bannerUrl={null} dominantColor={null} onScrolledPast={vi.fn()} />,

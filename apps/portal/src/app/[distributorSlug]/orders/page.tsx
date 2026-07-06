@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { ordersApi } from '@wholo/api-client';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 import type { OrderSummary, OrderStatus } from '@wholo/types';
 
 const STATUS_BADGE: Record<string, { color: string; bg: string; label: string }> = {
@@ -95,9 +96,9 @@ export default function OrdersPage() {
 
   if (authLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -109,10 +110,9 @@ export default function OrdersPage() {
         @keyframes ol-fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .ol-row { animation: ol-fade-up 0.32s ease both; cursor: pointer; transition: background 0.12s; }
         .ol-row:hover { background: #FAFAFA; }
-        @media (min-width: 481px) { .ol-shell { max-width: 480px; margin-left: auto; margin-right: auto; } }
       `}</style>
 
-      <div className="ol-shell w-full flex flex-col flex-1">
+      <PageShell padding="none">
         {loading ? (
           <>
             {[0, 1, 2, 3].map((i) => <SkeletonRow key={i} />)}
@@ -214,7 +214,7 @@ export default function OrdersPage() {
             )}
           </>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

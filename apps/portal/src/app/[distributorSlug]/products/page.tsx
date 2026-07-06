@@ -7,6 +7,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
 
 function formatPrice(price: string | null): string {
@@ -42,9 +43,9 @@ export default function CataloguePage() {
 
   if (authLoading || (user && fetchLoading)) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -98,14 +99,10 @@ export default function CataloguePage() {
 
         .cat-product-row { transition: background 0.1s; }
         .cat-product-row:active { background: #FAFAFA; }
-
-        @media (min-width: 481px) {
-          .cat-shell { max-width: 480px; margin-left: auto; margin-right: auto; }
-        }
       `}</style>
 
       {/* Product list */}
-      <div className="cat-shell flex-1 w-full p-5">
+      <PageShell>
 
         {fetchError ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-2">
@@ -207,7 +204,7 @@ export default function CataloguePage() {
             })}
           </ul>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

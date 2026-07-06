@@ -57,7 +57,12 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
         }
       `}</style>
 
-      <div ref={bannerRef} className="home-banner anim-banner">
+      {/* margin-bottom reserves space for the logo circle hanging below the banner */}
+      <div
+        ref={bannerRef}
+        className="home-banner anim-banner"
+        style={{ marginBottom: logoUrl ? 44 : undefined }}
+      >
         {/* Base gradient layer — always present */}
         <div
           className="absolute inset-0"

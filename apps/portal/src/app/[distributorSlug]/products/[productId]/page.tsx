@@ -8,6 +8,7 @@ import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import type { CatalogueProductDetail } from '@wholo/types';
 import { PageSubHeader } from '@/components/PageSubHeader';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 
 function formatPrice(price: string | null, resolvedPrice: string | null, productTypeName?: string | null): string {
   const raw = resolvedPrice ?? price;
@@ -44,9 +45,9 @@ export default function ProductDetailPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -56,9 +57,9 @@ export default function ProductDetailPage() {
     return (
       <>
         <PageSubHeader backLabel="All Products" backHref={`/${distributorSlug}/products`} title="Product" />
-        <div className="flex flex-1 items-center justify-center py-20 px-6 text-center">
+        <PageShell center className="px-6 text-center">
           <p style={{ fontSize: 13, color: '#9CA3AF' }}>{error ?? 'Product not found.'}</p>
-        </div>
+        </PageShell>
       </>
     );
   }
@@ -106,10 +107,6 @@ export default function ProductDetailPage() {
         .order-btn:hover  { background: #D97036; color: #fff; }
         .order-btn:active { background: #C4622A; border-color: #C4622A; color: #fff; }
         .order-btn:disabled { opacity: 0.55; cursor: default; }
-
-        @media (min-width: 481px) {
-          .pd-shell { max-width: 480px; margin-left: auto; margin-right: auto; }
-        }
       `}</style>
 
       <PageSubHeader
@@ -118,7 +115,7 @@ export default function ProductDetailPage() {
         title={product.name}
       />
 
-      <div className="pd-shell w-full flex flex-col pb-12">
+      <PageShell padding="none" className="pb-12">
 
         {/* Hero image */}
         <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', flexShrink: 0 }}>
@@ -226,7 +223,7 @@ export default function ProductDetailPage() {
           </p>
         </div>
 
-      </div>
+      </PageShell>
     </>
   );
 }

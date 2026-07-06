@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useDistributor } from '@/lib/distributor-context';
 import { portalApi } from '@wholo/api-client';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 import type { DistributorInfo } from '@wholo/types';
 
 function MapPinIcon() {
@@ -111,9 +112,9 @@ export default function DistributorHomePage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-16">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -127,7 +128,7 @@ export default function DistributorHomePage() {
 
   return (
     <>
-      <div className={`px-5 py-8 max-w-4xl mx-auto w-full ${hasRelationship === false ? 'pb-24' : ''}`}>
+      <PageShell width="wide" padding="none" className={`px-5 py-8 ${hasRelationship === false ? 'pb-24' : ''}`}>
         <div className={`grid grid-cols-1 gap-8 ${hasContact ? 'md:grid-cols-[1fr_280px]' : ''}`}>
 
           {/* About column */}
@@ -157,7 +158,7 @@ export default function DistributorHomePage() {
             </>
           )}
         </div>
-      </div>
+      </PageShell>
 
       {hasRelationship === false && (
         <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center pb-6 pointer-events-none">

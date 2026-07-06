@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { PageSubHeader } from '@/components/PageSubHeader';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 import { ordersApi, ApiError } from '@wholo/api-client';
 import type { Order } from '@wholo/types';
 
@@ -76,9 +77,9 @@ export default function OrderDetailPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -88,9 +89,9 @@ export default function OrderDetailPage() {
     return (
       <>
         <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title="Order" />
-        <div className="flex flex-1 items-center justify-center py-20 px-6 text-center">
+        <PageShell center className="px-6 text-center">
           <p style={{ fontSize: 13, color: '#9CA3AF' }}>{error ?? 'Order not found'}</p>
-        </div>
+        </PageShell>
       </>
     );
   }
@@ -104,12 +105,11 @@ export default function OrderDetailPage() {
       <style>{`
         @keyframes od-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .od-section { animation: od-fade-up 0.32s ease both; }
-        @media (min-width: 481px) { .od-shell { max-width: 480px; margin-left: auto; margin-right: auto; } }
       `}</style>
 
       <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title={order.orderNumber} />
 
-      <div className="od-shell w-full flex flex-col pb-12">
+      <PageShell padding="none" className="pb-12">
 
         {/* Status banner */}
         <div
@@ -295,7 +295,7 @@ export default function OrderDetailPage() {
           </div>
         )}
 
-      </div>
+      </PageShell>
     </>
   );
 }

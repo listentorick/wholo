@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { DistributorCard } from '@/components/DistributorCard';
 import { portalApi } from '@wholo/api-client';
+import { PageShell } from '@/components/PageShell';
 import type { PortalDistributorSummary } from '@wholo/types';
 
 function SearchIcon() {
@@ -50,7 +51,7 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="px-4 md:px-8 py-8 max-w-3xl mx-auto w-full">
+      <PageShell width="reading" padding="none" className="px-4 md:px-8 py-8">
 
         {/* Greeting */}
         <div className="mb-8">
@@ -132,7 +133,7 @@ export default function HomePage() {
           </button>
         </section>
 
-      </div>
+      </PageShell>
     </>
   );
 }

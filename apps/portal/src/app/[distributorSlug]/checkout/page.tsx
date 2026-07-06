@@ -6,6 +6,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
+import { PageShell, PageSpinner } from '@/components/PageShell';
 import { ordersApi, deliveryApi, ApiError } from '@wholo/api-client';
 import type { AvailableDeliveryDate } from '@wholo/types';
 
@@ -104,9 +105,9 @@ export default function CheckoutPage() {
 
   if (authLoading || cartLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center py-20">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
-      </div>
+      <PageShell center>
+        <PageSpinner />
+      </PageShell>
     );
   }
 
@@ -120,7 +121,7 @@ export default function CheckoutPage() {
           @keyframes co-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
           .co-empty { animation: co-fade-up 0.4s ease both 0.1s; }
         `}</style>
-        <div className="co-empty flex flex-1 flex-col items-center justify-center px-8 py-20 text-center gap-6">
+        <PageShell center className="co-empty px-8 text-center gap-6">
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
             border: '1.5px solid #E5E7EB',
@@ -154,7 +155,7 @@ export default function CheckoutPage() {
           >
             Browse Products
           </button>
-        </div>
+        </PageShell>
       </>
     );
   }
@@ -230,15 +231,11 @@ export default function CheckoutPage() {
         }
         .co-ghost-btn:hover    { color: #1A1A1A; }
         .co-ghost-btn:disabled { cursor: not-allowed; opacity: 0.45; }
-
-        @media (min-width: 481px) {
-          .co-shell { max-width: 480px; margin-left: auto; margin-right: auto; }
-        }
       `}</style>
 
       <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-      <div className="co-shell w-full flex flex-col pb-10">
+      <PageShell padding="none" className="pb-10">
 
         {/* Product list */}
         <div className="co-section" style={{ animationDelay: '0.05s' }}>
@@ -465,7 +462,7 @@ export default function CheckoutPage() {
           </button>
         </div>
 
-      </div>
+      </PageShell>
     </>
   );
 }

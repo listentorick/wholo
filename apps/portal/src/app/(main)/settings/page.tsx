@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { portalApi } from '@wholo/api-client';
+import { PageShell } from '@/components/PageShell';
 import type { MyProfileResponse } from '@wholo/types';
 
 const schema = z.object({
@@ -116,7 +117,7 @@ export default function SettingsPage() {
         </div>
       </nav>
 
-      <div className="w-full pb-10">
+      <PageShell width="full" padding="none" className="pb-10">
         {activeTab === 'Business' && (
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
             {loading ? (
@@ -230,7 +231,7 @@ export default function SettingsPage() {
             )}
           </form>
         )}
-      </div>
+      </PageShell>
     </>
   );
 }

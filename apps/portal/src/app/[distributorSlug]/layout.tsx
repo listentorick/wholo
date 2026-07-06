@@ -38,7 +38,7 @@ function DistributorMain({
       ) : (
         <DistributorPageHeader distributorSlug={distributorSlug} />
       )}
-      <div style={{ paddingTop: isAboutPage && distributor?.logoUrl ? '44px' : undefined }}>
+      <div className="flex flex-1 flex-col min-w-0">
         {children}
       </div>
     </main>
