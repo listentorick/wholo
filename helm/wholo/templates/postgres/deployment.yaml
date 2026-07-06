@@ -10,9 +10,11 @@ spec:
     matchLabels:
       app: {{ include "wholo.fullname" . }}-postgresql
   # Recreate: the RWO node-local volume can't be mounted by old and new pods
-  # at once, so a rolling update would deadlock.
+  # at once, so a rolling update would deadlock. rollingUpdate must be nulled
+  # explicitly or upgrades of releases created before this change are rejected.
   strategy:
     type: Recreate
+    rollingUpdate: null
   template:
     metadata:
       labels:
