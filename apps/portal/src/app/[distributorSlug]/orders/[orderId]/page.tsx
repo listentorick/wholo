@@ -6,7 +6,8 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { ordersApi, ApiError } from '@wholo/api-client';
-import type { Order } from '@wholo/types';
+import type { AddressSnapshot, Order } from '@wholo/types';
+import { formatAddress } from '@/lib/format-address';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
   SUBMITTED: { color: '#D97036', bg: '#FEF3EC', border: '#FDDCBE', label: 'Awaiting Confirmation' },
@@ -97,8 +98,7 @@ export default function OrderDetailPage() {
   }
 
   const sc = STATUS_CONFIG[order.status] ?? STATUS_CONFIG['CANCELLED'];
-  const delivAddr = order.deliveryAddressSnapshot as Record<string, string | null> | null;
-  const hasDelivAddr = delivAddr && Object.values(delivAddr).some(Boolean);
+  const delivAddrText = formatAddress(order.deliveryAddressSnapshot as AddressSnapshot | null);
 
   return (
     <>
@@ -222,14 +222,12 @@ export default function OrderDetailPage() {
         </div>
 
         {/* Delivery address */}
-        {hasDelivAddr && (
+        {delivAddrText && (
           <>
             <SectionLabel>Delivery Address</SectionLabel>
             <div className="od-section px-4 pb-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.25s' }}>
               <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7 }}>
-                {[delivAddr.line1, delivAddr.line2, delivAddr.city, delivAddr.state, delivAddr.postcode, delivAddr.country]
-                  .filter(Boolean)
-                  .join(', ')}
+                {delivAddrText}
               </p>
             </div>
           </>

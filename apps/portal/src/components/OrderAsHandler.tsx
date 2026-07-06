@@ -46,6 +46,7 @@ export function OrderAsHandler() {
         console.log('[OrderAs] exchange succeeded, customer:', data.customerName);
         setOrderAsSession({
           sessionToken: data.sessionToken,
+          customerId: data.customerId,
           customerName: data.customerName,
           distributorId: data.distributorId,
           returnUrl: document.referrer || window.location.origin + window.location.pathname,

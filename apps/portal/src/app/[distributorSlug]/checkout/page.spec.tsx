@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/hooks/use-require-auth', () => ({
-  useRequireAuth: () => ({ user: { id: 'u1' }, accessToken: 'tok', isLoading: false }),
+  useRequireAuth: () => ({ user: { id: 'u1', organisationId: 'org-1' }, accessToken: 'tok', isLoading: false }),
 }));
 
 const mockClearOrderAsSession = vi.fn();
@@ -19,6 +19,7 @@ let mockOrderAsMode = false;
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({
     orderAsMode: mockOrderAsMode,
+    orderAsCustomerId: null,
     clearOrderAsSession: mockClearOrderAsSession,
   }),
   ApiError: class extends Error {},
@@ -37,9 +38,11 @@ vi.mock('@/lib/cart-context', () => ({
 }));
 
 const mockSubmitOrder = vi.fn();
+const mockGetMyDeliveryAddress = vi.fn().mockResolvedValue({ deliveryAddress: null });
 vi.mock('@wholo/api-client', () => ({
   ordersApi: { submitOrder: (...args: unknown[]) => mockSubmitOrder(...args) },
   deliveryApi: { getAvailableDates: vi.fn().mockResolvedValue({ dates: [] }) },
+  portalApi: { getMyDeliveryAddress: (...args: unknown[]) => mockGetMyDeliveryAddress(...args) },
   ApiError: class ApiError extends Error {
     problem: { status: number; detail?: string };
     status: number;
@@ -82,5 +85,46 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     await waitFor(() => expect(mockRefreshCart).toHaveBeenCalled());
     expect(mockClearOrderAsSession).not.toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith('/winos/orders/ord-1');
+  });
+});
+
+describe('CheckoutPage — delivery address', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrderAsMode = false;
+  });
+
+  it('shows the delivery address when one is on file', async () => {
+    mockGetMyDeliveryAddress.mockResolvedValue({
+      deliveryAddress: {
+        line1: '1 Wine Lane', line2: null, city: 'Melbourne',
+        state: 'VIC', postcode: '3000', country: 'Australia',
+      },
+    });
+
+    render(<CheckoutPage />);
+
+    expect(await screen.findByText('Delivery Address')).toBeInTheDocument();
+    expect(screen.getByText('1 Wine Lane, Melbourne, VIC, 3000, Australia')).toBeInTheDocument();
+  });
+
+  it('shows the empty state when no address is on file', async () => {
+    mockGetMyDeliveryAddress.mockResolvedValue({ deliveryAddress: null });
+
+    render(<CheckoutPage />);
+
+    expect(
+      await screen.findByText('No delivery address on file. Please contact your distributor to add one.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the empty state when the address lookup fails', async () => {
+    mockGetMyDeliveryAddress.mockRejectedValue(new Error('403'));
+
+    render(<CheckoutPage />);
+
+    expect(
+      await screen.findByText('No delivery address on file. Please contact your distributor to add one.'),
+    ).toBeInTheDocument();
   });
 });

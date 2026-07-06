@@ -8,6 +8,7 @@ const ORDER_AS_STORAGE_KEY = 'orderAs_session';
 
 interface OrderAsState {
   sessionToken: string;
+  customerId: string;
   customerName: string;
   returnUrl: string;
   distributorId: string;
@@ -18,6 +19,7 @@ interface AuthContextValue {
   accessToken: string | null;
   isLoading: boolean;
   orderAsMode: boolean;
+  orderAsCustomerId: string | null;
   orderAsCustomerName: string | null;
   orderAsDistributorId: string | null;
   login: (returnUrl?: string) => void;
@@ -151,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken,
       isLoading,
       orderAsMode: orderAsState !== null,
+      orderAsCustomerId: orderAsState?.customerId ?? null,
       orderAsCustomerName: orderAsState?.customerName ?? null,
       orderAsDistributorId: orderAsState?.distributorId ?? null,
       login,

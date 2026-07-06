@@ -20,6 +20,7 @@ import { OrderAsModule } from './order-as/order-as.module';
 import { MailModule } from './mail/mail.module';
 import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
 import { PortalModule } from './portal/portal.module';
+import { CustomersModule } from './customers/customers.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
@@ -47,6 +48,7 @@ import './asset-images/branding-asset-types';
     MailModule,
     PortalInvitationsModule,
     PortalModule,
+    CustomersModule,
   ],
   controllers: [HealthController],
 })

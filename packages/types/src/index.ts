@@ -379,6 +379,10 @@ export interface MyProfileResponse {
   billingCountry: string | null;
 }
 
+export interface MyDeliveryAddressResponse {
+  deliveryAddress: AddressSnapshot | null;
+}
+
 export interface OrganisationSearchResult {
   id: string;
   name: string;
@@ -431,6 +435,23 @@ export interface Customer {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * Distributor's customer record as visible to the customer principal.
+ * The distributor's working data (notes, credit, pricing/catalogue wiring,
+ * invitations) is filtered out by authorization at the API.
+ */
+export type CustomerSelfView = Omit<
+  Customer,
+  | 'notes'
+  | 'creditLimit'
+  | 'priceListId'
+  | 'priceList'
+  | 'deliveryProfileId'
+  | 'deliveryProfile'
+  | 'catalogues'
+  | 'invitations'
+>;
 
 export interface CustomerListParams {
   limit?: number;

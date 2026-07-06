@@ -7,8 +7,9 @@ import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
-import { ordersApi, deliveryApi, ApiError } from '@wholo/api-client';
-import type { AvailableDeliveryDate } from '@wholo/types';
+import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
+import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
+import { formatAddress } from '@/lib/format-address';
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -17,7 +18,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
-  const { orderAsMode, clearOrderAsSession } = useAuth();
+  const { orderAsMode, orderAsCustomerId, clearOrderAsSession } = useAuth();
   const { cartLoading, items, quantities, savingItems, syncItem, refreshCart } = useCart();
 
   const [poOpen, setPoOpen] = useState(false);
@@ -31,6 +32,13 @@ export default function CheckoutPage() {
   const [loadingDates, setLoadingDates] = useState(true);
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
 
+  const [deliveryAddress, setDeliveryAddress] = useState<AddressSnapshot | null>(null);
+  const [loadingAddress, setLoadingAddress] = useState(true);
+
+  // The customer whose record we read: the impersonated customer in order-as mode,
+  // otherwise the logged-in organisation.
+  const customerId = orderAsCustomerId ?? user?.organisationId ?? null;
+
   useEffect(() => {
     if (!accessToken) return;
     setLoadingDates(true);
@@ -40,6 +48,16 @@ export default function CheckoutPage() {
       .catch(() => setAvailableDates([]))
       .finally(() => setLoadingDates(false));
   }, [accessToken, distributorSlug]);
+
+  useEffect(() => {
+    if (!accessToken || !customerId) return;
+    setLoadingAddress(true);
+    portalApi
+      .getMyDeliveryAddress(distributorSlug, customerId, accessToken)
+      .then((res) => setDeliveryAddress(res.deliveryAddress))
+      .catch(() => setDeliveryAddress(null))
+      .finally(() => setLoadingAddress(false));
+  }, [accessToken, customerId, distributorSlug]);
 
   const handlePlaceOrder = async () => {
     if (!accessToken || submitting) return;
@@ -388,9 +406,27 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        {/* Delivery Address */}
+        {!loadingAddress && (
+          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.3s' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
+              Delivery Address
+            </p>
+            {formatAddress(deliveryAddress) ? (
+              <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7, textAlign: 'center' }}>
+                {formatAddress(deliveryAddress)}
+              </p>
+            ) : (
+              <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+                No delivery address on file. Please contact your distributor to add one.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Delivery Day */}
         {(loadingDates || availableDates.length > 0) && (
-          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.3s' }}>
+          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.35s' }}>
             <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
               Delivery Day
             </p>
@@ -438,7 +474,7 @@ export default function CheckoutPage() {
         )}
 
         {/* Action buttons */}
-        <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.35s' }}>
+        <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.4s' }}>
           <button
             className="co-place-order"
             disabled={submitting}

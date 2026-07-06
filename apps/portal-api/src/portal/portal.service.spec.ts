@@ -50,4 +50,56 @@ describe('PortalService (portal-api)', () => {
       expect(mockApi.patch).toHaveBeenCalledWith('/portal/me/profile', 'tok-123', body);
     });
   });
+
+  describe('getMyDeliveryAddress', () => {
+    const customerRecord = {
+      deliveryLine1: '1 Wine Lane',
+      deliveryLine2: null,
+      deliveryCity: 'Melbourne',
+      deliveryState: 'VIC',
+      deliveryPostcode: '3000',
+      deliveryCountry: 'Australia',
+    };
+
+    it('resolves the slug then returns the delivery address from the customer record', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockResolvedValueOnce(customerRecord);
+
+      const result = await service.getMyDeliveryAddress('tok-123', 'winos', 'cust-1');
+
+      expect(mockApi.get).toHaveBeenNthCalledWith(1, '/distributors/winos', 'tok-123');
+      expect(mockApi.get).toHaveBeenNthCalledWith(2, '/distributors/dist-1/customers/cust-1', 'tok-123');
+      expect(result).toEqual({
+        deliveryAddress: {
+          line1: '1 Wine Lane',
+          line2: null,
+          city: 'Melbourne',
+          state: 'VIC',
+          postcode: '3000',
+          country: 'Australia',
+        },
+      });
+    });
+
+    it('returns a null address when all delivery fields are null', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockResolvedValueOnce({
+          deliveryLine1: null, deliveryLine2: null, deliveryCity: null,
+          deliveryState: null, deliveryPostcode: null, deliveryCountry: null,
+        });
+
+      const result = await service.getMyDeliveryAddress('tok-123', 'winos', 'cust-1');
+      expect(result).toEqual({ deliveryAddress: null });
+    });
+
+    it('propagates an upstream failure (e.g. unknown distributor)', async () => {
+      mockApi.get.mockRejectedValueOnce(new Error('Distributor not found'));
+
+      await expect(service.getMyDeliveryAddress('tok-123', 'nope', 'cust-1')).rejects.toThrow(
+        'Distributor not found',
+      );
+    });
+  });
 });
