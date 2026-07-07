@@ -137,6 +137,35 @@ kubectl port-forward svc/wholo-postgresql 5432:5432
 
 **Test structure**: Use `beforeAll` to create fixed-ID test organisations (`upsert` for idempotency), `beforeEach` to clean child records between tests, and `afterAll` to tear everything down. Use `supertest` to drive the HTTP layer — these tests exercise the full stack from controller to database.
 
+## Deployment
+
+### Local dev (Docker Desktop Kubernetes)
+
+Local dev runs on Kubernetes via Helm (`helm/wholo`, `pnpm helm:install`), not Docker Compose. Images are built locally and loaded straight into Docker Desktop's cluster — pods use `imagePullPolicy: Never`, so nothing is pulled automatically:
+
+```bash
+# build one image
+docker build -t wholo/<service>:local -f apps/<service>/Dockerfile .
+# or build all five in one go
+pnpm k8s:build
+
+# after every build, restart the deployment so pods pick up the new image
+kubectl rollout restart deployment/wholo-<service>
+```
+
+- The image tag must be `wholo/<service>:local` — **slash**, not hyphen. The Helm chart references that exact name; a hyphenated tag (`wholo-<service>:local`) silently builds an image the pods never see, and the old code keeps running.
+- `portal-api` and `admin-api` bake their Next.js frontend (`portal`/`admin` respectively) into the same image at build time — rebuild `portal-api`/`admin-api` (not `portal`/`admin`) to pick up frontend-only changes.
+
+### Live (self-hosted k3s)
+
+Full runbook, one-time setup, and troubleshooting: `docs/deployment/live-k3s.md` (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:
+
+1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
+2. Bump the `sha-` tags in `helm/wholo/values.live.yaml` (gitignored, not committed) to the new sha.
+3. Deploy: `pnpm helm:install:live` (`helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml`).
+
+`portal-api`/`admin-api` images are environment-specific: `NEXT_PUBLIC_KEYCLOAK_*` is baked into the Next.js bundle at Docker build time, so the CI-built live images are never reused for local dev (which builds its own `:local` images from the same Dockerfiles with local defaults).
+
 ## Reference
 
 Full product requirements are in `prd.md`.
