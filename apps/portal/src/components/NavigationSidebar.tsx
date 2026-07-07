@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Home, Lock, LogOut, Menu, Settings, ShoppingBasket, Truck, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCartSafe } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
@@ -13,82 +14,6 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   exact?: boolean;
-}
-
-function StoreIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 flex-shrink-0">
-      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
-
-function DeliveryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 flex-shrink-0">
-      <rect x="1" y="3" width="15" height="13" rx="1" />
-      <path d="M16 8h4l3 5v3h-7V8z" />
-      <circle cx="5.5" cy="18.5" r="2.5" />
-      <circle cx="18.5" cy="18.5" r="2.5" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 flex-shrink-0">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-    </svg>
-  );
-}
-
-function PasswordIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 flex-shrink-0">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0110 0v4" />
-    </svg>
-  );
-}
-
-function SignOutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 flex-shrink-0">
-      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function CartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 mt-0.5">
-      <path d="M6 9C6 4.5 18 4.5 18 9" />
-      <path d="M2 9h20l-2 10a2 2 0 01-2 2H6a2 2 0 01-2-2L2 9z" />
-    </svg>
-  );
-}
-
-function BurgerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
 }
 
 export function NavigationSidebar({ distributorSlug, contextName }: { distributorSlug?: string; contextName?: string }) {
@@ -129,15 +54,15 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
   }, [isOpen]);
 
   const mainNavItems: NavItem[] = [
-    { href: '/', label: 'Our Suppliers', icon: <StoreIcon />, exact: true },
+    { href: '/', label: 'Our Suppliers', icon: <Home className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />, exact: true },
     ...(distributorSlug ? [
-      { href: `/${distributorSlug}/delivery-settings`, label: 'Delivery Settings', icon: <DeliveryIcon /> },
+      { href: `/${distributorSlug}/delivery-settings`, label: 'Delivery Settings', icon: <Truck className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
     ] : []),
   ];
 
   const accountNavItems: NavItem[] = [
-    { href: '/settings', label: 'Settings', icon: <SettingsIcon /> },
-    { href: '/change-password', label: 'Change Password', icon: <PasswordIcon /> },
+    { href: '/settings', label: 'Settings', icon: <Settings className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
+    { href: '/change-password', label: 'Change Password', icon: <Lock className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
   ];
 
   function isActive(item: NavItem) {
@@ -165,7 +90,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[#9CA3AF] hover:text-[#1A1A1A]"
           aria-label="Close navigation"
         >
-          <CloseIcon />
+          <X className="h-5 w-5" strokeWidth={1.5} />
         </button>
       </div>
 
@@ -191,7 +116,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
               className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[#9CA3AF] hover:text-[#1A1A1A]"
               aria-label="Collapse navigation"
             >
-              <CloseIcon />
+              <X className="h-5 w-5" strokeWidth={1.5} />
             </button>
           </>
         )}
@@ -238,7 +163,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           ].join(' ')}
         >
           <span className="text-[#9CA3AF] group-hover:text-[#4B5563]">
-            <SignOutIcon />
+            <LogOut className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
           </span>
           <span className={isCollapsed ? 'md:hidden' : ''}>Sign out</span>
         </button>
@@ -255,7 +180,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
           aria-label="Open navigation"
         >
-          <BurgerIcon />
+          <Menu className="h-5 w-5" strokeWidth={1.5} />
         </button>
 
         <span className="text-sm font-medium tracking-wide text-[#1A1A1A]">{distributorName}</span>
@@ -272,7 +197,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
                   {cartCount}
                 </span>
               )}
-              <CartIcon />
+              <ShoppingBasket className="h-5 w-5 mt-0.5" strokeWidth={1.5} />
             </button>
           ) : null}
           <UserMenuButton />

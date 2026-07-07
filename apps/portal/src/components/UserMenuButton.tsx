@@ -2,36 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { LogOut, Store, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-
-function VenueIcon({ className = 'h-5 w-5' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
-      <path d="M3 10l9-7 9 7" />
-      <path d="M3 10v11h18V10" />
-      <rect x="9" y="14" width="6" height="7" />
-    </svg>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 flex-shrink-0">
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function SignOutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 flex-shrink-0">
-      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
 
 export function UserMenuButton() {
   const { user, logout } = useAuth();
@@ -57,7 +29,7 @@ export function UserMenuButton() {
         aria-label="Open user menu"
         aria-expanded={isOpen}
       >
-        <VenueIcon />
+        <Store className="h-5 w-5" strokeWidth={1.5} />
       </button>
 
       {isOpen && user && (
@@ -83,7 +55,7 @@ export function UserMenuButton() {
             onClick={() => setIsOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-secondary transition-colors duration-100 hover:bg-surface-hover hover:text-foreground"
           >
-            <UserIcon />
+            <User className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             User Settings
           </Link>
           <Link
@@ -91,7 +63,7 @@ export function UserMenuButton() {
             onClick={() => setIsOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-secondary transition-colors duration-100 hover:bg-surface-hover hover:text-foreground"
           >
-            <VenueIcon className="h-4 w-4 flex-shrink-0" />
+            <Store className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             Business Settings
           </Link>
 
@@ -102,7 +74,7 @@ export function UserMenuButton() {
             onClick={() => { setIsOpen(false); logout(); }}
             className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground-secondary transition-colors duration-100 hover:bg-error/5 hover:text-error"
           >
-            <SignOutIcon />
+            <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             Sign out
           </button>
         </div>
