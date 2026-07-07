@@ -5,6 +5,7 @@ import { CatalogueService } from './catalogue.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
+import { ProductSearchService } from '../product-search/product-search.service';
 
 const DISTRIBUTOR_ID = 'dist-1';
 const DISTRIBUTOR_SLUG = 'test-dist';
@@ -62,6 +63,10 @@ const mockR2Storage = {
   getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
 };
 
+const mockProductSearch = {
+  search: jest.fn(),
+};
+
 describe('CatalogueService', () => {
   let service: CatalogueService;
 
@@ -72,11 +77,13 @@ describe('CatalogueService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: PriceResolutionService, useValue: mockPriceResolution },
         { provide: R2StorageService, useValue: mockR2Storage },
+        { provide: ProductSearchService, useValue: mockProductSearch },
       ],
     }).compile();
 
     service = module.get<CatalogueService>(CatalogueService);
     jest.clearAllMocks();
+    mockProductSearch.search.mockResolvedValue([]);
 
     mockPrisma.organisation.findFirst.mockResolvedValue(baseDistributor);
     mockPrisma.product.count.mockResolvedValue(0);
@@ -317,6 +324,112 @@ describe('CatalogueService', () => {
       const result = await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
 
       expect(result.data[0].resolvedPrice).toBeNull();
+    });
+  });
+
+  describe('getProducts with search', () => {
+    const PRODUCT_ID_3 = 'prod-3';
+
+    it('returns products in ranked order from the search service', async () => {
+      mockProductSearch.search.mockResolvedValue([
+        { productId: PRODUCT_ID_2, tier: 0, score: 1 },
+        { productId: PRODUCT_ID_1, tier: 3, score: 0.6 },
+      ]);
+      // DB returns them in a different order — rank must win
+      mockPrisma.product.findMany.mockResolvedValue([
+        makeProduct(PRODUCT_ID_1),
+        makeProduct(PRODUCT_ID_2),
+      ]);
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'sku' }, CUSTOMER_ORG_ID);
+
+      expect(result.data.map((p) => p.id)).toEqual([PRODUCT_ID_2, PRODUCT_ID_1]);
+      expect(mockProductSearch.search).toHaveBeenCalledWith(
+        DISTRIBUTOR_ID,
+        'sku',
+        expect.objectContaining({ offset: 0 }),
+      );
+    });
+
+    it('drops search hits that fail visibility filtering', async () => {
+      mockProductSearch.search.mockResolvedValue([
+        { productId: PRODUCT_ID_1, tier: 2, score: 1 },
+        { productId: 'hidden-product', tier: 3, score: 0.5 },
+      ]);
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'wine' }, CUSTOMER_ORG_ID);
+
+      expect(result.data.map((p) => p.id)).toEqual([PRODUCT_ID_1]);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('returns an empty page without querying products when nothing matches', async () => {
+      mockProductSearch.search.mockResolvedValue([]);
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'zzz' }, CUSTOMER_ORG_ID);
+
+      expect(result.data).toEqual([]);
+      expect(result.pagination).toEqual({ nextCursor: null, hasMore: false, total: 0 });
+      expect(mockPrisma.product.findMany).not.toHaveBeenCalled();
+    });
+
+    it('paginates search results with an offset cursor', async () => {
+      mockProductSearch.search.mockResolvedValue([
+        { productId: PRODUCT_ID_1, tier: 0, score: 1 },
+        { productId: PRODUCT_ID_2, tier: 1, score: 0.8 },
+        { productId: PRODUCT_ID_3, tier: 3, score: 0.4 },
+      ]);
+      mockPrisma.product.findMany.mockResolvedValue([
+        makeProduct(PRODUCT_ID_1),
+        makeProduct(PRODUCT_ID_2),
+        makeProduct(PRODUCT_ID_3),
+      ]);
+
+      const page1 = await service.getProducts(
+        DISTRIBUTOR_SLUG,
+        { search: 'wine', limit: 2 },
+        CUSTOMER_ORG_ID,
+      );
+
+      expect(page1.data.map((p) => p.id)).toEqual([PRODUCT_ID_1, PRODUCT_ID_2]);
+      expect(page1.pagination.hasMore).toBe(true);
+      expect(page1.pagination.total).toBe(3);
+
+      const page2 = await service.getProducts(
+        DISTRIBUTOR_SLUG,
+        { search: 'wine', limit: 2, cursor: page1.pagination.nextCursor! },
+        CUSTOMER_ORG_ID,
+      );
+
+      expect(page2.data.map((p) => p.id)).toEqual([PRODUCT_ID_3]);
+      expect(page2.pagination.hasMore).toBe(false);
+    });
+
+    it('hydrates search results with thumbnails and resolved prices', async () => {
+      mockProductSearch.search.mockResolvedValue([{ productId: PRODUCT_ID_1, tier: 0, score: 1 }]);
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.assetImage.findMany.mockResolvedValue([
+        { entityId: PRODUCT_ID_1, variants: { thumb: 'dist/prod-1/thumb.webp' } },
+      ]);
+      mockPriceResolution.resolvePricesForProducts.mockResolvedValue(
+        new Map([[PRODUCT_ID_1, new Prisma.Decimal('12.00')]]),
+      );
+
+      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'wine' }, CUSTOMER_ORG_ID);
+
+      expect(result.data[0].thumbnailUrl).toBe('https://cdn.example.com/dist/prod-1/thumb.webp');
+      expect(result.data[0].resolvedPrice).toBe('12.00');
+    });
+
+    it('ignores a whitespace-only search and uses the browse path', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, { search: '   ' }, CUSTOMER_ORG_ID);
+
+      expect(mockProductSearch.search).not.toHaveBeenCalled();
+      expect(mockPrisma.product.count).toHaveBeenCalled();
     });
   });
 

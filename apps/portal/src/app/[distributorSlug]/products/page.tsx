@@ -8,7 +8,10 @@ import { useCart } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { SearchInput } from '@/components/SearchInput';
 import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 function formatPrice(price: string | null): string {
   if (price === null) return 'Price on request';
@@ -27,21 +30,39 @@ export default function CataloguePage() {
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     if (!user || !accessToken) return;
+    let cancelled = false;
     setFetchLoading(true);
     setFetchError(null);
     catalogueApi
-      .getProducts(distributorSlug, accessToken)
-      .then(setCatalogue)
-      .catch(() => setFetchError('Failed to load products. Please try again.'))
-      .finally(() => setFetchLoading(false));
-  }, [distributorSlug, user, accessToken]);
+      .getProducts(distributorSlug, accessToken, debouncedSearch ? { search: debouncedSearch } : undefined)
+      .then((res) => {
+        if (!cancelled) setCatalogue(res);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchError('Failed to load products. Please try again.');
+      })
+      .finally(() => {
+        if (!cancelled) setFetchLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [distributorSlug, user, accessToken, debouncedSearch]);
 
   const getQty = (id: string) => quantities[id] ?? 1;
 
-  if (authLoading || (user && fetchLoading)) {
+  // Full-page spinner only on the initial load — search refetches keep the grid up.
+  if (authLoading || (user && fetchLoading && catalogue === null)) {
     return (
       <PageShell center>
         <PageSpinner />
@@ -102,18 +123,38 @@ export default function CataloguePage() {
       `}</style>
 
       {/* Product list */}
-      <PageShell>
+      <PageShell width="wide">
+
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search products…"
+          className="mb-5"
+        />
 
         {fetchError ? (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-2">
             <p className="text-sm text-[#9CA3AF] leading-relaxed">{fetchError}</p>
           </div>
         ) : products.length === 0 ? (
-          <div className="flex items-center justify-center py-16 px-6">
-            <p className="text-sm text-[#9CA3AF]">No products available.</p>
+          <div className="py-16 px-6 text-center">
+            {debouncedSearch ? (
+              <>
+                <p className="text-sm font-medium text-[#1A1A1A]">
+                  No products match &ldquo;{debouncedSearch}&rdquo;
+                </p>
+                <p className="mt-1 text-xs text-[#9CA3AF]">Try a different search term</p>
+              </>
+            ) : (
+              <p className="text-sm text-[#9CA3AF]">No products available.</p>
+            )}
           </div>
         ) : (
-          <ul>
+          <ul
+            className={`sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:gap-x-5 sm:gap-y-8 transition-opacity ${
+              fetchLoading ? 'opacity-60' : ''
+            }`}
+          >
             {products.map((product, i) => {
               const qty = getQty(product.id);
               const added = inCart.has(product.id);
@@ -123,10 +164,13 @@ export default function CataloguePage() {
               return (
                 <li
                   key={product.id}
-                  className="cat-product-row flex items-center border-b border-[#E5E7EB] pb-5"
+                  className="cat-product-row flex items-center border-b border-[#E5E7EB] pb-5 sm:flex-col sm:items-stretch sm:border-b-0 sm:pb-0"
                   style={{ animationDelay: `${delay}s` }}
                 >
-                  <Link href={`/${distributorSlug}/products/${product.id}`} className="shrink-0 focus:outline-none">
+                  <Link
+                    href={`/${distributorSlug}/products/${product.id}`}
+                    className="shrink-0 focus:outline-none sm:w-full"
+                  >
                     {product.thumbnailUrl ? (
                       <img
                         src={product.thumbnailUrl}
@@ -134,18 +178,17 @@ export default function CataloguePage() {
                         width={96}
                         height={96}
                         loading="lazy"
-                        style={{ width: 96, height: 96, objectFit: 'cover' }}
+                        className="h-24 w-24 object-cover sm:h-auto sm:w-full sm:aspect-square"
                       />
                     ) : (
                       <div
-                        className="product-img-placeholder"
-                        style={{ width: 96, height: 96 }}
+                        className="product-img-placeholder h-24 w-24 sm:h-auto sm:w-full sm:aspect-square"
                         aria-hidden="true"
                       />
                     )}
                   </Link>
 
-                  <div className="flex flex-1 flex-col gap-0.5 px-3 py-3 min-w-0">
+                  <div className="flex flex-1 flex-col gap-0.5 px-3 py-3 min-w-0 sm:px-0">
                     <Link
                       href={`/${distributorSlug}/products/${product.id}`}
                       className="text-sm font-medium text-[#1A1A1A] leading-snug truncate hover:underline"

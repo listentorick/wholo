@@ -5,16 +5,8 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { DistributorCard } from '@/components/DistributorCard';
 import { portalApi } from '@wholo/api-client';
 import { PageShell } from '@/components/PageShell';
+import { SearchInput } from '@/components/SearchInput';
 import type { PortalDistributorSummary } from '@wholo/types';
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 text-muted">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
 
 function CompassIcon() {
   return (
@@ -65,18 +57,7 @@ export default function HomePage() {
           <h2 className="text-base font-semibold text-foreground mb-4">My Suppliers</h2>
 
           {/* Search */}
-          <div className="relative mb-4">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2">
-              <SearchIcon />
-            </span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search suppliers…"
-              className="w-full border border-border bg-white py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-            />
-          </div>
+          <SearchInput value={query} onChange={setQuery} placeholder="Search suppliers…" className="mb-4" />
 
           {/* Cards */}
           {loading ? (

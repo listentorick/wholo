@@ -15,6 +15,7 @@ export const catalogueApi = {
     if (params?.limit != null) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', params.cursor);
     if (params?.productTypeCode) query.set('productTypeCode', params.productTypeCode);
+    if (params?.search?.trim()) query.set('search', params.search.trim());
     const qs = query.toString();
     return apiFetch<CatalogueProductsResponse>(
       `/api/v1/distributors/${distributorSlug}/products${qs ? `?${qs}` : ''}`,

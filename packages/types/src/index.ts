@@ -273,6 +273,7 @@ export interface CatalogueProductsParams {
   limit?: number;
   cursor?: string;
   productTypeCode?: string;
+  search?: string;
 }
 
 export interface DistributorInfo {

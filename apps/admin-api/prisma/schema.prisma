@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
 }
 
 enum OrganisationType {
@@ -260,11 +262,34 @@ model Product {
   orderLines         OrderLine[]
   catalogues         CatalogueProduct[]
   priceListRules     PriceListRule[]             @relation("ProductPriceListRules")
+  searchDocument     ProductSearchDocument?
 
   @@unique([distributorId, sku])
   @@index([distributorId, createdAt])
   @@index([distributorId, deletedAt])
   @@map("products")
+}
+
+// Curated search document per product (see ADR-050). App code maintains the
+// text fields; searchVector is a Postgres generated column derived from
+// searchText (added in the migration — Prisma cannot express generated columns).
+model ProductSearchDocument {
+  productId            String                   @id
+  distributorId        String
+  searchText           String
+  searchTextNormalised String
+  nameNormalised       String
+  skuNormalised        String?
+  searchVector         Unsupported("tsvector")? @default(dbgenerated("to_tsvector('english'::regconfig, \"searchText\")"))
+  updatedAt            DateTime                 @updatedAt
+  product              Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([distributorId])
+  @@index([searchVector], type: Gin)
+  @@index([searchTextNormalised(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([nameNormalised(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([skuNormalised(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("product_search_documents")
 }
 
 model ProductExternalReference {

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductSearchService } from '../product-search/product-search.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -17,7 +18,10 @@ const productInclude = {
 
 @Injectable()
 export class AdminProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private productSearch: ProductSearchService,
+  ) {}
 
   async findAll(distributorId: string, query: ProductQueryDto) {
     const limit = query.limit ?? 20;
@@ -77,47 +81,58 @@ export class AdminProductsService {
   }
 
   async create(distributorId: string, dto: CreateProductDto) {
-    return this.prisma.product.create({
-      data: {
-        distributorId,
-        name: dto.name,
-        description: dto.description,
-        sku: dto.sku || null,
-        status: dto.status ?? ProductStatus.DRAFT,
-        productTypeId: dto.productTypeId || null,
-        supplierId: dto.supplierId || null,
-        price: dto.price != null ? new Prisma.Decimal(dto.price) : null,
-        compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
-      },
-      include: productInclude,
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          distributorId,
+          name: dto.name,
+          description: dto.description,
+          sku: dto.sku || null,
+          status: dto.status ?? ProductStatus.DRAFT,
+          productTypeId: dto.productTypeId || null,
+          supplierId: dto.supplierId || null,
+          price: dto.price != null ? new Prisma.Decimal(dto.price) : null,
+          compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
+        },
+        include: productInclude,
+      });
+      await this.productSearch.indexProduct(product, tx);
+      return product;
     });
   }
 
   async update(id: string, distributorId: string, dto: UpdateProductDto) {
     await this.assertOwnership(id, distributorId);
-    return this.prisma.product.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.sku !== undefined && { sku: dto.sku || null }),
-        ...(dto.status !== undefined && { status: dto.status }),
-        ...(dto.productTypeId !== undefined && { productTypeId: dto.productTypeId || null }),
-        ...(dto.supplierId !== undefined && { supplierId: dto.supplierId || null }),
-        ...(dto.price !== undefined && { price: dto.price != null ? new Prisma.Decimal(dto.price) : null }),
-        ...(dto.compareAtPrice !== undefined && {
-          compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
-        }),
-      },
-      include: productInclude,
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.update({
+        where: { id },
+        data: {
+          ...(dto.name !== undefined && { name: dto.name }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.sku !== undefined && { sku: dto.sku || null }),
+          ...(dto.status !== undefined && { status: dto.status }),
+          ...(dto.productTypeId !== undefined && { productTypeId: dto.productTypeId || null }),
+          ...(dto.supplierId !== undefined && { supplierId: dto.supplierId || null }),
+          ...(dto.price !== undefined && { price: dto.price != null ? new Prisma.Decimal(dto.price) : null }),
+          ...(dto.compareAtPrice !== undefined && {
+            compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
+          }),
+        },
+        include: productInclude,
+      });
+      await this.productSearch.indexProduct(product, tx);
+      return product;
     });
   }
 
   async remove(id: string, distributorId: string) {
     await this.assertOwnership(id, distributorId);
-    await this.prisma.product.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      await this.productSearch.removeProduct(id, tx);
     });
   }
 

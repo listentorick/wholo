@@ -3,12 +3,20 @@ import { Prisma, OrganisationType, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
+import { ProductSearchService } from '../product-search/product-search.service';
 import { CatalogueQueryDto } from './dto/catalogue-query.dto';
 
 interface CursorPayload {
   createdAt: string;
   id: string;
 }
+
+interface SearchCursorPayload {
+  offset: number;
+}
+
+// Ranked candidates considered per search before visibility filtering.
+const MAX_SEARCH_CANDIDATES = 500;
 
 interface AssetImageVariants {
   thumb?: string;
@@ -27,6 +35,7 @@ export class CatalogueService {
     private prisma: PrismaService,
     private priceResolution: PriceResolutionService,
     private r2Storage: R2StorageService,
+    private productSearch: ProductSearchService,
   ) {}
 
   async getDistributor(distributorSlug: string) {
@@ -125,7 +134,6 @@ export class CatalogueService {
     }
 
     const limit = query.limit ?? 50;
-    const take = limit + 1;
 
     const baseWhere: Prisma.ProductWhereInput = {
       distributorId: distributor.id,
@@ -136,6 +144,13 @@ export class CatalogueService {
         productType: { code: query.productTypeCode },
       }),
     };
+
+    const search = query.search?.trim();
+    if (search) {
+      return this.getProductsBySearch(distributor, search, baseWhere, limit, query.cursor, customerOrgId);
+    }
+
+    const take = limit + 1;
 
     let cursorWhere: Prisma.ProductWhereInput = {};
     if (query.cursor) {
@@ -163,6 +178,80 @@ export class CatalogueService {
     const hasMore = items.length > limit;
     const rawData = hasMore ? items.slice(0, -1) : items;
 
+    const nextCursor = hasMore && rawData.length > 0
+      ? Buffer.from(
+          JSON.stringify({ createdAt: rawData[rawData.length - 1].createdAt, id: rawData[rawData.length - 1].id }),
+        ).toString('base64url')
+      : null;
+
+    return {
+      distributor: { id: distributor.id, name: distributor.name },
+      data: await this.hydrateProducts(distributor.id, rawData, customerOrgId),
+      pagination: { nextCursor, hasMore, total },
+    };
+  }
+
+  /**
+   * Search-mode listing: ranked ids from ProductSearchService intersected with
+   * the same visibility rules as the browse path, order preserved. Relevance
+   * order cannot use the keyset cursor, so the opaque cursor carries an offset
+   * into the visible result set instead.
+   */
+  private async getProductsBySearch(
+    distributor: { id: string; name: string },
+    search: string,
+    baseWhere: Prisma.ProductWhereInput,
+    limit: number,
+    cursor: string | undefined,
+    customerOrgId?: string,
+  ) {
+    let offset = 0;
+    if (cursor) {
+      try {
+        const decoded: SearchCursorPayload = JSON.parse(
+          Buffer.from(cursor, 'base64url').toString('utf8'),
+        );
+        if (Number.isInteger(decoded.offset) && decoded.offset > 0) offset = decoded.offset;
+      } catch {
+        offset = 0;
+      }
+    }
+
+    const hits = await this.productSearch.search(distributor.id, search, {
+      limit: MAX_SEARCH_CANDIDATES,
+      offset: 0,
+    });
+
+    let ordered: Array<Prisma.ProductGetPayload<{ include: typeof catalogueProductInclude }>> = [];
+    if (hits.length > 0) {
+      const visible = await this.prisma.product.findMany({
+        where: { AND: [baseWhere, { id: { in: hits.map((h) => h.productId) } }] },
+        include: catalogueProductInclude,
+      });
+      const rank = new Map(hits.map((h, i) => [h.productId, i]));
+      ordered = visible.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+    }
+
+    const total = ordered.length;
+    const page = ordered.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
+    const nextCursor = hasMore
+      ? Buffer.from(JSON.stringify({ offset: offset + limit })).toString('base64url')
+      : null;
+
+    return {
+      distributor: { id: distributor.id, name: distributor.name },
+      data: await this.hydrateProducts(distributor.id, page, customerOrgId),
+      pagination: { nextCursor, hasMore, total },
+    };
+  }
+
+  /** Attach thumbnail urls and resolved prices, and serialise Decimal prices. */
+  private async hydrateProducts(
+    distributorId: string,
+    rawData: Array<Prisma.ProductGetPayload<{ include: typeof catalogueProductInclude }>>,
+    customerOrgId?: string,
+  ) {
     const thumbnailUrls = new Map<string, string>();
     const resolvedPrices = new Map<string, Prisma.Decimal>();
 
@@ -173,13 +262,13 @@ export class CatalogueService {
           where: {
             assetType: 'product-image',
             entityId: { in: productIds },
-            distributorId: distributor.id,
+            distributorId,
             isPrimary: true,
           },
           select: { entityId: true, variants: true },
         }),
         customerOrgId
-          ? this.priceResolution.resolvePricesForProducts(distributor.id, customerOrgId, productIds)
+          ? this.priceResolution.resolvePricesForProducts(distributorId, customerOrgId, productIds)
           : Promise.resolve(new Map<string, Prisma.Decimal>()),
       ]);
 
@@ -191,31 +280,21 @@ export class CatalogueService {
       for (const [id, price] of priceMap) resolvedPrices.set(id, price);
     }
 
-    const nextCursor = hasMore && rawData.length > 0
-      ? Buffer.from(
-          JSON.stringify({ createdAt: rawData[rawData.length - 1].createdAt, id: rawData[rawData.length - 1].id }),
-        ).toString('base64url')
-      : null;
-
-    return {
-      distributor: { id: distributor.id, name: distributor.name },
-      data: rawData.map((p) => ({
-        ...p,
-        price: p.price
-          ? typeof p.price === 'object' && 'toFixed' in (p.price as object)
-            ? (p.price as { toFixed: (n: number) => string }).toFixed(2)
-            : String(p.price)
-          : null,
-        compareAtPrice: p.compareAtPrice
-          ? typeof p.compareAtPrice === 'object' && 'toFixed' in (p.compareAtPrice as object)
-            ? (p.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
-            : String(p.compareAtPrice)
-          : null,
-        resolvedPrice: resolvedPrices.get(p.id)?.toFixed(2) ?? null,
-        thumbnailUrl: thumbnailUrls.get(p.id) ?? null,
-      })),
-      pagination: { nextCursor, hasMore, total },
-    };
+    return rawData.map((p) => ({
+      ...p,
+      price: p.price
+        ? typeof p.price === 'object' && 'toFixed' in (p.price as object)
+          ? (p.price as { toFixed: (n: number) => string }).toFixed(2)
+          : String(p.price)
+        : null,
+      compareAtPrice: p.compareAtPrice
+        ? typeof p.compareAtPrice === 'object' && 'toFixed' in (p.compareAtPrice as object)
+          ? (p.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
+          : String(p.compareAtPrice)
+        : null,
+      resolvedPrice: resolvedPrices.get(p.id)?.toFixed(2) ?? null,
+      thumbnailUrl: thumbnailUrls.get(p.id) ?? null,
+    }));
   }
 
   async getProduct(distributorSlug: string, productId: string, customerOrgId?: string) {

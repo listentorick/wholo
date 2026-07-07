@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AdminProductsService } from './admin-products.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductSearchService } from '../product-search/product-search.service';
 
 const mockPrisma = {
   product: {
@@ -12,6 +13,13 @@ const mockPrisma = {
     update: jest.fn(),
     count: jest.fn(),
   },
+  // Interactive transactions run the callback against the same mock client
+  $transaction: jest.fn((fn: (tx: unknown) => unknown): unknown => fn(mockPrisma)),
+};
+
+const mockProductSearch = {
+  indexProduct: jest.fn(),
+  removeProduct: jest.fn(),
 };
 
 const DISTRIBUTOR_ID = 'dist-1';
@@ -44,6 +52,7 @@ describe('AdminProductsService', () => {
       providers: [
         AdminProductsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: ProductSearchService, useValue: mockProductSearch },
       ],
     }).compile();
 
@@ -177,6 +186,14 @@ describe('AdminProductsService', () => {
       const call = mockPrisma.product.create.mock.calls[0][0];
       expect(call.data.status).toBe('DRAFT');
     });
+
+    it('indexes the search document for the created product', async () => {
+      mockPrisma.product.create.mockResolvedValue(baseProduct);
+
+      await service.create(DISTRIBUTOR_ID, { name: 'Test Product' } as any);
+
+      expect(mockProductSearch.indexProduct).toHaveBeenCalledWith(baseProduct, mockPrisma);
+    });
   });
 
   describe('update', () => {
@@ -189,6 +206,16 @@ describe('AdminProductsService', () => {
 
       expect(mockPrisma.product.update).toHaveBeenCalled();
       expect(result.name).toBe('Updated');
+    });
+
+    it('re-indexes the search document with the updated product', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({ distributorId: DISTRIBUTOR_ID, deletedAt: null });
+      const updated = { ...baseProduct, name: 'Updated' };
+      mockPrisma.product.update.mockResolvedValue(updated);
+
+      await service.update(PRODUCT_ID, DISTRIBUTOR_ID, { name: 'Updated' });
+
+      expect(mockProductSearch.indexProduct).toHaveBeenCalledWith(updated, mockPrisma);
     });
 
     it('throws NotFoundException when product does not exist', async () => {
@@ -229,6 +256,15 @@ describe('AdminProductsService', () => {
           data: expect.objectContaining({ deletedAt: expect.any(Date) }),
         }),
       );
+    });
+
+    it('removes the search document for the soft-deleted product', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({ distributorId: DISTRIBUTOR_ID, deletedAt: null });
+      mockPrisma.product.update.mockResolvedValue(baseProduct);
+
+      await service.remove(PRODUCT_ID, DISTRIBUTOR_ID);
+
+      expect(mockProductSearch.removeProduct).toHaveBeenCalledWith(PRODUCT_ID, mockPrisma);
     });
 
     it('throws NotFoundException when product does not exist', async () => {
