@@ -67,7 +67,6 @@ const mockCart = {
   savingItems: new Set<string>(),
   cartCount: 0,
   adjustQty: vi.fn(),
-  syncItem: vi.fn(),
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -207,6 +206,11 @@ describe('ProductDetailPage', () => {
   });
 
   it('calls adjustQty with -1 when decrease button is clicked', async () => {
+    (useCart as ReturnType<typeof vi.fn>).mockReturnValue({
+      ...mockCart,
+      quantities: { 'prod-1': 3 },
+    });
+
     render(<ProductDetailPage />);
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
@@ -217,31 +221,15 @@ describe('ProductDetailPage', () => {
     expect(mockCart.adjustQty).toHaveBeenCalledWith('prod-1', -1);
   });
 
-  it('calls syncItem with productId and qty when Add button is clicked', async () => {
+  it('disables the decrease button at zero quantity', async () => {
     render(<ProductDetailPage />);
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    const addBtn = screen.getByText('Add');
-    fireEvent.click(addBtn);
-
-    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 1);
+    expect(screen.getByLabelText('Decrease quantity')).toBeDisabled();
   });
 
-  it('shows Update button when product is already in cart', async () => {
-    (useCart as ReturnType<typeof vi.fn>).mockReturnValue({
-      ...mockCart,
-      inCart: new Set(['prod-1']),
-    });
-
-    render(<ProductDetailPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Update')).toBeTruthy();
-    });
-  });
-
-  it('shows … button while saving', async () => {
+  it('disables steppers while saving', async () => {
     (useCart as ReturnType<typeof vi.fn>).mockReturnValue({
       ...mockCart,
       savingItems: new Set(['prod-1']),
@@ -249,9 +237,10 @@ describe('ProductDetailPage', () => {
 
     render(<ProductDetailPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('…')).toBeTruthy();
-    });
+    await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
+
+    expect(screen.getByLabelText('Increase quantity')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity')).toBeDisabled();
   });
 
   it('shows error state when fetch fails', async () => {
@@ -264,7 +253,7 @@ describe('ProductDetailPage', () => {
     });
   });
 
-  it('hides stepper and add button when no active trade relationship', async () => {
+  it('hides steppers when no active trade relationship', async () => {
     (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: false });
 
     render(<ProductDetailPage />);
@@ -273,6 +262,5 @@ describe('ProductDetailPage', () => {
 
     expect(screen.queryByLabelText('Increase quantity')).toBeNull();
     expect(screen.queryByLabelText('Decrease quantity')).toBeNull();
-    expect(screen.queryByText('Add')).toBeNull();
   });
 });

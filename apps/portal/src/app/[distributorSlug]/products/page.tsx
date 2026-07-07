@@ -24,7 +24,7 @@ export default function CataloguePage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
+  const { quantities, savingItems, adjustQty } = useCart();
   const { hasRelationship } = useDistributor();
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
@@ -59,7 +59,7 @@ export default function CataloguePage() {
     };
   }, [distributorSlug, user, accessToken, debouncedSearch]);
 
-  const getQty = (id: string) => quantities[id] ?? 1;
+  const getQty = (id: string) => quantities[id] ?? 0;
 
   // Full-page spinner only on the initial load — search refetches keep the grid up.
   if (authLoading || (user && fetchLoading && catalogue === null)) {
@@ -97,21 +97,7 @@ export default function CataloguePage() {
         }
         .stepper-btn:hover  { border-color: #D97036; color: #D97036; }
         .stepper-btn:active { background: #FEF3EC; }
-
-        .order-btn {
-          padding: 5px 16px;
-          border-radius: 20px;
-          border: 1.5px solid #D97036;
-          background: transparent;
-          color: #D97036;
-          font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-          cursor: pointer;
-          transition: background 0.18s, color 0.18s;
-          white-space: nowrap; line-height: 1.4;
-        }
-        .order-btn:hover  { background: #D97036; color: #fff; }
-        .order-btn:active { background: #C4622A; border-color: #C4622A; color: #fff; }
-        .order-btn:disabled { opacity: 0.55; cursor: default; }
+        .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .product-img-placeholder {
           background: linear-gradient(145deg, #EDE8E1 0%, #DDD4C6 100%);
@@ -157,8 +143,8 @@ export default function CataloguePage() {
           >
             {products.map((product, i) => {
               const qty = getQty(product.id);
-              const added = inCart.has(product.id);
               const saving = savingItems.has(product.id);
+              const hasPrice = product.resolvedPrice !== null || product.price !== null;
               const delay = Math.min(0.08 + i * 0.04, 0.52);
 
               return (
@@ -207,6 +193,7 @@ export default function CataloguePage() {
                         <button
                           className="stepper-btn"
                           aria-label="Decrease quantity"
+                          disabled={saving || !hasPrice || qty <= 0}
                           onClick={() => adjustQty(product.id, -1)}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
@@ -224,20 +211,13 @@ export default function CataloguePage() {
                         <button
                           className="stepper-btn"
                           aria-label="Increase quantity"
+                          disabled={saving || !hasPrice}
                           onClick={() => adjustQty(product.id, 1)}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5"  y1="12" x2="19" y2="12" />
                           </svg>
-                        </button>
-
-                        <button
-                          className="order-btn"
-                          disabled={saving || (product.resolvedPrice === null && product.price === null)}
-                          onClick={() => syncItem(product.id, qty)}
-                        >
-                          {saving ? '…' : added ? 'Update' : 'Add'}
                         </button>
                       </div>
                     )}

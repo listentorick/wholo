@@ -68,11 +68,9 @@ const makeResponse = (products: ReturnType<typeof makeProduct>[]) => ({
 
 const mockCart = {
   quantities: {},
-  inCart: new Set<string>(),
   savingItems: new Set<string>(),
   cartCount: 0,
   adjustQty: vi.fn(),
-  syncItem: vi.fn(),
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -197,22 +195,21 @@ describe('CataloguePage', () => {
     });
   });
 
-  it('calls syncItem when Add is clicked', async () => {
+  it('calls adjustQty when the increase stepper is clicked', async () => {
     render(<CataloguePage />);
     await waitFor(() => screen.getByText('Egg tarts'));
 
-    fireEvent.click(screen.getAllByText('Add')[0]);
+    fireEvent.click(screen.getAllByLabelText('Increase quantity')[0]);
 
-    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 1);
+    expect(mockCart.adjustQty).toHaveBeenCalledWith('prod-1', 1);
   });
 
-  it('hides stepper and add button when no active trade relationship', async () => {
+  it('hides stepper when no active trade relationship', async () => {
     (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: false });
 
     render(<CataloguePage />);
     await waitFor(() => screen.getByText('Egg tarts'));
 
     expect(screen.queryByLabelText('Increase quantity')).toBeNull();
-    expect(screen.queryByText('Add')).toBeNull();
   });
 });

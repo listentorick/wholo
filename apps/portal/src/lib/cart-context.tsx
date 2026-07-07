@@ -60,13 +60,6 @@ export function CartProvider({
       .finally(() => setCartLoading(false));
   }, [distributorSlug, user, accessToken, reconcile]);
 
-  const adjustQty = useCallback((productId: string, delta: number) => {
-    setQuantities((prev) => ({
-      ...prev,
-      [productId]: Math.max(1, (prev[productId] ?? 1) + delta),
-    }));
-  }, []);
-
   const syncItem = useCallback(
     async (productId: string, quantity: number) => {
       if (!accessToken || hasRelationship === false) return;
@@ -94,6 +87,11 @@ export function CartProvider({
     },
     [accessToken, hasRelationship, distributorSlug, reconcile],
   );
+
+  const adjustQty = useCallback((productId: string, delta: number) => {
+    const next = Math.max(0, (quantities[productId] ?? 0) + delta);
+    syncItem(productId, next);
+  }, [quantities, syncItem]);
 
   const refreshCart = useCallback(async () => {
     if (!accessToken) return;

@@ -27,7 +27,7 @@ export default function ProductDetailPage() {
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(
     pathname ?? `/${distributorSlug}/products/${productId}`,
   );
-  const { quantities, inCart, savingItems, adjustQty, syncItem } = useCart();
+  const { quantities, savingItems, adjustQty } = useCart();
   const { hasRelationship } = useDistributor();
 
   const [product, setProduct] = useState<CatalogueProductDetail | null>(null);
@@ -64,8 +64,7 @@ export default function ProductDetailPage() {
     );
   }
 
-  const qty = quantities[productId] ?? 1;
-  const added = inCart.has(productId);
+  const qty = quantities[productId] ?? 0;
   const saving = savingItems.has(productId);
   const hasPrice = product.resolvedPrice !== null || product.price !== null;
 
@@ -92,21 +91,7 @@ export default function ProductDetailPage() {
         }
         .stepper-btn:hover  { border-color: #D97036; color: #D97036; }
         .stepper-btn:active { background: #FEF3EC; }
-
-        .order-btn {
-          padding: 5px 16px;
-          border-radius: 20px;
-          border: 1.5px solid #D97036;
-          background: transparent;
-          color: #D97036;
-          font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
-          cursor: pointer;
-          transition: background 0.18s, color 0.18s;
-          white-space: nowrap; line-height: 1.4;
-        }
-        .order-btn:hover  { background: #D97036; color: #fff; }
-        .order-btn:active { background: #C4622A; border-color: #C4622A; color: #fff; }
-        .order-btn:disabled { opacity: 0.55; cursor: default; }
+        .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
 
       <PageSubHeader
@@ -173,6 +158,7 @@ export default function ProductDetailPage() {
               <button
                 className="stepper-btn"
                 aria-label="Decrease quantity"
+                disabled={saving || !hasPrice || qty <= 0}
                 onClick={() => adjustQty(productId, -1)}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
@@ -187,21 +173,13 @@ export default function ProductDetailPage() {
               <button
                 className="stepper-btn"
                 aria-label="Increase quantity"
+                disabled={saving || !hasPrice}
                 onClick={() => adjustQty(productId, 1)}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5"  y1="12" x2="19" y2="12" />
                 </svg>
-              </button>
-
-              <button
-                className="order-btn"
-                disabled={saving || !hasPrice}
-                onClick={() => syncItem(productId, qty)}
-                style={{ marginLeft: 4 }}
-              >
-                {saving ? '…' : added ? 'Update' : 'Add'}
               </button>
             </div>
           )}
