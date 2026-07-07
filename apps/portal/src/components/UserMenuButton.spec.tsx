@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserMenuButton } from './UserMenuButton';
 
 const mockLogout = vi.fn();
+const mockChangePassword = vi.fn();
 const mockUser = {
   id: '1',
   email: 'jane@example.com',
@@ -14,7 +15,7 @@ const mockUser = {
 };
 
 vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({ user: mockUser, logout: mockLogout }),
+  useAuth: () => ({ user: mockUser, logout: mockLogout, changePassword: mockChangePassword }),
 }));
 
 vi.mock('next/link', () => ({
@@ -46,19 +47,18 @@ describe('UserMenuButton', () => {
     expect(screen.getByText('jane@example.com')).toBeTruthy();
   });
 
-  it('shows User Settings and Business Settings links', () => {
+  it('shows User Settings link', () => {
     render(<UserMenuButton />);
     fireEvent.click(screen.getByLabelText('Open user menu'));
     expect(screen.getByText('User Settings')).toBeTruthy();
-    expect(screen.getByText('Business Settings')).toBeTruthy();
   });
 
-  it('User Settings and Business Settings both link to /settings', () => {
+  it('User Settings links to /settings', () => {
     render(<UserMenuButton />);
     fireEvent.click(screen.getByLabelText('Open user menu'));
     const links = screen.getAllByRole('link');
     const settingsLinks = links.filter((l) => l.getAttribute('href') === '/settings');
-    expect(settingsLinks.length).toBe(2);
+    expect(settingsLinks.length).toBe(1);
   });
 
   it('calls logout when Sign out is clicked', () => {
@@ -66,6 +66,20 @@ describe('UserMenuButton', () => {
     fireEvent.click(screen.getByLabelText('Open user menu'));
     fireEvent.click(screen.getByText('Sign out'));
     expect(mockLogout).toHaveBeenCalledOnce();
+  });
+
+  it('calls changePassword when Change Password is clicked', () => {
+    render(<UserMenuButton />);
+    fireEvent.click(screen.getByLabelText('Open user menu'));
+    fireEvent.click(screen.getByText('Change Password'));
+    expect(mockChangePassword).toHaveBeenCalledOnce();
+  });
+
+  it('closes dropdown after clicking Change Password', () => {
+    render(<UserMenuButton />);
+    fireEvent.click(screen.getByLabelText('Open user menu'));
+    fireEvent.click(screen.getByText('Change Password'));
+    expect(screen.queryByText('Signed in as')).toBeNull();
   });
 
   it('closes dropdown after clicking Sign out', () => {

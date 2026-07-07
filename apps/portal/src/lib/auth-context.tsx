@@ -25,6 +25,7 @@ interface AuthContextValue {
   login: (returnUrl?: string) => void;
   loginWithRedirect: (redirectUri: string) => void;
   registerWithRedirect: (redirectUri: string) => void;
+  changePassword: () => void;
   logout: () => void;
   setOrderAsSession: (data: OrderAsState) => void;
   clearOrderAsSession: () => void;
@@ -122,6 +123,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const changePassword = useCallback(() => {
+    const kc = (window as any).__kc;
+    const redirectUri = window.location.href;
+    if (kc) {
+      kc.login({ action: 'UPDATE_PASSWORD', redirectUri });
+    } else {
+      getKeycloakAuth().then(() => {
+        (window as any).__kc?.login({ action: 'UPDATE_PASSWORD', redirectUri });
+      });
+    }
+  }, []);
+
   const logout = useCallback(() => {
     sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
     const kc = (window as any).__kc;
@@ -159,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       loginWithRedirect,
       registerWithRedirect,
+      changePassword,
       logout,
       setOrderAsSession,
       clearOrderAsSession,

@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { LogOut, Store, User } from 'lucide-react';
+import { Lock, LogOut, Store, User } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 export function UserMenuButton() {
-  const { user, logout } = useAuth();
+  const { user, logout, changePassword } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -58,14 +58,13 @@ export function UserMenuButton() {
             <User className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
             User Settings
           </Link>
-          <Link
-            href="/settings"
-            onClick={() => setIsOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground-secondary transition-colors duration-100 hover:bg-surface-hover hover:text-foreground"
+          <button
+            onClick={() => { setIsOpen(false); changePassword(); }}
+            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-foreground-secondary transition-colors duration-100 hover:bg-surface-hover hover:text-foreground"
           >
-            <Store className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-            Business Settings
-          </Link>
+            <Lock className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+            Change Password
+          </button>
 
           <div className="h-px bg-border" />
 

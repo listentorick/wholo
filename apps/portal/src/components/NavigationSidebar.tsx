@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Home, Lock, LogOut, Menu, Settings, ShoppingBasket, Truck, X } from 'lucide-react';
+import { Home, LogOut, Menu, Settings, ShoppingBasket, Truck, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useCartSafe } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
@@ -62,7 +62,6 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
 
   const accountNavItems: NavItem[] = [
     { href: '/settings', label: 'Settings', icon: <Settings className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
-    { href: '/change-password', label: 'Change Password', icon: <Lock className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
   ];
 
   function isActive(item: NavItem) {
