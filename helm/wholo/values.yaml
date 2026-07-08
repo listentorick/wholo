@@ -67,6 +67,19 @@ api:
   adminUrl: "http://localhost:3020"
   # Defaults target the in-cluster MailHog; override for a real provider.
   smtp: {}
+  xero:
+    clientId: ""
+    clientSecret: ""
+    # Must match the redirect URI registered in the Xero developer app exactly.
+    # This is apps/admin-api's public callback route (the admin app's own
+    # origin), not a route on apps/api itself — apps/api must never be given
+    # a public ingress route for this; see xero-connection.adapter.ts.
+    # Xero requires HTTPS even for local testing — values.local.yaml overrides
+    # this to an https://admin.localhost:... URL; see scripts/setup-local-xero-https.sh.
+    redirectUri: "http://localhost:3020/api/v1/accounting/xero/callback"
+  # 32-byte key, base64-encoded (e.g. `openssl rand -base64 32`) — encrypts
+  # stored accounting OAuth tokens at rest.
+  accountingTokenEncryptionKey: ""
   # Seeds demo data on every install/upgrade. Must be disabled in live.
   seedJob:
     enabled: true

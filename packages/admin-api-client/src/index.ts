@@ -10,4 +10,5 @@ export { adminPriceListsApi } from './price-lists';
 export { adminDeliveryProfilesApi } from './delivery-profiles';
 export { adminSettingsApi } from './settings';
 export { adminOrderAsApi } from './order-as';
+export { adminAccountingApi } from './accounting';
 export { ApiError } from './base';

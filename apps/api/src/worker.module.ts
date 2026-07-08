@@ -2,6 +2,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AccountingModule } from './accounting/accounting.module';
+import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxPublisherService } from './outbox/outbox-publisher.service';
@@ -28,7 +30,8 @@ import { XeroSyncModule } from './xero-sync/xero-sync.module';
     MailModule,
     NotificationsModule,
     XeroSyncModule,
+    AccountingModule,
   ],
-  providers: [OutboxPublisherService],
+  providers: [OutboxPublisherService, AccountingTokenRefreshScheduler],
 })
 export class WorkerModule {}

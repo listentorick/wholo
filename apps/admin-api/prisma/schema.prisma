@@ -121,6 +121,17 @@ enum PriceListRuleDiscountBaseType {
   PRICE_LIST
 }
 
+enum AccountingProvider {
+  XERO
+}
+
+enum AccountingConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  REVOKED
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -161,6 +172,7 @@ model Organisation {
   deliveryProfiles                DeliveryProfile[]   @relation("DistributorDeliveryProfiles")
   orderAsSessionsAsDistributor    OrderAsSession[]    @relation("OrderAsDistributor")
   orderAsSessionsAsCustomer       OrderAsSession[]    @relation("OrderAsCustomer")
+  accountingConnections           AccountingConnection[]
 
   @@map("organisations")
 }
@@ -503,6 +515,50 @@ model DistributorSettings {
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")
+}
+
+// ─── Accounting integration ───────────────────────────────────────────────────
+// Provider-neutral: Xero is the first AccountingProvider, not the shape of the
+// model. Historical rows are kept (never deleted) when a distributor
+// disconnects/reconnects — "one active connection per distributor" is enforced
+// by a partial unique index added by hand in the generated migration (Prisma's
+// schema DSL cannot express a WHERE clause on a unique index).
+model AccountingConnection {
+  id                       String                     @id @default(cuid())
+  distributorId            String
+  provider                 AccountingProvider
+  status                   AccountingConnectionStatus
+  externalOrganisationId   String
+  externalOrganisationName String
+  scopes                   String
+  encryptedCredentialData  String
+  connectedByUserId        String
+  connectedAt              DateTime
+  disconnectedAt           DateTime?
+  lastSyncedAt             DateTime?
+  lastErrorAt              DateTime?
+  lastErrorMessage         String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  distributor              Organisation               @relation(fields: [distributorId], references: [id])
+
+  @@index([distributorId])
+  @@map("accounting_connections")
+}
+
+// Short-lived, single-use CSRF/correlation row for the OAuth connect flow.
+// Xero's callback redirect carries only code+state, no Wholo JWT, so this row
+// (not a guard) is what proves the callback belongs to a given distributor.
+model AccountingOAuthState {
+  id                String             @id @default(cuid())
+  state             String             @unique
+  provider          AccountingProvider
+  distributorId     String
+  connectedByUserId String
+  createdAt         DateTime           @default(now())
+  expiresAt         DateTime
+
+  @@map("accounting_oauth_states")
 }
 
 model TraderCustomerSettings {

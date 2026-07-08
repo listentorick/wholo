@@ -13,6 +13,7 @@ import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
 import { OrderAsModule } from './order-as/order-as.module';
+import { AccountingModule } from './accounting/accounting.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthController } from './health.controller';
     SettingsModule,
     DeliveryProfilesModule,
     OrderAsModule,
+    AccountingModule,
   ],
   controllers: [HealthController],
 })

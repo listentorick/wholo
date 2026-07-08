@@ -13,12 +13,21 @@ spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:
     - hosts:
+        {{- if .Values.ingress.hosts.portal }}
         - {{ .Values.ingress.hosts.portal | quote }}
+        {{- end }}
+        {{- if .Values.ingress.hosts.admin }}
         - {{ .Values.ingress.hosts.admin | quote }}
+        {{- end }}
+        {{- if .Values.ingress.hosts.api }}
         - {{ .Values.ingress.hosts.api | quote }}
+        {{- end }}
+        {{- if .Values.ingress.hosts.auth }}
         - {{ .Values.ingress.hosts.auth | quote }}
+        {{- end }}
       secretName: {{ include "wholo.fullname" . }}-tls
   rules:
+    {{- if .Values.ingress.hosts.portal }}
     - host: {{ .Values.ingress.hosts.portal | quote }}
       http:
         paths:
@@ -29,6 +38,8 @@ spec:
                 name: {{ include "wholo.fullname" . }}-portal-api
                 port:
                   number: {{ .Values.portalApi.service.port }}
+    {{- end }}
+    {{- if .Values.ingress.hosts.admin }}
     - host: {{ .Values.ingress.hosts.admin | quote }}
       http:
         paths:
@@ -39,6 +50,8 @@ spec:
                 name: {{ include "wholo.fullname" . }}-admin-api
                 port:
                   number: {{ .Values.adminApi.service.port }}
+    {{- end }}
+    {{- if .Values.ingress.hosts.api }}
     - host: {{ .Values.ingress.hosts.api | quote }}
       http:
         paths:
@@ -49,6 +62,8 @@ spec:
                 name: {{ include "wholo.fullname" . }}-api
                 port:
                   number: {{ .Values.api.service.port }}
+    {{- end }}
+    {{- if .Values.ingress.hosts.auth }}
     - host: {{ .Values.ingress.hosts.auth | quote }}
       http:
         paths:
@@ -59,4 +74,5 @@ spec:
                 name: {{ include "wholo.fullname" . }}-keycloak
                 port:
                   number: {{ .Values.keycloak.port }}
+    {{- end }}
 {{- end }}

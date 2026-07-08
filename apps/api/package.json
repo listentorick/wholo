@@ -45,7 +45,8 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "sharp": "^0.35.1",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "xero-node": "^18.0.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

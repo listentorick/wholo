@@ -156,6 +156,34 @@ kubectl rollout restart deployment/wholo-<service>
 - The image tag must be `wholo/<service>:local` — **slash**, not hyphen. The Helm chart references that exact name; a hyphenated tag (`wholo-<service>:local`) silently builds an image the pods never see, and the old code keeps running.
 - `portal-api` and `admin-api` bake their Next.js frontend (`portal`/`admin` respectively) into the same image at build time — rebuild `portal-api`/`admin-api` (not `portal`/`admin`) to pick up frontend-only changes.
 
+#### Local URLs
+
+Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `localhost` — no port-forward needed for normal use:
+
+| Service | URL |
+|---|---|
+| Admin app (frontend + BFF) | `http://localhost:3020` |
+| Portal app (frontend + BFF) | `http://localhost:3010` |
+| API (central domain API) | `http://localhost:3001` |
+| Keycloak | `http://localhost:8080` |
+| MailHog UI | `http://localhost:30825` |
+
+#### Local HTTPS (for real Xero OAuth testing only)
+
+Xero requires an HTTPS redirect URI even for local testing. A second, HTTPS-only entry point for the admin app exists purely for this:
+
+```
+https://admin.localhost:8443
+```
+
+This routes through the Traefik ingress controller already running in the local cluster (Helm's `ingress.yaml`, enabled only for the `admin` host in `values.local.yaml` — `apps/api` is never given a public ingress route, on principle: it must stay reachable only via internal cluster DNS, exactly like every other BFF→`apps/api` call). Setup is one-shot via `scripts/setup-local-xero-https.sh` (self-signed cert, k8s TLS secret, and an additive — not overwriting — update to the Keycloak `wholo-admin` client's allowed redirect URIs/web origins/post-logout-redirect-uris).
+
+To use it:
+1. Keep `kubectl port-forward svc/traefik -n traefik 8443:443` running — Docker Desktop does not auto-expose Traefik's `LoadBalancer` ports the way it does for the `wholo-*` services.
+2. Browse to `https://admin.localhost:8443` and accept the one-time self-signed-cert warning.
+3. **This is a different browser origin than `localhost:3020`** — no shared login session. Log in fresh here rather than expecting a `localhost:3020` session to carry over. Use `localhost:3020` for everyday work; only switch to this URL to click "Connect Xero" and complete a real consent flow.
+4. `XERO_REDIRECT_URI` (`apps/api` env) must match this exactly: `https://admin.localhost:8443/api/v1/accounting/xero/callback` — this is what gets registered as the redirect URI in the Xero developer app, and it's `admin-api`'s route even though the env var lives on `apps/api` (see `xero-connection.adapter.ts`).
+
 ### Live (self-hosted k3s)
 
 Full runbook, one-time setup, and troubleshooting: `docs/deployment/live-k3s.md` (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:

@@ -689,6 +689,25 @@ export interface DistributorSettings {
 
 export type UpdateDistributorSettingsRequest = Partial<DistributorSettings>;
 
+// ─── Accounting Integration ────────────────────────────────────────────────────
+// Provider-neutral: Xero is the first AccountingProvider, not the shape of
+// the type — a second provider later adds to the union, nothing else changes.
+
+export type AccountingProvider = 'XERO';
+export type AccountingConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'REVOKED';
+
+export interface AccountingConnectionStatusResponse {
+  provider: AccountingProvider;
+  status: AccountingConnectionStatus;
+  externalOrganisationName: string;
+  connectedAt: string;
+  lastSyncedAt: string | null;
+}
+
+export interface AccountingAuthorizationUrlResponse {
+  authorizationUrl: string;
+}
+
 // ─── Asset Images ─────────────────────────────────────────────────────────────
 
 export interface AssetImage {

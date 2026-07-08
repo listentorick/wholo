@@ -7,6 +7,7 @@ build/
 helm/wholo/values.local.yaml
 helm/wholo/values.live.yaml
 helm/wholo/charts/
+helm/wholo/.local-certs/
 *.tgz
 
 # pnpm
