@@ -35,9 +35,37 @@ export interface AccountingExternalContact {
   raw: unknown;
 }
 
-// Phase 1 (connection lifecycle) + Phase 2 (listContacts). Still has room to
-// grow in Phases 3-4 (listProducts, createInvoice, getInvoicePdf) — not
-// built now, deliberately.
+// One product/item record as cached from the provider's accounting system.
+// Same provider-neutral contract as AccountingExternalContact. Prices and
+// quantities cross the adapter boundary as decimal strings, not numbers —
+// they land in Prisma Decimal columns and must not pick up float drift on
+// the way.
+export interface AccountingExternalProduct {
+  externalId: string;
+  code?: string;
+  displayName: string;
+  description?: string;
+  salesUnitPrice?: string;
+  purchaseUnitPrice?: string;
+  taxCode?: string;
+  accountCode?: string;
+  purchaseTaxCode?: string;
+  purchaseAccountCode?: string;
+  isSold: boolean;
+  isPurchased: boolean;
+  isTracked: boolean;
+  // Providers without an archived/deleted flag on products (Xero included)
+  // should return true here; the sync detects deletions by absence from the
+  // full fetch instead.
+  isActive: boolean;
+  quantityOnHand?: string;
+  updatedAt?: string; // ISO 8601
+  raw: unknown;
+}
+
+// Phase 1 (connection lifecycle) + Phase 2 (listContacts) + Phase 3
+// (listProducts). Still has room to grow in Phase 4 (createInvoice,
+// getInvoicePdf) — not built now, deliberately.
 export interface AccountingConnectionAdapter {
   buildAuthorizationUrl(state: string): Promise<string>;
   // callbackUrl is the full request URL (incl. querystring) the provider
@@ -54,4 +82,9 @@ export interface AccountingConnectionAdapter {
     externalOrganisationId: string,
     modifiedSince?: Date,
   ): Promise<AccountingExternalContact[]>;
+  listProducts(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    modifiedSince?: Date,
+  ): Promise<AccountingExternalProduct[]>;
 }

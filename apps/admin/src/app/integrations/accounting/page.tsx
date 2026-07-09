@@ -7,6 +7,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
+import { ProductsTab } from '@/components/integrations/products/ProductsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
@@ -39,6 +40,7 @@ function AccountingPageInner() {
 
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null | undefined>(undefined);
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
+  const [productsNeedsAttentionCount, setProductsNeedsAttentionCount] = useState(0);
 
   const activeTab = (searchParams.get('tab') as TabKey) ?? 'contacts';
 
@@ -60,9 +62,20 @@ function AccountingPageInner() {
       });
   }, [accessToken, connection?.status]);
 
+  const fetchProductsNeedsAttentionCount = useCallback(() => {
+    if (!accessToken || connection?.status !== 'CONNECTED') return;
+    adminAccountingApi
+      .countProductsNeedingAttention(accessToken)
+      .then((res) => setProductsNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't update if this fails.
+      });
+  }, [accessToken, connection?.status]);
+
   useEffect(() => {
     fetchNeedsAttentionCount();
-  }, [fetchNeedsAttentionCount]);
+    fetchProductsNeedsAttentionCount();
+  }, [fetchNeedsAttentionCount, fetchProductsNeedsAttentionCount]);
 
   function setTab(key: TabKey) {
     router.push(`/integrations/accounting?tab=${key}`);
@@ -128,6 +141,11 @@ function AccountingPageInner() {
                   {needsAttentionCount}
                 </span>
               )}
+              {tab.key === 'products' && productsNeedsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {productsNeedsAttentionCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -136,11 +154,13 @@ function AccountingPageInner() {
       {activeTab === 'contacts' && accessToken && (
         <ContactsTab token={accessToken} onContactsChanged={fetchNeedsAttentionCount} />
       )}
-      {activeTab !== 'contacts' && (
+      {activeTab === 'products' && accessToken && (
+        <ProductsTab token={accessToken} onProductsChanged={fetchProductsNeedsAttentionCount} />
+      )}
+      {activeTab !== 'contacts' && activeTab !== 'products' && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
           <h2 className="mb-1.5 text-base font-semibold text-text">Coming soon</h2>
           <p className="text-sm text-muted">
-            {activeTab === 'products' && 'Product sync and mapping is not available yet.'}
             {activeTab === 'invoices' && 'Invoice export history is not available yet.'}
             {activeTab === 'settings' && 'Accounting integration settings are not available yet.'}
           </p>

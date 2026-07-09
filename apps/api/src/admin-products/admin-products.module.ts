@@ -11,5 +11,8 @@ import { ProductSearchModule } from '../product-search/product-search.module';
   imports: [ProductSearchModule],
   controllers: [AdminProductsController, AdminProductTypesController, AdminSuppliersController],
   providers: [AdminProductsService, AdminProductTypesService, AdminSuppliersService],
+  // AdminProductsService is reused by AccountingModule's import-as-new-product
+  // flow (same pattern as AdminCustomersModule for contacts).
+  exports: [AdminProductsService],
 })
 export class AdminProductsModule {}

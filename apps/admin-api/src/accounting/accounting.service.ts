@@ -3,6 +3,9 @@ import { ApiClientService } from '../api-client/api-client.service';
 import { ContactQueryDto } from './dto/contact-query.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
 import { MatchContactDto } from './dto/match-contact.dto';
+import { ProductQueryDto } from './dto/product-query.dto';
+import { ImportProductDto } from './dto/import-product.dto';
+import { MatchProductDto } from './dto/match-product.dto';
 
 @Injectable()
 export class AccountingService {
@@ -57,6 +60,45 @@ export class AccountingService {
 
   unlinkMapping(distributorId: string, mappingId: string, token: string) {
     return this.api.post(`/distributors/${distributorId}/accounting/contacts/mappings/${mappingId}/unlink`, token);
+  }
+
+  listProducts(distributorId: string, query: ProductQueryDto, token: string) {
+    const params = new URLSearchParams();
+    if (query.limit != null) params.set('limit', String(query.limit));
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.search) params.set('search', query.search);
+    if (query.status) params.set('status', query.status);
+    if (query.type) params.set('type', query.type);
+    const qs = params.toString();
+    return this.api.get(`/distributors/${distributorId}/accounting/products${qs ? `?${qs}` : ''}`, token);
+  }
+
+  countProductsNeedingAttention(distributorId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/accounting/products/needs-attention-count`, token);
+  }
+
+  syncProducts(distributorId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/sync`, token);
+  }
+
+  importProduct(distributorId: string, externalProductId: string, dto: ImportProductDto, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/${externalProductId}/import`, token, dto);
+  }
+
+  confirmProductSuggestion(distributorId: string, suggestionId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/suggestions/${suggestionId}/confirm`, token);
+  }
+
+  matchProduct(distributorId: string, externalProductId: string, dto: MatchProductDto, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/${externalProductId}/match`, token, dto);
+  }
+
+  ignoreProduct(distributorId: string, externalProductId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/${externalProductId}/ignore`, token);
+  }
+
+  unlinkProductMapping(distributorId: string, mappingId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/mappings/${mappingId}/unlink`, token);
   }
 
   // Server-to-server, no bearer token — this is admin-api forwarding Xero's

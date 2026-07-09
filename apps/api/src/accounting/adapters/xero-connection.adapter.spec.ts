@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { XeroAccountingAdapter } from './xero-connection.adapter';
 
 const mockGetContacts = jest.fn();
+const mockGetItems = jest.fn();
 
 const mockXeroClientInstance = {
   buildConsentUrl: jest.fn(),
@@ -10,7 +11,7 @@ const mockXeroClientInstance = {
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
   refreshWithRefreshToken: jest.fn(),
-  accountingApi: { getContacts: mockGetContacts },
+  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems },
 };
 
 jest.mock('xero-node', () => ({
@@ -223,6 +224,105 @@ describe('XeroAccountingAdapter', () => {
       await adapter.listContacts(tokenSet, 'tenant-1', since);
 
       expect(mockGetContacts).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, undefined, 1, true);
+    });
+  });
+
+  describe('listProducts', () => {
+    const tokenSet = {
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: new Date().toISOString(),
+      scope: 'openid accounting.settings',
+    };
+
+    it('maps xero-node items to the provider-neutral shape', async () => {
+      mockGetItems.mockResolvedValueOnce({
+        body: {
+          items: [
+            {
+              itemID: 'item-1',
+              code: 'CAB-SAUV-001',
+              name: 'Cabernet Sauvignon 2023',
+              description: 'A bold red',
+              isSold: true,
+              isPurchased: false,
+              isTrackedAsInventory: true,
+              quantityOnHand: 42.5,
+              salesDetails: { unitPrice: 12.3456, taxType: 'OUTPUT2', accountCode: '200' },
+              purchaseDetails: { unitPrice: 8.5, taxType: 'INPUT2', accountCode: '300' },
+              updatedDateUTC: '2026-02-01T00:00:00.000Z',
+            },
+          ],
+        },
+      });
+
+      const products = await adapter.listProducts(tokenSet, 'tenant-1');
+
+      expect(products).toEqual([
+        {
+          externalId: 'item-1',
+          code: 'CAB-SAUV-001',
+          displayName: 'Cabernet Sauvignon 2023',
+          description: 'A bold red',
+          salesUnitPrice: '12.3456',
+          purchaseUnitPrice: '8.5',
+          taxCode: 'OUTPUT2',
+          accountCode: '200',
+          purchaseTaxCode: 'INPUT2',
+          purchaseAccountCode: '300',
+          isSold: true,
+          isPurchased: false,
+          isTracked: true,
+          isActive: true,
+          quantityOnHand: '42.5',
+          updatedAt: new Date('2026-02-01T00:00:00.000Z').toISOString(),
+          raw: expect.any(Object),
+        },
+      ]);
+      expect(mockXeroClientInstance.setTokenSet).toHaveBeenCalled();
+    });
+
+    it('requests four-decimal-place unit prices (unitdp=4) in a single unpaginated call', async () => {
+      mockGetItems.mockResolvedValueOnce({ body: { items: [] } });
+
+      await adapter.listProducts(tokenSet, 'tenant-1');
+
+      expect(mockGetItems).toHaveBeenCalledTimes(1);
+      expect(mockGetItems).toHaveBeenCalledWith('tenant-1', undefined, undefined, undefined, 4);
+    });
+
+    it('falls back to the item code as display name when name is missing', async () => {
+      mockGetItems.mockResolvedValueOnce({
+        body: { items: [{ itemID: 'item-2', code: 'MERLOT-CASE' }] },
+      });
+
+      const [product] = await adapter.listProducts(tokenSet, 'tenant-1');
+
+      expect(product.displayName).toBe('MERLOT-CASE');
+    });
+
+    it('defaults isSold/isPurchased to true and prices to undefined when details are absent', async () => {
+      mockGetItems.mockResolvedValueOnce({
+        body: { items: [{ itemID: 'item-3', code: 'BARE' }] },
+      });
+
+      const [product] = await adapter.listProducts(tokenSet, 'tenant-1');
+
+      expect(product.isSold).toBe(true);
+      expect(product.isPurchased).toBe(true);
+      expect(product.isTracked).toBe(false);
+      expect(product.salesUnitPrice).toBeUndefined();
+      expect(product.purchaseUnitPrice).toBeUndefined();
+      expect(product.quantityOnHand).toBeUndefined();
+    });
+
+    it('passes modifiedSince through to getItems', async () => {
+      mockGetItems.mockResolvedValueOnce({ body: { items: [] } });
+      const since = new Date('2026-03-01T00:00:00.000Z');
+
+      await adapter.listProducts(tokenSet, 'tenant-1', since);
+
+      expect(mockGetItems).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, 4);
     });
   });
 });

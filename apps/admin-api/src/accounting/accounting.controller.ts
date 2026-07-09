@@ -5,6 +5,9 @@ import { AccountingService } from './accounting.service';
 import { ContactQueryDto } from './dto/contact-query.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
 import { MatchContactDto } from './dto/match-contact.dto';
+import { ProductQueryDto } from './dto/product-query.dto';
+import { ImportProductDto } from './dto/import-product.dto';
+import { MatchProductDto } from './dto/match-product.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounting')
@@ -88,5 +91,61 @@ export class AccountingController {
   unlinkMapping(@Param('mappingId') mappingId: string, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.unlinkMapping(organisationId, mappingId, token);
+  }
+
+  @Get('products')
+  listProducts(@Query() query: ProductQueryDto, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.listProducts(organisationId, query, token);
+  }
+
+  @Get('products/needs-attention-count')
+  countProductsNeedingAttention(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.countProductsNeedingAttention(organisationId, token);
+  }
+
+  @Post('products/sync')
+  syncProducts(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.syncProducts(organisationId, token);
+  }
+
+  @Post('products/:externalProductId/import')
+  importProduct(
+    @Param('externalProductId') externalProductId: string,
+    @Body() dto: ImportProductDto,
+    @Req() req: Request,
+  ) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.importProduct(organisationId, externalProductId, dto, token);
+  }
+
+  @Post('products/suggestions/:suggestionId/confirm')
+  confirmProductSuggestion(@Param('suggestionId') suggestionId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.confirmProductSuggestion(organisationId, suggestionId, token);
+  }
+
+  @Post('products/:externalProductId/match')
+  matchProduct(
+    @Param('externalProductId') externalProductId: string,
+    @Body() dto: MatchProductDto,
+    @Req() req: Request,
+  ) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.matchProduct(organisationId, externalProductId, dto, token);
+  }
+
+  @Post('products/:externalProductId/ignore')
+  ignoreProduct(@Param('externalProductId') externalProductId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.ignoreProduct(organisationId, externalProductId, token);
+  }
+
+  @Post('products/mappings/:mappingId/unlink')
+  unlinkProductMapping(@Param('mappingId') mappingId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.unlinkProductMapping(organisationId, mappingId, token);
   }
 }

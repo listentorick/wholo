@@ -136,6 +136,86 @@ describe('AccountingService (BFF)', () => {
     });
   });
 
+  describe('listProducts', () => {
+    it('forwards limit/cursor/search/status as query params', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+
+      await service.listProducts('dist-1', { limit: 20, cursor: 'abc', search: 'cab', status: 'SUGGESTED' }, 'token-1');
+
+      expect(mockApi.get).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/products?limit=20&cursor=abc&search=cab&status=SUGGESTED',
+        'token-1',
+      );
+    });
+
+    it('omits the query string entirely when no filters are supplied', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listProducts('dist-1', {}, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products', 'token-1');
+    });
+
+    it('forwards the type filter (sold/purchased/tracked)', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listProducts('dist-1', { type: 'tracked' }, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products?type=tracked', 'token-1');
+    });
+  });
+
+  describe('countProductsNeedingAttention', () => {
+    it('calls the needs-attention-count route', async () => {
+      mockApi.get.mockResolvedValue({ count: 3 });
+      const result = await service.countProductsNeedingAttention('dist-1', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/needs-attention-count', 'token-1');
+      expect(result).toEqual({ count: 3 });
+    });
+  });
+
+  describe('syncProducts', () => {
+    it('posts to the sync route', async () => {
+      mockApi.post.mockResolvedValue({ queued: true });
+      const result = await service.syncProducts('dist-1', 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/sync', 'token-1');
+      expect(result).toEqual({ queued: true });
+    });
+  });
+
+  describe('importProduct', () => {
+    it('posts the import DTO to the product-scoped import route', async () => {
+      const dto = { name: 'Cabernet Sauvignon 2023' };
+      await service.importProduct('dist-1', 'ext-1', dto, 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/ext-1/import', 'token-1', dto);
+    });
+  });
+
+  describe('confirmProductSuggestion', () => {
+    it('posts to the suggestion-scoped confirm route', async () => {
+      await service.confirmProductSuggestion('dist-1', 'sugg-1', 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/suggestions/sugg-1/confirm', 'token-1');
+    });
+  });
+
+  describe('matchProduct', () => {
+    it('posts the match DTO to the product-scoped match route', async () => {
+      const dto = { productId: 'prod-1' };
+      await service.matchProduct('dist-1', 'ext-1', dto, 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/ext-1/match', 'token-1', dto);
+    });
+  });
+
+  describe('ignoreProduct', () => {
+    it('posts to the product-scoped ignore route', async () => {
+      await service.ignoreProduct('dist-1', 'ext-1', 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/ext-1/ignore', 'token-1');
+    });
+  });
+
+  describe('unlinkProductMapping', () => {
+    it('posts to the mapping-scoped unlink route', async () => {
+      await service.unlinkProductMapping('dist-1', 'mapping-1', 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/mappings/mapping-1/unlink', 'token-1');
+    });
+  });
+
   describe('handleXeroCallback', () => {
     it('calls api.postAnonymous with no bearer token — this is a server-to-server call, not a user request', async () => {
       mockApi.postAnonymous.mockResolvedValue({ status: 'connected' });

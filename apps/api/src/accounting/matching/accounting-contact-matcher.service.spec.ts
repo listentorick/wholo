@@ -53,7 +53,7 @@ describe('AccountingContactMatcherService', () => {
         [candidate({ tradeRelationshipId: 'tr-9', accountNumber: 'XC-102' })],
       );
       expect(result).toMatchObject({
-        tradeRelationshipId: 'tr-9',
+        candidateId: 'tr-9',
         confidence: 95,
         matchMethod: AccountingContactMatchMethod.ACCOUNT_CODE_EXACT,
       });
@@ -80,7 +80,7 @@ describe('AccountingContactMatcherService', () => {
         contact({ externalContactCode: 'XC-102', email: 'billing@blackbird.example', displayName: 'Blackbird Vine & Co' }),
         [candidate({ tradeRelationshipId: 'tr-code', accountNumber: 'XC-102', organisationEmail: 'someone-else@example.com', organisationName: 'Completely Different Name' })],
       );
-      expect(result?.tradeRelationshipId).toBe('tr-code');
+      expect(result?.candidateId).toBe('tr-code');
       expect(result?.matchMethod).toBe(AccountingContactMatchMethod.ACCOUNT_CODE_EXACT);
     });
   });
@@ -92,7 +92,7 @@ describe('AccountingContactMatcherService', () => {
         [candidate({ tradeRelationshipId: 'tr-email', organisationEmail: 'billing@blackbird.example' })],
       );
       expect(result).toMatchObject({
-        tradeRelationshipId: 'tr-email',
+        candidateId: 'tr-email',
         confidence: 80,
         matchMethod: AccountingContactMatchMethod.EMAIL_EXACT,
       });
@@ -114,7 +114,7 @@ describe('AccountingContactMatcherService', () => {
         [candidate({ tradeRelationshipId: 'tr-name', organisationName: 'Blackbird Vine & Co' })],
       );
       expect(result).toMatchObject({
-        tradeRelationshipId: 'tr-name',
+        candidateId: 'tr-name',
         confidence: 70,
         matchMethod: AccountingContactMatchMethod.NAME_EXACT,
       });
@@ -128,7 +128,7 @@ describe('AccountingContactMatcherService', () => {
         [candidate({ tradeRelationshipId: 'tr-pc', organisationName: 'Blackbird Vine & Co', organisationPostcode: 'E1 1AA' })],
       );
       expect(result).toMatchObject({
-        tradeRelationshipId: 'tr-pc',
+        candidateId: 'tr-pc',
         confidence: 60,
         matchMethod: AccountingContactMatchMethod.NAME_POSTCODE,
       });
@@ -171,7 +171,7 @@ describe('AccountingContactMatcherService', () => {
           candidate({ tradeRelationshipId: 'tr-close', organisationName: 'Blackbird Vine and Co' }),
         ],
       );
-      expect(result?.tradeRelationshipId).toBe('tr-close');
+      expect(result?.candidateId).toBe('tr-close');
     });
 
     it('floors confidence at 25 rather than going lower for a borderline match', () => {
@@ -194,7 +194,7 @@ describe('AccountingContactMatcherService', () => {
         candidate({ tradeRelationshipId: 'tr-b', organisationName: 'Blackbird Vine & Co' }),
       ],
     );
-    expect(result?.tradeRelationshipId).toBe('tr-b');
+    expect(result?.candidateId).toBe('tr-b');
     expect(result?.matchMethod).toBe(AccountingContactMatchMethod.NAME_EXACT);
   });
 });

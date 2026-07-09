@@ -5,13 +5,20 @@ import type {
   AccountingContactListResponse,
   AccountingContactNeedsAttentionCountResponse,
   AccountingContactSyncRequestedResponse,
+  AccountingProductListParams,
+  AccountingProductListResponse,
+  AccountingProductNeedsAttentionCountResponse,
+  AccountingProductSyncRequestedResponse,
   Customer,
   ImportAccountingContactRequest,
+  ImportAccountingProductRequest,
   MatchAccountingContactRequest,
+  MatchAccountingProductRequest,
+  Product,
 } from '@wholo/types';
 import { apiFetch } from './base';
 
-function buildContactQuery(params: AccountingContactListParams): string {
+function buildListQuery(params: AccountingContactListParams | AccountingProductListParams): string {
   const qs = new URLSearchParams();
   if (params.limit != null) qs.set('limit', String(params.limit));
   if (params.cursor) qs.set('cursor', params.cursor);
@@ -39,7 +46,7 @@ export const adminAccountingApi = {
   },
 
   listContacts(params: AccountingContactListParams, token: string): Promise<AccountingContactListResponse> {
-    return apiFetch<AccountingContactListResponse>(`/api/v1/accounting/contacts${buildContactQuery(params)}`, { token });
+    return apiFetch<AccountingContactListResponse>(`/api/v1/accounting/contacts${buildListQuery(params)}`, { token });
   },
 
   countContactsNeedingAttention(token: string): Promise<AccountingContactNeedsAttentionCountResponse> {
@@ -95,6 +102,68 @@ export const adminAccountingApi = {
 
   unlinkMapping(mappingId: string, token: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/mappings/${mappingId}/unlink`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  listProducts(params: AccountingProductListParams, token: string): Promise<AccountingProductListResponse> {
+    return apiFetch<AccountingProductListResponse>(`/api/v1/accounting/products${buildListQuery(params)}`, { token });
+  },
+
+  countProductsNeedingAttention(token: string): Promise<AccountingProductNeedsAttentionCountResponse> {
+    return apiFetch<AccountingProductNeedsAttentionCountResponse>('/api/v1/accounting/products/needs-attention-count', {
+      token,
+    });
+  },
+
+  syncProducts(token: string): Promise<AccountingProductSyncRequestedResponse> {
+    return apiFetch<AccountingProductSyncRequestedResponse>('/api/v1/accounting/products/sync', {
+      method: 'POST',
+      token,
+    });
+  },
+
+  importProduct(
+    externalProductId: string,
+    dto: ImportAccountingProductRequest,
+    token: string,
+  ): Promise<Product> {
+    return apiFetch<Product>(`/api/v1/accounting/products/${externalProductId}/import`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  confirmProductSuggestion(suggestionId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/products/suggestions/${suggestionId}/confirm`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  matchProduct(
+    externalProductId: string,
+    dto: MatchAccountingProductRequest,
+    token: string,
+  ): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/match`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  ignoreProduct(externalProductId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/ignore`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  unlinkProductMapping(mappingId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/products/mappings/${mappingId}/unlink`, {
       method: 'POST',
       token,
     });

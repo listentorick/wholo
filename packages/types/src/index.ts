@@ -810,6 +810,107 @@ export interface MatchAccountingContactRequest {
   tradeRelationshipId: string;
 }
 
+// ─── Accounting Products (Phase 3: sync/import/manage) ────────────────────────
+// A product's status is computed at read time (see apps/api's
+// AccountingProductService), never stored — it's derived from whether an
+// active mapping/suggestion exists, not a column on any row.
+
+export type AccountingProductStatus =
+  | 'LINKED'
+  | 'SUGGESTED'
+  | 'READY_TO_IMPORT'
+  | 'NOT_SOLD'
+  | 'IGNORED'
+  | 'INACTIVE'
+  | 'CONFLICT';
+
+// The provider's own item flags (Xero: IsSold/IsPurchased/IsTracked) —
+// distinct from AccountingProductStatus, which is "what does Wholo need
+// you to do" rather than "which provider bucket is this in".
+export type AccountingProductType = 'sold' | 'purchased' | 'tracked';
+
+export type AccountingProductMatchMethod =
+  | 'SKU_EXACT'
+  | 'SKU_NORMALISED'
+  | 'NAME_EXACT'
+  | 'NAME_FUZZY'
+  | 'MANUAL';
+
+export interface AccountingProductMappingSummary {
+  id: string;
+  productId: string;
+  productName: string;
+  matchMethod: AccountingProductMatchMethod;
+  linkedAt: string;
+}
+
+export interface AccountingProductSuggestionSummary {
+  id: string;
+  productId: string;
+  productName: string;
+  confidence: number;
+  matchMethod: AccountingProductMatchMethod;
+  matchReason: string;
+}
+
+export interface AccountingProductSummary {
+  id: string;
+  displayName: string;
+  description: string | null;
+  externalProductCode: string | null;
+  // Decimal string at the provider's precision (up to 4 dp for Xero) —
+  // rounded to 2 dp only when imported into Product.price.
+  salesUnitPrice: string | null;
+  quantityOnHand: string | null;
+  isSold: boolean;
+  isPurchased: boolean;
+  isTracked: boolean;
+  isActive: boolean;
+  ignoredAt: string | null;
+  status: AccountingProductStatus;
+  mapping: AccountingProductMappingSummary | null;
+  suggestion: AccountingProductSuggestionSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountingProductListParams {
+  limit?: number;
+  cursor?: string;
+  search?: string;
+  status?: AccountingProductStatus;
+  type?: AccountingProductType;
+}
+
+export interface AccountingProductListResponse {
+  data: AccountingProductSummary[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
+}
+
+export interface AccountingProductSyncRequestedResponse {
+  queued: true;
+}
+
+export interface AccountingProductNeedsAttentionCountResponse {
+  count: number;
+}
+
+export interface ImportAccountingProductRequest {
+  name?: string;
+  description?: string;
+  sku?: string;
+  price?: string;
+  productTypeId?: string;
+  supplierId?: string;
+}
+
+export interface MatchAccountingProductRequest {
+  productId: string;
+}
+
 // ─── Asset Images ─────────────────────────────────────────────────────────────
 
 export interface AssetImage {

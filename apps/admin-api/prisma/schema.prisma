@@ -148,6 +148,21 @@ enum AccountingContactMatchMethod {
   MANUAL
 }
 
+enum AccountingProductMatchStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum AccountingProductMatchMethod {
+  SKU_EXACT
+  SKU_NORMALISED
+  NAME_EXACT
+  NAME_FUZZY
+  MANUAL
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -192,6 +207,9 @@ model Organisation {
   externalAccountingContacts      ExternalAccountingContact[]
   customerAccountingMappings      CustomerAccountingMapping[]
   accountingContactMatchSuggestions AccountingContactMatchSuggestion[]
+  externalAccountingProducts      ExternalAccountingProduct[]
+  productAccountingMappings       ProductAccountingMapping[]
+  accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
 
   @@map("organisations")
 }
@@ -294,6 +312,8 @@ model Product {
   catalogues         CatalogueProduct[]
   priceListRules     PriceListRule[]             @relation("ProductPriceListRules")
   searchDocument     ProductSearchDocument?
+  accountingMappings ProductAccountingMapping[]
+  accountingMatchSuggestions AccountingProductMatchSuggestion[]
 
   @@unique([distributorId, sku])
   @@index([distributorId, createdAt])
@@ -323,6 +343,9 @@ model ProductSearchDocument {
   @@map("product_search_documents")
 }
 
+// Superseded for accounting by ProductAccountingMapping (connection-scoped,
+// soft-unlink, matchMethod audit trail). Kept for a future non-accounting
+// external-id use case; nothing reads or writes it today.
 model ProductExternalReference {
   id            String   @id @default(cuid())
   productId     String
@@ -565,6 +588,9 @@ model AccountingConnection {
   externalContacts         ExternalAccountingContact[]
   customerMappings         CustomerAccountingMapping[]
   contactMatchSuggestions  AccountingContactMatchSuggestion[]
+  externalProducts         ExternalAccountingProduct[]
+  productMappings          ProductAccountingMapping[]
+  productMatchSuggestions  AccountingProductMatchSuggestion[]
 
   @@index([distributorId])
   @@map("accounting_connections")
@@ -686,6 +712,113 @@ model AccountingContactMatchSuggestion {
   @@index([distributorId, status])
   @@index([externalContactId, status])
   @@map("accounting_contact_match_suggestions")
+}
+
+// Locally cached products/items pulled from the connected accounting system
+// (Xero Items initially). Populated only through
+// AccountingConnectionAdapter.listProducts — same provider-neutral cache
+// pattern as ExternalAccountingContact. Prices are Decimal(12,4): Xero
+// serves 4-dp unit prices (unitdp=4); rounding to Wholo's 2-dp Product.price
+// happens only at import, never in the cache.
+model ExternalAccountingProduct {
+  id                     String             @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  provider               AccountingProvider
+  externalProductId      String
+  externalProductCode    String?
+  displayName            String
+  description            String?
+  salesUnitPrice         Decimal?           @db.Decimal(12, 4)
+  purchaseUnitPrice      Decimal?           @db.Decimal(12, 4)
+  taxCode                String?
+  accountCode            String?
+  purchaseTaxCode        String?
+  purchaseAccountCode    String?
+  isSold                 Boolean            @default(true)
+  isPurchased            Boolean            @default(true)
+  isTracked              Boolean            @default(false)
+  // Xero Items have no archived flag — deleted items simply vanish from the
+  // next full fetch, so the sync marks absent rows isActive=false instead.
+  isActive               Boolean            @default(true)
+  quantityOnHand         Decimal?           @db.Decimal(12, 4)
+  ignoredAt              DateTime?
+  lastExternalUpdatedAt  DateTime?
+  lastSyncedAt           DateTime
+  rawProviderData        Json
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  distributor Organisation                       @relation(fields: [distributorId], references: [id])
+  connection  AccountingConnection               @relation(fields: [accountingConnectionId], references: [id])
+  // One-to-many, not one-to-one: unlinking soft-deletes (unlinkedAt) rather
+  // than hard-deleting, so a product can accumulate historical mapping rows
+  // even though only one is ever active (unlinkedAt IS NULL) at a time.
+  mappings    ProductAccountingMapping[]
+  suggestions AccountingProductMatchSuggestion[]
+
+  @@unique([accountingConnectionId, externalProductId])
+  @@index([distributorId, isSold, isActive])
+  @@map("external_accounting_products")
+}
+
+// Confirmed link between a Wholo Product and one cached external accounting
+// product. Written only by an explicit user action (import/confirm/match) —
+// never by the sync/matcher, regardless of match confidence.
+model ProductAccountingMapping {
+  id                     String                       @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  productId              String
+  externalProductId      String
+  matchMethod            AccountingProductMatchMethod
+  linkedByUserId         String
+  linkedAt               DateTime                     @default(now())
+  unlinkedAt             DateTime?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  distributor     Organisation              @relation(fields: [distributorId], references: [id])
+  connection      AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  product         Product                   @relation(fields: [productId], references: [id])
+  externalProduct ExternalAccountingProduct @relation(fields: [externalProductId], references: [id])
+
+  // Both uniques below are made partial (WHERE "unlinkedAt" IS NULL) by hand
+  // in the generated migration — same precedent as
+  // CustomerAccountingMapping. An unlink-then-relink of the same pair must
+  // not collide with the closed-out row.
+  @@unique([accountingConnectionId, productId])
+  @@unique([accountingConnectionId, externalProductId])
+  @@index([distributorId])
+  @@map("product_accounting_mappings")
+}
+
+// System-suggested product match awaiting human review. The matcher only ever
+// writes here; ProductAccountingMapping rows are created exclusively by an
+// explicit confirm/match action, regardless of confidence.
+model AccountingProductMatchSuggestion {
+  id                     String                       @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  externalProductId      String
+  suggestedProductId     String
+  confidence             Int
+  matchMethod            AccountingProductMatchMethod
+  matchReason            String
+  status                 AccountingProductMatchStatus @default(SUGGESTED)
+  reviewedByUserId       String?
+  reviewedAt             DateTime?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  distributor      Organisation              @relation(fields: [distributorId], references: [id])
+  connection       AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  externalProduct  ExternalAccountingProduct @relation(fields: [externalProductId], references: [id])
+  suggestedProduct Product                   @relation(fields: [suggestedProductId], references: [id])
+
+  @@index([distributorId, status])
+  @@index([externalProductId, status])
+  @@map("accounting_product_match_suggestions")
 }
 
 model TraderCustomerSettings {

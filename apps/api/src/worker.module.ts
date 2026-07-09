@@ -5,13 +5,20 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
+import { AccountingProductSyncScheduler } from './accounting/accounting-product-sync.scheduler';
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
+import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { OutboxPublisherService } from './outbox/outbox-publisher.service';
 import { PrismaModule } from './prisma/prisma.module';
-import { ACCOUNTING_CONTACT_SYNC_QUEUE, NOTIFICATIONS_QUEUE, XERO_SYNC_QUEUE } from './queues/queue.constants';
+import {
+  ACCOUNTING_CONTACT_SYNC_QUEUE,
+  ACCOUNTING_PRODUCT_SYNC_QUEUE,
+  NOTIFICATIONS_QUEUE,
+  XERO_SYNC_QUEUE,
+} from './queues/queue.constants';
 import { redisConnectionFromUrl } from './queues/redis-connection';
 import { XeroSyncModule } from './xero-sync/xero-sync.module';
 
@@ -32,6 +39,7 @@ import { XeroSyncModule } from './xero-sync/xero-sync.module';
       { name: NOTIFICATIONS_QUEUE },
       { name: XERO_SYNC_QUEUE },
       { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
+      { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
     ),
     PrismaModule,
     MailModule,
@@ -39,8 +47,14 @@ import { XeroSyncModule } from './xero-sync/xero-sync.module';
     XeroSyncModule,
     AccountingModule,
     AccountingContactSyncModule,
+    AccountingProductSyncModule,
     OutboxModule,
   ],
-  providers: [OutboxPublisherService, AccountingTokenRefreshScheduler, AccountingContactSyncScheduler],
+  providers: [
+    OutboxPublisherService,
+    AccountingTokenRefreshScheduler,
+    AccountingContactSyncScheduler,
+    AccountingProductSyncScheduler,
+  ],
 })
 export class WorkerModule {}

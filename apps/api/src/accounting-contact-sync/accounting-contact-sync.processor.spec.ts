@@ -184,7 +184,7 @@ describe('AccountingContactSyncProcessor', () => {
 
     it('creates a new suggestion when a match is found and none existed before', async () => {
       matcher.findBestMatch.mockReturnValue({
-        tradeRelationshipId: 'tr-1',
+        candidateId: 'tr-1',
         confidence: 95,
         matchMethod: AccountingContactMatchMethod.ACCOUNT_CODE_EXACT,
         matchReason: 'Account number matches',
@@ -211,7 +211,7 @@ describe('AccountingContactSyncProcessor', () => {
         suggestedTradeRelationshipId: 'tr-1',
       });
       matcher.findBestMatch.mockReturnValue({
-        tradeRelationshipId: 'tr-1',
+        candidateId: 'tr-1',
         confidence: 42,
         matchMethod: AccountingContactMatchMethod.NAME_FUZZY,
         matchReason: 'still similar',
@@ -232,7 +232,7 @@ describe('AccountingContactSyncProcessor', () => {
         suggestedTradeRelationshipId: 'tr-old',
       });
       matcher.findBestMatch.mockReturnValue({
-        tradeRelationshipId: 'tr-new',
+        candidateId: 'tr-new',
         confidence: 70,
         matchMethod: AccountingContactMatchMethod.NAME_EXACT,
         matchReason: 'name now matches exactly',

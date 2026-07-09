@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Address, Contact, XeroClient } from 'xero-node';
+import { Address, Contact, Item, XeroClient } from 'xero-node';
 import {
   AccountingConnectionAdapter,
   AccountingExternalContact,
   AccountingExternalOrganisation,
+  AccountingExternalProduct,
   AccountingTokenSet,
 } from './accounting-connection-adapter.interface';
 
@@ -103,6 +104,54 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       page += 1;
     }
     return contacts.map((c) => this.toAccountingExternalContact(c));
+  }
+
+  async listProducts(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    modifiedSince?: Date,
+  ): Promise<AccountingExternalProduct[]> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    // Unlike getContacts, Xero's Items endpoint has no pagination — one call
+    // returns every item (item counts are small relative to contacts).
+    // unitdp=4 opts in to four-decimal-place unit prices; the cache column is
+    // Decimal(12,4) to hold them losslessly.
+    const { body } = await client.accountingApi.getItems(
+      externalOrganisationId,
+      modifiedSince,
+      undefined, // where
+      undefined, // order
+      4, // unitdp
+    );
+    return (body.items ?? []).map((item) => this.toAccountingExternalProduct(item));
+  }
+
+  private toAccountingExternalProduct(item: Item): AccountingExternalProduct {
+    return {
+      externalId: item.itemID ?? '',
+      // code is Xero's required user-facing item code (the SKU analog);
+      // name is optional, so display falls back to code.
+      code: item.code || undefined,
+      displayName: item.name || item.code || '',
+      description: item.description || undefined,
+      salesUnitPrice: item.salesDetails?.unitPrice != null ? String(item.salesDetails.unitPrice) : undefined,
+      purchaseUnitPrice: item.purchaseDetails?.unitPrice != null ? String(item.purchaseDetails.unitPrice) : undefined,
+      taxCode: item.salesDetails?.taxType || undefined,
+      accountCode: item.salesDetails?.accountCode || undefined,
+      purchaseTaxCode: item.purchaseDetails?.taxType || undefined,
+      purchaseAccountCode: item.purchaseDetails?.accountCode || undefined,
+      // Xero defaults both to true and only serialises them when set.
+      isSold: item.isSold ?? true,
+      isPurchased: item.isPurchased ?? true,
+      isTracked: !!item.isTrackedAsInventory,
+      // Xero Items carry no archived/deleted status — deleted items simply
+      // stop appearing; the sync's stale-row pass owns deactivation.
+      isActive: true,
+      quantityOnHand: item.quantityOnHand != null ? String(item.quantityOnHand) : undefined,
+      updatedAt: item.updatedDateUTC ? new Date(item.updatedDateUTC).toISOString() : undefined,
+      raw: item,
+    };
   }
 
   private toAccountingExternalContact(contact: Contact): AccountingExternalContact {

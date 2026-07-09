@@ -1,95 +1,68 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { AccountingConnectionStatus, AccountingContactMatchStatus, AccountingProvider, Prisma } from '@prisma/client';
-import { Job } from 'bullmq';
+import {
+  AccountingConnection,
+  AccountingContactMatchMethod,
+  AccountingContactMatchStatus,
+  ExternalAccountingContact,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ACCOUNTING_CONTACT_SYNC_QUEUE } from '../queues/queue.constants';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
-import { AccountingExternalContact } from '../accounting/adapters/accounting-connection-adapter.interface';
+import {
+  AccountingConnectionAdapter,
+  AccountingExternalContact,
+  AccountingTokenSet,
+} from '../accounting/adapters/accounting-connection-adapter.interface';
 import {
   AccountingContactMatcherService,
   AccountingMatchCandidate,
 } from '../accounting/matching/accounting-contact-matcher.service';
-
-interface OutboxEventJobData {
-  eventId: string;
-  aggregateType: string;
-  aggregateId: string; // AccountingConnection id
-  payload: unknown;
-}
+import { AccountingMatchResult } from '../accounting/matching/accounting-record-matcher.interface';
+import {
+  AccountingSyncProcessorBase,
+  AccountingSyncSuggestionRef,
+} from '../accounting/sync/accounting-sync-processor.base';
 
 // Consumes AccountingContactSyncRequested — written to the outbox by both
 // AccountingContactSyncScheduler (periodic) and the "Sync now" HTTP endpoint
-// (manual). One trigger, one path: pull contacts from the provider, cache
-// them, and run the matcher against unmapped Wholo customers. Never writes a
+// (manual). One trigger, one path: the shared sync pipeline
+// (AccountingSyncProcessorBase) pulls contacts from the provider, caches
+// them, and runs the matcher against unmapped Wholo customers. Never writes a
 // CustomerAccountingMapping itself — only ever produces suggestions.
 @Processor(ACCOUNTING_CONTACT_SYNC_QUEUE)
-export class AccountingContactSyncProcessor extends WorkerHost {
-  private readonly logger = new Logger(AccountingContactSyncProcessor.name);
+export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
+  AccountingExternalContact,
+  ExternalAccountingContact,
+  AccountingMatchCandidate,
+  AccountingContactMatchMethod
+> {
+  protected readonly logger = new Logger(AccountingContactSyncProcessor.name);
+  protected readonly recordNoun = 'contact';
 
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly accountingConnectionService: AccountingConnectionService,
-    private readonly adapters: AccountingAdapterRegistry,
-    private readonly matcher: AccountingContactMatcherService,
+    prisma: PrismaService,
+    accountingConnectionService: AccountingConnectionService,
+    adapters: AccountingAdapterRegistry,
+    protected readonly matcher: AccountingContactMatcherService,
   ) {
-    super();
+    super(prisma, accountingConnectionService, adapters);
   }
 
-  async process(job: Job<OutboxEventJobData>): Promise<void> {
-    const connectionId = job.data.aggregateId;
-    const connection = await this.prisma.accountingConnection.findUnique({ where: { id: connectionId } });
-    if (!connection) {
-      this.logger.warn(`AccountingConnection ${connectionId} no longer exists — skipping sync`);
-      return;
-    }
-    if (connection.status !== AccountingConnectionStatus.CONNECTED) {
-      this.logger.log(`AccountingConnection ${connectionId} is not CONNECTED — skipping sync`);
-      return;
-    }
-
-    const tokenSet = await this.accountingConnectionService.getValidTokenSet(
-      connection.distributorId,
-      connection.provider,
-    );
-    const adapter = this.adapters.get(connection.provider);
-    // Deliberately a full fetch every time, not an incremental one keyed off
-    // connection.lastSyncedAt: that field also means "last successful token
-    // refresh" (see AccountingConnectionService.getValidTokenSet, called
-    // just above) — reusing it as the contacts If-Modified-Since cursor
-    // conflates two different clocks and can silently starve the sync of
-    // everything that existed before some unrelated token refresh. A proper
-    // incremental cursor needs its own dedicated field; not worth the
-    // complexity yet at this feature's contact volumes.
-    const externalContacts = await adapter.listContacts(tokenSet, connection.externalOrganisationId);
-
-    const cachedContacts = await Promise.all(
-      externalContacts.map((contact) => this.upsertExternalContact(connection.id, connection.distributorId, connection.provider, contact)),
-    );
-
-    const candidates = await this.loadMatchCandidates(connection.distributorId, connection.id);
-
-    for (const cached of cachedContacts) {
-      await this.runMatcherFor(connection.id, connection.distributorId, cached, candidates);
-    }
-
-    await this.prisma.accountingConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncedAt: new Date() },
-    });
-
-    this.logger.log(
-      `Accounting contact sync complete for connection ${connection.id}: ${externalContacts.length} contact(s) fetched`,
-    );
+  protected fetchExternalRecords(
+    adapter: AccountingConnectionAdapter,
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+  ): Promise<AccountingExternalContact[]> {
+    return adapter.listContacts(tokenSet, externalOrganisationId);
   }
 
-  private async upsertExternalContact(
-    accountingConnectionId: string,
-    distributorId: string,
-    provider: AccountingProvider,
+  protected upsertCacheRecord(
+    connection: AccountingConnection,
     contact: AccountingExternalContact,
-  ) {
+  ): Promise<ExternalAccountingContact> {
     const shared = {
       externalContactCode: contact.code ?? null,
       externalAccountNumber: contact.accountNumber ?? null,
@@ -112,16 +85,16 @@ export class AccountingContactSyncProcessor extends WorkerHost {
     return this.prisma.externalAccountingContact.upsert({
       where: {
         accountingConnectionId_externalContactId: {
-          accountingConnectionId,
+          accountingConnectionId: connection.id,
           externalContactId: contact.externalId,
         },
       },
       // ignoredAt is intentionally left untouched on update — a re-sync must
       // not silently un-ignore a contact the distributor deliberately dismissed.
       create: {
-        distributorId,
-        accountingConnectionId,
-        provider,
+        distributorId: connection.distributorId,
+        accountingConnectionId: connection.id,
+        provider: connection.provider,
         externalContactId: contact.externalId,
         ...shared,
       },
@@ -129,15 +102,12 @@ export class AccountingContactSyncProcessor extends WorkerHost {
     });
   }
 
-  private async loadMatchCandidates(
-    distributorId: string,
-    accountingConnectionId: string,
-  ): Promise<AccountingMatchCandidate[]> {
+  protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingMatchCandidate[]> {
     const tradeRelationships = await this.prisma.tradeRelationship.findMany({
       where: {
-        distributorId,
+        distributorId: connection.distributorId,
         deletedAt: null,
-        accountingMappings: { none: { accountingConnectionId, unlinkedAt: null } },
+        accountingMappings: { none: { accountingConnectionId: connection.id, unlinkedAt: null } },
       },
       select: {
         id: true,
@@ -155,21 +125,7 @@ export class AccountingContactSyncProcessor extends WorkerHost {
     }));
   }
 
-  private async runMatcherFor(
-    accountingConnectionId: string,
-    distributorId: string,
-    cached: {
-      id: string;
-      externalContactCode: string | null;
-      externalAccountNumber: string | null;
-      displayName: string;
-      email: string | null;
-      billingPostcode: string | null;
-      isArchived: boolean;
-      ignoredAt: Date | null;
-    },
-    candidates: AccountingMatchCandidate[],
-  ): Promise<void> {
+  protected shouldMatch(cached: ExternalAccountingContact): boolean {
     // Deliberately not gated on isCustomer/isSupplier: those flags are set
     // automatically by Xero based on transaction history (has an AR invoice
     // or AP bill ever been raised against this contact), not a business
@@ -178,56 +134,57 @@ export class AccountingContactSyncProcessor extends WorkerHost {
     // already handles the "not a customer" label correctly: a contact that
     // gets a suggestion here shows SUGGESTED, never falling through to
     // NOT_A_CUSTOMER.
-    if (cached.isArchived || cached.ignoredAt) return;
+    return !cached.isArchived && !cached.ignoredAt;
+  }
 
-    const hasActiveMapping = await this.prisma.customerAccountingMapping.findFirst({
-      where: { externalContactId: cached.id, unlinkedAt: null },
+  protected async hasActiveMapping(cachedId: string): Promise<boolean> {
+    const mapping = await this.prisma.customerAccountingMapping.findFirst({
+      where: { externalContactId: cachedId, unlinkedAt: null },
       select: { id: true },
     });
-    if (hasActiveMapping) return;
+    return !!mapping;
+  }
 
-    const match = this.matcher.findBestMatch(
-      {
-        externalContactCode: cached.externalContactCode,
-        externalAccountNumber: cached.externalAccountNumber,
-        displayName: cached.displayName,
-        email: cached.email,
-        billingPostcode: cached.billingPostcode,
-      },
-      candidates,
-    );
-
-    const existingSuggestion = await this.prisma.accountingContactMatchSuggestion.findFirst({
-      where: { externalContactId: cached.id, status: AccountingContactMatchStatus.SUGGESTED },
+  protected async findOpenSuggestion(cachedId: string): Promise<AccountingSyncSuggestionRef | null> {
+    const suggestion = await this.prisma.accountingContactMatchSuggestion.findFirst({
+      where: { externalContactId: cachedId, status: AccountingContactMatchStatus.SUGGESTED },
     });
+    if (!suggestion) return null;
+    return { id: suggestion.id, candidateId: suggestion.suggestedTradeRelationshipId };
+  }
 
-    if (existingSuggestion && match && existingSuggestion.suggestedTradeRelationshipId === match.tradeRelationshipId) {
-      await this.prisma.accountingContactMatchSuggestion.update({
-        where: { id: existingSuggestion.id },
-        data: { confidence: match.confidence, matchMethod: match.matchMethod, matchReason: match.matchReason },
-      });
-      return;
-    }
+  protected async updateSuggestion(
+    suggestionId: string,
+    match: AccountingMatchResult<AccountingContactMatchMethod>,
+  ): Promise<void> {
+    await this.prisma.accountingContactMatchSuggestion.update({
+      where: { id: suggestionId },
+      data: { confidence: match.confidence, matchMethod: match.matchMethod, matchReason: match.matchReason },
+    });
+  }
 
-    if (existingSuggestion) {
-      await this.prisma.accountingContactMatchSuggestion.update({
-        where: { id: existingSuggestion.id },
-        data: { status: AccountingContactMatchStatus.SUPERSEDED },
-      });
-    }
+  protected async supersedeSuggestion(suggestionId: string): Promise<void> {
+    await this.prisma.accountingContactMatchSuggestion.update({
+      where: { id: suggestionId },
+      data: { status: AccountingContactMatchStatus.SUPERSEDED },
+    });
+  }
 
-    if (match) {
-      await this.prisma.accountingContactMatchSuggestion.create({
-        data: {
-          distributorId,
-          accountingConnectionId,
-          externalContactId: cached.id,
-          suggestedTradeRelationshipId: match.tradeRelationshipId,
-          confidence: match.confidence,
-          matchMethod: match.matchMethod,
-          matchReason: match.matchReason,
-        },
-      });
-    }
+  protected async createSuggestion(
+    connection: AccountingConnection,
+    cached: ExternalAccountingContact,
+    match: AccountingMatchResult<AccountingContactMatchMethod>,
+  ): Promise<void> {
+    await this.prisma.accountingContactMatchSuggestion.create({
+      data: {
+        distributorId: connection.distributorId,
+        accountingConnectionId: connection.id,
+        externalContactId: cached.id,
+        suggestedTradeRelationshipId: match.candidateId,
+        confidence: match.confidence,
+        matchMethod: match.matchMethod,
+        matchReason: match.matchReason,
+      },
+    });
   }
 }
