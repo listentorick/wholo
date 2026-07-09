@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer } from '@wholo/types';
-import { adminCustomersApi } from '@wholo/admin-api-client';
+import { adminCustomersApi, ApiError } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput, Textarea, AddressGrid, WizardSectionHeading } from './form-helpers';
 
 const schema = z.object({
@@ -49,6 +49,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [accountNumberError, setAccountNumberError] = useState<string | null>(null);
 
   const {
     register,
@@ -75,6 +76,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
     setSaving(true);
     setSuccess(false);
     setApiError(null);
+    setAccountNumberError(null);
     try {
       await adminCustomersApi.update(token, customer.id, {
         accountNumber: data.accountNumber || undefined,
@@ -96,7 +98,11 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
         onNext?.();
       }
     } catch (err: unknown) {
-      setApiError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+      if (err instanceof ApiError && err.status === 409) {
+        setAccountNumberError(err.problem.detail ?? 'This account number is already in use by another customer.');
+      } else {
+        setApiError(err instanceof Error ? err.message : 'Failed to save. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -116,6 +122,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
             <div>
               <FieldLabel htmlFor="accountNumber">Account number</FieldLabel>
               <TextInput id="accountNumber" placeholder="ACC-001" disabled={disabled} {...register('accountNumber')} />
+              <FieldError message={accountNumberError ?? undefined} />
             </div>
             <div>
               <FieldLabel htmlFor="creditLimit">Credit limit</FieldLabel>
@@ -175,6 +182,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
           <div>
             <FieldLabel htmlFor="accountNumber">Account number</FieldLabel>
             <TextInput id="accountNumber" placeholder="ACC-001" disabled={disabled} {...register('accountNumber')} />
+            <FieldError message={accountNumberError ?? undefined} />
           </div>
           <div>
             <FieldLabel htmlFor="creditLimit">Credit limit</FieldLabel>

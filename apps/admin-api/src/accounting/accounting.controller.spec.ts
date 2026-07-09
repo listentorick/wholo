@@ -6,6 +6,14 @@ const mockService = {
   getConnection: jest.fn(),
   createXeroAuthorizationUrl: jest.fn(),
   disconnect: jest.fn(),
+  listContacts: jest.fn(),
+  countContactsNeedingAttention: jest.fn(),
+  syncContacts: jest.fn(),
+  importContact: jest.fn(),
+  confirmSuggestion: jest.fn(),
+  matchContact: jest.fn(),
+  ignoreContact: jest.fn(),
+  unlinkMapping: jest.fn(),
 };
 
 function mockRequest() {
@@ -62,5 +70,48 @@ describe('AccountingController (BFF)', () => {
   it('disconnect resolves organisationId from req.user, never a client-supplied id', async () => {
     await controller.disconnect(mockRequest());
     expect(mockService.disconnect).toHaveBeenCalledWith('dist-1', 'token-1');
+  });
+
+  it('listContacts resolves organisationId from req.user and forwards the query', async () => {
+    const query = { limit: 20 } as never;
+    await controller.listContacts(query, mockRequest());
+    expect(mockService.listContacts).toHaveBeenCalledWith('dist-1', query, 'token-1');
+  });
+
+  it('countContactsNeedingAttention resolves organisationId from req.user', async () => {
+    await controller.countContactsNeedingAttention(mockRequest());
+    expect(mockService.countContactsNeedingAttention).toHaveBeenCalledWith('dist-1', 'token-1');
+  });
+
+  it('syncContacts resolves organisationId from req.user, never a client-supplied id', async () => {
+    await controller.syncContacts(mockRequest());
+    expect(mockService.syncContacts).toHaveBeenCalledWith('dist-1', 'token-1');
+  });
+
+  it('importContact forwards the contact id and DTO with the resolved organisationId', async () => {
+    const dto = { name: 'Blackbird Vine & Co' } as never;
+    await controller.importContact('contact-1', dto, mockRequest());
+    expect(mockService.importContact).toHaveBeenCalledWith('dist-1', 'contact-1', dto, 'token-1');
+  });
+
+  it('confirmSuggestion forwards the suggestion id with the resolved organisationId', async () => {
+    await controller.confirmSuggestion('sugg-1', mockRequest());
+    expect(mockService.confirmSuggestion).toHaveBeenCalledWith('dist-1', 'sugg-1', 'token-1');
+  });
+
+  it('matchContact forwards the contact id and DTO with the resolved organisationId', async () => {
+    const dto = { tradeRelationshipId: 'tr-1' } as never;
+    await controller.matchContact('contact-1', dto, mockRequest());
+    expect(mockService.matchContact).toHaveBeenCalledWith('dist-1', 'contact-1', dto, 'token-1');
+  });
+
+  it('ignoreContact forwards the contact id with the resolved organisationId', async () => {
+    await controller.ignoreContact('contact-1', mockRequest());
+    expect(mockService.ignoreContact).toHaveBeenCalledWith('dist-1', 'contact-1', 'token-1');
+  });
+
+  it('unlinkMapping forwards the mapping id with the resolved organisationId', async () => {
+    await controller.unlinkMapping('mapping-1', mockRequest());
+    expect(mockService.unlinkMapping).toHaveBeenCalledWith('dist-1', 'mapping-1', 'token-1');
   });
 });

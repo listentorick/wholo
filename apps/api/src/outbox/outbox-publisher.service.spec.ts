@@ -21,6 +21,7 @@ describe('OutboxPublisherService', () => {
   let prisma: { outboxEvent: { findMany: jest.Mock; update: jest.Mock } };
   let notificationsQueue: { add: jest.Mock };
   let xeroSyncQueue: { add: jest.Mock };
+  let accountingContactSyncQueue: { add: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -31,10 +32,12 @@ describe('OutboxPublisherService', () => {
     };
     notificationsQueue = { add: jest.fn().mockResolvedValue({}) };
     xeroSyncQueue = { add: jest.fn().mockResolvedValue({}) };
+    accountingContactSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
       xeroSyncQueue as unknown as Queue,
+      accountingContactSyncQueue as unknown as Queue,
     );
   });
 
@@ -69,6 +72,22 @@ describe('OutboxPublisherService', () => {
 
     expect(xeroSyncQueue.add).toHaveBeenCalledWith('OrderAccepted', expect.anything(), { jobId: 'evt-2' });
     expect(notificationsQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes AccountingContactSyncRequested to the accounting-contact-sync queue, whether scheduled or manually triggered', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-4', eventType: 'AccountingContactSyncRequested', aggregateType: 'AccountingConnection', aggregateId: 'conn-1' }),
+    ]);
+
+    await service.publishPending();
+
+    expect(accountingContactSyncQueue.add).toHaveBeenCalledWith(
+      'AccountingContactSyncRequested',
+      expect.anything(),
+      { jobId: 'evt-4' },
+    );
+    expect(notificationsQueue.add).not.toHaveBeenCalled();
+    expect(xeroSyncQueue.add).not.toHaveBeenCalled();
   });
 
   it('marks unrouted event types PUBLISHED without enqueueing anything', async () => {

@@ -708,6 +708,108 @@ export interface AccountingAuthorizationUrlResponse {
   authorizationUrl: string;
 }
 
+// ─── Accounting Contacts (Phase 2: sync/import/manage) ────────────────────────
+// A contact's status is computed at read time (see apps/api's
+// AccountingContactService), never stored — it's derived from whether an
+// active mapping/suggestion exists, not a column on any row.
+
+export type AccountingContactStatus =
+  | 'LINKED'
+  | 'SUGGESTED'
+  | 'READY_TO_IMPORT'
+  | 'NOT_A_CUSTOMER'
+  | 'IGNORED'
+  | 'ARCHIVED'
+  | 'CONFLICT';
+
+// Mirrors Xero's own All/Customers/Suppliers/Archived contacts split —
+// distinct from AccountingContactStatus, which is "what does Wholo need
+// you to do" rather than "which Xero bucket is this in".
+export type AccountingContactType = 'customers' | 'suppliers' | 'archived';
+
+export type AccountingContactMatchMethod =
+  | 'ACCOUNT_CODE_EXACT'
+  | 'EMAIL_EXACT'
+  | 'NAME_EXACT'
+  | 'NAME_POSTCODE'
+  | 'NAME_FUZZY'
+  | 'MANUAL';
+
+export interface AccountingContactMappingSummary {
+  id: string;
+  tradeRelationshipId: string;
+  customerName: string;
+  matchMethod: AccountingContactMatchMethod;
+  linkedAt: string;
+}
+
+export interface AccountingContactSuggestionSummary {
+  id: string;
+  tradeRelationshipId: string;
+  customerName: string;
+  confidence: number;
+  matchMethod: AccountingContactMatchMethod;
+  matchReason: string;
+}
+
+export interface AccountingContactSummary {
+  id: string;
+  displayName: string;
+  email: string | null;
+  externalContactCode: string | null;
+  externalAccountNumber: string | null;
+  isCustomer: boolean;
+  isSupplier: boolean;
+  isArchived: boolean;
+  ignoredAt: string | null;
+  status: AccountingContactStatus;
+  mapping: AccountingContactMappingSummary | null;
+  suggestion: AccountingContactSuggestionSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountingContactListParams {
+  limit?: number;
+  cursor?: string;
+  search?: string;
+  status?: AccountingContactStatus;
+  type?: AccountingContactType;
+}
+
+export interface AccountingContactListResponse {
+  data: AccountingContactSummary[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
+}
+
+export interface AccountingContactSyncRequestedResponse {
+  queued: true;
+}
+
+export interface AccountingContactNeedsAttentionCountResponse {
+  count: number;
+}
+
+export interface ImportAccountingContactRequest {
+  name?: string;
+  legalName?: string;
+  phone?: string;
+  accountNumber?: string;
+  billingLine1?: string;
+  billingLine2?: string;
+  billingCity?: string;
+  billingState?: string;
+  billingPostcode?: string;
+  billingCountry?: string;
+}
+
+export interface MatchAccountingContactRequest {
+  tradeRelationshipId: string;
+}
+
 // ─── Asset Images ─────────────────────────────────────────────────────────────
 
 export interface AssetImage {

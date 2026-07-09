@@ -220,4 +220,61 @@ describe('Admin Customers (integration)', () => {
       expect(inDb?.deletedAt).not.toBeNull();
     });
   });
+
+  // ── Account number uniqueness ───────────────────────────────────────────────
+
+  describe('account number uniqueness', () => {
+    it('rejects creating a second customer with an account number already in use for the same distributor', async () => {
+      await createCustomer(DIST_A, 'First Co').then((rel) =>
+        prisma.tradeRelationship.update({ where: { id: rel.id }, data: { accountNumber: 'ACC-DUP' } }),
+      );
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Second Co', accountNumber: 'ACC-DUP' });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('allows the same account number to be reused across different distributors', async () => {
+      await createCustomer(DIST_A, 'Dist A Co').then((rel) =>
+        prisma.tradeRelationship.update({ where: { id: rel.id }, data: { accountNumber: 'ACC-SHARED' } }),
+      );
+      const orgB = await prisma.organisation.create({ data: { name: 'Dist B Co', type: OrganisationType.TRADE_CUSTOMER } });
+
+      // The unique index is scoped by distributorId, so the same code under
+      // a different distributor must not collide.
+      await expect(
+        prisma.tradeRelationship.create({
+          data: { distributorId: DIST_B, customerId: orgB.id, accountNumber: 'ACC-SHARED' },
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('rejects a duplicate account number at the database level, independent of app-level validation', async () => {
+      const first = await createCustomer(DIST_A, 'DB Level First');
+      await prisma.tradeRelationship.update({ where: { id: first.id }, data: { accountNumber: 'ACC-DB-DUP' } });
+      const org2 = await prisma.organisation.create({ data: { name: 'DB Level Second', type: OrganisationType.TRADE_CUSTOMER } });
+
+      await expect(
+        prisma.tradeRelationship.create({
+          data: { distributorId: DIST_A, customerId: org2.id, accountNumber: 'ACC-DB-DUP' },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it('allows updating a customer to keep its own existing account number unchanged', async () => {
+      const rel = await createCustomer(DIST_A, 'Self Update Co');
+      await prisma.tradeRelationship.update({ where: { id: rel.id }, data: { accountNumber: 'ACC-SELF' } });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ accountNumber: 'ACC-SELF', notes: 'still me' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.accountNumber).toBe('ACC-SELF');
+    });
+  });
 });

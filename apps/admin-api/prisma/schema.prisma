@@ -132,6 +132,22 @@ enum AccountingConnectionStatus {
   REVOKED
 }
 
+enum AccountingContactMatchStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum AccountingContactMatchMethod {
+  ACCOUNT_CODE_EXACT
+  EMAIL_EXACT
+  NAME_EXACT
+  NAME_POSTCODE
+  NAME_FUZZY
+  MANUAL
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -173,6 +189,9 @@ model Organisation {
   orderAsSessionsAsDistributor    OrderAsSession[]    @relation("OrderAsDistributor")
   orderAsSessionsAsCustomer       OrderAsSession[]    @relation("OrderAsCustomer")
   accountingConnections           AccountingConnection[]
+  externalAccountingContacts      ExternalAccountingContact[]
+  customerAccountingMappings      CustomerAccountingMapping[]
+  accountingContactMatchSuggestions AccountingContactMatchSuggestion[]
 
   @@map("organisations")
 }
@@ -344,6 +363,8 @@ model TradeRelationship {
   catalogues       CustomerCatalogue[]
   traderCustomerSettings TraderCustomerSettings?
   orderAsSessions        OrderAsSession[]
+  accountingMappings     CustomerAccountingMapping[]
+  accountingMatchSuggestions AccountingContactMatchSuggestion[]
 
   @@unique([distributorId, customerId])
   @@index([distributorId, createdAt])
@@ -541,6 +562,9 @@ model AccountingConnection {
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
   distributor              Organisation               @relation(fields: [distributorId], references: [id])
+  externalContacts         ExternalAccountingContact[]
+  customerMappings         CustomerAccountingMapping[]
+  contactMatchSuggestions  AccountingContactMatchSuggestion[]
 
   @@index([distributorId])
   @@map("accounting_connections")
@@ -559,6 +583,109 @@ model AccountingOAuthState {
   expiresAt         DateTime
 
   @@map("accounting_oauth_states")
+}
+
+// Locally cached contacts pulled from the connected accounting system (Xero
+// initially). Populated only through AccountingConnectionAdapter.listContacts
+// — "provider" plus generic field names keep a second provider a pure
+// adapter addition, nothing here is Xero-specific.
+model ExternalAccountingContact {
+  id                     String             @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  provider               AccountingProvider
+  externalContactId      String
+  externalContactCode    String?
+  externalAccountNumber  String?
+  displayName            String
+  email                  String?
+  billingLine1           String?
+  billingLine2           String?
+  billingCity            String?
+  billingState           String?
+  billingPostcode        String?
+  billingCountry         String?
+  isCustomer             Boolean            @default(false)
+  isSupplier             Boolean            @default(false)
+  isArchived             Boolean            @default(false)
+  ignoredAt              DateTime?
+  lastExternalUpdatedAt  DateTime?
+  lastSyncedAt           DateTime
+  rawProviderData        Json
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  distributor Organisation                       @relation(fields: [distributorId], references: [id])
+  connection  AccountingConnection               @relation(fields: [accountingConnectionId], references: [id])
+  // One-to-many, not one-to-one: unlinking soft-deletes (unlinkedAt) rather
+  // than hard-deleting, so a contact can accumulate historical mapping rows
+  // even though only one is ever active (unlinkedAt IS NULL) at a time.
+  mappings    CustomerAccountingMapping[]
+  suggestions AccountingContactMatchSuggestion[]
+
+  @@unique([accountingConnectionId, externalContactId])
+  @@index([distributorId, isCustomer, isArchived])
+  @@map("external_accounting_contacts")
+}
+
+// Confirmed link between a Wholo customer (TradeRelationship, in the context
+// of one distributor) and one cached external contact. Written only by an
+// explicit user action (import/confirm/match) — never by the sync/matcher,
+// regardless of match confidence.
+model CustomerAccountingMapping {
+  id                     String                        @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  tradeRelationshipId    String
+  externalContactId      String
+  matchMethod            AccountingContactMatchMethod
+  linkedByUserId         String
+  linkedAt               DateTime                      @default(now())
+  unlinkedAt             DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  distributor       Organisation              @relation(fields: [distributorId], references: [id])
+  connection         AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  tradeRelationship TradeRelationship          @relation(fields: [tradeRelationshipId], references: [id])
+  externalContact    ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
+
+  // Both uniques below are made partial (WHERE "unlinkedAt" IS NULL) by hand
+  // in the generated migration — same precedent as
+  // unique_active_accounting_connection above. An unlink-then-relink of the
+  // same pair must not collide with the closed-out row.
+  @@unique([accountingConnectionId, tradeRelationshipId])
+  @@unique([accountingConnectionId, externalContactId])
+  @@index([distributorId])
+  @@map("customer_accounting_mappings")
+}
+
+// System-suggested match awaiting human review. The matcher only ever writes
+// here; CustomerAccountingMapping rows are created exclusively by an
+// explicit confirm/match action, regardless of confidence.
+model AccountingContactMatchSuggestion {
+  id                            String                        @id @default(cuid())
+  distributorId                 String
+  accountingConnectionId        String
+  externalContactId             String
+  suggestedTradeRelationshipId  String
+  confidence                    Int
+  matchMethod                   AccountingContactMatchMethod
+  matchReason                   String
+  status                        AccountingContactMatchStatus @default(SUGGESTED)
+  reviewedByUserId              String?
+  reviewedAt                    DateTime?
+  createdAt                     DateTime                     @default(now())
+  updatedAt                     DateTime                     @updatedAt
+
+  distributor                Organisation              @relation(fields: [distributorId], references: [id])
+  connection                  AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  externalContact             ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
+  suggestedTradeRelationship TradeRelationship          @relation(fields: [suggestedTradeRelationshipId], references: [id])
+
+  @@index([distributorId, status])
+  @@index([externalContactId, status])
+  @@map("accounting_contact_match_suggestions")
 }
 
 model TraderCustomerSettings {

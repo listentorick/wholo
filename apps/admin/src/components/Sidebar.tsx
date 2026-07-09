@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { adminAccountingApi } from '@wholo/admin-api-client';
 
 interface NavItem {
   label: string;
@@ -121,10 +123,22 @@ const navItems: NavItem[] = [
 interface SidebarProps {
   onClose: () => void;
   onLogout: () => void;
+  token?: string;
 }
 
-export function Sidebar({ onClose, onLogout }: SidebarProps) {
+export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
   const pathname = usePathname();
+  const [accountingNeedsAttention, setAccountingNeedsAttention] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    // Best-effort — returns 0 (no badge) when there's no accounting
+    // connection at all, so this is safe to call unconditionally.
+    adminAccountingApi
+      .countContactsNeedingAttention(token)
+      .then((res) => setAccountingNeedsAttention(res.count))
+      .catch(() => {});
+  }, [token]);
 
   return (
     <div className="flex h-full flex-col text-sidebar-fg">
@@ -168,8 +182,12 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
                 >
                   <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
                   {item.label}
-                  {active && (
-                    <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
+                  {item.href === '/integrations' && accountingNeedsAttention > 0 ? (
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-sidebar-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-accent">
+                      {accountingNeedsAttention}
+                    </span>
+                  ) : (
+                    active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
                   )}
                 </Link>
               </li>

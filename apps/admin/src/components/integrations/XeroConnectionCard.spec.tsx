@@ -9,6 +9,7 @@ vi.mock('@wholo/admin-api-client', () => ({
     getConnection: vi.fn(),
     createXeroAuthorizationUrl: vi.fn(),
     disconnect: vi.fn(),
+    countContactsNeedingAttention: vi.fn(),
   },
 }));
 
@@ -17,12 +18,14 @@ const TOKEN = 'test-token';
 const mockGetConnection = adminAccountingApi.getConnection as ReturnType<typeof vi.fn>;
 const mockCreateAuthUrl = adminAccountingApi.createXeroAuthorizationUrl as ReturnType<typeof vi.fn>;
 const mockDisconnect = adminAccountingApi.disconnect as ReturnType<typeof vi.fn>;
+const mockCountNeedsAttention = adminAccountingApi.countContactsNeedingAttention as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   delete (window as unknown as { location?: unknown }).location;
   (window as unknown as { location: { href: string } }).location = { href: '' };
+  mockCountNeedsAttention.mockResolvedValue({ count: 0 });
 });
 
 describe('XeroConnectionCard', () => {
@@ -47,6 +50,32 @@ describe('XeroConnectionCard', () => {
     await waitFor(() => expect(screen.getByText('Acme Wines')).toBeInTheDocument());
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(screen.getByText('Disconnect')).toBeInTheDocument();
+    expect(screen.getByText('View synced data').closest('a')).toHaveAttribute('href', '/integrations/accounting');
+  });
+
+  it('shows a needs-attention badge on the View synced data link when there is a count', async () => {
+    mockGetConnection.mockResolvedValue({
+      provider: 'XERO',
+      status: 'CONNECTED',
+      externalOrganisationName: 'Acme Wines',
+      connectedAt: '2026-01-01T00:00:00.000Z',
+      lastSyncedAt: null,
+    });
+    mockCountNeedsAttention.mockResolvedValue({ count: 4 });
+
+    render(<XeroConnectionCard token={TOKEN} />);
+
+    await waitFor(() => expect(mockCountNeedsAttention).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(screen.getByText('4')).toBeInTheDocument());
+  });
+
+  it('does not fetch or show a needs-attention count when not connected', async () => {
+    mockGetConnection.mockResolvedValue(undefined);
+    render(<XeroConnectionCard token={TOKEN} />);
+
+    await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
+    expect(mockCountNeedsAttention).not.toHaveBeenCalled();
+    expect(screen.queryByText('View synced data')).not.toBeInTheDocument();
   });
 
   it('shows a load error banner when the status fetch fails', async () => {

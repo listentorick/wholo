@@ -301,6 +301,44 @@ describe('AdminCustomersService', () => {
         NotFoundException,
       );
     });
+
+    it('throws ConflictException when the account number is already used by another customer', async () => {
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => {
+        mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-existing' });
+        return fn({
+          organisation: { create: mockPrisma.organisation.create },
+          tradeRelationship: { create: mockPrisma.tradeRelationship.create, findFirst: mockPrisma.tradeRelationship.findFirst },
+          customerInvitation: { create: mockPrisma.customerInvitation.create },
+        });
+      });
+
+      await expect(
+        service.create('dist-1', { name: 'New Co', accountNumber: 'ACC-001' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.tradeRelationship.create).not.toHaveBeenCalled();
+    });
+
+    it('does not check for account-number conflicts when none is supplied', async () => {
+      const rel = makeRel();
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => {
+        mockPrisma.organisation.create.mockResolvedValue({ id: 'org-1' });
+        mockPrisma.tradeRelationship.create.mockResolvedValue({ id: 'rel-1' });
+        mockPrisma.tradeRelationship.findUniqueOrThrow.mockResolvedValue(rel);
+        mockPrisma.tradeRelationship.findFirst.mockClear();
+        return fn({
+          organisation: { create: mockPrisma.organisation.create },
+          tradeRelationship: {
+            create: mockPrisma.tradeRelationship.create,
+            findFirst: mockPrisma.tradeRelationship.findFirst,
+            findUniqueOrThrow: mockPrisma.tradeRelationship.findUniqueOrThrow,
+          },
+          customerInvitation: { create: mockPrisma.customerInvitation.create },
+        });
+      });
+
+      await service.create('dist-1', { name: 'No Account Number' });
+      expect(mockPrisma.tradeRelationship.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   // ── update ──────────────────────────────────────────────────────────────────
@@ -321,6 +359,28 @@ describe('AdminCustomersService', () => {
       await expect(service.update('rel-1', 'dist-2', { notes: 'x' })).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('throws ConflictException when the account number is already used by a different customer', async () => {
+      mockPrisma.tradeRelationship.findFirst
+        .mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' })
+        .mockResolvedValueOnce({ id: 'rel-other' });
+
+      await expect(
+        service.update('rel-1', 'dist-1', { accountNumber: 'ACC-001' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('excludes the relationship itself when checking for account-number conflicts', async () => {
+      mockPrisma.tradeRelationship.findFirst
+        .mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' })
+        .mockResolvedValueOnce(null) // conflict check: no other relationship has it
+        .mockResolvedValueOnce(makeRel({ accountNumber: 'ACC-001' })); // findOne after update
+      mockPrisma.$transaction.mockResolvedValue([{}, {}]);
+
+      const result = await service.update('rel-1', 'dist-1', { accountNumber: 'ACC-001' });
+      expect(result.accountNumber).toBe('ACC-001');
     });
   });
 

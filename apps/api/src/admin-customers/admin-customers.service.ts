@@ -207,6 +207,16 @@ export class AdminCustomersService {
         orgId = org.id;
       }
 
+      if (dto.accountNumber) {
+        const conflict = await tx.tradeRelationship.findFirst({
+          where: { distributorId, accountNumber: dto.accountNumber, deletedAt: null },
+          select: { id: true },
+        });
+        if (conflict) {
+          throw new ConflictException('This account number is already in use by another customer');
+        }
+      }
+
       const relationship = await tx.tradeRelationship.create({
         data: {
           distributorId,
@@ -259,6 +269,16 @@ export class AdminCustomersService {
       select: { id: true, customerId: true },
     });
     if (!rel) throw new NotFoundException('Customer not found');
+
+    if (dto.accountNumber) {
+      const conflict = await this.prisma.tradeRelationship.findFirst({
+        where: { distributorId, accountNumber: dto.accountNumber, deletedAt: null, id: { not: id } },
+        select: { id: true },
+      });
+      if (conflict) {
+        throw new ConflictException('This account number is already in use by another customer');
+      }
+    }
 
     await this.prisma.$transaction([
       this.prisma.organisation.update({

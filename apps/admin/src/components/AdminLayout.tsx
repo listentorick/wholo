@@ -7,7 +7,7 @@ import { TopBar } from './TopBar';
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { logout } = useAuth();
+  const { logout, accessToken } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-surface">
@@ -29,7 +29,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         ].join(' ')}
         style={{ width: 'var(--sidebar-width)' }}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} onLogout={logout} />
+        <Sidebar onClose={() => setSidebarOpen(false)} onLogout={logout} token={accessToken ?? undefined} />
       </aside>
 
       {/* Main content area */}

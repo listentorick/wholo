@@ -2,16 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { XeroAccountingAdapter } from './xero-connection.adapter';
 
+const mockGetContacts = jest.fn();
+
 const mockXeroClientInstance = {
   buildConsentUrl: jest.fn(),
   apiCallback: jest.fn(),
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
   refreshWithRefreshToken: jest.fn(),
+  accountingApi: { getContacts: mockGetContacts },
 };
 
 jest.mock('xero-node', () => ({
   XeroClient: jest.fn().mockImplementation(() => mockXeroClientInstance),
+  Contact: { ContactStatusEnum: { ACTIVE: 'ACTIVE', ARCHIVED: 'ARCHIVED', GDPRREQUEST: 'GDPRREQUEST' } },
+  Address: { AddressTypeEnum: { POBOX: 'POBOX', STREET: 'STREET' } },
 }));
 
 const makeConfig = () => ({
@@ -114,5 +119,110 @@ describe('XeroAccountingAdapter', () => {
       'old-refresh',
     );
     expect(refreshed.accessToken).toBe('new-access');
+  });
+
+  describe('listContacts', () => {
+    const tokenSet = {
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: new Date().toISOString(),
+      scope: 'openid accounting.contacts',
+    };
+
+    it('maps xero-node contacts to the provider-neutral shape', async () => {
+      mockGetContacts.mockResolvedValueOnce({
+        body: {
+          contacts: [
+            {
+              contactID: 'contact-1',
+              contactNumber: 'CODE-1',
+              accountNumber: 'ACC-1',
+              name: 'Acme Wines',
+              emailAddress: 'billing@acme.example',
+              isCustomer: true,
+              isSupplier: false,
+              contactStatus: 'ACTIVE',
+              updatedDateUTC: '2026-01-01T00:00:00.000Z',
+              addresses: [
+                {
+                  addressType: 'STREET',
+                  addressLine1: '1 Vine Street',
+                  city: 'London',
+                  postalCode: 'E1 1AA',
+                  country: 'UK',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const contacts = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(contacts).toEqual([
+        {
+          externalId: 'contact-1',
+          code: 'CODE-1',
+          accountNumber: 'ACC-1',
+          displayName: 'Acme Wines',
+          email: 'billing@acme.example',
+          billingLine1: '1 Vine Street',
+          billingLine2: undefined,
+          billingCity: 'London',
+          billingState: undefined,
+          billingPostcode: 'E1 1AA',
+          billingCountry: 'UK',
+          isCustomer: true,
+          isSupplier: false,
+          isArchived: false,
+          updatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+          raw: expect.any(Object),
+        },
+      ]);
+      expect(mockXeroClientInstance.setTokenSet).toHaveBeenCalled();
+      expect(mockGetContacts).toHaveBeenCalledWith(
+        'tenant-1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        1,
+        true,
+      );
+    });
+
+    it('marks archived contacts based on contactStatus', async () => {
+      mockGetContacts.mockResolvedValueOnce({
+        body: { contacts: [{ contactID: 'c-2', name: 'Old Co', contactStatus: 'ARCHIVED' }] },
+      });
+
+      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+      expect(contact.isArchived).toBe(true);
+    });
+
+    it('paginates until a short page is returned', async () => {
+      const fullPage = Array.from({ length: 100 }, (_, i) => ({
+        contactID: `c-${i}`,
+        name: `Contact ${i}`,
+      }));
+      mockGetContacts
+        .mockResolvedValueOnce({ body: { contacts: fullPage } })
+        .mockResolvedValueOnce({ body: { contacts: [{ contactID: 'c-last', name: 'Last' }] } });
+
+      const contacts = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(contacts).toHaveLength(101);
+      expect(mockGetContacts).toHaveBeenCalledTimes(2);
+      expect(mockGetContacts).toHaveBeenNthCalledWith(2, 'tenant-1', undefined, undefined, undefined, undefined, 2, true);
+    });
+
+    it('passes modifiedSince through to getContacts', async () => {
+      mockGetContacts.mockResolvedValueOnce({ body: { contacts: [] } });
+      const since = new Date('2026-01-01T00:00:00.000Z');
+
+      await adapter.listContacts(tokenSet, 'tenant-1', since);
+
+      expect(mockGetContacts).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, undefined, 1, true);
+    });
   });
 });

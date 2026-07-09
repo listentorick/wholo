@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
@@ -15,6 +16,7 @@ export function XeroConnectionCard({ token }: Props) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
 
   useEffect(() => {
     adminAccountingApi
@@ -23,6 +25,19 @@ export function XeroConnectionCard({ token }: Props) {
       .catch(() => setLoadError('Failed to load connection status.'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const isConnected = connection?.status === 'CONNECTED';
+  const isError = connection?.status === 'ERROR';
+
+  useEffect(() => {
+    if (!isConnected) return;
+    adminAccountingApi
+      .countContactsNeedingAttention(token)
+      .then((res) => setNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't show if this fails.
+      });
+  }, [isConnected, token]);
 
   async function handleConnect() {
     setActionError(null);
@@ -43,6 +58,7 @@ export function XeroConnectionCard({ token }: Props) {
     try {
       await adminAccountingApi.disconnect(token);
       setConnection(null);
+      setNeedsAttentionCount(0);
     } catch {
       setActionError('Failed to disconnect. Please try again.');
     } finally {
@@ -50,15 +66,16 @@ export function XeroConnectionCard({ token }: Props) {
     }
   }
 
-  const isConnected = connection?.status === 'CONNECTED';
-  const isError = connection?.status === 'ERROR';
-
   return (
     <div className="rounded-lg border border-border bg-white p-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold text-text">Xero</h2>
-          <p className="mt-0.5 text-xs text-muted">Sync invoicing with your Xero organisation.</p>
+        <div className="flex items-start gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logos/xero.png" alt="" className="mt-0.5 h-8 w-8 shrink-0 rounded-full" />
+          <div>
+            <h2 className="text-sm font-semibold text-text">Xero</h2>
+            <p className="mt-0.5 text-xs text-muted">Sync invoicing with your Xero organisation.</p>
+          </div>
         </div>
         {isConnected && (
           <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
@@ -102,14 +119,28 @@ export function XeroConnectionCard({ token }: Props) {
               <dd>{new Date(connection.connectedAt).toLocaleDateString()}</dd>
             </div>
           </dl>
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[hsl(var(--color-border)/10%)] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/integrations/accounting"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+            >
+              View synced data
+              {needsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold">
+                  {needsAttentionCount}
+                </span>
+              )}
+              <span aria-hidden>→</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[hsl(var(--color-border)/10%)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="mt-4">

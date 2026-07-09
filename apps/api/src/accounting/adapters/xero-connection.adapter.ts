@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { XeroClient } from 'xero-node';
+import { Address, Contact, XeroClient } from 'xero-node';
 import {
   AccountingConnectionAdapter,
+  AccountingExternalContact,
   AccountingExternalOrganisation,
   AccountingTokenSet,
 } from './accounting-connection-adapter.interface';
@@ -74,6 +75,59 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     const client = this.buildClient();
     const refreshed = await client.refreshWithRefreshToken(this.clientId, this.clientSecret, tokenSet.refreshToken);
     return this.toAccountingTokenSet(refreshed);
+  }
+
+  async listContacts(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    modifiedSince?: Date,
+  ): Promise<AccountingExternalContact[]> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    const contacts: Contact[] = [];
+    let page = 1;
+    // xero-node paginates at 100 contacts/page; loop until a short page ends it.
+    for (;;) {
+      const { body } = await client.accountingApi.getContacts(
+        externalOrganisationId,
+        modifiedSince,
+        undefined, // where
+        undefined, // order
+        undefined, // iDs
+        page,
+        true, // includeArchived — Archived is a status this feature surfaces
+      );
+      const batch = body.contacts ?? [];
+      contacts.push(...batch);
+      if (batch.length < 100) break;
+      page += 1;
+    }
+    return contacts.map((c) => this.toAccountingExternalContact(c));
+  }
+
+  private toAccountingExternalContact(contact: Contact): AccountingExternalContact {
+    // Xero has no distinct "billing address" type — STREET is the closest
+    // equivalent to a postal/billing address; POBOX is the fallback.
+    const address =
+      contact.addresses?.find((a) => a.addressType === Address.AddressTypeEnum.STREET) ?? contact.addresses?.[0];
+    return {
+      externalId: contact.contactID ?? '',
+      code: contact.contactNumber || undefined,
+      accountNumber: contact.accountNumber || undefined,
+      displayName: contact.name ?? '',
+      email: contact.emailAddress || undefined,
+      billingLine1: address?.addressLine1 || undefined,
+      billingLine2: address?.addressLine2 || undefined,
+      billingCity: address?.city || undefined,
+      billingState: address?.region || undefined,
+      billingPostcode: address?.postalCode || undefined,
+      billingCountry: address?.country || undefined,
+      isCustomer: !!contact.isCustomer,
+      isSupplier: !!contact.isSupplier,
+      isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED,
+      updatedAt: contact.updatedDateUTC ? new Date(contact.updatedDateUTC).toISOString() : undefined,
+      raw: contact,
+    };
   }
 
   private toAccountingTokenSet(tokenSet: {
