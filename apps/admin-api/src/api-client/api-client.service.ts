@@ -24,13 +24,30 @@ export class ApiClientService {
       },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
+    return this.parseResponse<T>(res);
+  }
 
+  // Text-then-parse rather than res.json(): a void upstream action (e.g. the
+  // accounting confirm/ignore/unlink endpoints) legitimately responds 201
+  // with an empty body, and res.json() on an empty body throws — turning a
+  // success into a 500 after the upstream side effect already committed.
+  private async parseResponse<T>(res: Response): Promise<T> {
     if (res.status === 204) return undefined as T;
 
-    const data = await res.json();
+    const text = await res.text();
+    let data: unknown;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = undefined;
+      }
+    }
+
     if (!res.ok) {
-      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
-      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
+      const d = data as { detail?: unknown; message?: unknown } | undefined;
+      const raw = d?.detail ?? d?.message ?? `Request failed: ${res.status}`;
+      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : (raw as string), res.status);
     }
     return data as T;
   }
@@ -68,15 +85,7 @@ export class ApiClientService {
       },
       body: formData,
     });
-
-    if (res.status === 204) return undefined as T;
-
-    const data = await res.json();
-    if (!res.ok) {
-      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
-      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
-    }
-    return data as T;
+    return this.parseResponse<T>(res);
   }
 
   async postAnonymous<T>(path: string, body?: unknown): Promise<T> {
@@ -86,12 +95,6 @@ export class ApiClientService {
       headers: { 'Content-Type': 'application/json' },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
-    if (res.status === 204) return undefined as T;
-    const data = await res.json();
-    if (!res.ok) {
-      const raw = data?.detail ?? data?.message ?? `Request failed: ${res.status}`;
-      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : raw, res.status);
-    }
-    return data as T;
+    return this.parseResponse<T>(res);
   }
 }

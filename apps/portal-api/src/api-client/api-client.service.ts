@@ -31,15 +31,23 @@ export class ApiClientService {
 
     if (res.status === 204) return undefined as T;
 
+    // Text-then-parse rather than res.json(): a void upstream action can
+    // legitimately respond 2xx with an empty body, and res.json() on an
+    // empty body throws — previously surfacing a success as a 502 after the
+    // upstream side effect already committed. A NON-empty body that isn't
+    // JSON is still a genuine upstream fault → 502.
+    const text = await res.text();
     let data: unknown;
-    try {
-      data = await res.json();
-    } catch {
-      throw new HttpException(`Upstream error: ${res.status}`, HttpStatus.BAD_GATEWAY);
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new HttpException(`Upstream error: ${res.status}`, HttpStatus.BAD_GATEWAY);
+      }
     }
 
     if (!res.ok) {
-      const d = data as Record<string, unknown>;
+      const d = data as Record<string, unknown> | undefined;
       const message = d?.['message'] ?? `Request failed: ${res.status}`;
       throw new HttpException(
         Array.isArray(message) ? message.join(', ') : (message as string),

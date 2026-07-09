@@ -47,5 +47,9 @@ export async function apiFetch<T>(
     throw new ApiError(problem, res.status);
   }
 
-  return res.json() as Promise<T>;
+  // Text-then-parse rather than res.json(): void actions legitimately
+  // respond 2xx with an empty body, and res.json() on an empty body throws —
+  // surfacing a success as a failure.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }

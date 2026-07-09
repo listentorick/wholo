@@ -40,5 +40,9 @@ export async function apiFetch<T>(
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  // Text-then-parse rather than res.json(): void actions (e.g. accounting
+  // confirm/ignore/unlink) legitimately respond 2xx with an empty body, and
+  // res.json() on an empty body throws — surfacing a success as a failure.
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
