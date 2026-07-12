@@ -58,7 +58,7 @@ Solid arrows = request traffic; dotted = auxiliary (JWKS fetches, images, mail).
 | `portal.<domain>` | `wholo-portal-api:3010` | Trade customers' browsers | Portal pages + its BFF endpoints (`/api/v1/*`, same origin) |
 | `admin.<domain>` | `wholo-admin-api:3020` | Distributor staff browsers | Admin pages + its BFF endpoints |
 | `auth.<domain>` | `wholo-keycloak:8080` | Browsers (redirects from both frontends) | Keycloak login page, PKCE flow, token endpoint |
-| `api.<domain>` | `wholo-api:3001` | *Nobody, currently* | Unused by browser flows (BFFs proxy internally); reserved for future webhooks (e.g. Xero) |
+| `api.<domain>` | `wholo-api:3001` | *Nobody, currently* | **Not exposed on live** (no `ingress.hosts.api`, no DNS record) — BFFs proxy internally. Add the host + A record only if future webhooks (e.g. Xero) need it |
 
 Asset images are served to the browser directly from R2 (`R2_PUBLIC_BASE_URL`),
 outside the cluster.
@@ -110,7 +110,7 @@ sequenceDiagram
 
 ## Changing the domain
 
-Five values in `values.live.yaml` (the four `ingress.hosts.*` + the URL trio:
+The values in `values.live.yaml` (the `ingress.hosts.*` + the URL trio:
 `api.portalUrl`/`adminUrl`, `keycloak.adminClientUrl`/`portalClientUrl`,
 `keycloak.hostname`), plus the `LIVE_KEYCLOAK_URL` repo variable — then
 rebuild images and wipe the namespace so the realm re-imports with the new

@@ -43,6 +43,16 @@ api:
     publicBaseUrl: "CHANGE_ME"
     accessKeyId: "CHANGE_ME"
     secretAccessKey: "CHANGE_ME"
+  xero:
+    clientId: "CHANGE_ME"
+    clientSecret: "CHANGE_ME"
+    # Must be registered EXACTLY (https, host, path) in the Xero developer
+    # app. This is admin-api's public callback route via the admin ingress
+    # host — never a route on apps/api (see xero-connection.adapter.ts).
+    redirectUri: "https://admin.<domain>/api/v1/accounting/xero/callback"
+  # 32-byte key, base64-encoded (openssl rand -base64 32) — encrypts stored
+  # accounting OAuth tokens at rest. Changing it orphans stored tokens.
+  accountingTokenEncryptionKey: "CHANGE_ME"
 
 portalApi:
   image:
@@ -90,5 +100,8 @@ ingress:
   hosts:
     portal: portal.<domain>
     admin: admin.<domain>
-    api: api.<domain>
     auth: auth.<domain>
+    # apps/api is deliberately not exposed publicly — BFFs reach it via
+    # cluster DNS. Only add an api host (plus its DNS A record) if external
+    # webhooks ever need it:
+    # api: api.<domain>
