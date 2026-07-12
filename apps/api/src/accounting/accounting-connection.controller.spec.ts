@@ -6,6 +6,7 @@ import { AccountingConnectionService } from './accounting-connection.service';
 const mockService = {
   getConnectionStatus: jest.fn(),
   createAuthorizationUrl: jest.fn(),
+  updateConnectionSettings: jest.fn(),
   disconnect: jest.fn(),
 };
 
@@ -50,6 +51,22 @@ describe('AccountingConnectionController', () => {
       const result = await controller.getConnection('dist-1', res);
 
       expect(res.status).not.toHaveBeenCalled();
+      expect(result).toBe(status);
+    });
+  });
+
+  describe('updateConnectionSettings', () => {
+    it('forwards the path distributorId and settings body to the service', async () => {
+      const status = { invoiceExportTargetStatus: 'AUTHORISED' };
+      mockService.updateConnectionSettings.mockResolvedValue(status);
+
+      const result = await controller.updateConnectionSettings('dist-1', {
+        invoiceExportTargetStatus: 'AUTHORISED' as never,
+      });
+
+      expect(mockService.updateConnectionSettings).toHaveBeenCalledWith('dist-1', {
+        invoiceExportTargetStatus: 'AUTHORISED',
+      });
       expect(result).toBe(status);
     });
   });

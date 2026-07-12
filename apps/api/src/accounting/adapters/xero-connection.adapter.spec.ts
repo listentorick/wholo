@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { XeroAccountingAdapter } from './xero-connection.adapter';
+import { AccountingProviderError } from './accounting-provider.error';
 
 const mockGetContacts = jest.fn();
 const mockGetItems = jest.fn();
+const mockCreateInvoices = jest.fn();
 
 const mockXeroClientInstance = {
   buildConsentUrl: jest.fn(),
@@ -11,13 +13,19 @@ const mockXeroClientInstance = {
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
   refreshWithRefreshToken: jest.fn(),
-  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems },
+  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices },
 };
 
 jest.mock('xero-node', () => ({
   XeroClient: jest.fn().mockImplementation(() => mockXeroClientInstance),
   Contact: { ContactStatusEnum: { ACTIVE: 'ACTIVE', ARCHIVED: 'ARCHIVED', GDPRREQUEST: 'GDPRREQUEST' } },
   Address: { AddressTypeEnum: { POBOX: 'POBOX', STREET: 'STREET' } },
+  Invoice: {
+    TypeEnum: { ACCREC: 'ACCREC', ACCPAY: 'ACCPAY' },
+    StatusEnum: { DRAFT: 'DRAFT', SUBMITTED: 'SUBMITTED', AUTHORISED: 'AUTHORISED', PAID: 'PAID' },
+  },
+  CurrencyCode: { GBP: 'GBP', EUR: 'EUR', USD: 'USD' },
+  LineAmountTypes: { Exclusive: 'Exclusive', Inclusive: 'Inclusive', NoTax: 'NoTax' },
 }));
 
 const makeConfig = () => ({
@@ -323,6 +331,172 @@ describe('XeroAccountingAdapter', () => {
       await adapter.listProducts(tokenSet, 'tenant-1', since);
 
       expect(mockGetItems).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, 4);
+    });
+  });
+
+  describe('hasInvoiceCreationScope', () => {
+    it('accepts the granular accounting.invoices scope', () => {
+      expect(adapter.hasInvoiceCreationScope('openid accounting.invoices offline_access')).toBe(true);
+    });
+
+    it('accepts the legacy broad accounting.transactions scope (pre-granular-cutover apps)', () => {
+      expect(adapter.hasInvoiceCreationScope('openid accounting.transactions offline_access')).toBe(true);
+    });
+
+    it('rejects a scope set without invoice access (pre-Phase-4 connections)', () => {
+      expect(
+        adapter.hasInvoiceCreationScope('openid profile email accounting.contacts accounting.settings offline_access'),
+      ).toBe(false);
+    });
+  });
+
+  describe('createInvoice', () => {
+    const tokenSet = {
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: new Date().toISOString(),
+      scope: 'openid accounting.transactions',
+    };
+
+    const request = {
+      externalContactId: 'contact-1',
+      reference: 'ORD-1001',
+      currency: 'GBP',
+      issueDate: '2026-07-09',
+      targetStatus: 'DRAFT' as const,
+      lines: [
+        {
+          description: 'Cabernet Sauvignon 2023',
+          quantity: 6,
+          unitPrice: '12.34',
+          externalItemCode: 'CAB-SAUV-001',
+          taxCode: 'OUTPUT2',
+          accountCode: '200',
+        },
+        { description: 'Unmapped Merlot', quantity: 2, unitPrice: '9.99' },
+      ],
+    };
+
+    const createdInvoice = {
+      invoiceID: 'inv-1',
+      invoiceNumber: 'INV-0042',
+      status: 'DRAFT',
+    };
+
+    it('maps the neutral request to a Xero ACCREC invoice with the idempotency key', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [createdInvoice] } });
+
+      await adapter.createInvoice(tokenSet, 'tenant-1', request, 'export-1:1');
+
+      expect(mockXeroClientInstance.setTokenSet).toHaveBeenCalled();
+      expect(mockCreateInvoices).toHaveBeenCalledWith(
+        'tenant-1',
+        {
+          invoices: [
+            {
+              type: 'ACCREC',
+              contact: { contactID: 'contact-1' },
+              date: '2026-07-09',
+              reference: 'ORD-1001',
+              currencyCode: 'GBP',
+              lineAmountTypes: 'Exclusive',
+              status: 'DRAFT',
+              lineItems: [
+                {
+                  description: 'Cabernet Sauvignon 2023',
+                  quantity: 6,
+                  unitAmount: 12.34,
+                  itemCode: 'CAB-SAUV-001',
+                  taxType: 'OUTPUT2',
+                  accountCode: '200',
+                },
+                { description: 'Unmapped Merlot', quantity: 2, unitAmount: 9.99 },
+              ],
+            },
+          ],
+        },
+        true,
+        4,
+        'export-1:1',
+      );
+    });
+
+    it('maps each target status onto the matching Xero status', async () => {
+      for (const targetStatus of ['SUBMITTED', 'AUTHORISED'] as const) {
+        mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [createdInvoice] } });
+        await adapter.createInvoice(tokenSet, 'tenant-1', { ...request, targetStatus }, 'key');
+        const sent = mockCreateInvoices.mock.calls.at(-1)![1].invoices[0];
+        expect(sent.status).toBe(targetStatus);
+      }
+    });
+
+    it('returns the created invoice identifiers as a provider-neutral result', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [createdInvoice] } });
+
+      const result = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key');
+
+      expect(result).toEqual({
+        externalInvoiceId: 'inv-1',
+        externalInvoiceNumber: 'INV-0042',
+        externalInvoiceStatus: 'DRAFT',
+        raw: createdInvoice,
+      });
+    });
+
+    it('tolerates a missing invoice number (orgs that number on approval)', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({
+        body: { invoices: [{ invoiceID: 'inv-2', status: 'DRAFT' }] },
+      });
+
+      const result = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key');
+
+      expect(result.externalInvoiceId).toBe('inv-2');
+      expect(result.externalInvoiceNumber).toBeUndefined();
+    });
+
+    it('throws a permanent AccountingProviderError when the response contains no invoice', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [] } });
+
+      await expect(adapter.createInvoice(tokenSet, 'tenant-1', request, 'key')).rejects.toMatchObject({
+        name: 'AccountingProviderError',
+        transient: false,
+      });
+    });
+
+    it('classifies validation failures (400) as permanent and surfaces Xero validation messages', async () => {
+      mockCreateInvoices.mockRejectedValueOnce({
+        response: {
+          statusCode: 400,
+          body: {
+            Elements: [{ ValidationErrors: [{ Message: 'Account code 999 is not valid' }] }],
+          },
+        },
+      });
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(false);
+      expect(err.message).toContain('Account code 999 is not valid');
+    });
+
+    it('classifies rate limits (429) and provider faults (5xx) as transient', async () => {
+      for (const statusCode of [429, 500, 503]) {
+        mockCreateInvoices.mockRejectedValueOnce({ response: { statusCode } });
+        const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+        expect(err).toBeInstanceOf(AccountingProviderError);
+        expect(err.transient).toBe(true);
+      }
+    });
+
+    it('classifies errors without an HTTP response (network faults) as transient', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(new Error('socket hang up'));
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(true);
+      expect(err.message).toContain('socket hang up');
     });
   });
 });

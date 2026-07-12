@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
 import { adminOrdersApi } from '@wholo/admin-api-client';
 import type { Order } from '@wholo/types';
 import { OrderStatus, AcceptedByActorType } from '@wholo/types';
@@ -322,6 +323,11 @@ export default function OrderDetailPage() {
               )}
             </p>
           </div>
+
+          {/* Accounting invoice export state */}
+          {order.invoiceExport && accessToken && (
+            <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} token={accessToken} />
+          )}
 
           {/* Order lines */}
           <div className="rounded-lg border border-border bg-white overflow-hidden">

@@ -1,25 +1,45 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Address, Contact, Item, XeroClient } from 'xero-node';
+import { Address, Contact, CurrencyCode, Invoice, Item, LineAmountTypes, LineItem, XeroClient } from 'xero-node';
 import {
   AccountingConnectionAdapter,
   AccountingExternalContact,
   AccountingExternalOrganisation,
   AccountingExternalProduct,
+  AccountingInvoiceRequest,
+  AccountingInvoiceResult,
+  AccountingInvoiceTargetStatusValue,
   AccountingTokenSet,
 } from './accounting-connection-adapter.interface';
+import { AccountingProviderError } from './accounting-provider.error';
 
 // Xero requests all scopes up front (including contacts/settings, unused
 // until Phases 2-3) because Xero scopes cannot be silently expanded after
 // the distributor has consented — asking now avoids a second consent round trip.
+// accounting.invoices (invoice creation, Phase 4) was added later, so
+// connections consented before it must reconnect — the invoice export worker
+// checks the connection's granted scopes and fails with SCOPE_MISSING rather
+// than calling Xero with a token that would 403.
+//
+// accounting.invoices is one of Xero's granular scopes: the broad
+// accounting.transactions scope is deprecated and apps created on/after
+// 2026-03-02 get error=invalid_scope if they request it at all.
+// https://developer.xero.com/faq/granular-scopes
 const XERO_SCOPES = [
   'openid',
   'profile',
   'email',
   'accounting.contacts',
   'accounting.settings',
+  'accounting.invoices',
   'offline_access',
 ];
+
+const XERO_INVOICE_STATUS: Record<AccountingInvoiceTargetStatusValue, Invoice.StatusEnum> = {
+  DRAFT: Invoice.StatusEnum.DRAFT,
+  SUBMITTED: Invoice.StatusEnum.SUBMITTED,
+  AUTHORISED: Invoice.StatusEnum.AUTHORISED,
+};
 
 @Injectable()
 export class XeroAccountingAdapter implements AccountingConnectionAdapter {
@@ -125,6 +145,108 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       4, // unitdp
     );
     return (body.items ?? []).map((item) => this.toAccountingExternalProduct(item));
+  }
+
+  hasInvoiceCreationScope(grantedScopes: string): boolean {
+    // The legacy broad accounting.transactions scope also grants invoice
+    // creation — connections on apps grandfathered before Xero's granular
+    // scopes cutover (2026-03-02) may still carry it.
+    const scopes = grantedScopes.split(' ');
+    return scopes.includes('accounting.invoices') || scopes.includes('accounting.transactions');
+  }
+
+  async createInvoice(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    request: AccountingInvoiceRequest,
+    idempotencyKey: string,
+  ): Promise<AccountingInvoiceResult> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+
+    const lineItems: LineItem[] = request.lines.map((line) => ({
+      description: line.description,
+      quantity: line.quantity,
+      // Decimal string → number only here, at the SDK boundary; unitdp=4
+      // below keeps four decimal places rather than rounding to two.
+      unitAmount: Number(line.unitPrice),
+      ...(line.externalItemCode ? { itemCode: line.externalItemCode } : {}),
+      ...(line.taxCode ? { taxType: line.taxCode } : {}),
+      ...(line.accountCode ? { accountCode: line.accountCode } : {}),
+    }));
+
+    const invoice: Invoice = {
+      type: Invoice.TypeEnum.ACCREC,
+      contact: { contactID: request.externalContactId },
+      date: request.issueDate,
+      reference: request.reference,
+      currencyCode: CurrencyCode[request.currency as keyof typeof CurrencyCode],
+      // Wholo order prices are tax-exclusive (tax is carried separately on
+      // the order); Xero derives the tax from each line's taxType or, for
+      // unmapped lines, the account default.
+      lineAmountTypes: LineAmountTypes.Exclusive,
+      status: XERO_INVOICE_STATUS[request.targetStatus],
+      lineItems,
+    };
+
+    let body;
+    try {
+      ({ body } = await client.accountingApi.createInvoices(
+        externalOrganisationId,
+        { invoices: [invoice] },
+        true, // summarizeErrors — all-or-nothing, a validation failure throws
+        4, // unitdp
+        idempotencyKey,
+      ));
+    } catch (err) {
+      throw this.toProviderError(err);
+    }
+
+    const created = body.invoices?.[0];
+    if (!created?.invoiceID) {
+      throw new AccountingProviderError('Xero returned no invoice for the create request', false);
+    }
+    return {
+      externalInvoiceId: created.invoiceID,
+      externalInvoiceNumber: created.invoiceNumber || undefined,
+      // The generated enums are string-valued at runtime ('DRAFT' etc.)
+      // despite their numeric-looking declarations.
+      externalInvoiceStatus: created.status != null ? String(created.status) : undefined,
+      raw: created,
+    };
+  }
+
+  // Xero SDK errors carry the HTTP response on err.response; classify by
+  // status: rate limits (429) and Xero-side faults (5xx) are worth retrying,
+  // validation (400) and authorisation (401/403) failures are not — they need
+  // user action (fix mappings/codes, or reconnect). No response = network
+  // fault = transient.
+  private toProviderError(err: unknown): AccountingProviderError {
+    const statusCode = (err as { response?: { statusCode?: number; status?: number } })?.response?.statusCode
+      ?? (err as { response?: { status?: number } })?.response?.status;
+    const transient = statusCode == null || statusCode === 429 || statusCode >= 500;
+    const detail = this.extractXeroErrorDetail(err);
+    const message = detail
+      ? `Xero rejected the invoice: ${detail}`
+      : statusCode
+        ? `Xero request failed with HTTP ${statusCode}`
+        : `Xero request failed: ${err instanceof Error ? err.message : String(err)}`;
+    return new AccountingProviderError(message, transient, err);
+  }
+
+  private extractXeroErrorDetail(err: unknown): string | undefined {
+    const body = (err as { response?: { body?: unknown } })?.response?.body as
+      | {
+          Message?: string;
+          Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>;
+        }
+      | undefined;
+    const validationMessages = (body?.Elements ?? [])
+      .flatMap((el) => el.ValidationErrors ?? [])
+      .map((v) => v.Message)
+      .filter((m): m is string => !!m);
+    if (validationMessages.length > 0) return validationMessages.join('; ');
+    return body?.Message;
   }
 
   private toAccountingExternalProduct(item: Item): AccountingExternalProduct {

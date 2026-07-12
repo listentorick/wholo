@@ -47,6 +47,7 @@ const makeOrder = (overrides = {}) => ({
   cancellationReason: null,
   customer: { id: 'customer-1', name: 'Test Customer' },
   lines: [],
+  invoiceExports: [],
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   ...overrides,
@@ -139,6 +140,50 @@ describe('AdminOrdersService', () => {
     it('throws NotFoundException when order belongs to different distributor', async () => {
       mockPrisma.order.findFirst.mockResolvedValue(null);
       await expect(service.getOrder('order-1', 'dist-2')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns invoiceExport null when the order has no accounting export', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder());
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.invoiceExport).toBeNull();
+    });
+
+    it('maps the latest accounting invoice export onto the order resource', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(
+        makeOrder({
+          invoiceExports: [
+            {
+              id: 'export-1',
+              provider: 'XERO',
+              status: 'COMPLETED',
+              externalInvoiceId: 'inv-1',
+              externalInvoiceNumber: 'INV-0042',
+              externalInvoiceStatus: 'DRAFT',
+              exportedAt: new Date('2026-07-09T18:45:00.000Z'),
+              errorCode: null,
+              errorMessage: null,
+              createdAt: new Date('2026-07-09T18:44:00.000Z'),
+            },
+          ],
+        }),
+      );
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.invoiceExport).toEqual({
+        id: 'export-1',
+        provider: 'XERO',
+        status: 'COMPLETED',
+        externalInvoiceId: 'inv-1',
+        externalInvoiceNumber: 'INV-0042',
+        externalInvoiceStatus: 'DRAFT',
+        exportedAt: '2026-07-09T18:45:00.000Z',
+        errorCode: null,
+        errorMessage: null,
+        createdAt: '2026-07-09T18:44:00.000Z',
+      });
     });
   });
 

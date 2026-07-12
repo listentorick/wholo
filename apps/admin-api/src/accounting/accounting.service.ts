@@ -6,6 +6,7 @@ import { MatchContactDto } from './dto/match-contact.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
+import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
 
 @Injectable()
 export class AccountingService {
@@ -17,6 +18,14 @@ export class AccountingService {
 
   createXeroAuthorizationUrl(distributorId: string, token: string) {
     return this.api.post(`/distributors/${distributorId}/accounting/connections/xero/authorization-url`, token);
+  }
+
+  updateConnectionSettings(distributorId: string, dto: UpdateConnectionSettingsDto, token: string) {
+    return this.api.patch(`/distributors/${distributorId}/accounting/connection`, token, dto);
+  }
+
+  retryInvoiceExport(distributorId: string, exportId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/invoice-exports/${exportId}/retry`, token);
   }
 
   disconnect(distributorId: string, token: string) {

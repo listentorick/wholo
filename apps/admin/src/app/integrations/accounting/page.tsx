@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
 import { ProductsTab } from '@/components/integrations/products/ProductsTab';
+import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
@@ -157,13 +158,13 @@ function AccountingPageInner() {
       {activeTab === 'products' && accessToken && (
         <ProductsTab token={accessToken} onProductsChanged={fetchProductsNeedsAttentionCount} />
       )}
-      {activeTab !== 'contacts' && activeTab !== 'products' && (
+      {activeTab === 'settings' && accessToken && (
+        <AccountingSettingsTab token={accessToken} connection={connection} onConnectionUpdated={setConnection} />
+      )}
+      {activeTab === 'invoices' && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
           <h2 className="mb-1.5 text-base font-semibold text-text">Coming soon</h2>
-          <p className="text-sm text-muted">
-            {activeTab === 'invoices' && 'Invoice export history is not available yet.'}
-            {activeTab === 'settings' && 'Accounting integration settings are not available yet.'}
-          </p>
+          <p className="text-sm text-muted">Invoice export history is not available yet.</p>
         </div>
       )}
     </AdminLayout>

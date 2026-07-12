@@ -1,10 +1,11 @@
-import { Controller, Delete, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AccountingProvider } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AccountingConnectionService } from './accounting-connection.service';
+import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -40,6 +41,15 @@ export class AccountingConnectionController {
     @Req() req: RequestWithUser,
   ) {
     return this.service.createAuthorizationUrl(distributorId, req.user.sub, AccountingProvider.XERO);
+  }
+
+  @Patch('connection')
+  @ApiOperation({ summary: 'Update settings on the distributor\'s current accounting connection' })
+  updateConnectionSettings(
+    @Param('distributorId') distributorId: string,
+    @Body() dto: UpdateConnectionSettingsDto,
+  ) {
+    return this.service.updateConnectionSettings(distributorId, dto);
   }
 
   @Delete('connection')

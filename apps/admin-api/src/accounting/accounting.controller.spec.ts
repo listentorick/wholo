@@ -5,6 +5,7 @@ import { AccountingService } from './accounting.service';
 const mockService = {
   getConnection: jest.fn(),
   createXeroAuthorizationUrl: jest.fn(),
+  updateConnectionSettings: jest.fn(),
   disconnect: jest.fn(),
   listContacts: jest.fn(),
   countContactsNeedingAttention: jest.fn(),
@@ -78,6 +79,12 @@ describe('AccountingController (BFF)', () => {
   it('disconnect resolves organisationId from req.user, never a client-supplied id', async () => {
     await controller.disconnect(mockRequest());
     expect(mockService.disconnect).toHaveBeenCalledWith('dist-1', 'token-1');
+  });
+
+  it('updateConnectionSettings resolves organisationId from req.user and forwards the settings', async () => {
+    const dto = { invoiceExportTargetStatus: 'DRAFT' } as never;
+    await controller.updateConnectionSettings(dto, mockRequest());
+    expect(mockService.updateConnectionSettings).toHaveBeenCalledWith('dist-1', dto, 'token-1');
   });
 
   it('listContacts resolves organisationId from req.user and forwards the query', async () => {

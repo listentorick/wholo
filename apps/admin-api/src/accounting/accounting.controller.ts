@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccountingService } from './accounting.service';
 import { ContactQueryDto } from './dto/contact-query.dto';
+import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
 import { MatchContactDto } from './dto/match-contact.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
@@ -29,6 +30,18 @@ export class AccountingController {
   createXeroAuthorizationUrl(@Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.createXeroAuthorizationUrl(organisationId, token);
+  }
+
+  @Patch('connection')
+  updateConnectionSettings(@Body() dto: UpdateConnectionSettingsDto, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.updateConnectionSettings(organisationId, dto, token);
+  }
+
+  @Post('invoice-exports/:exportId/retry')
+  retryInvoiceExport(@Param('exportId') exportId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.retryInvoiceExport(organisationId, exportId, token);
   }
 
   @Delete('connection')

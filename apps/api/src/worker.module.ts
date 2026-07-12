@@ -7,6 +7,7 @@ import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-r
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
 import { AccountingProductSyncScheduler } from './accounting/accounting-product-sync.scheduler';
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
+import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -15,12 +16,11 @@ import { OutboxPublisherService } from './outbox/outbox-publisher.service';
 import { PrismaModule } from './prisma/prisma.module';
 import {
   ACCOUNTING_CONTACT_SYNC_QUEUE,
+  ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
   NOTIFICATIONS_QUEUE,
-  XERO_SYNC_QUEUE,
 } from './queues/queue.constants';
 import { redisConnectionFromUrl } from './queues/redis-connection';
-import { XeroSyncModule } from './xero-sync/xero-sync.module';
 
 // Root module for the wholo-worker process (dist/worker.js) — the single
 // replica that relays outbox events onto BullMQ and runs all queue consumers.
@@ -37,14 +37,27 @@ import { XeroSyncModule } from './xero-sync/xero-sync.module';
     }),
     BullModule.registerQueue(
       { name: NOTIFICATIONS_QUEUE },
-      { name: XERO_SYNC_QUEUE },
+      {
+        name: ACCOUNTING_INVOICE_EXPORT_QUEUE,
+        // These options must live on THIS registration: the outbox publisher's
+        // @InjectQueue resolves this queue provider, and queue.add picks up
+        // defaultJobOptions from the Queue instance (the publisher only sets
+        // jobId). Backoff is generous — the usual transient cause is a Xero
+        // rate limit, not a blip.
+        defaultJobOptions: {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
       { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
       { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
     ),
     PrismaModule,
     MailModule,
     NotificationsModule,
-    XeroSyncModule,
+    AccountingInvoiceExportModule,
     AccountingModule,
     AccountingContactSyncModule,
     AccountingProductSyncModule,

@@ -62,6 +62,8 @@ Never activate a route before its processor exists — jobs would accumulate unc
 
 The `xero-sync` queue and `OrderAccepted` route are live from day one, consumed by a placeholder processor that logs and acknowledges. The real implementation adds the `XeroInvoiceSync` inbox table (status machine `PENDING → CREATING → CREATED/FAILED`, `xeroInvoiceId`, attempts, lastError) per the external-reference-table convention before making any Xero API call. Events acknowledged by the placeholder can be replayed from the outbox if backfill is required.
 
+> **Update (2026-07, Phase 4 shipped):** the placeholder was replaced by the provider-neutral `accounting-invoice-export` queue and `AccountingInvoiceExportProcessor` (the `xero-sync` name carried Xero vocabulary above the adapter boundary, which the accounting integration forbids). The inbox table shipped as `AccountingInvoiceExport` with `unique(accountingConnectionId, orderId)` (status machine `PENDING → PROCESSING → COMPLETED/FAILED`). `OrderAccepted` and the manual-retry event `AccountingInvoiceExportRequested` both route to it; all Xero specifics live in `XeroAccountingAdapter` behind `AccountingAdapterRegistry`.
+
 ## Consequences
 
 - The bespoke distribution code is a ~50-line pump whose worst failure mode (duplicate delivery) is absorbed by inbox constraints; correctness is anchored in Postgres, not in the relay.

@@ -163,6 +163,22 @@ enum AccountingProductMatchMethod {
   MANUAL
 }
 
+enum AccountingInvoiceExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Status the invoice is created with in the accounting system. Provider-neutral
+// vocabulary; each adapter maps it onto its own status model (Xero: Draft /
+// Submitted for approval / Authorised).
+enum AccountingInvoiceTargetStatus {
+  DRAFT
+  SUBMITTED
+  AUTHORISED
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -210,6 +226,7 @@ model Organisation {
   externalAccountingProducts      ExternalAccountingProduct[]
   productAccountingMappings       ProductAccountingMapping[]
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
+  accountingInvoiceExports        AccountingInvoiceExport[]
 
   @@map("organisations")
 }
@@ -504,6 +521,7 @@ model Order {
   delegateAdmin  User?        @relation("DelegateOrders", fields: [delegateAdminUserId], references: [id])
   lines          OrderLine[]
   notifications  Notification[]
+  invoiceExports AccountingInvoiceExport[]
 
   @@index([distributorId, status])
   @@index([traderCustomerId, status])
@@ -582,6 +600,7 @@ model AccountingConnection {
   lastSyncedAt             DateTime?
   lastErrorAt              DateTime?
   lastErrorMessage         String?
+  invoiceExportTargetStatus AccountingInvoiceTargetStatus @default(DRAFT)
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
   distributor              Organisation               @relation(fields: [distributorId], references: [id])
@@ -591,6 +610,7 @@ model AccountingConnection {
   externalProducts         ExternalAccountingProduct[]
   productMappings          ProductAccountingMapping[]
   productMatchSuggestions  AccountingProductMatchSuggestion[]
+  invoiceExports           AccountingInvoiceExport[]
 
   @@index([distributorId])
   @@map("accounting_connections")
@@ -819,6 +839,40 @@ model AccountingProductMatchSuggestion {
   @@index([distributorId, status])
   @@index([externalProductId, status])
   @@map("accounting_product_match_suggestions")
+}
+
+// One row per (connection, order) invoice export attempt-set — the business
+// idempotency guard for external invoice creation (the worker's provider call
+// additionally carries an idempotency key derived from id + retryCount).
+// Retries reuse the row; the unique constraint means a single order can never
+// produce two invoices on the same connection.
+model AccountingInvoiceExport {
+  id                     String                        @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  provider               AccountingProvider
+  orderId                String
+  status                 AccountingInvoiceExportStatus @default(PENDING)
+  externalInvoiceId      String?
+  externalInvoiceNumber  String?
+  // Provider vocabulary, stored verbatim (e.g. Xero "DRAFT"/"AUTHORISED").
+  externalInvoiceStatus  String?
+  exportedAt             DateTime?
+  failedAt               DateTime?
+  errorCode              String?
+  errorMessage           String?
+  retryCount             Int                           @default(0)
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  distributor Organisation         @relation(fields: [distributorId], references: [id])
+  connection  AccountingConnection @relation(fields: [accountingConnectionId], references: [id])
+  order       Order                @relation(fields: [orderId], references: [id])
+
+  @@unique([accountingConnectionId, orderId])
+  @@index([distributorId, status])
+  @@index([orderId])
+  @@map("accounting_invoice_exports")
 }
 
 model TraderCustomerSettings {

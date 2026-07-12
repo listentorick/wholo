@@ -149,8 +149,27 @@ export interface Order {
   cancellationReason: string | null;
   lines: OrderLine[];
   traderCustomer: { id: string; name: string } | null;
+  // Latest accounting invoice export for the order (null when the distributor
+  // has no accounting integration or the order predates it). Present only on
+  // the admin/distributor order resource — customer-facing (portal) order
+  // responses never carry it, hence optional. Types declared in the
+  // Accounting Integration section below.
+  invoiceExport?: OrderInvoiceExportSummary | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OrderInvoiceExportSummary {
+  id: string;
+  provider: AccountingProvider;
+  status: AccountingInvoiceExportStatus;
+  externalInvoiceId: string | null;
+  externalInvoiceNumber: string | null;
+  externalInvoiceStatus: string | null;
+  exportedAt: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 export interface OrderSummary {
@@ -695,6 +714,11 @@ export type UpdateDistributorSettingsRequest = Partial<DistributorSettings>;
 
 export type AccountingProvider = 'XERO';
 export type AccountingConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'REVOKED';
+// Status invoices are created with in the accounting system (provider-neutral
+// vocabulary; each provider adapter maps it onto its own status model).
+export type AccountingInvoiceTargetStatus = 'DRAFT' | 'SUBMITTED' | 'AUTHORISED';
+// Lifecycle of one order's invoice export to the accounting system.
+export type AccountingInvoiceExportStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
 export interface AccountingConnectionStatusResponse {
   provider: AccountingProvider;
@@ -702,6 +726,11 @@ export interface AccountingConnectionStatusResponse {
   externalOrganisationName: string;
   connectedAt: string;
   lastSyncedAt: string | null;
+  invoiceExportTargetStatus: AccountingInvoiceTargetStatus;
+}
+
+export interface UpdateAccountingConnectionSettingsRequest {
+  invoiceExportTargetStatus: AccountingInvoiceTargetStatus;
 }
 
 export interface AccountingAuthorizationUrlResponse {

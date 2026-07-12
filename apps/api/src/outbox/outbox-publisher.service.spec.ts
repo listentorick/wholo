@@ -20,7 +20,7 @@ describe('OutboxPublisherService', () => {
   let service: OutboxPublisherService;
   let prisma: { outboxEvent: { findMany: jest.Mock; update: jest.Mock } };
   let notificationsQueue: { add: jest.Mock };
-  let xeroSyncQueue: { add: jest.Mock };
+  let accountingInvoiceExportQueue: { add: jest.Mock };
   let accountingContactSyncQueue: { add: jest.Mock };
   let accountingProductSyncQueue: { add: jest.Mock };
 
@@ -32,13 +32,13 @@ describe('OutboxPublisherService', () => {
       },
     };
     notificationsQueue = { add: jest.fn().mockResolvedValue({}) };
-    xeroSyncQueue = { add: jest.fn().mockResolvedValue({}) };
+    accountingInvoiceExportQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingContactSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingProductSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
-      xeroSyncQueue as unknown as Queue,
+      accountingInvoiceExportQueue as unknown as Queue,
       accountingContactSyncQueue as unknown as Queue,
       accountingProductSyncQueue as unknown as Queue,
     );
@@ -59,7 +59,7 @@ describe('OutboxPublisherService', () => {
       },
       { jobId: 'evt-1' },
     );
-    expect(xeroSyncQueue.add).not.toHaveBeenCalled();
+    expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'evt-1' },
@@ -68,12 +68,27 @@ describe('OutboxPublisherService', () => {
     );
   });
 
-  it('routes OrderAccepted to the xero-sync queue', async () => {
+  it('routes OrderAccepted to the accounting-invoice-export queue', async () => {
     prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ id: 'evt-2', eventType: 'OrderAccepted' })]);
 
     await service.publishPending();
 
-    expect(xeroSyncQueue.add).toHaveBeenCalledWith('OrderAccepted', expect.anything(), { jobId: 'evt-2' });
+    expect(accountingInvoiceExportQueue.add).toHaveBeenCalledWith('OrderAccepted', expect.anything(), { jobId: 'evt-2' });
+    expect(notificationsQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes AccountingInvoiceExportRequested (manual retry) to the accounting-invoice-export queue', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-6', eventType: 'AccountingInvoiceExportRequested', payload: { orderId: 'order-1', exportId: 'exp-1' } }),
+    ]);
+
+    await service.publishPending();
+
+    expect(accountingInvoiceExportQueue.add).toHaveBeenCalledWith(
+      'AccountingInvoiceExportRequested',
+      expect.anything(),
+      { jobId: 'evt-6' },
+    );
     expect(notificationsQueue.add).not.toHaveBeenCalled();
   });
 
@@ -90,7 +105,7 @@ describe('OutboxPublisherService', () => {
       { jobId: 'evt-4' },
     );
     expect(notificationsQueue.add).not.toHaveBeenCalled();
-    expect(xeroSyncQueue.add).not.toHaveBeenCalled();
+    expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
   });
 
   it('routes AccountingProductSyncRequested to the accounting-product-sync queue, whether scheduled or manually triggered', async () => {
@@ -107,7 +122,7 @@ describe('OutboxPublisherService', () => {
     );
     expect(accountingContactSyncQueue.add).not.toHaveBeenCalled();
     expect(notificationsQueue.add).not.toHaveBeenCalled();
-    expect(xeroSyncQueue.add).not.toHaveBeenCalled();
+    expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
   });
 
   it('marks unrouted event types PUBLISHED without enqueueing anything', async () => {
@@ -116,7 +131,7 @@ describe('OutboxPublisherService', () => {
     await service.publishPending();
 
     expect(notificationsQueue.add).not.toHaveBeenCalled();
-    expect(xeroSyncQueue.add).not.toHaveBeenCalled();
+    expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'evt-3' },

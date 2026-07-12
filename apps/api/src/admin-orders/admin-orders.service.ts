@@ -76,6 +76,24 @@ const orderSelect = {
   updatedAt: true,
   customer: { select: { id: true, name: true } },
   lines: { select: orderLineSelect },
+  // Latest export only — the order resource carries the current accounting
+  // state; historical rows from superseded connections are noise for the UI.
+  invoiceExports: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: {
+      id: true,
+      provider: true,
+      status: true,
+      externalInvoiceId: true,
+      externalInvoiceNumber: true,
+      externalInvoiceStatus: true,
+      exportedAt: true,
+      errorCode: true,
+      errorMessage: true,
+      createdAt: true,
+    },
+  },
 } satisfies Prisma.OrderSelect;
 
 @Injectable()
@@ -388,6 +406,20 @@ export class AdminOrdersService {
       cancelledByUserId: order.cancelledByUserId,
       cancellationReason: order.cancellationReason,
       traderCustomer: order.customer ? { id: order.customer.id, name: order.customer.name } : null,
+      invoiceExport: order.invoiceExports[0]
+        ? {
+            id: order.invoiceExports[0].id,
+            provider: order.invoiceExports[0].provider,
+            status: order.invoiceExports[0].status,
+            externalInvoiceId: order.invoiceExports[0].externalInvoiceId,
+            externalInvoiceNumber: order.invoiceExports[0].externalInvoiceNumber,
+            externalInvoiceStatus: order.invoiceExports[0].externalInvoiceStatus,
+            exportedAt: order.invoiceExports[0].exportedAt?.toISOString() ?? null,
+            errorCode: order.invoiceExports[0].errorCode,
+            errorMessage: order.invoiceExports[0].errorMessage,
+            createdAt: order.invoiceExports[0].createdAt.toISOString(),
+          }
+        : null,
       lines: order.lines.map((l) => ({
         id: l.id,
         orderId: l.orderId,

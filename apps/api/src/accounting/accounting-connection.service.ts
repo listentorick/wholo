@@ -1,6 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { AccountingConnectionStatus, AccountingProvider } from '@prisma/client';
+import {
+  AccountingConnection,
+  AccountingConnectionStatus,
+  AccountingInvoiceTargetStatus,
+  AccountingProvider,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TokenEncryptionService } from './token-encryption.service';
 import { AccountingAdapterRegistry } from './adapters/accounting-adapter.registry';
@@ -24,22 +29,49 @@ export class AccountingConnectionService {
   ) {}
 
   async getConnectionStatus(distributorId: string) {
-    // Include ERROR so a broken connection (e.g. refresh failed, revoked
-    // access) is surfaced distinctly rather than looking indistinguishable
-    // from "never connected".
-    const connection = await this.prisma.accountingConnection.findFirst({
+    const connection = await this.findCurrentConnection(distributorId);
+    if (!connection) return null;
+    return this.toConnectionStatus(connection);
+  }
+
+  // Per-connection (not per-distributor) settings: the invoice target status
+  // is about how this provider's invoices are raised, so it lives and dies
+  // with the connection.
+  async updateConnectionSettings(
+    distributorId: string,
+    settings: { invoiceExportTargetStatus: AccountingInvoiceTargetStatus },
+  ) {
+    const connection = await this.findCurrentConnection(distributorId);
+    if (!connection) {
+      throw new NotFoundException('No accounting connection exists for this distributor');
+    }
+    const updated = await this.prisma.accountingConnection.update({
+      where: { id: connection.id },
+      data: { invoiceExportTargetStatus: settings.invoiceExportTargetStatus },
+    });
+    return this.toConnectionStatus(updated);
+  }
+
+  // Include ERROR so a broken connection (e.g. refresh failed, revoked
+  // access) is surfaced distinctly rather than looking indistinguishable
+  // from "never connected".
+  private findCurrentConnection(distributorId: string) {
+    return this.prisma.accountingConnection.findFirst({
       where: {
         distributorId,
         status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
       },
     });
-    if (!connection) return null;
+  }
+
+  private toConnectionStatus(connection: AccountingConnection) {
     return {
       provider: connection.provider,
       status: connection.status,
       externalOrganisationName: connection.externalOrganisationName,
       connectedAt: connection.connectedAt,
       lastSyncedAt: connection.lastSyncedAt,
+      invoiceExportTargetStatus: connection.invoiceExportTargetStatus,
     };
   }
 

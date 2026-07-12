@@ -75,6 +75,7 @@ describe('AccountingConnectionService', () => {
         externalOrganisationName: 'Acme Wines',
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
+        invoiceExportTargetStatus: 'DRAFT',
       });
       const result = await service.getConnectionStatus('dist-1');
       expect(result).toEqual({
@@ -83,6 +84,7 @@ describe('AccountingConnectionService', () => {
         externalOrganisationName: 'Acme Wines',
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
+        invoiceExportTargetStatus: 'DRAFT',
       });
     });
 
@@ -95,6 +97,38 @@ describe('AccountingConnectionService', () => {
           status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
         },
       });
+    });
+  });
+
+  describe('updateConnectionSettings', () => {
+    it('throws NotFoundException when no connection exists', async () => {
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue(null);
+      await expect(
+        service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' }),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.accountingConnection.update).not.toHaveBeenCalled();
+    });
+
+    it('updates the target status on the current connection and returns the refreshed status shape', async () => {
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
+      mockPrisma.accountingConnection.update.mockResolvedValue({
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationName: 'Acme Wines',
+        connectedAt: new Date('2026-01-01'),
+        lastSyncedAt: null,
+        invoiceExportTargetStatus: 'AUTHORISED',
+      });
+
+      const result = await service.updateConnectionSettings('dist-1', {
+        invoiceExportTargetStatus: 'AUTHORISED',
+      });
+
+      expect(mockPrisma.accountingConnection.update).toHaveBeenCalledWith({
+        where: { id: 'conn-1' },
+        data: { invoiceExportTargetStatus: 'AUTHORISED' },
+      });
+      expect(result).toEqual(expect.objectContaining({ invoiceExportTargetStatus: 'AUTHORISED' }));
     });
   });
 

@@ -15,6 +15,7 @@ import type {
   MatchAccountingContactRequest,
   MatchAccountingProductRequest,
   Product,
+  UpdateAccountingConnectionSettingsRequest,
 } from '@wholo/types';
 import { apiFetch } from './base';
 
@@ -41,8 +42,26 @@ export const adminAccountingApi = {
     });
   },
 
+  updateConnectionSettings(
+    body: UpdateAccountingConnectionSettingsRequest,
+    token: string,
+  ): Promise<AccountingConnectionStatusResponse> {
+    return apiFetch<AccountingConnectionStatusResponse>('/api/v1/accounting/connection', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      token,
+    });
+  },
+
   disconnect(token: string): Promise<void> {
     return apiFetch<void>('/api/v1/accounting/connection', { method: 'DELETE', token });
+  },
+
+  retryInvoiceExport(exportId: string, token: string): Promise<{ status: 'requested' }> {
+    return apiFetch<{ status: 'requested' }>(`/api/v1/accounting/invoice-exports/${exportId}/retry`, {
+      method: 'POST',
+      token,
+    });
   },
 
   listContacts(params: AccountingContactListParams, token: string): Promise<AccountingContactListResponse> {

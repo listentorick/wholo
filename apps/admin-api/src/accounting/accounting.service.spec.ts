@@ -5,6 +5,7 @@ import { ApiClientService } from '../api-client/api-client.service';
 const mockApi = {
   get: jest.fn(),
   post: jest.fn(),
+  patch: jest.fn(),
   delete: jest.fn(),
   postAnonymous: jest.fn(),
 };
@@ -45,6 +46,23 @@ describe('AccountingService (BFF)', () => {
         'token-1',
       );
       expect(result).toEqual({ authorizationUrl: 'https://xero.example' });
+    });
+  });
+
+  describe('updateConnectionSettings', () => {
+    it('calls api.patch with the distributor path, bearer token and settings body', async () => {
+      mockApi.patch.mockResolvedValue({ invoiceExportTargetStatus: 'AUTHORISED' });
+
+      const result = await service.updateConnectionSettings(
+        'dist-1',
+        { invoiceExportTargetStatus: 'AUTHORISED' },
+        'token-1',
+      );
+
+      expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/accounting/connection', 'token-1', {
+        invoiceExportTargetStatus: 'AUTHORISED',
+      });
+      expect(result).toEqual({ invoiceExportTargetStatus: 'AUTHORISED' });
     });
   });
 

@@ -2,7 +2,7 @@
 // pub/sub topics, so fan-out is owned by the outbox publisher via EVENT_ROUTES.
 export const NOTIFICATIONS_QUEUE = 'notifications';
 export const NOTIFICATION_DELIVERY_QUEUE = 'notification-delivery';
-export const XERO_SYNC_QUEUE = 'xero-sync';
+export const ACCOUNTING_INVOICE_EXPORT_QUEUE = 'accounting-invoice-export';
 export const ACCOUNTING_CONTACT_SYNC_QUEUE = 'accounting-contact-sync';
 export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 
@@ -21,7 +21,11 @@ export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 // there's no separate inbox table for these routes.
 export const EVENT_ROUTES: Record<string, string[]> = {
   OrderSubmitted: [NOTIFICATIONS_QUEUE],
-  OrderAccepted: [XERO_SYNC_QUEUE],
+  OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
+  // Manual "retry export" — same uniform-outbox rationale as the sync events;
+  // business idempotency lives in the AccountingInvoiceExport row, so a
+  // deliberate retry (new outbox event id = new jobId) is never deduped away.
+  AccountingInvoiceExportRequested: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
   AccountingContactSyncRequested: [ACCOUNTING_CONTACT_SYNC_QUEUE],
   AccountingProductSyncRequested: [ACCOUNTING_PRODUCT_SYNC_QUEUE],
 };
