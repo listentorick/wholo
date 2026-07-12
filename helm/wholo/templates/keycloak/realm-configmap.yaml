@@ -7,9 +7,9 @@ metadata:
 data:
   wholo-realm.json: |
     {
-      "realm": "wholo",
+      "realm": {{ .Values.keycloak.realm | quote }},
       "enabled": true,
-      "displayName": "Wholo",
+      "displayName": {{ .Values.keycloak.realmDisplayName | quote }},
       "loginTheme": "wholo",
       "accessTokenLifespan": 900,
       "ssoSessionMaxLifespan": 2592000,
@@ -22,8 +22,8 @@ data:
       "smtpServer": {
         "host": {{ .Values.keycloak.smtpHost | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }},
         "port": "1025",
-        "from": "noreply@wholo.com.au",
-        "fromDisplayName": "Wholo",
+        "from": {{ .Values.api.smtp.from | default "noreply@wholo.com.au" | quote }},
+        "fromDisplayName": {{ .Values.keycloak.realmDisplayName | quote }},
         "ssl": "false",
         "starttls": "false",
         "auth": "false"

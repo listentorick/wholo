@@ -155,7 +155,12 @@ keycloak:
   adminUser: admin
   adminPassword: admin
   port: 8080
+  # Realm name is an internal identifier baked into browser bundles as
+  # NEXT_PUBLIC_KEYCLOAK_REALM (repo var LIVE_KEYCLOAK_REALM for live images)
+  # — the two MUST agree. Import is first-boot-only: changing this on an
+  # existing install requires a realm delete/re-import (or namespace wipe).
   realm: wholo
+  realmDisplayName: Wholo
   service:
     type: LoadBalancer
   # "start-dev" for local; "start" (production mode) in live.
