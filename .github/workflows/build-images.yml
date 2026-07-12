@@ -22,6 +22,10 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Tests compile against the generated Prisma client (enums, Decimal,
+      # typed transactions) — without this every suite fails with TS2305.
+      - run: pnpm --filter @wholo/api exec prisma generate
+      - run: pnpm --filter @wholo/admin-api exec prisma generate
       - run: pnpm turbo test
 
   build:
