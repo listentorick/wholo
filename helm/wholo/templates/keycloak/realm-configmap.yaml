@@ -5,7 +5,8 @@ metadata:
   labels:
     app: {{ include "wholo.fullname" . }}-keycloak
 data:
-  wholo-realm.json: |
+  # Keycloak --import-realm requires the file to be named <realm>-realm.json.
+  {{ .Values.keycloak.realm }}-realm.json: |
     {
       "realm": {{ .Values.keycloak.realm | quote }},
       "enabled": true,
