@@ -84,10 +84,16 @@ keycloak:
   service:
     type: ClusterIP
   adminPassword: "CHANGE_ME_strong_password"
+  # Keep the realm NAME brand-neutral (e.g. prod) — it is baked into browser
+  # bundles (LIVE_KEYCLOAK_REALM must equal it) and into every token issuer,
+  # so renaming after launch is painful. Branding lives in realmDisplayName,
+  # editable any time in the Keycloak console.
+  realm: prod
+  realmDisplayName: "CHANGE_ME brand name"
   startCommand: start       # production mode
   hostname: "https://auth.<domain>"
   hostnamePort: ""          # unused when hostname is a full URL
-  proxyHeaders: xforwarded  # TLS terminates at Traefik
+  proxyHeaders: xforwarded  # TLS terminates upstream (WAF); headers forwarded
   seedUsers: false          # demo users must never reach a public auth server
   adminClientUrl: "https://admin.<domain>"
   portalClientUrl: "https://portal.<domain>"
