@@ -187,6 +187,10 @@ ingress:
   enabled: false
   className: traefik
   annotations: {}
+  # Serve TLS at Traefik from the `<release>-tls` secret. Set false when TLS
+  # terminates upstream of the cluster (e.g. an external WAF/proxy that
+  # forwards plain HTTP to Traefik) — the ingress then declares no tls block.
+  tls: true
   hosts:
     portal: ""
     admin: ""

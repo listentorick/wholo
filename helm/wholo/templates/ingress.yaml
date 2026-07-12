@@ -11,6 +11,7 @@ metadata:
   {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls }}
   tls:
     - hosts:
         {{- if .Values.ingress.hosts.portal }}
@@ -26,6 +27,7 @@ spec:
         - {{ .Values.ingress.hosts.auth | quote }}
         {{- end }}
       secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
   rules:
     {{- if .Values.ingress.hosts.portal }}
     - host: {{ .Values.ingress.hosts.portal | quote }}

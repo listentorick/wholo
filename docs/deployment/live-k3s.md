@@ -4,7 +4,7 @@ Topology and rationale: [ADR-048](../adrs/ADR-048-live-environment-k3s.md).
 
 - Cluster: 3 nodes — `k3s-00` (control-plane, schedulable), `k3s-01`, `k3s-02`. ~2 CPU / 4 GiB RAM / 22 GiB disk each.
 - Storage: `local-path` only (node-local, ReclaimPolicy **Delete** — `helm uninstall` destroys data; PVC deletion is unrecoverable).
-- Ingress: bundled Traefik; TLS via cert-manager + Let's Encrypt.
+- Edge: Cloudflare (proxied DNS, edge TLS, WAF rules, SSL mode **Full (strict)**) → on-prem WAF appliance (terminates the Cloudflare leg with a Cloudflare Origin CA cert) → bundled Traefik over **plain HTTP :80** (`ingress.tls: false`; Traefik trusts the WAF's `X-Forwarded-Proto` via `deploy/live/traefik-forwarded-headers.yaml`). No cert-manager / Let's Encrypt.
 - Images: private GHCR packages, published by the `build-images` GitHub Actions workflow on every push to `master` (tags `sha-<shortsha>` + `latest`). Always deploy a pinned `sha-` tag.
 - Live config: `helm/wholo/values.live.yaml` (gitignored) — copy from `values.live.example.yaml`.
 
@@ -21,29 +21,29 @@ Topology and rationale: [ADR-048](../adrs/ADR-048-live-environment-k3s.md).
 
 ## One-time cluster setup
 
-1. **DNS** — A records for `portal.`, `admin.`, `api.`, `auth.<domain>` → one
-   or more node IPs (ServiceLB exposes Traefik's 80/443 on every node).
-   Verify: `dig +short portal.<domain>`.
+1. **DNS / Cloudflare** — zone on Cloudflare (nameservers delegated from the
+   registrar). A records for `portal.`, `admin.`, `auth.<domain>` →
+   the WAF's public IP, all **Proxied** (`apps/api` gets no public host —
+   BFFs reach it over cluster DNS). Cloudflare settings: SSL/TLS mode
+   **Full (strict)**, **Always Use HTTPS** on.
 
-2. **Namespace**
+2. **WAF appliance** (in front of the cluster; terminates TLS) — install a
+   Cloudflare **Origin CA certificate** (dashboard: SSL/TLS → Origin Server →
+   Create Certificate, `*.<domain>`) as its server cert; upstream = k3s
+   node(s) port **80** plain HTTP; preserve the `Host` header; send
+   `X-Forwarded-Proto: https`; accept inbound 443 only from
+   [Cloudflare's IP ranges](https://www.cloudflare.com/ips/).
+
+3. **Traefik forwarded-headers trust** — fill the WAF's internal IP into
+   `deploy/live/traefik-forwarded-headers.yaml`, then:
+   ```bash
+   kubectl apply -f deploy/live/traefik-forwarded-headers.yaml
+   ```
+
+4. **Namespace**
    ```bash
    kubectl create namespace wholo
    ```
-
-3. **cert-manager**
-   ```bash
-   helm repo add jetstack https://charts.jetstack.io
-   helm upgrade --install cert-manager jetstack/cert-manager \
-     -n cert-manager --create-namespace --set crds.enabled=true
-   ```
-
-4. **ClusterIssuers**
-   ```bash
-   kubectl apply -f deploy/live/cluster-issuer.yaml
-   ```
-   While iterating, point the ingress annotation in values.live.yaml at
-   `letsencrypt-staging` to avoid production rate limits; switch to
-   `letsencrypt-prod` once certificates issue.
 
 5. **GHCR pull secret** — create a GitHub PAT (classic) with `read:packages`:
    ```bash
@@ -128,8 +128,9 @@ push to R2) is a recommended follow-up.
 ## Verification checklist (after deploy)
 
 1. `kubectl -n wholo get pods` — all Running/Ready.
-2. `kubectl -n wholo get certificate` — Ready; then
-   `curl -sI https://api.<domain>/api/v1/health` → 200 with a valid LE cert.
+2. `curl -sI https://portal.<domain>/` → response with a valid Cloudflare
+   edge cert (no `-k` needed); `curl -sI http://portal.<domain>/` → 301 to
+   https (edge "Always Use HTTPS").
 3. Browse `https://admin.<domain>` → redirected to `auth.<domain>` → log in →
    redirected back (proves baked NEXT_PUBLIC URL, realm redirect URIs, and
    JWKS validation agree). Repeat for the portal.

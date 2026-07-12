@@ -1,14 +1,20 @@
 # URL map — public subdomains and intra-cluster calls
 
-Rule of thumb: **browsers only ever see the four public hostnames; pods only
+Rule of thumb: **browsers only ever see the public hostnames; pods only
 ever talk to each other via internal service DNS.** The two worlds meet only
-at Traefik and inside the JWT.
+at the edge chain and inside the JWT.
+
+On live, the edge is a chain in front of Traefik:
+`Browser —TLS→ Cloudflare (proxied DNS, edge cert, WAF rules, Full (strict))
+—TLS→ WAF appliance (Cloudflare Origin CA cert) —plain HTTP :80→ Traefik`.
+Traefik serves no TLS on live (`ingress.tls: false`) and trusts the WAF's
+`X-Forwarded-Proto` (`deploy/live/traefik-forwarded-headers.yaml`).
 
 ```mermaid
 flowchart LR
     B["Browser<br/>(trade customer / admin staff)"]
 
-    subgraph edge ["Traefik ingress — HTTPS, host routing"]
+    subgraph edge ["Traefik ingress — host routing (TLS terminated upstream on live)"]
         P("portal.&lt;domain&gt;")
         A("admin.&lt;domain&gt;")
         AU("auth.&lt;domain&gt;")
@@ -51,7 +57,7 @@ flowchart LR
 
 Solid arrows = request traffic; dotted = auxiliary (JWKS fetches, images, mail).
 
-## Public URLs (browser → Traefik ingress, HTTPS)
+## Public URLs (browser → Cloudflare → WAF → Traefik)
 
 | Subdomain | Routes to (service) | Who calls it | Purpose |
 |---|---|---|---|

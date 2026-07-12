@@ -95,8 +95,11 @@ keycloak:
 ingress:
   enabled: true
   className: traefik
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+  annotations: {}
+  # TLS terminates upstream (Cloudflare -> WAF appliance); Traefik receives
+  # plain HTTP — see docs/deployment/live-k3s.md and
+  # deploy/live/traefik-forwarded-headers.yaml.
+  tls: false
   hosts:
     portal: portal.<domain>
     admin: admin.<domain>

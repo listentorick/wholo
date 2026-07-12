@@ -1,0 +1,29 @@
+# One-time cluster-scoped infrastructure for the live k3s cluster.
+# Applied manually (not part of the Helm chart) because it configures k3s's
+# bundled Traefik, which lives in kube-system and is managed by k3s's own
+# HelmChart controller:
+#   kubectl apply -f deploy/live/traefik-forwarded-headers.yaml
+#
+# Live topology: Cloudflare -> WAF appliance (terminates TLS) -> Traefik :80.
+# The WAF forwards plain HTTP with X-Forwarded-Proto: https. By default
+# Traefik STRIPS X-Forwarded-* headers from untrusted client IPs (correctly —
+# they are trivially spoofable) and would restamp requests as plain http,
+# breaking scheme detection in Keycloak and the BFFs (redirect loops,
+# http:// URLs). Trusting the WAF's IP keeps its headers intact.
+#
+# NOTE: do NOT add an 80->443 redirect here — the WAF always speaks plain
+# HTTP to Traefik, so a redirect would loop every request. Browser-side
+# http->https is handled at the Cloudflare edge ("Always Use HTTPS").
+#
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        forwardedHeaders:
+          trustedIPs:
+            - "192.168.1.4/32" # the WAF appliance — the only trusted proxy
