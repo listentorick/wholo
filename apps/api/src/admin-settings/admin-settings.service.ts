@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -59,16 +59,25 @@ export class AdminSettingsService {
       settingsPatch.minimumOrderSpend = rawMinSpend != null ? new Prisma.Decimal(rawMinSpend) : null;
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      if (Object.keys(orgPatch).length > 0) {
-        await tx.organisation.update({ where: { id: distributorId }, data: orgPatch });
-      }
-      await tx.distributorSettings.upsert({
-        where: { distributorId },
-        create: { distributorId, ...settingsPatch },
-        update: settingsPatch,
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (Object.keys(orgPatch).length > 0) {
+          await tx.organisation.update({ where: { id: distributorId }, data: orgPatch });
+        }
+        await tx.distributorSettings.upsert({
+          where: { distributorId },
+          create: { distributorId, ...settingsPatch },
+          update: settingsPatch,
+        });
       });
-    });
+    } catch (e) {
+      // Slug is unique across organisations — surface a collision as a clear
+      // 409 rather than an unhandled P2002 (500).
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('That portal address is already taken — choose another.');
+      }
+      throw e;
+    }
 
     return this.find(distributorId);
   }

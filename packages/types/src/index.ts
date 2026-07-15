@@ -26,6 +26,55 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
+// ─── Session / onboarding ─────────────────────────────────────────────────────
+
+export type SessionStatus = 'ACTIVE' | 'ONBOARDING_REQUIRED';
+
+/** Identity claims from Keycloak for a person who has no Wholo user yet. */
+export interface SessionIdentity {
+  email: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface AuthSession {
+  status: SessionStatus;
+  /** Present when status is ACTIVE. */
+  user?: AuthUser;
+  /** Present when status is ONBOARDING_REQUIRED — prefill for the wizard. */
+  identity?: SessionIdentity;
+}
+
+export interface CreateDistributorRequest {
+  name: string;
+  /** Portal address; omitted/blank → derived from name server-side. */
+  slug?: string;
+  phone?: string;
+  email?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  addressCity: string;
+  addressState?: string;
+  addressPostcode: string;
+  addressCountry: string;
+}
+
+export interface DistributorOrganisation {
+  id: string;
+  name: string;
+  slug: string;
+  type: 'DISTRIBUTOR';
+  email?: string | null;
+  phone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressPostcode?: string | null;
+  addressCountry?: string | null;
+  createdAt: string;
+}
+
 export interface ProblemDetail {
   type: string;
   title: string;

@@ -1,4 +1,4 @@
-import type { LoginRequest, LoginResponse, AuthUser } from '@wholo/types';
+import type { LoginRequest, LoginResponse, AuthUser, AuthSession } from '@wholo/types';
 import { apiFetch } from './base';
 
 export const adminAuthApi = {
@@ -11,5 +11,10 @@ export const adminAuthApi = {
 
   me(token: string): Promise<AuthUser> {
     return apiFetch<AuthUser>('/api/v1/auth/me', { token });
+  },
+
+  /** Tri-state session check: ACTIVE (profile) or ONBOARDING_REQUIRED (identity only). */
+  session(token: string): Promise<AuthSession> {
+    return apiFetch<AuthSession>('/api/v1/auth/session', { token });
   },
 };

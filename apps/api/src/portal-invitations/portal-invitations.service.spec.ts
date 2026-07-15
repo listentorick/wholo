@@ -4,7 +4,7 @@ import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client'
 import { PortalInvitationsService } from './portal-invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import type { KeycloakIdentity } from '../auth/strategies/portal-jwt.strategy';
+import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
 
 const mockPrisma = {
   customerInvitation: {

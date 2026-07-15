@@ -13,7 +13,7 @@ export interface KeycloakIdentity {
 }
 
 @Injectable()
-export class PortalJwtStrategy extends PassportStrategy(Strategy, 'portal-jwt') {
+export class KeycloakIdentityStrategy extends PassportStrategy(Strategy, 'keycloak-identity') {
   constructor(config: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -31,7 +31,7 @@ export class PortalJwtStrategy extends PassportStrategy(Strategy, 'portal-jwt') 
   validate(payload: KeycloakIdentity): KeycloakIdentity {
     // Reject unverified emails — prevents account takeover via email squatting
     if (!payload.email_verified) {
-      throw new UnauthorizedException('Email address must be verified before accepting an invitation');
+      throw new UnauthorizedException('Email address must be verified before continuing');
     }
     return {
       sub: payload.sub,

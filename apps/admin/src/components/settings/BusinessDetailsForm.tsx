@@ -94,11 +94,11 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
 
             <div>
               <FieldLabel htmlFor="slug">Portal URL slug</FieldLabel>
-              <TextInput id="slug" placeholder="acme-wine" {...register('slug')} />
+              <TextInput id="slug" placeholder="acme-wine" autoComplete="off" {...register('slug')} />
               <FieldError message={errors.slug?.message} />
               {settings.slug && (
                 <p className="mt-1.5 text-xs text-muted">
-                  Portal URL: <span className="font-mono">…/d/{settings.slug}</span>
+                  Portal URL: <span className="font-mono">…/{settings.slug}</span>
                 </p>
               )}
             </div>
@@ -108,30 +108,30 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
               <div className="space-y-4">
                 <div>
                   <FieldLabel htmlFor="addressLine1">Address line 1</FieldLabel>
-                  <TextInput id="addressLine1" placeholder="123 Main Street" {...register('addressLine1')} />
+                  <TextInput id="addressLine1" placeholder="123 Main Street" autoComplete="address-line1" {...register('addressLine1')} />
                 </div>
                 <div>
                   <FieldLabel htmlFor="addressLine2">Address line 2</FieldLabel>
-                  <TextInput id="addressLine2" placeholder="Suite 4" {...register('addressLine2')} />
+                  <TextInput id="addressLine2" placeholder="Suite 4" autoComplete="address-line2" {...register('addressLine2')} />
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <FieldLabel htmlFor="addressCity">City</FieldLabel>
-                    <TextInput id="addressCity" placeholder="Sydney" {...register('addressCity')} />
+                    <TextInput id="addressCity" placeholder="Sydney" autoComplete="address-level2" {...register('addressCity')} />
                   </div>
                   <div>
                     <FieldLabel htmlFor="addressState">State / region</FieldLabel>
-                    <TextInput id="addressState" placeholder="NSW" {...register('addressState')} />
+                    <TextInput id="addressState" placeholder="NSW" autoComplete="address-level1" {...register('addressState')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <FieldLabel htmlFor="addressPostcode">Postcode</FieldLabel>
-                    <TextInput id="addressPostcode" placeholder="2000" {...register('addressPostcode')} />
+                    <TextInput id="addressPostcode" placeholder="2000" autoComplete="postal-code" {...register('addressPostcode')} />
                   </div>
                   <div>
                     <FieldLabel htmlFor="addressCountry">Country</FieldLabel>
-                    <TextInput id="addressCountry" placeholder="Australia" {...register('addressCountry')} />
+                    <TextInput id="addressCountry" placeholder="Australia" autoComplete="country-name" {...register('addressCountry')} />
                   </div>
                 </div>
               </div>

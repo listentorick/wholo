@@ -3,13 +3,19 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminAuthApi, adminAssetImagesApi, ApiError } from '@wholo/admin-api-client';
-import type { AuthUser } from '@wholo/types';
+import type { AuthUser, SessionIdentity } from '@wholo/types';
 
 interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   logoUrl: string | null;
   isLoading: boolean;
+  /** Authenticated with Keycloak but no Wholo user yet — route to /onboarding. */
+  onboardingRequired: boolean;
+  /** Token identity claims, for prefilling the onboarding wizard. */
+  identity: SessionIdentity | null;
+  /** Re-fetch the session (e.g. right after onboarding completes). */
+  refreshSession: () => Promise<void>;
   login: () => void;
   logout: () => void;
 }
@@ -57,9 +63,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [onboardingRequired, setOnboardingRequired] = useState(false);
+  const [identity, setIdentity] = useState<SessionIdentity | null>(null);
   const router = useRouter();
   const routerRef = useRef(router);
   useEffect(() => { routerRef.current = router; });
+
+  const loadSession = useCallback(async (token: string) => {
+    try {
+      const session = await adminAuthApi.session(token);
+      if (session.status === 'ACTIVE' && session.user) {
+        setUser(session.user);
+        setOnboardingRequired(false);
+        setIdentity(null);
+        if (session.user.organisationId) {
+          fetchLogoUrl(token, session.user.organisationId, setLogoUrl);
+        }
+      } else if (session.status === 'ONBOARDING_REQUIRED') {
+        setUser(null);
+        setOnboardingRequired(true);
+        setIdentity(session.identity ?? null);
+      }
+    } catch {
+      // Network / upstream failure: leave user null WITHOUT flagging
+      // onboarding — an outage must not shove existing users into the wizard.
+    }
+  }, []);
 
   useEffect(() => {
     getKeycloakAuth()
@@ -82,15 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
         if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
 
-        try {
-          const profile = await adminAuthApi.me(token);
-          setUser(profile as AuthUser);
-          if ((profile as any).organisationId) {
-            fetchLogoUrl(token, (profile as any).organisationId, setLogoUrl);
-          }
-        } catch {
-          // Token valid but Wholo profile unavailable
-        }
+        await loadSession(token);
 
         // Client-side navigation so AuthProvider stays mounted and user state persists
         if (postLoginRedirect && postLoginRedirect !== '/') {
@@ -98,7 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [loadSession]);
+
+  const refreshSession = useCallback(async () => {
+    const kc = (window as any).__kc;
+    const token: string | undefined = kc?.token;
+    if (token) await loadSession(token);
+  }, [loadSession]);
 
   const login = useCallback(() => {
     const kc = (window as any).__kc;
@@ -119,11 +146,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAccessToken(null);
     setLogoUrl(null);
+    setOnboardingRequired(false);
+    setIdentity(null);
     (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, logoUrl, isLoading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, accessToken, logoUrl, isLoading, onboardingRequired, identity, refreshSession, login, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

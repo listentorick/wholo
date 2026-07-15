@@ -173,6 +173,21 @@ describe('AdminSettingsService', () => {
       expect(result).toHaveProperty('defaultOrderAcceptanceMode');
     });
 
+    it('maps a slug unique-constraint violation to ConflictException (409, not 500)', async () => {
+      const { Prisma } = jest.requireActual('@prisma/client');
+      mockPrisma.organisation.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: ['slug'] },
+        }),
+      );
+
+      await expect(service.update('dist-1', { slug: 'taken-slug' })).rejects.toMatchObject({
+        status: 409,
+      });
+    });
+
     it('converts minimumOrderSpend string to Decimal in settingsPatch', async () => {
       await service.update('dist-1', { minimumOrderSpend: '50.00' });
 

@@ -21,6 +21,7 @@ import { MailModule } from './mail/mail.module';
 import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
 import { PortalModule } from './portal/portal.module';
 import { CustomersModule } from './customers/customers.module';
+import { DistributorsModule } from './distributors/distributors.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { HealthController } from './health.controller';
 import './admin-products/product-image.asset-config';
@@ -50,6 +51,7 @@ import './asset-images/branding-asset-types';
     PortalInvitationsModule,
     PortalModule,
     CustomersModule,
+    DistributorsModule,
     AccountingModule,
   ],
   controllers: [HealthController],

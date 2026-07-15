@@ -7,9 +7,12 @@ import {
   IsArray,
   IsInt,
   IsDecimal,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 import { OrderAcceptanceMode } from '@prisma/client';
+import { SLUG_PATTERN } from '../../common/slug';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -27,6 +30,8 @@ export class UpdateSettingsDto {
 
   @IsOptional()
   @IsString()
+  @Matches(SLUG_PATTERN, { message: 'Portal address may only contain lowercase letters, numbers and hyphens' })
+  @MaxLength(60)
   slug?: string;
 
   @IsOptional()

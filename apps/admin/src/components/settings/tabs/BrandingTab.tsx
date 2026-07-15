@@ -1,15 +1,42 @@
 'use client';
 
 import { FormCard } from '../shared';
+import { WizardSectionHeading } from '@/components/customers/tabs/form-helpers';
 import { BrandingLogoUploader } from '@/components/branding/BrandingLogoUploader';
 import { BrandingBannerUploader } from '@/components/branding/BrandingBannerUploader';
+import { WizardStepFooter } from '../../onboarding/WizardStepFooter';
 
 interface Props {
   token: string;
   distributorId: string;
+  /** 'wizard' embeds this as an onboarding step. Uploads apply instantly, so Next never blocks. */
+  mode?: 'tab' | 'wizard';
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
-export function BrandingTab({ token, distributorId }: Props) {
+export function BrandingTab({ token, distributorId, mode = 'tab', onNext, onBack }: Props) {
+  if (mode === 'wizard') {
+    return (
+      <div>
+        <div className="border-b border-border px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-text">Make it yours</h2>
+        </div>
+        <div className="space-y-5 p-5">
+          <div>
+            <WizardSectionHeading>Logo</WizardSectionHeading>
+            <BrandingLogoUploader token={token} distributorId={distributorId} />
+          </div>
+          <div>
+            <WizardSectionHeading>Banner</WizardSectionHeading>
+            <BrandingBannerUploader token={token} distributorId={distributorId} />
+          </div>
+        </div>
+        <WizardStepFooter onBack={onBack} onNext={onNext} nextLabel="Continue" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <FormCard

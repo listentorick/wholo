@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../auth-context';
 
 export function useRequireAuth() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, onboardingRequired } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.replace('/login');
+      // A Keycloak-authenticated visitor with no Wholo user belongs in the
+      // onboarding wizard, not the login bounce (which would loop via SSO).
+      router.replace(onboardingRequired ? '/onboarding' : '/login');
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, onboardingRequired, router]);
 
   return { user, isLoading };
 }

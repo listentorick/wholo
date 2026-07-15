@@ -14,6 +14,7 @@ import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
 import { OrderAsModule } from './order-as/order-as.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -33,6 +34,7 @@ import { HealthController } from './health.controller';
     DeliveryProfilesModule,
     OrderAsModule,
     AccountingModule,
+    OnboardingModule,
   ],
   controllers: [HealthController],
 })

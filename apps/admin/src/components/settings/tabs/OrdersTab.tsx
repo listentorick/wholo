@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { OrderAcceptanceMode } from '@wholo/types';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
 import { FormCard } from '../shared';
+import { WizardSectionHeading } from '@/components/customers/tabs/form-helpers';
+import { WizardStepFooter } from '../../onboarding/WizardStepFooter';
 
 const schema = z.object({
   defaultOrderAcceptanceMode: z.nativeEnum(OrderAcceptanceMode),
@@ -47,9 +49,13 @@ const WEEKDAYS = [
 interface Props {
   settings: DistributorSettings;
   onSave: (data: UpdateDistributorSettingsRequest) => Promise<void>;
+  /** 'wizard' embeds this form as an onboarding step (Back/Skip/Next chrome). */
+  mode?: 'tab' | 'wizard';
+  onNext?: () => void;
+  onBack?: () => void;
 }
 
-export function OrdersTab({ settings, onSave }: Props) {
+export function OrdersTab({ settings, onSave, mode = 'tab', onNext, onBack }: Props) {
   const [processingDays, setProcessingDays] = useState<number[]>(
     settings.processingDays ?? [1, 2, 3, 4, 5],
   );
@@ -81,7 +87,8 @@ export function OrdersTab({ settings, onSave }: Props) {
         processingDays,
         minimumOrderSpend: data.minimumOrderSpend || undefined,
       });
-      setSuccess(true);
+      if (mode === 'wizard') onNext?.();
+      else setSuccess(true);
     } catch {
       setApiError('Failed to save. Please try again.');
     } finally {
@@ -89,9 +96,7 @@ export function OrdersTab({ settings, onSave }: Props) {
     }
   }
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-      <FormCard title="Order acceptance" description="Control how incoming orders from customers are handled.">
+  const acceptanceFields = (
         <div className="space-y-2">
           {MODE_OPTIONS.map(({ value, label, description }) => (
             <label
@@ -114,9 +119,9 @@ export function OrdersTab({ settings, onSave }: Props) {
             <p className="mt-1 text-xs text-red-500">{errors.defaultOrderAcceptanceMode.message}</p>
           )}
         </div>
-      </FormCard>
+  );
 
-      <FormCard title="Processing days" description="The days your warehouse processes orders. Used to calculate delivery cut-off deadlines.">
+  const processingDaysFields = (
         <div className="flex flex-wrap gap-2">
           {WEEKDAYS.map(({ value, label }) => {
             const active = processingDays.includes(value);
@@ -137,9 +142,9 @@ export function OrdersTab({ settings, onSave }: Props) {
             );
           })}
         </div>
-      </FormCard>
+  );
 
-      <FormCard title="Minimum order" description="The minimum order value required for a customer to submit an order. Can be overridden per customer.">
+  const minimumOrderFields = (
         <div>
           <label htmlFor="minimumOrderSpend" className="mb-1.5 block text-sm font-medium text-text">
             Minimum spend
@@ -160,6 +165,45 @@ export function OrdersTab({ settings, onSave }: Props) {
             <p className="mt-1 text-xs text-red-500">{errors.minimumOrderSpend.message}</p>
           )}
         </div>
+  );
+
+  if (mode === 'wizard') {
+    return (
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <div className="border-b border-border px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-text">How you take orders</h2>
+        </div>
+        <div className="p-5 space-y-5">
+          <div>
+            <WizardSectionHeading>Order acceptance</WizardSectionHeading>
+            {acceptanceFields}
+          </div>
+          <div>
+            <WizardSectionHeading>Processing days</WizardSectionHeading>
+            {processingDaysFields}
+          </div>
+          <div>
+            <WizardSectionHeading>Minimum order</WizardSectionHeading>
+            {minimumOrderFields}
+          </div>
+        </div>
+        <WizardStepFooter onBack={onBack} onSkip={onNext} saving={saving} error={apiError} />
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+      <FormCard title="Order acceptance" description="Control how incoming orders from customers are handled.">
+        {acceptanceFields}
+      </FormCard>
+
+      <FormCard title="Processing days" description="The days your warehouse processes orders. Used to calculate delivery cut-off deadlines.">
+        {processingDaysFields}
+      </FormCard>
+
+      <FormCard title="Minimum order" description="The minimum order value required for a customer to submit an order. Can be overridden per customer.">
+        {minimumOrderFields}
       </FormCard>
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
