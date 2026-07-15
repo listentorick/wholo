@@ -69,6 +69,10 @@
       <a class="wh-link" href="${url.loginResetCredentialsUrl}">Forgot password?</a>
     </#if>
 
+    <#if realm.registrationAllowed && !registrationDisabled??>
+      <a class="wh-link wh-link--register" href="${url.registrationUrl}">New to Wholo? Create an account</a>
+    </#if>
+
   </div>
 
 </body>

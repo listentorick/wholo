@@ -181,3 +181,59 @@ input[type="password"]:focus {
 .wh-link:hover {
   color: #D97036;
 }
+
+.wh-link--register {
+  margin-top: 12px;
+  color: #D97036;
+  font-weight: 600;
+}
+
+/* ─── Registration layout ───────────────────────────────── */
+
+.wh-row {
+  display: flex;
+  gap: 20px;
+}
+
+.wh-row .wh-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.wh-field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #EF4444;
+  line-height: 1.4;
+}
+
+/* ─── Body copy (verify-email, info pages) ──────────────── */
+
+.wh-body {
+  font-size: 14px;
+  color: #1e2436;
+  text-align: center;
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.wh-body--muted {
+  font-size: 13px;
+  color: #9BA3AE;
+  margin-bottom: 28px;
+}
+
+.wh-inline-link {
+  color: #D97036;
+  text-decoration: none;
+}
+
+.wh-inline-link:hover {
+  text-decoration: underline;
+}
+
+.wh-btn--link {
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}

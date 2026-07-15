@@ -56,17 +56,25 @@ spec:
             - name: realm-import
               mountPath: /opt/keycloak/data/import
               readOnly: true
+          # HTTP probes against Keycloak's real health endpoints (management
+          # port; KC_HEALTH_ENABLED in the configmap). TCP probes kept a
+          # wedged JVM "Ready" forever — it accepts connections it never
+          # answers — so Kubernetes wouldn't restart or unroute it.
           livenessProbe:
-            tcpSocket:
-              port: 8080
+            httpGet:
+              path: /health/live
+              port: management
             initialDelaySeconds: 60
             periodSeconds: 15
+            timeoutSeconds: 5
             failureThreshold: 5
           readinessProbe:
-            tcpSocket:
-              port: 8080
+            httpGet:
+              path: /health/ready
+              port: management
             initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 5
             failureThreshold: 10
           resources:
             {{- toYaml .Values.keycloak.resources | nindent 12 }}
