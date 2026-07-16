@@ -30,6 +30,11 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    env:
+      # Stopgap for community actions (e.g. docker/metadata-action@v5) not yet
+      # updated for GitHub's Node 20 -> 24 runner migration. Remove once
+      # upstream actions are confirmed Node 24-compatible.
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     strategy:
       fail-fast: false
       matrix:
