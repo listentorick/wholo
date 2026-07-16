@@ -71,8 +71,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       # Inlined instead of docker/metadata-action: all we need is two tag
       # strings, and metadata-action has been failing outright (HTML error
-      # page instead of JSON) regardless of action version — not worth
-      # depending on a third-party action for two lines of string-building.
+      # page instead of JSON) regardless of action version. Root cause turned
+      # out to be a GitHub REST API availability degradation (see
+      # githubstatus.com), not the action itself — TODO once that's resolved,
+      # consider reverting to docker/metadata-action for its fuller feature
+      # set (OCI labels etc.), since this inline version only covers the two
+      # tag patterns we actually use.
       - id: meta
         run: |
           IMAGE="ghcr.io/${{ github.repository }}/${{ matrix.name }}"
