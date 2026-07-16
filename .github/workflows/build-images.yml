@@ -69,13 +69,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Inlined instead of docker/metadata-action: all we need is two tag
+      # strings, and metadata-action has been failing outright (HTML error
+      # page instead of JSON) regardless of action version — not worth
+      # depending on a third-party action for two lines of string-building.
       - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}/${{ matrix.name }}
-          tags: |
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/${{ matrix.name }}"
+          TAGS="${IMAGE}:sha-${GITHUB_SHA::7}"
+          if [ "${{ github.ref }}" = "refs/heads/${{ github.event.repository.default_branch }}" ]; then
+            TAGS="${TAGS}"$'\n'"${IMAGE}:latest"
+          fi
+          {
+            echo "tags<<TAGS_EOF"
+            echo "$TAGS"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
@@ -83,6 +92,5 @@ jobs:
           push: true
           build-args: ${{ matrix.build-args }}
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/${{ matrix.name }}:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/${{ matrix.name }}:buildcache,mode=max
