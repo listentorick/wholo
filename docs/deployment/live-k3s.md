@@ -95,17 +95,31 @@ console instead, or delete and re-import the realm.
 
 ## Email
 
-Live still runs MailHog: no real email leaves the cluster. The UI is
-ClusterIP-only (it has no auth):
+Live sends real mail via PurelyMail (`smtp.purelymail.com`, port 587
+STARTTLS), configured through `api.smtp.*` and `keycloak.smtp*` in
+values.live.yaml. Two From addresses, both on the `stocdup.com` domain so a
+single SPF/DKIM/DMARC setup in Cloudflare covers both:
+
+- `notifications@stocdup.com` — `apps/api` order/invite emails (`api.smtp.*`)
+- `noreply@stocdup.com` — Keycloak account emails: verification, password
+  reset (`keycloak.smtp*`, `smtpFrom` decoupled from `api.smtp.from`)
+
+Keycloak's realm import only applies on first boot, so changing
+`keycloak.smtp*` values after the realm already exists requires forcing a
+re-import: drop just Keycloak's own database (not the main `wholo` app
+database) and restart its pod —
 
 ```bash
-kubectl -n wholo port-forward svc/wholo-mailhog 8025:8025
-# open http://localhost:8025
+kubectl exec -n wholo -it deploy/wholo-postgresql -- psql -U wholo -d wholo -c "DROP DATABASE keycloak;"
+kubectl rollout restart deployment/wholo-keycloak -n wholo
 ```
 
-Moving to a real SMTP provider later = set `api.smtp.{host,port,secure,from}`
-and `keycloak.smtpHost` in values.live.yaml (credentials support in
-`mail.service.ts` reads optional `SMTP_USER`/`SMTP_PASS`).
+— which deletes existing realm users/sessions, so only do this when that's
+acceptable (e.g. only test/seed users exist).
+
+MailHog is still deployed (ClusterIP-only, ClusterIP ⇒ no public exposure)
+as a fallback/local-dev parity fixture, but nothing points at it in live
+anymore. UI: `kubectl -n wholo port-forward svc/wholo-mailhog 8025:8025`.
 
 ## Backups
 

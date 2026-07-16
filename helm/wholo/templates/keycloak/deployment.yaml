@@ -80,5 +80,5 @@ spec:
             {{- toYaml .Values.keycloak.resources | nindent 12 }}
       volumes:
         - name: realm-import
-          configMap:
-            name: {{ include "wholo.fullname" . }}-keycloak-realm
+          secret:
+            secretName: {{ include "wholo.fullname" . }}-keycloak-realm
