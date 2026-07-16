@@ -177,7 +177,7 @@ export default function OnboardingPage() {
   const meta = step !== 'business' ? STEP_TITLES[step] : null;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-surface lg:flex-row">
+    <div className="flex h-dvh flex-col overflow-hidden bg-surface lg:flex-row">
       {/* Navy panel — the same surface as the app's sidebar: the wizard
           previews the workspace anatomy the new distributor is about to enter. */}
       <aside className="flex shrink-0 flex-col justify-between bg-sidebar-bg px-8 py-8 lg:w-[380px] lg:px-10 lg:py-12">
