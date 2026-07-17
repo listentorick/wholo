@@ -192,12 +192,15 @@ keycloak:
   smtpFrom: ""
   # Demo users with weak passwords, for local dev only. Never enable in live.
   seedUsers: true
+  # First boot (Quarkus augmentation + DB migration + realm import all at
+  # once) is memory-hungry — 1Gi was getting OOMKilled repeatedly on live
+  # during a fresh install before settling. Give it headroom for that spike.
   resources:
     requests:
-      memory: "512Mi"
+      memory: "768Mi"
       cpu: "250m"
     limits:
-      memory: "1Gi"
+      memory: "2Gi"
       cpu: "1000m"
 
 ingress:
