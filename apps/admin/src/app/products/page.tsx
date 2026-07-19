@@ -1,41 +1,60 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
+import { useCursorList } from '@/lib/hooks/use-cursor-list';
 import { AdminLayout } from '@/components/AdminLayout';
-import { adminProductsApi } from '@wholo/admin-api-client';
-import type { Product } from '@wholo/types';
+import { ListPageHeader } from '@/components/list/ListPageHeader';
+import { ListTableShell } from '@/components/list/ListTableShell';
+import { ListTh } from '@/components/list/ListTh';
+import { ListRow } from '@/components/list/ListRow';
+import { ListCellLink } from '@/components/list/ListCellLink';
+import { ListPagination } from '@/components/list/ListPagination';
+import { ListErrorBanner } from '@/components/list/ListErrorBanner';
+import { ListSpinner } from '@/components/list/ListSpinner';
+import { ListEmptyState } from '@/components/list/ListEmptyState';
+import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { FilterBar } from '@/components/list/filter-bar/FilterBar';
+import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
+import { adminProductsApi, adminProductTypesApi, adminSuppliersApi } from '@wholo/admin-api-client';
+import type { Product, ProductType, Supplier, ProductListParams } from '@wholo/types';
 import { ProductStatus } from '@wholo/types';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: ProductStatus }) {
-  const styles: Record<ProductStatus, { bg: string; text: string; label: string }> = {
-    [ProductStatus.ACTIVE]: { bg: '#dcfce7', text: '#15803d', label: 'Active' },
-    [ProductStatus.DRAFT]: { bg: '#fef9c3', text: '#a16207', label: 'Draft' },
-    [ProductStatus.ARCHIVED]: { bg: '#f3f4f6', text: '#6b7280', label: 'Archived' },
-  };
-  const s = styles[status] ?? styles[ProductStatus.DRAFT];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: s.bg, color: s.text }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.text }} />
-      {s.label}
-    </span>
-  );
+const STATUS_META: Record<ProductStatus, { label: string; tone: StatusTone }> = {
+  [ProductStatus.ACTIVE]: { label: 'Active', tone: 'green' },
+  [ProductStatus.DRAFT]: { label: 'Draft', tone: 'yellow' },
+  [ProductStatus.ARCHIVED]: { label: 'Archived', tone: 'gray' },
+};
+
+function ProductStatusBadge({ status }: { status: ProductStatus }) {
+  const meta = STATUS_META[status] ?? STATUS_META[ProductStatus.DRAFT];
+  return <StatusBadge label={meta.label} tone={meta.tone} />;
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────────────
+
+function buildApiParams(filters: ActiveFilter[], cursor: string | undefined): ProductListParams {
+  const params: ProductListParams = { limit: 20, cursor };
+  for (const f of filters) {
+    const values = Array.isArray(f.value) ? f.value : [f.value];
+    if (f.field === 'status') params.status = values as ProductStatus[];
+    else if (f.field === 'productType') params.productTypeId = values;
+    else if (f.field === 'supplier') params.supplierId = values;
+  }
+  return params;
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyState() {
+function ProductsEmptyState({ hasFilters, onClearFilters }: { hasFilters: boolean; onClearFilters: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-white py-20 px-8 text-center">
-      {/* Illustration */}
-      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-[#fef3e8]">
+    <ListEmptyState
+      iconBgClassName="bg-[#fef3e8]"
+      icon={
         <svg viewBox="0 0 64 64" fill="none" className="h-14 w-14" aria-hidden>
           <rect x="8" y="20" width="48" height="36" rx="4" fill="#f5d9c0" />
           <rect x="8" y="20" width="48" height="10" rx="4" fill="#e8b990" />
@@ -44,74 +63,67 @@ function EmptyState() {
           <circle cx="48" cy="14" r="7" fill="#d97036" />
           <path d="M45 14l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </div>
-
-      <h2 className="mb-2 text-lg font-semibold text-text">First up: what are you selling?</h2>
-      <p className="mb-8 max-w-xs text-sm text-muted leading-relaxed">
-        Before you open your store, first you need some products.
-      </p>
-
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <button
-          type="button"
-          className="rounded-md border border-border px-5 py-2.5 text-sm font-medium text-text transition-colors hover:bg-border/20"
-        >
-          Find products to sell
-        </button>
-        <Link
-          href="/products/new"
-          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-        >
-          Add your products
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// ─── Spinner ──────────────────────────────────────────────────────────────────
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <div
-        className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary"
-      />
-    </div>
+      }
+      title={hasFilters ? 'No matching products' : 'First up: what are you selling?'}
+      description={
+        hasFilters
+          ? 'Try adjusting or clearing your filters.'
+          : 'Before you open your store, first you need some products.'
+      }
+      action={
+        hasFilters ? (
+          <button type="button" onClick={onClearFilters} className="text-sm text-primary hover:underline">
+            Clear filters
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              className="rounded-md border border-border px-5 py-2.5 text-sm font-medium text-text transition-colors hover:bg-border/20"
+            >
+              Find products to sell
+            </button>
+            <Link
+              href="/products/new"
+              className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              Add your products
+            </Link>
+          </div>
+        )
+      }
+    />
   );
 }
 
 // ─── Product row ──────────────────────────────────────────────────────────────
 
 function ProductRow({ product }: { product: Product }) {
+  const href = `/products/${product.id}/edit`;
   return (
-    <tr className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors cursor-pointer">
+    <ListRow>
       <td className="py-3 pl-5 pr-4">
-        <Link href={`/products/${product.id}/edit`} className="block">
+        <ListCellLink href={href}>
           <span className="block font-medium text-text text-sm group-hover:text-primary transition-colors">
             {product.name}
           </span>
           {product.sku && (
             <span className="block text-xs text-muted mt-0.5">SKU: {product.sku}</span>
           )}
-        </Link>
+        </ListCellLink>
       </td>
       <td className="py-3 px-4">
-        <Link href={`/products/${product.id}/edit`} className="block">
-          <StatusBadge status={product.status} />
-        </Link>
+        <ListCellLink href={href}>
+          <ProductStatusBadge status={product.status} />
+        </ListCellLink>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
-        <Link href={`/products/${product.id}/edit`} className="block">
-          {product.productType?.name ?? '—'}
-        </Link>
+        <ListCellLink href={href}>{product.productType?.name ?? '—'}</ListCellLink>
       </td>
       <td className="py-3 pl-4 pr-5 text-sm text-muted">
-        <Link href={`/products/${product.id}/edit`} className="block">
-          {product.supplier?.name ?? '—'}
-        </Link>
+        <ListCellLink href={href}>{product.supplier?.name ?? '—'}</ListCellLink>
       </td>
-    </tr>
+    </ListRow>
   );
 }
 
@@ -121,42 +133,75 @@ export default function ProductsPage() {
   const { isLoading: authLoading } = useRequireAuth();
   const { accessToken } = useAuth();
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadProducts = useCallback(async (token: string, nextCursor?: string, append = false) => {
-    try {
-      const result = await adminProductsApi.list(token, { limit: 20, cursor: nextCursor });
-      setProducts((prev) => append ? [...prev, ...result.data] : result.data);
-      setCursor(result.pagination.nextCursor ?? undefined);
-      setHasMore(result.pagination.hasMore);
-      setTotal(result.pagination.total);
-    } catch {
-      setError('Failed to load products. Please refresh.');
-    }
-  }, []);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
 
   useEffect(() => {
     if (!accessToken) return;
-    setIsLoading(true);
-    loadProducts(accessToken).finally(() => setIsLoading(false));
-  }, [accessToken, loadProducts]);
+    Promise.all([adminProductTypesApi.list(accessToken), adminSuppliersApi.list(accessToken)])
+      .then(([types, sups]) => {
+        setProductTypes(types);
+        setSuppliers(sups);
+      })
+      .catch(() => {})
+      .finally(() => setMetaLoading(false));
+  }, [accessToken]);
 
-  async function handleLoadMore() {
-    if (!accessToken || !cursor) return;
-    setIsLoadingMore(true);
-    await loadProducts(accessToken, cursor, true);
-    setIsLoadingMore(false);
-  }
+  const filterFields = useMemo<FilterFieldConfig[]>(() => [
+    {
+      field: 'status',
+      label: 'Status',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: [
+        { value: ProductStatus.ACTIVE, label: 'Active' },
+        { value: ProductStatus.DRAFT, label: 'Draft' },
+        { value: ProductStatus.ARCHIVED, label: 'Archived' },
+      ],
+    },
+    {
+      field: 'productType',
+      label: 'Type',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: productTypes.map((pt) => ({ value: pt.id, label: pt.name })),
+    },
+    {
+      field: 'supplier',
+      label: 'Supplier',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: suppliers.map((s) => ({ value: s.id, label: s.name })),
+    },
+  ], [productTypes, suppliers]);
+
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+
+  const buildParams = useCallback(
+    (cursor: string | undefined) => buildApiParams(filters, cursor),
+    [filters],
+  );
+
+  const {
+    data: products,
+    total,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    error,
+    loadMore,
+  } = useCursorList({
+    token: accessToken,
+    fetchPage: adminProductsApi.list,
+    buildParams,
+    errorMessage: 'Failed to load products. Please refresh.',
+    deps: [filters],
+  });
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
@@ -164,56 +209,43 @@ export default function ProductsPage() {
 
   return (
     <AdminLayout>
-      {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-text">Products</h1>
-          {!isLoading && total > 0 && (
-            <p className="mt-0.5 text-sm text-muted">{total} product{total !== 1 ? 's' : ''}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="hidden rounded-md border border-border px-3.5 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 sm:block"
-          >
-            Import
-          </button>
+      <ListPageHeader
+        title="Products"
+        count={!isLoading ? total : undefined}
+        actions={
           <Link
             href="/products/new"
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
           >
             Add product
           </Link>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Content */}
+      {!metaLoading && (
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearAll={() => setFilters([])}
+        />
+      )}
+
       {isLoading ? (
-        <Spinner />
+        <ListSpinner />
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {error}
-        </div>
+        <ListErrorBanner message={error} />
       ) : products.length === 0 ? (
-        <EmptyState />
+        <ProductsEmptyState hasFilters={filters.length > 0} onClearFilters={() => setFilters([])} />
       ) : (
-        <div className="rounded-lg border border-border bg-white overflow-hidden">
+        <ListTableShell>
           <table className="w-full text-left">
             <thead className="border-b border-border bg-[#fafafa]">
               <tr>
-                <th className="py-2.5 pl-5 pr-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Product
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Status
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Type
-                </th>
-                <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Supplier
-                </th>
+                <ListTh>Product</ListTh>
+                <ListTh>Status</ListTh>
+                <ListTh>Type</ListTh>
+                <ListTh>Supplier</ListTh>
               </tr>
             </thead>
             <tbody>
@@ -222,20 +254,8 @@ export default function ProductsPage() {
               ))}
             </tbody>
           </table>
-
-          {hasMore && (
-            <div className="border-t border-border px-5 py-3.5">
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
-              >
-                {isLoadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            </div>
-          )}
-        </div>
+          <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
+        </ListTableShell>
       )}
     </AdminLayout>
   );

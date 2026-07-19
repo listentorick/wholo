@@ -310,7 +310,9 @@ export interface PaginatedResponse<T> {
 export interface ProductListParams {
   limit?: number;
   cursor?: string;
-  status?: ProductStatus;
+  status?: ProductStatus[];
+  productTypeId?: string[];
+  supplierId?: string[];
 }
 
 // ─── Catalogue (customer-facing) ─────────────────────────────────────────────

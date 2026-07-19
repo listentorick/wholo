@@ -157,7 +157,7 @@ function ProductPicker({ token, selectedId, onSelect, disabled }: ProductPickerP
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminProductsApi.list(token, { limit: 500, status: ProductStatus.ACTIVE })
+    adminProductsApi.list(token, { limit: 500, status: [ProductStatus.ACTIVE] })
       .then((r) => setProducts(r.data))
       .finally(() => setLoading(false));
   }, [token]);

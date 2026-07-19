@@ -30,7 +30,9 @@ export class AdminProductsService {
     const baseWhere: Prisma.ProductWhereInput = {
       distributorId,
       deletedAt: null,
-      ...(query.status && { status: query.status }),
+      ...(query.status?.length && { status: { in: query.status } }),
+      ...(query.productTypeId?.length && { productTypeId: { in: query.productTypeId } }),
+      ...(query.supplierId?.length && { supplierId: { in: query.supplierId } }),
     };
 
     let cursorWhere: Prisma.ProductWhereInput = {};

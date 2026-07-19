@@ -109,14 +109,48 @@ describe('AdminProductsService', () => {
       );
     });
 
-    it('applies status filter when provided', async () => {
+    it('applies a single-value status filter as an IN clause', async () => {
       mockPrisma.product.findMany.mockResolvedValue([]);
       mockPrisma.product.count.mockResolvedValue(0);
 
-      await service.findAll(DISTRIBUTOR_ID, { status: 'ACTIVE' as any });
+      await service.findAll(DISTRIBUTOR_ID, { status: ['ACTIVE'] as any });
 
       const call = mockPrisma.product.findMany.mock.calls[0][0];
-      expect(call.where.AND[0].status).toBe('ACTIVE');
+      expect(call.where.AND[0].status).toEqual({ in: ['ACTIVE'] });
+    });
+
+    it('applies a multi-value status filter matching any of the given statuses', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([]);
+      mockPrisma.product.count.mockResolvedValue(0);
+
+      await service.findAll(DISTRIBUTOR_ID, { status: ['ACTIVE', 'DRAFT'] as any });
+
+      const call = mockPrisma.product.findMany.mock.calls[0][0];
+      expect(call.where.AND[0].status).toEqual({ in: ['ACTIVE', 'DRAFT'] });
+    });
+
+    it('applies productTypeId and supplierId filters as IN clauses', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([]);
+      mockPrisma.product.count.mockResolvedValue(0);
+
+      await service.findAll(DISTRIBUTOR_ID, {
+        productTypeId: ['pt-1', 'pt-2'],
+        supplierId: ['sup-1'],
+      });
+
+      const call = mockPrisma.product.findMany.mock.calls[0][0];
+      expect(call.where.AND[0].productTypeId).toEqual({ in: ['pt-1', 'pt-2'] });
+      expect(call.where.AND[0].supplierId).toEqual({ in: ['sup-1'] });
+    });
+
+    it('adds no status/productTypeId/supplierId constraints when filters are empty or absent', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([]);
+      mockPrisma.product.count.mockResolvedValue(0);
+
+      await service.findAll(DISTRIBUTOR_ID, { status: [], productTypeId: [], supplierId: [] } as any);
+
+      const call = mockPrisma.product.findMany.mock.calls[0][0];
+      expect(call.where.AND[0]).toEqual({ distributorId: DISTRIBUTOR_ID, deletedAt: null });
     });
 
     it('scopes query to the requesting distributor only', async () => {
