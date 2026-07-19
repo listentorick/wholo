@@ -123,40 +123,49 @@ async function main() {
     },
   });
 
-  // Garratts — YHMP trade customer portal login
-  await prisma.organisation.update({
+  // Garratts — YHMP trade customer portal login. This organisation and its
+  // trade relationship were created ad hoc through the app (real cuids, not
+  // a seed-fixed id) rather than by this script, so on a genuinely fresh
+  // database neither row exists yet — skip rather than error.
+  const garrattsOrg = await prisma.organisation.findUnique({
     where: { id: 'cmqhajvd8000kou01gacuad3p' },
-    data: { email: 'buyer@garratts.co.uk' },
   });
 
-  const garrattsPasswordHash = await bcrypt.hash('password123', 10);
+  if (garrattsOrg) {
+    await prisma.organisation.update({
+      where: { id: garrattsOrg.id },
+      data: { email: 'buyer@garratts.co.uk' },
+    });
 
-  const garrattsUser = await prisma.user.upsert({
-    where: { email: 'buyer@garratts.co.uk' },
-    update: { keycloakId: 'kc-seed-garratts-1' },
-    create: {
-      email: 'buyer@garratts.co.uk',
-      keycloakId: 'kc-seed-garratts-1',
-      passwordHash: garrattsPasswordHash,
-      firstName: 'Garratts',
-      lastName: 'Buyer',
-    },
-  });
+    const garrattsPasswordHash = await bcrypt.hash('password123', 10);
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: garrattsUser.id, organisationId: 'cmqhajvd8000kou01gacuad3p' } },
-    update: {},
-    create: {
-      userId: garrattsUser.id,
-      organisationId: 'cmqhajvd8000kou01gacuad3p',
-      role: Role.TRADE_CUSTOMER,
-    },
-  });
+    const garrattsUser = await prisma.user.upsert({
+      where: { email: 'buyer@garratts.co.uk' },
+      update: { keycloakId: 'kc-seed-garratts-1' },
+      create: {
+        email: 'buyer@garratts.co.uk',
+        keycloakId: 'kc-seed-garratts-1',
+        passwordHash: garrattsPasswordHash,
+        firstName: 'Garratts',
+        lastName: 'Buyer',
+      },
+    });
 
-  await prisma.tradeRelationship.update({
-    where: { id: 'cmqhajvda000mou01kgeqoz8v' },
-    data: { status: 'ACTIVE' },
-  });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: garrattsUser.id, organisationId: garrattsOrg.id } },
+      update: {},
+      create: {
+        userId: garrattsUser.id,
+        organisationId: garrattsOrg.id,
+        role: Role.TRADE_CUSTOMER,
+      },
+    });
+
+    await prisma.tradeRelationship.updateMany({
+      where: { id: 'cmqhajvda000mou01kgeqoz8v' },
+      data: { status: 'ACTIVE' },
+    });
+  }
 
   // Rogers Bakery
   const rogersBakery = await prisma.organisation.upsert({
