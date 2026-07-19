@@ -27,19 +27,6 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         </svg>
       </button>
 
-      {/* Search */}
-      <div className="flex flex-1 items-center gap-2 rounded border border-border bg-surface px-3 py-1.5 max-w-sm">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-3.5 w-3.5 shrink-0 text-muted">
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          type="search"
-          placeholder="Search…"
-          className="w-full bg-transparent text-sm text-text placeholder-muted outline-none"
-        />
-      </div>
-
       <div className="ml-auto flex items-center gap-3">
         {/* Notification bell */}
         <button className="flex h-8 w-8 items-center justify-center rounded text-muted hover:text-text">
