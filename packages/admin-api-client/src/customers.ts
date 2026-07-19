@@ -19,7 +19,10 @@ export const adminCustomersApi = {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', params.cursor);
-    if (params?.status) query.set('status', params.status);
+    if (params?.status?.length) query.set('status', params.status.join(','));
+    if (params?.priceListId?.length) query.set('priceListId', params.priceListId.join(','));
+    if (params?.deliveryProfileId?.length) query.set('deliveryProfileId', params.deliveryProfileId.join(','));
+    if (params?.catalogueId?.length) query.set('catalogueId', params.catalogueId.join(','));
     const qs = query.toString();
     return apiFetch<PaginatedResponse<Customer>>(`/api/v1/customers${qs ? `?${qs}` : ''}`, { token });
   },

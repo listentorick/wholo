@@ -527,7 +527,10 @@ export type CustomerSelfView = Omit<
 export interface CustomerListParams {
   limit?: number;
   cursor?: string;
-  status?: TradeRelationshipStatus;
+  status?: TradeRelationshipStatus[];
+  priceListId?: string[];
+  deliveryProfileId?: string[];
+  catalogueId?: string[];
 }
 
 export interface CreateCustomerRequest {

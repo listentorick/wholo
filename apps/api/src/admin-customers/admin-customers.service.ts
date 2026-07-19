@@ -65,10 +65,20 @@ export class AdminCustomersService {
     const limit = query.limit ?? 20;
     const take = limit + 1;
 
+    // priceListId/deliveryProfileId both nest under the same traderCustomerSettings
+    // relation — must be merged into one where-object, not spread as two separate
+    // `traderCustomerSettings` keys (the second would silently clobber the first).
+    const traderSettingsWhere: Prisma.TraderCustomerSettingsWhereInput = {
+      ...(query.priceListId?.length && { priceListId: { in: query.priceListId } }),
+      ...(query.deliveryProfileId?.length && { deliveryProfileId: { in: query.deliveryProfileId } }),
+    };
+
     const baseWhere: Prisma.TradeRelationshipWhereInput = {
       distributorId,
       deletedAt: null,
-      ...(query.status && { status: query.status }),
+      ...(query.status?.length && { status: { in: query.status } }),
+      ...(Object.keys(traderSettingsWhere).length > 0 && { traderCustomerSettings: traderSettingsWhere }),
+      ...(query.catalogueId?.length && { catalogues: { some: { catalogueId: { in: query.catalogueId } } } }),
     };
 
     let cursorWhere: Prisma.TradeRelationshipWhereInput = {};

@@ -150,21 +150,80 @@ describe('AdminCustomersService', () => {
       );
     });
 
-    it('applies status filter', async () => {
+    it('applies a single-value status filter as an IN clause', async () => {
       mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
       mockPrisma.tradeRelationship.count.mockResolvedValue(0);
 
-      await service.findAll('dist-1', { status: TradeRelationshipStatus.PENDING_INVITE });
+      await service.findAll('dist-1', { status: [TradeRelationshipStatus.PENDING_INVITE] });
 
       expect(mockPrisma.tradeRelationship.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             AND: expect.arrayContaining([
-              expect.objectContaining({ status: TradeRelationshipStatus.PENDING_INVITE }),
+              expect.objectContaining({ status: { in: [TradeRelationshipStatus.PENDING_INVITE] } }),
             ]),
           }),
         }),
       );
+    });
+
+    it('applies a multi-value status filter matching any of the given statuses', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.tradeRelationship.count.mockResolvedValue(0);
+
+      await service.findAll('dist-1', {
+        status: [TradeRelationshipStatus.PENDING_INVITE, TradeRelationshipStatus.ACTIVE],
+      });
+
+      const call = mockPrisma.tradeRelationship.findMany.mock.calls[0][0];
+      expect(call.where.AND[0].status).toEqual({
+        in: [TradeRelationshipStatus.PENDING_INVITE, TradeRelationshipStatus.ACTIVE],
+      });
+    });
+
+    it('applies a priceListId filter nested under traderCustomerSettings', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.tradeRelationship.count.mockResolvedValue(0);
+
+      await service.findAll('dist-1', { priceListId: ['pl-1'] });
+
+      const call = mockPrisma.tradeRelationship.findMany.mock.calls[0][0];
+      expect(call.where.AND[0].traderCustomerSettings).toEqual({ priceListId: { in: ['pl-1'] } });
+    });
+
+    it('merges priceListId and deliveryProfileId into a single traderCustomerSettings clause', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.tradeRelationship.count.mockResolvedValue(0);
+
+      await service.findAll('dist-1', { priceListId: ['pl-1'], deliveryProfileId: ['dp-1'] });
+
+      const call = mockPrisma.tradeRelationship.findMany.mock.calls[0][0];
+      // Both constraints must land in the same object — a naive flat-spread of two
+      // separate `traderCustomerSettings` keys would let the second clobber the first.
+      expect(call.where.AND[0].traderCustomerSettings).toEqual({
+        priceListId: { in: ['pl-1'] },
+        deliveryProfileId: { in: ['dp-1'] },
+      });
+    });
+
+    it('applies a catalogueId filter as a some() relation filter', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.tradeRelationship.count.mockResolvedValue(0);
+
+      await service.findAll('dist-1', { catalogueId: ['cat-1', 'cat-2'] });
+
+      const call = mockPrisma.tradeRelationship.findMany.mock.calls[0][0];
+      expect(call.where.AND[0].catalogues).toEqual({ some: { catalogueId: { in: ['cat-1', 'cat-2'] } } });
+    });
+
+    it('adds no filter constraints when status/priceListId/deliveryProfileId/catalogueId are absent', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.tradeRelationship.count.mockResolvedValue(0);
+
+      await service.findAll('dist-1', {});
+
+      const call = mockPrisma.tradeRelationship.findMany.mock.calls[0][0];
+      expect(call.where.AND[0]).toEqual({ distributorId: 'dist-1', deletedAt: null });
     });
   });
 

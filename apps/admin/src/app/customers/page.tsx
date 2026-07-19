@@ -1,74 +1,104 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
+import { useCursorList } from '@/lib/hooks/use-cursor-list';
 import { AdminLayout } from '@/components/AdminLayout';
+import { ListPageHeader } from '@/components/list/ListPageHeader';
+import { ListTableShell } from '@/components/list/ListTableShell';
+import { ListTh } from '@/components/list/ListTh';
+import { ListRow } from '@/components/list/ListRow';
+import { ListCellLink } from '@/components/list/ListCellLink';
+import { ListPagination } from '@/components/list/ListPagination';
+import { ListErrorBanner } from '@/components/list/ListErrorBanner';
+import { ListSpinner } from '@/components/list/ListSpinner';
+import { ListEmptyState } from '@/components/list/ListEmptyState';
+import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { FilterBar } from '@/components/list/filter-bar/FilterBar';
+import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { PriceListDrawer } from '@/components/customers/PriceListDrawer';
 import { CatalogueDrawer } from '@/components/customers/CatalogueDrawer';
 import { DeliveryProfileDrawer } from '@/components/customers/DeliveryProfileDrawer';
-import { adminCustomersApi } from '@wholo/admin-api-client';
-import type { Customer } from '@wholo/types';
+import {
+  adminCustomersApi,
+  adminPriceListsApi,
+  adminDeliveryProfilesApi,
+  adminCataloguesApi,
+} from '@wholo/admin-api-client';
+import type {
+  Customer,
+  PriceListSummary,
+  DeliveryProfileSummary,
+  CatalogueSummary,
+  CustomerListParams,
+} from '@wholo/types';
 import { TradeRelationshipStatus } from '@wholo/types';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-const STATUS_META: Record<TradeRelationshipStatus, { label: string; bg: string; text: string }> = {
-  [TradeRelationshipStatus.PENDING_INVITE]: { label: 'Pending invite', bg: '#fef9c3', text: '#a16207' },
-  [TradeRelationshipStatus.PENDING_REQUEST]: { label: 'Pending request', bg: '#dbeafe', text: '#1d4ed8' },
-  [TradeRelationshipStatus.ACTIVE]: { label: 'Active', bg: '#dcfce7', text: '#15803d' },
-  [TradeRelationshipStatus.SUSPENDED]: { label: 'Suspended', bg: '#fee2e2', text: '#b91c1c' },
-  [TradeRelationshipStatus.INACTIVE]: { label: 'Inactive', bg: '#f3f4f6', text: '#6b7280' },
+const STATUS_META: Record<TradeRelationshipStatus, { label: string; tone: StatusTone }> = {
+  [TradeRelationshipStatus.PENDING_INVITE]: { label: 'Pending invite', tone: 'yellow' },
+  [TradeRelationshipStatus.PENDING_REQUEST]: { label: 'Pending request', tone: 'blue' },
+  [TradeRelationshipStatus.ACTIVE]: { label: 'Active', tone: 'green' },
+  [TradeRelationshipStatus.SUSPENDED]: { label: 'Suspended', tone: 'red' },
+  [TradeRelationshipStatus.INACTIVE]: { label: 'Inactive', tone: 'gray' },
 };
 
-function StatusBadge({ status }: { status: TradeRelationshipStatus }) {
-  const s = STATUS_META[status] ?? STATUS_META[TradeRelationshipStatus.INACTIVE];
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-      style={{ backgroundColor: s.bg, color: s.text }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: s.text }} />
-      {s.label}
-    </span>
-  );
+function CustomerStatusBadge({ status }: { status: TradeRelationshipStatus }) {
+  const meta = STATUS_META[status] ?? STATUS_META[TradeRelationshipStatus.INACTIVE];
+  return <StatusBadge label={meta.label} tone={meta.tone} />;
+}
+
+// ─── Filters ──────────────────────────────────────────────────────────────────
+
+function buildApiParams(filters: ActiveFilter[], cursor: string | undefined): CustomerListParams {
+  const params: CustomerListParams = { limit: 20, cursor };
+  for (const f of filters) {
+    const values = Array.isArray(f.value) ? f.value : [f.value];
+    if (f.field === 'status') params.status = values as TradeRelationshipStatus[];
+    else if (f.field === 'priceList') params.priceListId = values;
+    else if (f.field === 'deliveryProfile') params.deliveryProfileId = values;
+    else if (f.field === 'catalogue') params.catalogueId = values;
+  }
+  return params;
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyState() {
+function CustomersEmptyState({ hasFilters, onClearFilters }: { hasFilters: boolean; onClearFilters: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-white py-20 px-8 text-center">
-      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-2xl bg-[#eef2ff]">
+    <ListEmptyState
+      icon={
         <svg viewBox="0 0 64 64" fill="none" className="h-14 w-14" aria-hidden>
-          <circle cx="26" cy="22" r="10" fill="#c7d2fe" />
-          <path d="M6 54c0-11 9-18 20-18s20 7 20 18" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="46" cy="26" r="7" fill="#a5b4fc" />
-          <path d="M38 54c0-8 5-13 8-15" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="26" cy="22" r="10" className="fill-primary/40" />
+          <path d="M6 54c0-11 9-18 20-18s20 7 20 18" className="stroke-primary" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="46" cy="26" r="7" className="fill-primary/30" />
+          <path d="M38 54c0-8 5-13 8-15" className="stroke-primary" strokeWidth="3" strokeLinecap="round" />
         </svg>
-      </div>
-      <h2 className="mb-2 text-lg font-semibold text-text">No customers yet</h2>
-      <p className="mb-8 max-w-xs text-sm text-muted leading-relaxed">
-        Add your trade customers to manage orders, invoices, and deliveries.
-      </p>
-      <Link
-        href="/customers/new"
-        className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-      >
-        Add your first customer
-      </Link>
-    </div>
-  );
-}
-
-// ─── Spinner ──────────────────────────────────────────────────────────────────
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
-    </div>
+      }
+      title={hasFilters ? 'No matching customers' : 'No customers yet'}
+      description={
+        hasFilters
+          ? 'Try adjusting or clearing your filters.'
+          : 'Add your trade customers to manage orders, invoices, and deliveries.'
+      }
+      action={
+        hasFilters ? (
+          <button type="button" onClick={onClearFilters} className="text-sm text-primary hover:underline">
+            Clear filters
+          </button>
+        ) : (
+          <Link
+            href="/customers/new"
+            className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+          >
+            Add your first customer
+          </Link>
+        )
+      }
+    />
   );
 }
 
@@ -82,32 +112,30 @@ function CustomerRow({ customer }: { customer: Customer }) {
     | null
   >(null);
 
+  const href = `/customers/${customer.id}`;
+
   return (
     <>
-    <tr className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors cursor-pointer">
+    <ListRow>
       <td className="py-3 pl-5 pr-4">
-        <Link href={`/customers/${customer.id}`} className="block">
+        <ListCellLink href={href}>
           <span className="block font-medium text-text text-sm group-hover:text-primary transition-colors">
             {customer.organisation.name}
           </span>
           {customer.organisation.email && (
             <span className="block text-xs text-muted mt-0.5">{customer.organisation.email}</span>
           )}
-        </Link>
+        </ListCellLink>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
-        <Link href={`/customers/${customer.id}`} className="block">
-          {customer.accountNumber ?? '—'}
-        </Link>
+        <ListCellLink href={href}>{customer.accountNumber ?? '—'}</ListCellLink>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
-        <Link href={`/customers/${customer.id}`} className="block">
-          {customer.organisation.phone ?? '—'}
-        </Link>
+        <ListCellLink href={href}>{customer.organisation.phone ?? '—'}</ListCellLink>
       </td>
       <td className="py-3 px-4">
         {customer.catalogues.length === 0 ? (
-          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
+          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         ) : (
           <div className="flex flex-wrap gap-1">
             {customer.catalogues.map((c) => (
@@ -133,7 +161,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
             {customer.priceList.name} →
           </button>
         ) : (
-          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
+          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         )}
       </td>
       <td className="py-3 px-4">
@@ -146,15 +174,15 @@ function CustomerRow({ customer }: { customer: Customer }) {
             {customer.deliveryProfile.name} →
           </button>
         ) : (
-          <Link href={`/customers/${customer.id}`} className="block text-sm text-muted">—</Link>
+          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         )}
       </td>
       <td className="py-3 pl-4 pr-5">
-        <Link href={`/customers/${customer.id}`} className="block">
-          <StatusBadge status={customer.status} />
-        </Link>
+        <ListCellLink href={href}>
+          <CustomerStatusBadge status={customer.status} />
+        </ListCellLink>
       </td>
-    </tr>
+    </ListRow>
     {activeDrawer?.type === 'pricelist' && (
       <PriceListDrawer priceListId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
     )}
@@ -174,42 +202,87 @@ export default function CustomersPage() {
   const { isLoading: authLoading } = useRequireAuth();
   const { accessToken } = useAuth();
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadCustomers = useCallback(async (token: string, nextCursor?: string, append = false) => {
-    try {
-      const result = await adminCustomersApi.list(token, { limit: 20, cursor: nextCursor });
-      setCustomers((prev) => append ? [...prev, ...result.data] : result.data);
-      setCursor(result.pagination.nextCursor ?? undefined);
-      setHasMore(result.pagination.hasMore);
-      setTotal(result.pagination.total);
-    } catch {
-      setError('Failed to load customers. Please refresh.');
-    }
-  }, []);
+  const [priceLists, setPriceLists] = useState<PriceListSummary[]>([]);
+  const [deliveryProfiles, setDeliveryProfiles] = useState<DeliveryProfileSummary[]>([]);
+  const [catalogues, setCatalogues] = useState<CatalogueSummary[]>([]);
+  const [metaLoading, setMetaLoading] = useState(true);
 
   useEffect(() => {
     if (!accessToken) return;
-    setIsLoading(true);
-    loadCustomers(accessToken).finally(() => setIsLoading(false));
-  }, [accessToken, loadCustomers]);
+    Promise.all([
+      adminPriceListsApi.list(accessToken, { limit: 100 }),
+      adminDeliveryProfilesApi.list(accessToken, { limit: 100 }),
+      adminCataloguesApi.list(accessToken, { limit: 100 }),
+    ])
+      .then(([pl, dp, cat]) => {
+        setPriceLists(pl.data.filter((p) => p.active));
+        setDeliveryProfiles(dp.data);
+        setCatalogues(cat.data);
+      })
+      .catch(() => {})
+      .finally(() => setMetaLoading(false));
+  }, [accessToken]);
 
-  async function handleLoadMore() {
-    if (!accessToken || !cursor) return;
-    setIsLoadingMore(true);
-    await loadCustomers(accessToken, cursor, true);
-    setIsLoadingMore(false);
-  }
+  const filterFields = useMemo<FilterFieldConfig[]>(() => [
+    {
+      field: 'status',
+      label: 'Status',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: (Object.keys(STATUS_META) as TradeRelationshipStatus[]).map((s) => ({
+        value: s,
+        label: STATUS_META[s].label,
+      })),
+    },
+    {
+      field: 'priceList',
+      label: 'Price List',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: priceLists.map((pl) => ({ value: pl.id, label: pl.name })),
+    },
+    {
+      field: 'deliveryProfile',
+      label: 'Delivery Profile',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: deliveryProfiles.map((dp) => ({ value: dp.id, label: dp.name })),
+    },
+    {
+      field: 'catalogue',
+      label: 'Catalogue',
+      operators: [{ value: 'is', label: 'is' }],
+      valueKind: 'multi-select',
+      options: catalogues.map((c) => ({ value: c.id, label: c.name })),
+    },
+  ], [priceLists, deliveryProfiles, catalogues]);
+
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+
+  const buildParams = useCallback(
+    (cursor: string | undefined) => buildApiParams(filters, cursor),
+    [filters],
+  );
+
+  const {
+    data: customers,
+    total,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    error,
+    loadMore,
+  } = useCursorList({
+    token: accessToken,
+    fetchPage: adminCustomersApi.list,
+    buildParams,
+    errorMessage: 'Failed to load customers. Please refresh.',
+    deps: [filters],
+  });
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
@@ -217,56 +290,46 @@ export default function CustomersPage() {
 
   return (
     <AdminLayout>
-      {/* Page header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-text">Customers</h1>
-          {!isLoading && total > 0 && (
-            <p className="mt-0.5 text-sm text-muted">{total} customer{total !== 1 ? 's' : ''}</p>
-          )}
-        </div>
-        <Link
-          href="/customers/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-        >
-          Add customer
-        </Link>
-      </div>
+      <ListPageHeader
+        title="Customers"
+        count={!isLoading ? total : undefined}
+        actions={
+          <Link
+            href="/customers/new"
+            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+          >
+            Add customer
+          </Link>
+        }
+      />
+
+      {!metaLoading && (
+        <FilterBar
+          fields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearAll={() => setFilters([])}
+        />
+      )}
 
       {isLoading ? (
-        <Spinner />
+        <ListSpinner />
       ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {error}
-        </div>
+        <ListErrorBanner message={error} />
       ) : customers.length === 0 ? (
-        <EmptyState />
+        <CustomersEmptyState hasFilters={filters.length > 0} onClearFilters={() => setFilters([])} />
       ) : (
-        <div className="rounded-lg border border-border bg-white overflow-hidden">
+        <ListTableShell>
           <table className="w-full text-left">
             <thead className="border-b border-border bg-[#fafafa]">
               <tr>
-                <th className="py-2.5 pl-5 pr-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Customer
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Account #
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Phone
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Catalogues
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Price List
-                </th>
-                <th className="py-2.5 px-4 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Delivery Profile
-                </th>
-                <th className="py-2.5 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted">
-                  Status
-                </th>
+                <ListTh>Customer</ListTh>
+                <ListTh>Account #</ListTh>
+                <ListTh>Phone</ListTh>
+                <ListTh>Catalogues</ListTh>
+                <ListTh>Price List</ListTh>
+                <ListTh>Delivery Profile</ListTh>
+                <ListTh>Status</ListTh>
               </tr>
             </thead>
             <tbody>
@@ -275,20 +338,8 @@ export default function CustomersPage() {
               ))}
             </tbody>
           </table>
-
-          {hasMore && (
-            <div className="border-t border-border px-5 py-3.5">
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
-              >
-                {isLoadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            </div>
-          )}
-        </div>
+          <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
+        </ListTableShell>
       )}
     </AdminLayout>
   );
