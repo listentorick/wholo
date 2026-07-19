@@ -22,7 +22,13 @@ spec:
         - name: seed
           image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
-          command: ["npx", "prisma", "db", "seed"]
+          # Races the api Deployment's migrate initContainer on a genuine
+          # first boot (fresh PVC, many migrations to apply) — the job's
+          # backoffLimit runs out before migrations land. `migrate deploy`
+          # is safe to run concurrently (Prisma takes a migration lock) and
+          # is a no-op if the api pod already finished, so run it here too
+          # rather than relying on hook ordering to race a non-hook resource.
+          command: ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed"]
           envFrom:
             - configMapRef:
                 name: {{ include "wholo.fullname" . }}-api
