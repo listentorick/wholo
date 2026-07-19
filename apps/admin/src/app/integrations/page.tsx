@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { PageHeading } from '@/components/PageHeading';
 import { XeroConnectionCard } from '@/components/integrations/XeroConnectionCard';
 import { ComingSoonProviderCard } from '@/components/integrations/ComingSoonProviderCard';
 
@@ -43,7 +44,7 @@ function IntegrationsPageInner() {
 
   if (authLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
@@ -51,7 +52,7 @@ function IntegrationsPageInner() {
 
   return (
     <AdminLayout>
-      <h1 className="mb-6 text-xl font-semibold text-text">Integrations</h1>
+      <PageHeading className="mb-6">Integrations</PageHeading>
 
       {banner && (
         <div
@@ -79,7 +80,7 @@ export default function IntegrationsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen items-center justify-center bg-surface">
+        <div className="flex h-screen items-center justify-center bg-canvas">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
         </div>
       }

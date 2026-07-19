@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { PageHeading } from '@/components/PageHeading';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
 import { ProductsTab } from '@/components/integrations/products/ProductsTab';
 import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
@@ -27,7 +28,7 @@ const PROVIDER_LABELS: Record<string, string> = { XERO: 'Xero' };
 
 function Spinner() {
   return (
-    <div className="flex h-screen items-center justify-center bg-surface">
+    <div className="flex h-screen items-center justify-center bg-canvas">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
     </div>
   );
@@ -89,7 +90,7 @@ function AccountingPageInner() {
   if (!connection || connection.status !== 'CONNECTED') {
     return (
       <AdminLayout>
-        <h1 className="mb-6 text-xl font-semibold text-text">Accounting</h1>
+        <PageHeading className="mb-6">Accounting</PageHeading>
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
           <h2 className="mb-1.5 text-base font-semibold text-text">No accounting connection</h2>
           <p className="mb-4 text-sm text-muted">
@@ -116,7 +117,7 @@ function AccountingPageInner() {
           Integrations
         </Link>
 
-        <h1 className="text-xl font-semibold text-text">Accounting</h1>
+        <PageHeading>Accounting</PageHeading>
         <p className="mt-0.5 text-sm text-muted">
           {PROVIDER_LABELS[connection.provider] ?? connection.provider} — {connection.externalOrganisationName}
         </p>

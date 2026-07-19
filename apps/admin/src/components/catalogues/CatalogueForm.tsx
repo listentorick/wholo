@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { adminCataloguesApi } from '@wholo/admin-api-client';
 import type { Catalogue } from '@wholo/types';
+import { PageHeading } from '@/components/PageHeading';
 import { ProductTransferPanel } from './ProductTransferPanel';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -154,9 +155,11 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold text-text">
-              {mode === 'create' ? 'New catalogue' : (catalogue?.name ?? 'Edit catalogue')}
-            </h1>
+            {mode === 'create' ? (
+              <PageHeading size="lg">New catalogue</PageHeading>
+            ) : (
+              <h1 className="text-lg font-semibold text-text">{catalogue?.name ?? 'Edit catalogue'}</h1>
+            )}
           </>
         ) : (
           <>
@@ -170,9 +173,11 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
               Catalogues
             </Link>
             <span className="text-border">/</span>
-            <h1 className="text-xl font-semibold text-text">
-              {mode === 'create' ? 'New catalogue' : (catalogue?.name ?? 'Edit catalogue')}
-            </h1>
+            {mode === 'create' ? (
+              <PageHeading>New catalogue</PageHeading>
+            ) : (
+              <h1 className="text-xl font-semibold text-text">{catalogue?.name ?? 'Edit catalogue'}</h1>
+            )}
           </>
         )}
       </div>

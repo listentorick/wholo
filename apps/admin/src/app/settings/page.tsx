@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { PageHeading } from '@/components/PageHeading';
 import { adminSettingsApi } from '@wholo/admin-api-client';
 import { BusinessDetailsForm } from '@/components/settings/BusinessDetailsForm';
 import { DiscoverySettingsForm } from '@/components/settings/DiscoverySettingsForm';
@@ -58,7 +59,7 @@ function SettingsPageInner() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
@@ -76,7 +77,7 @@ function SettingsPageInner() {
 
   return (
     <AdminLayout>
-      <h1 className="mb-6 text-xl font-semibold text-text">Company Settings</h1>
+      <PageHeading className="mb-6">Company Settings</PageHeading>
 
       <div className="mb-6 border-b border-border">
         <nav className="-mb-px flex gap-6 overflow-x-auto">
@@ -124,7 +125,7 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex h-screen items-center justify-center bg-surface">
+        <div className="flex h-screen items-center justify-center bg-canvas">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
         </div>
       }

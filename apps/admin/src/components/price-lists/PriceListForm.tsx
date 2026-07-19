@@ -14,6 +14,7 @@ import {
   PriceListRuleDiscountBaseType,
   ProductStatus,
 } from '@wholo/types';
+import { PageHeading } from '@/components/PageHeading';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -922,9 +923,11 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
-            <h1 className="text-lg font-semibold text-text">
-              {mode === 'create' ? 'New price list' : (initialValues?.name ?? 'Edit price list')}
-            </h1>
+            {mode === 'create' ? (
+              <PageHeading size="lg">New price list</PageHeading>
+            ) : (
+              <h1 className="text-lg font-semibold text-text">{initialValues?.name ?? 'Edit price list'}</h1>
+            )}
             {initialValues?.isDefault && (
               <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#dbeafe] text-[#1d4ed8]">
                 Default
@@ -943,9 +946,11 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
               Price lists
             </Link>
             <span className="text-border">/</span>
-            <h1 className="text-xl font-semibold text-text">
-              {mode === 'create' ? 'New price list' : (initialValues?.name ?? 'Edit price list')}
-            </h1>
+            {mode === 'create' ? (
+              <PageHeading>New price list</PageHeading>
+            ) : (
+              <h1 className="text-xl font-semibold text-text">{initialValues?.name ?? 'Edit price list'}</h1>
+            )}
             {initialValues?.isDefault && (
               <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#dbeafe] text-[#1d4ed8]">
                 Default

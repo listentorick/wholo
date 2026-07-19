@@ -10,7 +10,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { logout, accessToken } = useAuth();
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-surface">
+    <div className="flex h-dvh overflow-hidden bg-canvas">
 
       {/* Mobile backdrop */}
       {sidebarOpen && (

@@ -130,16 +130,16 @@ export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
     <div className="flex h-full flex-col text-sidebar-fg">
 
       {/* Logo */}
-      <div className="flex h-[var(--topbar-height)] shrink-0 items-center gap-2.5 border-b border-sidebar-border px-5">
-        <div
-          className="h-2 w-2 shrink-0 bg-sidebar-accent"
-          style={{ transform: 'rotate(45deg)' }}
-        />
-        <span className="text-[18px] font-bold tracking-tight text-sidebar-fg">Wholo</span>
+      <div className="flex h-[var(--topbar-height)] shrink-0 items-center gap-2.5 border-b border-border bg-topbar-bg px-5">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logos/stocdup-logo-only.png" alt="" className="h-9 w-9 shrink-0" />
+        <span className="text-[18px] font-bold tracking-tight text-text">
+          stoc<span className="text-primary">up</span>
+        </span>
         {/* Close button — visible on mobile only */}
         <button
           onClick={onClose}
-          className="ml-auto flex h-7 w-7 items-center justify-center rounded text-sidebar-fg/60 hover:text-sidebar-fg lg:hidden"
+          className="ml-auto flex h-7 w-7 items-center justify-center rounded text-muted hover:text-text lg:hidden"
           aria-label="Close menu"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
@@ -169,7 +169,7 @@ export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
                   <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
                   {item.label}
                   {item.href === '/integrations' && accountingNeedsAttention > 0 ? (
-                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-sidebar-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-sidebar-accent">
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
                       {accountingNeedsAttention}
                     </span>
                   ) : (

@@ -21,9 +21,14 @@ const config: Config = {
           hover: 'hsl(var(--color-primary-hover))',
         },
         surface: 'hsl(var(--color-surface))',
+        canvas: 'hsl(var(--color-canvas))',
         border: 'hsl(var(--color-border))',
         muted: 'hsl(var(--color-muted))',
         text: 'hsl(var(--color-text))',
+        accent: {
+          DEFAULT: 'hsl(var(--color-accent))',
+          fg: 'hsl(var(--color-accent-fg))',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

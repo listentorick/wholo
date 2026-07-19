@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType } from '@wholo/types';
 import type { ProductType, Supplier, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
 import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi } from '@wholo/admin-api-client';
+import { PageHeading } from '@/components/PageHeading';
 import { ProductImageUploader } from './ProductImageUploader';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
@@ -588,9 +589,11 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
           Products
         </Link>
         <span className="text-border">/</span>
-        <h1 className="text-xl font-semibold text-text">
-          {mode === 'create' ? 'Add product' : (initialValues?.name ?? 'Edit product')}
-        </h1>
+        {mode === 'create' ? (
+          <PageHeading>Add product</PageHeading>
+        ) : (
+          <h1 className="text-xl font-semibold text-text">{initialValues?.name ?? 'Edit product'}</h1>
+        )}
       </div>
 
       {/* Two-column layout */}

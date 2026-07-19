@@ -18,7 +18,7 @@
     box-sizing: border-box;
   }
   body {
-    @apply font-sans bg-surface text-text;
+    @apply font-sans bg-canvas text-text;
     -webkit-font-smoothing: antialiased;
   }
 }

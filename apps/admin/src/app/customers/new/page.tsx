@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
+import { PageHeading } from '@/components/PageHeading';
 import { CustomerSearchStep } from '@/components/customers/CustomerSearchStep';
 import { CustomerConfirmStep } from '@/components/customers/CustomerConfirmStep';
 import { AccountTab } from '@/components/customers/tabs/AccountTab';
@@ -69,7 +70,7 @@ export default function NewCustomerPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface">
+      <div className="flex h-screen items-center justify-center bg-canvas">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
       </div>
     );
@@ -124,7 +125,7 @@ export default function NewCustomerPage() {
           Customers
         </Link>
         <span className="text-border">/</span>
-        <h1 className="text-xl font-semibold text-text">Add customer</h1>
+        <PageHeading>Add customer</PageHeading>
       </div>
 
       <StepIndicator current={step} />
