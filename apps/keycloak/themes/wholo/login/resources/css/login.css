@@ -37,11 +37,9 @@ body {
   margin-bottom: 10px;
 }
 
-.wh-diamond {
-  width: 7px;
-  height: 7px;
-  background-color: #D97036;
-  transform: rotate(45deg);
+.wh-logo {
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
 }
 
@@ -51,6 +49,10 @@ body {
   letter-spacing: -0.03em;
   color: #1e2436;
   line-height: 1;
+}
+
+.wh-title-accent {
+  color: #1565FF;
 }
 
 .wh-subtitle {
@@ -64,7 +66,7 @@ body {
 .wh-divider {
   width: 28px;
   height: 1.5px;
-  background-color: #D97036;
+  background-color: #1565FF;
   margin: 0 auto;
 }
 
@@ -111,7 +113,7 @@ input[type="password"] {
   outline: none;
   transition: border-color 0.2s ease;
   font-family: 'Inter', system-ui, sans-serif;
-  caret-color: #D97036;
+  caret-color: #1565FF;
 }
 
 input[type="text"]::placeholder,
@@ -123,16 +125,16 @@ input[type="password"]::placeholder {
 input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="password"]:focus {
-  border-bottom-color: #D97036;
+  border-bottom-color: #1565FF;
 }
 
 /* ─── Submit button ─────────────────────────────────────── */
 
 .wh-btn {
   width: 100%;
-  border: 1.5px solid #D97036;
+  border: 1.5px solid #1565FF;
   background: #ffffff;
-  color: #D97036;
+  color: #1565FF;
   padding: 15px 20px;
   font-size: 11px;
   font-weight: 600;
@@ -146,13 +148,13 @@ input[type="password"]:focus {
 }
 
 .wh-btn:hover {
-  background: #D97036;
+  background: #1565FF;
   color: #ffffff;
 }
 
 .wh-btn:active {
-  background: #C4622A;
-  border-color: #C4622A;
+  background: #004EEB;
+  border-color: #004EEB;
   color: #ffffff;
 }
 
@@ -179,12 +181,12 @@ input[type="password"]:focus {
 }
 
 .wh-link:hover {
-  color: #D97036;
+  color: #1565FF;
 }
 
 .wh-link--register {
   margin-top: 12px;
-  color: #D97036;
+  color: #1565FF;
   font-weight: 600;
 }
 
@@ -224,7 +226,7 @@ input[type="password"]:focus {
 }
 
 .wh-inline-link {
-  color: #D97036;
+  color: #1565FF;
   text-decoration: none;
 }
 

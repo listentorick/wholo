@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>Sign In — Wholo</title>
+  <title>Sign In — Stocdup</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${url.resourcesPath}/css/login.css">
@@ -15,8 +15,8 @@
 
     <div class="wh-header">
       <div class="wh-wordmark">
-        <div class="wh-diamond"></div>
-        <span class="wh-title">Wholo</span>
+        <img src="${url.resourcesPath}/img/stocdup-logo-only.png" alt="" class="wh-logo" />
+        <span class="wh-title">stocd<span class="wh-title-accent">up</span></span>
       </div>
       <p class="wh-subtitle">Sign In</p>
       <div class="wh-divider"></div>
@@ -70,7 +70,7 @@
     </#if>
 
     <#if realm.registrationAllowed && !registrationDisabled??>
-      <a class="wh-link wh-link--register" href="${url.registrationUrl}">New to Wholo? Create an account</a>
+      <a class="wh-link wh-link--register" href="${url.registrationUrl}">New to Stocdup? Create an account</a>
     </#if>
 
   </div>
