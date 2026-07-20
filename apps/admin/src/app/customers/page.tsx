@@ -130,10 +130,10 @@ function CustomerRow({ customer }: { customer: Customer }) {
       <td className="py-3 px-4 text-sm text-muted">
         <ListCellLink href={href}>{customer.accountNumber ?? '—'}</ListCellLink>
       </td>
-      <td className="py-3 px-4 text-sm text-muted">
+      <td className="py-3 px-4 max-md:pr-5 text-sm text-muted">
         <ListCellLink href={href}>{customer.organisation.phone ?? '—'}</ListCellLink>
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden md:table-cell">
         {customer.catalogues.length === 0 ? (
           <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         ) : (
@@ -151,7 +151,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
           </div>
         )}
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden md:table-cell">
         {customer.priceList ? (
           <button
             type="button"
@@ -164,7 +164,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
           <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         )}
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 hidden md:table-cell">
         {customer.deliveryProfile ? (
           <button
             type="button"
@@ -177,7 +177,7 @@ function CustomerRow({ customer }: { customer: Customer }) {
           <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
         )}
       </td>
-      <td className="py-3 pl-4 pr-5">
+      <td className="py-3 pl-4 pr-5 hidden md:table-cell">
         <ListCellLink href={href}>
           <CustomerStatusBadge status={customer.status} />
         </ListCellLink>
@@ -325,11 +325,11 @@ export default function CustomersPage() {
               <tr>
                 <ListTh>Customer</ListTh>
                 <ListTh>Account #</ListTh>
-                <ListTh>Phone</ListTh>
-                <ListTh>Catalogues</ListTh>
-                <ListTh>Price List</ListTh>
-                <ListTh>Delivery Profile</ListTh>
-                <ListTh>Status</ListTh>
+                <ListTh className="max-md:pr-5">Phone</ListTh>
+                <ListTh className="hidden md:table-cell">Catalogues</ListTh>
+                <ListTh className="hidden md:table-cell">Price List</ListTh>
+                <ListTh className="hidden md:table-cell">Delivery Profile</ListTh>
+                <ListTh className="hidden md:table-cell">Status</ListTh>
               </tr>
             </thead>
             <tbody>

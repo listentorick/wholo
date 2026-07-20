@@ -71,7 +71,7 @@ function DeliveryProfileRow({ profile }: { profile: DeliveryProfileSummary }) {
           </span>
         </ListCellLink>
       </td>
-      <td className="py-3 px-4 text-sm text-muted">
+      <td className="py-3 px-4 text-sm text-muted hidden md:table-cell">
         <ListCellLink href={href}>{weekdaysLabel(profile.defaultWeekdays)}</ListCellLink>
       </td>
       <td className="py-3 px-4 text-sm text-muted">
@@ -145,7 +145,7 @@ export default function DeliveryProfilesPage() {
             <thead className="border-b border-border bg-[#fafafa]">
               <tr>
                 <ListTh>Profile</ListTh>
-                <ListTh>Delivery days</ListTh>
+                <ListTh className="hidden md:table-cell">Delivery days</ListTh>
                 <ListTh>Customers</ListTh>
                 <ListTh>Status</ListTh>
               </tr>
