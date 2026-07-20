@@ -71,7 +71,7 @@ function CatalogueRow({ catalogue }: { catalogue: CatalogueSummary }) {
           <span className="text-sm text-text">{catalogue._count.products}</span>
         </ListCellLink>
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 max-md:pr-5">
         <ListCellLink href={href}>
           {noCustomers ? (
             <StatusBadge label="No customers" tone="yellow" />
@@ -80,7 +80,7 @@ function CatalogueRow({ catalogue }: { catalogue: CatalogueSummary }) {
           )}
         </ListCellLink>
       </td>
-      <td className="py-3 pl-4 pr-5 text-sm text-muted">
+      <td className="py-3 pl-4 pr-5 text-sm text-muted hidden md:table-cell">
         <ListCellLink href={href}>
           {new Date(catalogue.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
         </ListCellLink>
@@ -149,8 +149,8 @@ export default function CataloguesPage() {
               <tr>
                 <ListTh>Catalogue</ListTh>
                 <ListTh>Products</ListTh>
-                <ListTh>Customers</ListTh>
-                <ListTh>Created</ListTh>
+                <ListTh className="max-md:pr-5">Customers</ListTh>
+                <ListTh className="hidden md:table-cell">Created</ListTh>
               </tr>
             </thead>
             <tbody>
