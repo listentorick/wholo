@@ -47,7 +47,7 @@ export function ImportContactDialog({ contact, token, onClose, onImported }: Pro
       </div>
       <div className="p-5 space-y-4">
         <p className="text-xs text-muted">
-          This creates a new Wholo customer from &ldquo;{contact.displayName}&rdquo;. It won&apos;t create a login
+          This creates a new Stocdup customer from &ldquo;{contact.displayName}&rdquo;. It won&apos;t create a login
           user or send an invitation — you can add ordering users and invite them once the customer is set up.
         </p>
 

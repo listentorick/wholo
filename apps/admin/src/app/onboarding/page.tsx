@@ -182,9 +182,12 @@ export default function OnboardingPage() {
           previews the workspace anatomy the new distributor is about to enter. */}
       <aside className="flex shrink-0 flex-col justify-between bg-sidebar-bg px-8 py-8 lg:w-[380px] lg:px-10 lg:py-12">
         <div className="motion-safe:animate-[onboarding-enter_0.5s_ease-out]">
-          <div className="inline-flex items-center gap-[7px]">
-            <div className="h-[7px] w-[7px] shrink-0 rotate-45 bg-primary" aria-hidden />
-            <span className="text-2xl font-bold leading-none tracking-[-0.03em] text-sidebar-fg">Wholo</span>
+          <div className="inline-flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/stocdup-logo-only.png" alt="" className="h-8 w-8 shrink-0" />
+            <span className="text-2xl font-bold leading-none tracking-[-0.03em] text-sidebar-fg">
+              stocd<span className="text-primary">up</span>
+            </span>
           </div>
 
           <h1 className="mt-10 text-3xl font-semibold leading-tight tracking-tight text-sidebar-fg lg:mt-16">

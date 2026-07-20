@@ -108,7 +108,7 @@ export function DiscoverySettingsForm({ settings, onSave, mode = 'tab', onNext, 
     <form onSubmit={handleSubmit(onSubmit)}>
       <FormCard
           title="Discovery & marketplace"
-          description="Control whether your business appears in the Wholo distributor marketplace."
+          description="Control whether your business appears in the Stocdup distributor marketplace."
         >
           <div className="space-y-4">
             {fields}

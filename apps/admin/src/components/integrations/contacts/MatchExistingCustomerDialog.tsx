@@ -58,7 +58,7 @@ export function MatchExistingCustomerDialog({ contact, token, onClose, onMatched
       </div>
       <div className="p-5 space-y-4">
         <p className="text-xs text-muted">
-          Link &ldquo;{contact.displayName}&rdquo; to a customer you already have in Wholo.
+          Link &ldquo;{contact.displayName}&rdquo; to a customer you already have in Stocdup.
         </p>
 
         <div>

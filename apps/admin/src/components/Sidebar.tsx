@@ -134,7 +134,7 @@ export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logos/stocdup-logo-only.png" alt="" className="h-9 w-9 shrink-0" />
         <span className="text-[18px] font-bold tracking-tight text-text">
-          stoc<span className="text-primary">up</span>
+          stocd<span className="text-primary">up</span>
         </span>
         {/* Close button — visible on mobile only */}
         <button

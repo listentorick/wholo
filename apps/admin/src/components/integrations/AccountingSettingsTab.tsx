@@ -58,7 +58,7 @@ export function AccountingSettingsTab({ token, connection, onConnectionUpdated }
     <div className="max-w-2xl rounded-lg border border-border bg-white p-6">
       <h2 className="text-base font-semibold text-text">Invoice creation</h2>
       <p className="mt-0.5 mb-4 text-sm text-muted">
-        Choose the status new invoices are created with in your accounting system when a Wholo order is
+        Choose the status new invoices are created with in your accounting system when a Stocdup order is
         accepted.
       </p>
 

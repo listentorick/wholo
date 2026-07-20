@@ -96,7 +96,7 @@ export function XeroConnectionCard({ token }: Props) {
       ) : isError ? (
         <div className="mt-4 space-y-3">
           <p className="text-xs text-red-600">
-            Wholo lost access to your Xero organisation. Reconnect to restore syncing.
+            Stocdup lost access to your Xero organisation. Reconnect to restore syncing.
           </p>
           <button
             type="button"

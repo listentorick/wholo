@@ -20,16 +20,9 @@ export default function LoginPage() {
         backgroundColor: 'hsl(var(--color-surface))',
       }}
     >
-      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
-        <div
-          style={{
-            width: '7px',
-            height: '7px',
-            backgroundColor: 'hsl(var(--color-primary))',
-            transform: 'rotate(45deg)',
-            flexShrink: 0,
-          }}
-        />
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logos/stocdup-logo-only.png" alt="" style={{ width: '40px', height: '40px', flexShrink: 0 }} />
         <span
           style={{
             fontSize: '34px',
@@ -39,7 +32,7 @@ export default function LoginPage() {
             lineHeight: 1,
           }}
         >
-          Wholo
+          stocd<span style={{ color: 'hsl(var(--color-primary))' }}>up</span>
         </span>
       </div>
     </div>

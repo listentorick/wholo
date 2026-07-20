@@ -57,7 +57,7 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
       </div>
       <div className="p-5 space-y-4">
         <p className="text-xs text-muted">
-          Link &ldquo;{product.displayName}&rdquo; to a product you already have in Wholo.
+          Link &ldquo;{product.displayName}&rdquo; to a product you already have in Stocdup.
         </p>
 
         <div>

@@ -60,7 +60,7 @@ export function ImportProductDialog({ product, token, onClose, onImported }: Pro
       </div>
       <div className="p-5 space-y-4">
         <p className="text-xs text-muted">
-          This creates a new Wholo product from &ldquo;{product.displayName}&rdquo; as a draft. It may still need
+          This creates a new Stocdup product from &ldquo;{product.displayName}&rdquo; as a draft. It may still need
           catalogue setup — images, categories and visibility — before customers can see it.
         </p>
 
