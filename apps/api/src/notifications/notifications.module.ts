@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { NOTIFICATION_DELIVERY_QUEUE, NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
 import { CHANNEL_SENDERS } from './channel-senders/channel-sender.interface';
 import { EmailChannelSender } from './channel-senders/email-channel.sender';
+import { CustomerInviteNotificationService } from './customer-invite-notification.service';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationsProcessor } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
@@ -28,6 +29,7 @@ import { OrderPlacedNotificationService } from './order-placed-notification.serv
   ],
   providers: [
     OrderPlacedNotificationService,
+    CustomerInviteNotificationService,
     NotificationsProcessor,
     NotificationDeliveryProcessor,
     EmailChannelSender,
@@ -37,6 +39,6 @@ import { OrderPlacedNotificationService } from './order-placed-notification.serv
       inject: [EmailChannelSender],
     },
   ],
-  exports: [OrderPlacedNotificationService],
+  exports: [OrderPlacedNotificationService, CustomerInviteNotificationService],
 })
 export class NotificationsModule {}

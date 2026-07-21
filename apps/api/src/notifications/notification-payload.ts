@@ -8,3 +8,10 @@ export interface OrderPlacedNotificationPayload {
   autoAccepted: boolean;
   placedByUserId: string;
 }
+
+// Snapshot stored on Notification.payload for CUSTOMER_INVITE_SENT.
+export interface CustomerInviteNotificationPayload {
+  invitationId: string;
+  distributorName: string;
+  inviteUrl: string;
+}

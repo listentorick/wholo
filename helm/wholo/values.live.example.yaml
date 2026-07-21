@@ -36,7 +36,8 @@ api:
   portalUrl: "https://portal.<domain>"
   adminUrl: "https://admin.<domain>"
   smtp:
-    from: "noreply@<domain>"
+    from: "notifications@<domain>"
+    inviteFrom: "noreply@<domain>"
   r2:
     accountId: "CHANGE_ME"
     bucketName: "CHANGE_ME"

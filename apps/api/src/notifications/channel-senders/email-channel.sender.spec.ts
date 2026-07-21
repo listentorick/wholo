@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery } from '@prisma/client';
+import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
 import { EmailChannelSender } from './email-channel.sender';
 
@@ -29,6 +29,7 @@ describe('EmailChannelSender', () => {
       sendOrderPlacedToDistributor: jest.fn().mockResolvedValue(undefined),
       sendOrderReceivedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendOrderConfirmedToCustomer: jest.fn().mockResolvedValue(undefined),
+      sendInvite: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<MailService>;
 
     const config = {
@@ -69,5 +70,26 @@ describe('EmailChannelSender', () => {
       orderNumber: 'ORD-2026-00042',
     });
     expect(mail.sendOrderReceivedToCustomer).not.toHaveBeenCalled();
+  });
+
+  it('sends the invite email for CUSTOMER_INVITE_SENT notifications', async () => {
+    const notification = {
+      type: NotificationType.CUSTOMER_INVITE_SENT,
+      payload: {
+        invitationId: 'inv-1',
+        distributorName: 'Vinos Direct',
+        inviteUrl: 'http://localhost:3010/accept-invite?token=abc',
+      },
+    } as unknown as Notification;
+
+    await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'), notification);
+
+    expect(mail.sendInvite).toHaveBeenCalledWith(
+      'buyer@winebar.example',
+      'Vinos Direct',
+      'http://localhost:3010/accept-invite?token=abc',
+    );
+    expect(mail.sendOrderReceivedToCustomer).not.toHaveBeenCalled();
+    expect(mail.sendOrderConfirmedToCustomer).not.toHaveBeenCalled();
   });
 });

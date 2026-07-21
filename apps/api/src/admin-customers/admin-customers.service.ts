@@ -13,7 +13,7 @@ import {
 } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { MailService } from '../mail/mail.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
@@ -58,7 +58,7 @@ export class AdminCustomersService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    private mail: MailService,
+    private outbox: OutboxService,
   ) {}
 
   async findAll(distributorId: string, query: CustomerQueryDto) {
@@ -361,13 +361,15 @@ export class AdminCustomersService {
     const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const inviteUrl = `${portalUrl}/accept-invite?token=${token}`;
 
-    await this.prisma.$transaction([
-      this.prisma.customerInvitation.updateMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.customerInvitation.updateMany({
         where: { tradeRelationshipId: id, email: target, status: InvitationStatus.PENDING },
         data: { status: InvitationStatus.REVOKED },
-      }),
-      this.prisma.customerInvitation.create({
+      });
+
+      const invitation = await tx.customerInvitation.create({
         data: {
           tradeRelationshipId: id,
           distributorId,
@@ -375,11 +377,18 @@ export class AdminCustomersService {
           token,
           expiresAt,
         },
-      }),
-    ]);
+      });
 
-    const inviteUrl = `${portalUrl}/accept-invite?token=${token}`;
-    await this.mail.sendInvite(target, rel.distributor.name, inviteUrl);
+      // Sending is async from here — see CustomerInviteNotificationService
+      // (NOTIFICATIONS_QUEUE, routed via EVENT_ROUTES['CustomerInviteSent']).
+      await this.outbox.writeEvent(tx, 'CustomerInvitation', invitation.id, 'CustomerInviteSent', {
+        invitationId: invitation.id,
+        distributorId,
+        email: target,
+        distributorName: rel.distributor.name,
+        inviteUrl,
+      });
+    });
 
     return {
       inviteUrl,

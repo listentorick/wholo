@@ -2,6 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
+import { CustomerInviteNotificationService, CustomerInviteSentEventPayload } from './customer-invite-notification.service';
 import { OrderPlacedNotificationService, OrderSubmittedEventPayload } from './order-placed-notification.service';
 
 export interface OutboxEventJobData {
@@ -18,13 +19,20 @@ export interface OutboxEventJobData {
 export class NotificationsProcessor extends WorkerHost {
   private readonly logger = new Logger(NotificationsProcessor.name);
 
-  constructor(private readonly orderPlaced: OrderPlacedNotificationService) {
+  constructor(
+    private readonly orderPlaced: OrderPlacedNotificationService,
+    private readonly customerInvite: CustomerInviteNotificationService,
+  ) {
     super();
   }
 
   async process(job: Job<OutboxEventJobData>): Promise<void> {
     if (job.name === 'OrderSubmitted') {
       await this.orderPlaced.handleOrderSubmitted(job.data.payload as OrderSubmittedEventPayload);
+      return;
+    }
+    if (job.name === 'CustomerInviteSent') {
+      await this.customerInvite.handleCustomerInviteSent(job.data.payload as CustomerInviteSentEventPayload);
       return;
     }
     this.logger.warn(`No notification handler for event type '${job.name}' (event ${job.data.eventId}); ignoring`);

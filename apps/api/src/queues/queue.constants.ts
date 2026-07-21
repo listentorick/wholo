@@ -21,6 +21,7 @@ export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 // there's no separate inbox table for these routes.
 export const EVENT_ROUTES: Record<string, string[]> = {
   OrderSubmitted: [NOTIFICATIONS_QUEUE],
+  CustomerInviteSent: [NOTIFICATIONS_QUEUE],
   OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
   // Manual "retry export" — same uniform-outbox rationale as the sync events;
   // business idempotency lives in the AccountingInvoiceExport row, so a

@@ -87,6 +87,7 @@ enum OutboxEventStatus {
 
 enum NotificationType {
   ORDER_PLACED
+  CUSTOMER_INVITE_SENT
 }
 
 enum NotificationChannel {

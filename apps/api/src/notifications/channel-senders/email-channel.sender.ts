@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery } from '@prisma/client';
+import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
-import { OrderPlacedNotificationPayload } from '../notification-payload';
+import { CustomerInviteNotificationPayload, OrderPlacedNotificationPayload } from '../notification-payload';
 import { ChannelSender } from './channel-sender.interface';
 
 @Injectable()
@@ -19,6 +19,12 @@ export class EmailChannelSender implements ChannelSender {
   }
 
   async send(delivery: NotificationDelivery, notification: Notification): Promise<void> {
+    if (notification.type === NotificationType.CUSTOMER_INVITE_SENT) {
+      const invitePayload = notification.payload as unknown as CustomerInviteNotificationPayload;
+      await this.mail.sendInvite(delivery.recipient, invitePayload.distributorName, invitePayload.inviteUrl);
+      return;
+    }
+
     const payload = notification.payload as unknown as OrderPlacedNotificationPayload;
 
     if (delivery.audience === NotificationAudience.DISTRIBUTOR) {

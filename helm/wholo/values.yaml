@@ -61,15 +61,20 @@ api:
     publicBaseUrl: ""
     accessKeyId: ""
     secretAccessKey: ""
-  portalUrl: "http://wholo-portal-api:3010"
-  # Must be reachable from a recipient's browser (used in email links) —
-  # do not point this at internal service DNS.
+  # Both must be reachable from a recipient's browser (used in email links) —
+  # do not point either at internal service DNS.
+  portalUrl: "http://localhost:3010"
   adminUrl: "http://localhost:3020"
   # Defaults target the in-cluster MailHog; override for a real provider.
   # user/password empty = no SMTP auth (MailHog default).
   smtp:
     user: ""
     password: ""
+    # From address for invite emails specifically; falls back to smtp.from
+    # if unset. Lets invites ride a separately-verified sending address
+    # (e.g. one already proven to work via Keycloak) independent of the
+    # address used for order notification emails.
+    inviteFrom: ""
   xero:
     clientId: ""
     clientSecret: ""

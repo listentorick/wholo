@@ -4,7 +4,7 @@ import { OrganisationType, TradeRelationshipStatus, InvitationStatus } from '@pr
 import { ConfigService } from '@nestjs/config';
 import { AdminCustomersService } from './admin-customers.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { MailService } from '../mail/mail.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 const mockPrisma = {
   tradeRelationship: {
@@ -31,7 +31,7 @@ const mockPrisma = {
 };
 
 const mockConfig = { get: jest.fn().mockReturnValue('http://portal.test') };
-const mockMail = { sendInvite: jest.fn().mockResolvedValue(undefined) };
+const mockOutbox = { writeEvent: jest.fn().mockResolvedValue({}) };
 
 const makeOrg = (overrides = {}) => ({
   id: 'org-1',
@@ -83,7 +83,7 @@ describe('AdminCustomersService', () => {
         AdminCustomersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
-        { provide: MailService, useValue: mockMail },
+        { provide: OutboxService, useValue: mockOutbox },
       ],
     }).compile();
     service = module.get(AdminCustomersService);
@@ -466,17 +466,60 @@ describe('AdminCustomersService', () => {
   // ── invite ──────────────────────────────────────────────────────────────────
 
   describe('invite', () => {
-    it('revokes pending invites and creates a new one', async () => {
+    it('revokes pending invites, creates a new one, and writes a CustomerInviteSent outbox event', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
         makeRel({ customer: makeOrg({ email: 'acme@example.com' }), distributor: { name: 'Winos Pty Ltd' } }),
       );
-      mockPrisma.$transaction.mockResolvedValue([{}, {}]);
+      mockPrisma.customerInvitation.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.customerInvitation.create.mockResolvedValue({ id: 'inv-1' });
+      mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          customerInvitation: {
+            updateMany: mockPrisma.customerInvitation.updateMany,
+            create: mockPrisma.customerInvitation.create,
+          },
+        }),
+      );
 
       const result = await service.invite('rel-1', 'dist-1');
 
       expect(result.inviteUrl).toContain('/accept-invite?token=');
       expect(result.expiresAt).toBeDefined();
-      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.customerInvitation.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ tradeRelationshipId: 'rel-1', email: 'acme@example.com' }) }),
+      );
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(),
+        'CustomerInvitation',
+        'inv-1',
+        'CustomerInviteSent',
+        expect.objectContaining({
+          invitationId: 'inv-1',
+          distributorId: 'dist-1',
+          email: 'acme@example.com',
+          distributorName: 'Winos Pty Ltd',
+          inviteUrl: result.inviteUrl,
+        }),
+      );
+    });
+
+    it('does not send the invite email directly — only writes the outbox event', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({ customer: makeOrg({ email: 'acme@example.com' }), distributor: { name: 'Winos Pty Ltd' } }),
+      );
+      mockPrisma.customerInvitation.create.mockResolvedValue({ id: 'inv-2' });
+      mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          customerInvitation: {
+            updateMany: mockPrisma.customerInvitation.updateMany,
+            create: mockPrisma.customerInvitation.create,
+          },
+        }),
+      );
+
+      await service.invite('rel-1', 'dist-1');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledTimes(1);
     });
 
     it('throws NotFoundException when relationship not found', async () => {
