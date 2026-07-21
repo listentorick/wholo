@@ -9,6 +9,7 @@ import { AccountingProductSyncScheduler } from './accounting/accounting-product-
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
 import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
+import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxModule } from './outbox/outbox.module';
@@ -62,6 +63,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingContactSyncModule,
     AccountingProductSyncModule,
     OutboxModule,
+    HealthModule,
   ],
   providers: [
     OutboxPublisherService,

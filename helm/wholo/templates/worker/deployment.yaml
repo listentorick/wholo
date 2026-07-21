@@ -24,10 +24,24 @@ spec:
           image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
           command: ["node", "dist/worker.js"]
+          ports:
+            - containerPort: 3099
           envFrom:
             - configMapRef:
                 name: {{ include "wholo.fullname" . }}-api
             - secretRef:
                 name: {{ include "wholo.fullname" . }}-api
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3099
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3099
+            initialDelaySeconds: 10
+            periodSeconds: 5
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

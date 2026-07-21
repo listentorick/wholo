@@ -565,8 +565,9 @@ Observability is provided by the **Grafana stack**, deployed via Helm charts alo
 
 ### Health checks
 
-- Each service exposes a `/health` endpoint covering its critical dependencies (Postgres, Redis).
-- Kubernetes liveness and readiness probes point to `/health`.
+- Each service exposes a liveness endpoint (`/health` for `api`/`admin-api`/`portal-api`, `/health/live` for the `worker`'s bare HTTP health server) that only confirms the process is up — no dependency calls, so a dependency blip can't cause a pod restart.
+- Each service also exposes a readiness endpoint (`/health/ready`) that is dependency-aware: `api` and `worker` check Postgres and Redis; `admin-api` and `portal-api` check that `apps/api` is reachable, since all their business logic proxies through it.
+- Kubernetes liveness probes point to the liveness endpoint; readiness probes point to `/health/ready`.
 
 ---
 

@@ -24,6 +24,7 @@ import { CustomersModule } from './customers/customers.module';
 import { DistributorsModule } from './distributors/distributors.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { HealthController } from './health.controller';
+import { HealthModule } from './health/health.module';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
 
@@ -53,6 +54,7 @@ import './asset-images/branding-asset-types';
     CustomersModule,
     DistributorsModule,
     AccountingModule,
+    HealthModule,
   ],
   controllers: [HealthController],
 })
