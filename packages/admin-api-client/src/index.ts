@@ -12,4 +12,5 @@ export { adminSettingsApi } from './settings';
 export { adminOrderAsApi } from './order-as';
 export { adminAccountingApi } from './accounting';
 export { adminOnboardingApi } from './onboarding';
+export { adminAnalyticsApi } from './analytics';
 export { ApiError } from './base';

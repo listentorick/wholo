@@ -750,6 +750,7 @@ export interface DistributorSettings {
   addressState: string | null;
   addressPostcode: string | null;
   addressCountry: string | null;
+  timezone: string;
   defaultOrderAcceptanceMode: OrderAcceptanceMode;
   marketplaceVisible: boolean;
   marketplaceDescription: string | null;
@@ -1103,4 +1104,135 @@ export interface AvailableDeliveryDate {
 export interface DeliveryAvailabilityResponse {
   dates: AvailableDeliveryDate[];
   profileId: string | null;
+}
+
+// ─── Analytics (wholesaler homepage dashboard) ────────────────────────────────
+
+export type AnalyticsPeriodKey = 'today' | 'week' | 'month' | 'rolling7' | 'rolling30' | 'rolling90' | 'rolling365' | 'custom';
+
+export interface AnalyticsPeriodQuery {
+  period?: AnalyticsPeriodKey;
+  start?: string;
+  end?: string;
+  limit?: number;
+}
+
+export interface AnalyticsPeriod {
+  key: AnalyticsPeriodKey;
+  start: string;
+  end: string;
+}
+
+export type ComparisonStatus = 'value' | 'new' | 'insufficient_history';
+
+export interface AnalyticsComparison {
+  current: number;
+  comparison: number | null;
+  status: ComparisonStatus;
+  absoluteChange: number | null;
+  percentageChange: number | null;
+}
+
+export interface OrderSummaryResponse {
+  distributorId: string;
+  timezone: string;
+  period: AnalyticsPeriod;
+  comparisonPeriod: AnalyticsPeriod | null;
+  generatedAt: string;
+  metrics: {
+    orderValue: AnalyticsComparison;
+    orderCount: AnalyticsComparison;
+    purchasingCustomers: AnalyticsComparison;
+    averageOrderValue: AnalyticsComparison;
+  };
+}
+
+export interface OrderTrendPoint {
+  date: string;
+  value: number;
+  count: number;
+}
+
+export interface OrderTrendResponse {
+  distributorId: string;
+  timezone: string;
+  period: AnalyticsPeriod;
+  comparisonPeriod: AnalyticsPeriod | null;
+  generatedAt: string;
+  current: OrderTrendPoint[];
+  comparison: OrderTrendPoint[];
+}
+
+export interface CustomerRanking {
+  customerId: string;
+  customerName: string;
+  value: number;
+  orderCount: number;
+  share: number | null;
+  change: AnalyticsComparison;
+}
+
+export interface CustomerRankingsResponse {
+  distributorId: string;
+  timezone: string;
+  period: AnalyticsPeriod;
+  comparisonPeriod: AnalyticsPeriod | null;
+  generatedAt: string;
+  totalQualifyingValue: number;
+  top5Share: number | null;
+  customers: CustomerRanking[];
+}
+
+export interface ProductRanking {
+  productId: string;
+  productName: string;
+  value: number;
+  units: number;
+  reach: number;
+}
+
+export interface NonSellingProduct {
+  productId: string;
+  productName: string;
+}
+
+export interface ProductRankingsResponse {
+  distributorId: string;
+  timezone: string;
+  period: AnalyticsPeriod;
+  comparisonPeriod: AnalyticsPeriod | null;
+  generatedAt: string;
+  products: ProductRanking[];
+  nonSellingProducts: NonSellingProduct[];
+}
+
+export interface ActionItemOrder {
+  id: string;
+  orderNumber: string;
+  traderCustomerId: string;
+  submittedAt?: string | null;
+  requestedDeliveryDate?: string | null;
+  totalAmount: string;
+}
+
+export interface ActionItemInvoiceFailure {
+  id: string;
+  orderId: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  failedAt: string | null;
+}
+
+export interface ActionItemNeverOrderedCustomer {
+  customerId: string;
+  customerName: string;
+}
+
+export interface ActionItemsResponse {
+  distributorId: string;
+  generatedAt: string;
+  awaitingAcceptance: ActionItemOrder[];
+  dueForFulfilment: ActionItemOrder[];
+  invoiceFailures: ActionItemInvoiceFailure[];
+  neverOrdered: ActionItemNeverOrderedCustomer[];
 }
