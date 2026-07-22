@@ -8,6 +8,7 @@ import {
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
+  ANALYTICS_FACTS_QUEUE,
   EVENT_ROUTES,
   NOTIFICATIONS_QUEUE,
 } from '../queues/queue.constants';
@@ -32,12 +33,14 @@ export class OutboxPublisherService {
     @InjectQueue(ACCOUNTING_INVOICE_EXPORT_QUEUE) accountingInvoiceExportQueue: Queue,
     @InjectQueue(ACCOUNTING_CONTACT_SYNC_QUEUE) accountingContactSyncQueue: Queue,
     @InjectQueue(ACCOUNTING_PRODUCT_SYNC_QUEUE) accountingProductSyncQueue: Queue,
+    @InjectQueue(ANALYTICS_FACTS_QUEUE) analyticsFactsQueue: Queue,
   ) {
     this.queues = new Map([
       [NOTIFICATIONS_QUEUE, notificationsQueue],
       [ACCOUNTING_INVOICE_EXPORT_QUEUE, accountingInvoiceExportQueue],
       [ACCOUNTING_CONTACT_SYNC_QUEUE, accountingContactSyncQueue],
       [ACCOUNTING_PRODUCT_SYNC_QUEUE, accountingProductSyncQueue],
+      [ANALYTICS_FACTS_QUEUE, analyticsFactsQueue],
     ]);
   }
 

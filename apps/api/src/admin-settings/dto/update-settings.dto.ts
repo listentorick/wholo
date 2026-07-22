@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsArray,
   IsInt,
+  IsIn,
   IsDecimal,
   Matches,
   MaxLength,
@@ -57,6 +58,12 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   addressCountry?: string;
+
+  // Defines calendar-day/week/month boundaries for analytics period
+  // comparisons — see the wholesaler homepage dashboard PRD, §4.1.
+  @IsOptional()
+  @IsIn(Intl.supportedValuesOf('timeZone'), { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
+  timezone?: string;
 
   @IsOptional()
   @IsEnum(OrderAcceptanceMode)

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, IsDecimal, MinLength } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, IsDecimal, IsIn, MinLength } from 'class-validator';
 
 export class UpdateSettingsDto {
   @IsOptional()
@@ -41,6 +41,10 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   addressCountry?: string;
+
+  @IsOptional()
+  @IsIn(Intl.supportedValuesOf('timeZone'), { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
+  timezone?: string;
 
   @IsOptional()
   @IsString()

@@ -20,6 +20,7 @@ import {
 } from '../accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { ACCOUNTING_INVOICE_EXPORT_QUEUE } from '../queues/queue.constants';
 
 interface InvoiceExportJobData {
@@ -52,6 +53,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly accountingConnectionService: AccountingConnectionService,
     private readonly adapters: AccountingAdapterRegistry,
+    private readonly outbox: OutboxService,
   ) {
     super();
   }
@@ -172,7 +174,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     // "reconnect" message rather than letting the provider call 403.
     if (!adapter.hasInvoiceCreationScope(connection.scopes)) {
       await this.markFailed(
-        exportRow.id,
+        exportRow,
         'SCOPE_MISSING',
         'Reconnect the accounting integration to grant Wholo permission to create invoices.',
       );
@@ -183,7 +185,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       (line) => line.status !== OrderLineStatus.CANCELLED && line.status !== OrderLineStatus.REJECTED,
     );
     if (invoiceableLines.length === 0) {
-      await this.markFailed(exportRow.id, 'ORDER_NOT_INVOICEABLE', 'The order has no invoiceable lines.');
+      await this.markFailed(exportRow, 'ORDER_NOT_INVOICEABLE', 'The order has no invoiceable lines.');
       return;
     }
 
@@ -206,7 +208,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       : null;
     if (!customerMapping) {
       await this.markFailed(
-        exportRow.id,
+        exportRow,
         'CUSTOMER_NOT_MAPPED',
         'Cannot create accounting invoice because the customer is not linked to an accounting contact.',
       );
@@ -266,18 +268,38 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
         `${exportRow.id}:${exportRow.retryCount}`,
       );
 
-      await this.prisma.accountingInvoiceExport.update({
-        where: { id: exportRow.id },
-        data: {
-          status: AccountingInvoiceExportStatus.COMPLETED,
-          externalInvoiceId: result.externalInvoiceId,
-          externalInvoiceNumber: result.externalInvoiceNumber ?? null,
-          externalInvoiceStatus: result.externalInvoiceStatus ?? null,
-          exportedAt: new Date(),
-          failedAt: null,
-          errorCode: null,
-          errorMessage: null,
-        },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.accountingInvoiceExport.update({
+          where: { id: exportRow.id },
+          data: {
+            status: AccountingInvoiceExportStatus.COMPLETED,
+            externalInvoiceId: result.externalInvoiceId,
+            externalInvoiceNumber: result.externalInvoiceNumber ?? null,
+            externalInvoiceStatus: result.externalInvoiceStatus ?? null,
+            exportedAt: new Date(),
+            failedAt: null,
+            errorCode: null,
+            errorMessage: null,
+          },
+        });
+        await this.outbox.writeEvent(
+          tx,
+          'AccountingInvoiceExport',
+          exportRow.id,
+          'AccountingInvoiceExportProcessed',
+          {
+            exportId: exportRow.id,
+            orderId: order.id,
+            distributorId: order.distributorId,
+            traderCustomerId: order.traderCustomerId,
+            orderNumber: order.orderNumber,
+            currency: order.currency,
+            subtotalAmount: order.subtotalAmount.toFixed(2),
+            externalInvoiceId: result.externalInvoiceId,
+            externalInvoiceNumber: result.externalInvoiceNumber ?? null,
+            occurredAt: new Date().toISOString(),
+          },
+        );
       });
       this.logger.log(
         `Created ${connection.provider} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
@@ -290,21 +312,41 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       // rethrown so BullMQ retries with backoff (the next attempt claims the
       // FAILED row again).
       const permanent = err instanceof AccountingProviderError && !err.transient;
-      await this.markFailed(exportRow.id, 'PROVIDER_ERROR', message);
+      await this.markFailed(exportRow, 'PROVIDER_ERROR', message);
       if (!permanent) throw err;
     }
   }
 
-  private async markFailed(exportId: string, errorCode: string, errorMessage: string): Promise<void> {
-    this.logger.warn(`Invoice export ${exportId} failed (${errorCode}): ${errorMessage}`);
-    await this.prisma.accountingInvoiceExport.update({
-      where: { id: exportId },
-      data: {
-        status: AccountingInvoiceExportStatus.FAILED,
-        failedAt: new Date(),
-        errorCode,
-        errorMessage,
-      },
+  private async markFailed(
+    exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>,
+    errorCode: string,
+    errorMessage: string,
+  ): Promise<void> {
+    this.logger.warn(`Invoice export ${exportRow.id} failed (${errorCode}): ${errorMessage}`);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accountingInvoiceExport.update({
+        where: { id: exportRow.id },
+        data: {
+          status: AccountingInvoiceExportStatus.FAILED,
+          failedAt: new Date(),
+          errorCode,
+          errorMessage,
+        },
+      });
+      await this.outbox.writeEvent(
+        tx,
+        'AccountingInvoiceExport',
+        exportRow.id,
+        'AccountingInvoiceExportFailed',
+        {
+          exportId: exportRow.id,
+          orderId: exportRow.orderId,
+          distributorId: exportRow.distributorId,
+          errorCode,
+          errorMessage,
+          occurredAt: new Date().toISOString(),
+        },
+      );
     });
   }
 }

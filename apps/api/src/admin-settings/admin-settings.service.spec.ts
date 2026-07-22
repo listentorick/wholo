@@ -30,6 +30,7 @@ const mockOrg = {
 
 const mockSettings = {
   distributorId: 'dist-1',
+  timezone: 'UTC',
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
@@ -72,6 +73,7 @@ describe('AdminSettingsService', () => {
         addressState: 'NSW',
         addressPostcode: '2010',
         addressCountry: 'Australia',
+        timezone: 'UTC',
         defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
         marketplaceVisible: false,
         marketplaceDescription: null,
@@ -204,6 +206,28 @@ describe('AdminSettingsService', () => {
 
       const result = await service.find('dist-1');
       expect(result.minimumOrderSpend).toBe('75.50');
+    });
+
+    it('upserts timezone as a settings field, not an org field', async () => {
+      await service.update('dist-1', { timezone: 'Europe/London' });
+
+      expect(mockPrisma.organisation.update).not.toHaveBeenCalled();
+      expect(mockPrisma.distributorSettings.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ timezone: 'Europe/London' }),
+          update: expect.objectContaining({ timezone: 'Europe/London' }),
+        }),
+      );
+    });
+
+    it('includes timezone in find() result', async () => {
+      mockPrisma.distributorSettings.upsert.mockResolvedValue({
+        ...mockSettings,
+        timezone: 'Europe/London',
+      });
+
+      const result = await service.find('dist-1');
+      expect(result.timezone).toBe('Europe/London');
     });
   });
 });

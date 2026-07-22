@@ -23,6 +23,7 @@ describe('OutboxPublisherService', () => {
   let accountingInvoiceExportQueue: { add: jest.Mock };
   let accountingContactSyncQueue: { add: jest.Mock };
   let accountingProductSyncQueue: { add: jest.Mock };
+  let analyticsFactsQueue: { add: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -35,16 +36,18 @@ describe('OutboxPublisherService', () => {
     accountingInvoiceExportQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingContactSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingProductSyncQueue = { add: jest.fn().mockResolvedValue({}) };
+    analyticsFactsQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
       accountingInvoiceExportQueue as unknown as Queue,
       accountingContactSyncQueue as unknown as Queue,
       accountingProductSyncQueue as unknown as Queue,
+      analyticsFactsQueue as unknown as Queue,
     );
   });
 
-  it('enqueues OrderSubmitted to the notifications queue with jobId = event id and marks it PUBLISHED', async () => {
+  it('enqueues OrderSubmitted to the notifications and analytics-facts queues with jobId = event id and marks it PUBLISHED', async () => {
     prisma.outboxEvent.findMany.mockResolvedValue([makeEvent()]);
 
     await service.publishPending();
@@ -59,6 +62,7 @@ describe('OutboxPublisherService', () => {
       },
       { jobId: 'evt-1' },
     );
+    expect(analyticsFactsQueue.add).toHaveBeenCalledWith('OrderSubmitted', expect.anything(), { jobId: 'evt-1' });
     expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -68,13 +72,28 @@ describe('OutboxPublisherService', () => {
     );
   });
 
-  it('routes OrderAccepted to the accounting-invoice-export queue', async () => {
+  it('routes OrderAccepted to the accounting-invoice-export and analytics-facts queues', async () => {
     prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ id: 'evt-2', eventType: 'OrderAccepted' })]);
 
     await service.publishPending();
 
     expect(accountingInvoiceExportQueue.add).toHaveBeenCalledWith('OrderAccepted', expect.anything(), { jobId: 'evt-2' });
+    expect(analyticsFactsQueue.add).toHaveBeenCalledWith('OrderAccepted', expect.anything(), { jobId: 'evt-2' });
     expect(notificationsQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes OrderRejected and OrderCancelled to the analytics-facts queue only', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-7', eventType: 'OrderRejected' }),
+      makeEvent({ id: 'evt-8', eventType: 'OrderCancelled' }),
+    ]);
+
+    await service.publishPending();
+
+    expect(analyticsFactsQueue.add).toHaveBeenCalledWith('OrderRejected', expect.anything(), { jobId: 'evt-7' });
+    expect(analyticsFactsQueue.add).toHaveBeenCalledWith('OrderCancelled', expect.anything(), { jobId: 'evt-8' });
+    expect(notificationsQueue.add).not.toHaveBeenCalled();
+    expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
   });
 
   it('routes AccountingInvoiceExportRequested (manual retry) to the accounting-invoice-export queue', async () => {
@@ -126,12 +145,13 @@ describe('OutboxPublisherService', () => {
   });
 
   it('marks unrouted event types PUBLISHED without enqueueing anything', async () => {
-    prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ id: 'evt-3', eventType: 'OrderCancelled' })]);
+    prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ id: 'evt-3', eventType: 'SomeUnroutedEvent' })]);
 
     await service.publishPending();
 
     expect(notificationsQueue.add).not.toHaveBeenCalled();
     expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
+    expect(analyticsFactsQueue.add).not.toHaveBeenCalled();
     expect(prisma.outboxEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'evt-3' },

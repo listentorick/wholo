@@ -15,6 +15,7 @@ const baseSettings: DistributorSettings = {
   addressState: null,
   addressPostcode: null,
   addressCountry: null,
+  timezone: 'UTC',
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
@@ -94,6 +95,27 @@ describe('BusinessDetailsForm', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/failed to save/i)).toBeInTheDocument();
+    });
+  });
+
+  it('renders the configured timezone as selected', () => {
+    render(<BusinessDetailsForm settings={{ ...baseSettings, timezone: 'Europe/London' }} onSave={onSave} />);
+
+    expect(screen.getByRole('combobox', { name: /timezone/i })).toHaveValue('Europe/London');
+  });
+
+  it('includes the selected timezone on submit', async () => {
+    render(<BusinessDetailsForm settings={baseSettings} onSave={onSave} />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: /timezone/i }), {
+      target: { value: 'Australia/Sydney' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ timezone: 'Australia/Sydney' }),
+      );
     });
   });
 });

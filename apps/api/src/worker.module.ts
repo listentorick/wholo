@@ -9,6 +9,7 @@ import { AccountingProductSyncScheduler } from './accounting/accounting-product-
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
 import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
+import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -19,6 +20,7 @@ import {
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
+  ANALYTICS_FACTS_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queues/queue.constants';
 import { redisConnectionFromUrl } from './queues/redis-connection';
@@ -54,6 +56,18 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
       },
       { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
       { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
+      {
+        name: ANALYTICS_FACTS_QUEUE,
+        // Fact writes are local DB operations, not external API calls — no
+        // rate-limit-driven backoff needed, just enough retries to ride out a
+        // transient DB blip.
+        defaultJobOptions: {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 5_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
     ),
     PrismaModule,
     MailModule,
@@ -62,6 +76,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingModule,
     AccountingContactSyncModule,
     AccountingProductSyncModule,
+    AnalyticsFactsModule,
     OutboxModule,
     HealthModule,
   ],

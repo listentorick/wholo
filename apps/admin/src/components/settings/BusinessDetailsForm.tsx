@@ -5,7 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
-import { FormCard, FieldLabel, FieldError, TextInput, SaveButton, SaveBanner } from './shared';
+import { FormCard, FieldLabel, FieldError, TextInput, Select, SaveButton, SaveBanner } from './shared';
+
+const IANA_TIMEZONES = Intl.supportedValuesOf('timeZone');
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -18,6 +20,7 @@ const schema = z.object({
   addressState: z.string().optional(),
   addressPostcode: z.string().optional(),
   addressCountry: z.string().optional(),
+  timezone: z.string().min(1, 'Timezone is required'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -44,6 +47,7 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
       addressState: settings.addressState ?? '',
       addressPostcode: settings.addressPostcode ?? '',
       addressCountry: settings.addressCountry ?? '',
+      timezone: settings.timezone,
     },
   });
 
@@ -62,6 +66,7 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
         addressState: data.addressState || undefined,
         addressPostcode: data.addressPostcode || undefined,
         addressCountry: data.addressCountry || undefined,
+        timezone: data.timezone,
       });
       setSuccess(true);
     } catch {
@@ -134,6 +139,22 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
                     <TextInput id="addressCountry" placeholder="Australia" autoComplete="country-name" {...register('addressCountry')} />
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trading calendar</p>
+              <div>
+                <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
+                <Select id="timezone" {...register('timezone')}>
+                  {IANA_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz}>{tz}</option>
+                  ))}
+                </Select>
+                <FieldError message={errors.timezone?.message} />
+                <p className="mt-1.5 text-xs text-muted">
+                  Defines your trading day, week and month boundaries — used throughout order and sales reporting.
+                </p>
               </div>
             </div>
 

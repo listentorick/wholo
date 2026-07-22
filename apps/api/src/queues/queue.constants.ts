@@ -5,6 +5,7 @@ export const NOTIFICATION_DELIVERY_QUEUE = 'notification-delivery';
 export const ACCOUNTING_INVOICE_EXPORT_QUEUE = 'accounting-invoice-export';
 export const ACCOUNTING_CONTACT_SYNC_QUEUE = 'accounting-contact-sync';
 export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
+export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
 
 // Domain event type → queues whose consumers care about it.
 // Activation rule (ADR-047): a route entry ships in the same PR as its
@@ -20,9 +21,11 @@ export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 // other doesn't. jobId = outbox event id gives idempotent dedup for free, so
 // there's no separate inbox table for these routes.
 export const EVENT_ROUTES: Record<string, string[]> = {
-  OrderSubmitted: [NOTIFICATIONS_QUEUE],
+  OrderSubmitted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   CustomerInviteSent: [NOTIFICATIONS_QUEUE],
-  OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
+  OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE, ANALYTICS_FACTS_QUEUE],
+  OrderRejected: [ANALYTICS_FACTS_QUEUE],
+  OrderCancelled: [ANALYTICS_FACTS_QUEUE],
   // Manual "retry export" — same uniform-outbox rationale as the sync events;
   // business idempotency lives in the AccountingInvoiceExport row, so a
   // deliberate retry (new outbox event id = new jobId) is never deduped away.

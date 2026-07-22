@@ -6,7 +6,7 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [pg_trgm]
+  extensions = [pg_trgm, timescaledb]
 }
 
 enum OrganisationType {
@@ -563,6 +563,76 @@ model OrderLine {
   @@map("order_lines")
 }
 
+// ─── Analytics fact layer (wholesaler homepage dashboard) ─────────────────────
+// order_facts / order_line_facts are TimescaleDB hypertables (converted via
+// SELECT create_hypertable(...) hand-appended to the generated migration —
+// Prisma's schema DSL cannot express this, same precedent as the partial
+// unique indexes on the accounting mapping tables). Append-only, immutable —
+// never UPDATE or DELETE a row. Timescale requires every unique index
+// (including the primary key) on a hypertable to include the partitioning
+// column, hence the composite @@id ending in occurredAt rather than a
+// separate cuid — that composite is also the ADR-047 "inbox" idempotency key
+// (a replayed event hits the PK conflict and is a no-op).
+//
+// order_analytics_state is a plain (non-hypertable) table: one row per order,
+// always reflecting current truth, upserted with an out-of-order guard
+// (only accept an incoming event if it's newer than the last one applied).
+// This is what Phase 1's dashboard endpoints query directly — no separate
+// daily-aggregate/continuous-aggregate layer, since aggregating this compact
+// one-row-per-order table at query time is both correct-by-construction
+// (a cancellation just updates its one row) and fast enough at Wholo's scale.
+model OrderFact {
+  eventId              String
+  distributorId        String
+  orderId              String
+  traderCustomerId     String
+  eventType            String // OrderSubmitted | OrderAccepted | OrderRejected | OrderCancelled
+  resultingStatus      OrderStatus
+  subtotalAmount       Decimal     @db.Decimal(10, 2)
+  occurredAt           DateTime // UTC business timestamp; hypertable partitioning column
+  distributorLocalDate DateTime    @db.Date // computed at write time from the distributor's timezone as of this event
+  recordedAt           DateTime    @default(now())
+
+  @@id([eventId, occurredAt])
+  @@index([distributorId, distributorLocalDate])
+  @@index([orderId])
+  @@map("order_facts")
+}
+
+model OrderLineFact {
+  eventId              String
+  orderLineId          String
+  distributorId        String
+  orderId              String
+  productId            String
+  traderCustomerId     String
+  quantity             Int
+  netValue             Decimal  @db.Decimal(10, 2)
+  occurredAt           DateTime
+  distributorLocalDate DateTime @db.Date
+  recordedAt           DateTime @default(now())
+
+  @@id([eventId, orderLineId, occurredAt])
+  @@index([distributorId, distributorLocalDate])
+  @@index([productId])
+  @@map("order_line_facts")
+}
+
+model OrderAnalyticsState {
+  orderId              String      @id
+  distributorId        String
+  traderCustomerId     String
+  status               OrderStatus
+  subtotalAmount       Decimal     @db.Decimal(10, 2)
+  distributorLocalDate DateTime    @db.Date
+  lastEventAt          DateTime
+  updatedAt            DateTime    @updatedAt
+
+  @@index([distributorId, distributorLocalDate, status])
+  @@index([distributorId, traderCustomerId, status])
+  @@map("order_analytics_state")
+}
+
 // ─── Acceptance configuration ─────────────────────────────────────────────────
 
 model DistributorSettings {
@@ -575,6 +645,10 @@ model DistributorSettings {
   orderNotificationEmails    String[]            @default([])
   processingDays             Int[]               @default([1, 2, 3, 4, 5])
   minimumOrderSpend          Decimal?            @db.Decimal(10, 2)
+  // IANA timezone (e.g. "Europe/London") defining this distributor's calendar
+  // day/week/month boundaries for analytics period comparisons — see the
+  // wholesaler homepage dashboard PRD, §4.1.
+  timezone                   String              @default("UTC")
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")

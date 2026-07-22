@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
+import { OutboxService } from '../outbox/outbox.service';
 import { AccountingInvoiceExportProcessor } from './accounting-invoice-export.processor';
 
 const makeJob = (payload: Record<string, unknown> = { orderId: 'order-1', distributorId: 'dist-1' }) =>
@@ -26,6 +27,7 @@ const makeOrder = (overrides: Record<string, unknown> = {}) => ({
   orderNumber: 'ORD-1001',
   status: OrderStatus.ACCEPTED,
   currency: 'GBP',
+  subtotalAmount: new Prisma.Decimal('94.04'),
   acceptedAt: new Date('2026-07-09T18:30:00.000Z'),
   lines: [
     {
@@ -93,9 +95,11 @@ describe('AccountingInvoiceExportProcessor', () => {
     tradeRelationship: { findUnique: jest.Mock };
     customerAccountingMapping: { findFirst: jest.Mock };
     productAccountingMapping: { findMany: jest.Mock };
+    $transaction: jest.Mock;
   };
   let connectionService: { getValidTokenSet: jest.Mock };
   let adapter: { hasInvoiceCreationScope: jest.Mock; createInvoice: jest.Mock };
+  let outbox: { writeEvent: jest.Mock };
 
   const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 's' };
 
@@ -124,7 +128,9 @@ describe('AccountingInvoiceExportProcessor', () => {
           },
         ]),
       },
+      $transaction: jest.fn(),
     };
+    prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
     connectionService = { getValidTokenSet: jest.fn().mockResolvedValue(tokenSet) };
     adapter = {
       hasInvoiceCreationScope: jest.fn().mockReturnValue(true),
@@ -135,10 +141,12 @@ describe('AccountingInvoiceExportProcessor', () => {
         raw: {},
       }),
     };
+    outbox = { writeEvent: jest.fn() };
     processor = new AccountingInvoiceExportProcessor(
       prisma as unknown as PrismaService,
       connectionService as unknown as AccountingConnectionService,
       { get: jest.fn().mockReturnValue(adapter) } as unknown as AccountingAdapterRegistry,
+      outbox as unknown as OutboxService,
     );
   });
 
@@ -225,6 +233,13 @@ describe('AccountingInvoiceExportProcessor', () => {
             externalInvoiceStatus: 'DRAFT',
           }),
         }),
+      );
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        prisma,
+        'AccountingInvoiceExport',
+        'export-1',
+        'AccountingInvoiceExportProcessed',
+        expect.objectContaining({ orderId: 'order-1', distributorId: 'dist-1', externalInvoiceId: 'inv-1' }),
       );
     });
 
@@ -322,6 +337,13 @@ describe('AccountingInvoiceExportProcessor', () => {
       expect(adapter.createInvoice).not.toHaveBeenCalled();
       expect(failedUpdate()![0].data).toEqual(
         expect.objectContaining({ errorCode: 'SCOPE_MISSING' }),
+      );
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        prisma,
+        'AccountingInvoiceExport',
+        'export-1',
+        'AccountingInvoiceExportFailed',
+        expect.objectContaining({ orderId: 'order-1', distributorId: 'dist-1', errorCode: 'SCOPE_MISSING' }),
       );
     });
 

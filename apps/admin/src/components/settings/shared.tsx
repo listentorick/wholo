@@ -40,6 +40,19 @@ export function TextInput({ id, placeholder, disabled, ...props }: React.InputHT
   );
 }
 
+export function Select({ id, disabled, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      id={id}
+      disabled={disabled}
+      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+      {...props}
+    >
+      {children}
+    </select>
+  );
+}
+
 export function Textarea({ id, placeholder, disabled, rows = 3, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea

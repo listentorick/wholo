@@ -23,6 +23,10 @@ spec:
       containers:
         - name: postgresql
           image: {{ .Values.postgresql.image }}
+          # timescaledb must be loaded at server start, not just CREATE EXTENSION'd —
+          # the entrypoint's default CMD is bare `postgres`, so this is the standard
+          # way to pass it a server config flag without a mounted postgresql.conf.
+          args: ["postgres", "-c", "shared_preload_libraries=timescaledb"]
           ports:
             - containerPort: 5432
           env:
