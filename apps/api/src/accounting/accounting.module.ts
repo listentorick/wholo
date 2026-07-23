@@ -40,9 +40,13 @@ import { AccountingProductMatcherService } from './matching/accounting-product-m
   // AccountingConnectionService is used by WorkerModule's dormancy-prevention
   // scheduler; AccountingAdapterRegistry and the matcher services are used by
   // the worker-side sync processors (AccountingContactSyncModule /
-  // AccountingProductSyncModule).
+  // AccountingProductSyncModule). AccountingContactService/AccountingProductService
+  // are used by AccountingBulkImportProcessor (AccountingBulkImportModule) to
+  // reuse the same per-item import/match logic the row actions use.
   exports: [
     AccountingConnectionService,
+    AccountingContactService,
+    AccountingProductService,
     AccountingAdapterRegistry,
     AccountingContactMatcherService,
     AccountingProductMatcherService,

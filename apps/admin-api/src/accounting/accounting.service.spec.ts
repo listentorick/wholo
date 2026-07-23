@@ -78,10 +78,19 @@ describe('AccountingService (BFF)', () => {
     it('forwards limit/cursor/search/status as query params', async () => {
       mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
 
-      await service.listContacts('dist-1', { limit: 20, cursor: 'abc', search: 'blackbird', status: 'SUGGESTED' }, 'token-1');
+      await service.listContacts('dist-1', { limit: 20, cursor: 'abc', search: 'blackbird', status: ['SUGGESTED'] }, 'token-1');
 
       expect(mockApi.get).toHaveBeenCalledWith(
         '/distributors/dist-1/accounting/contacts?limit=20&cursor=abc&search=blackbird&status=SUGGESTED',
+        'token-1',
+      );
+    });
+
+    it('joins multiple selected statuses into a comma-separated value', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listContacts('dist-1', { status: ['SUGGESTED', 'IGNORED'] }, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/contacts?status=SUGGESTED%2CIGNORED',
         'token-1',
       );
     });
@@ -94,8 +103,17 @@ describe('AccountingService (BFF)', () => {
 
     it('forwards the type filter (customers/suppliers/archived)', async () => {
       mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
-      await service.listContacts('dist-1', { type: 'suppliers' }, 'token-1');
+      await service.listContacts('dist-1', { type: ['suppliers'] }, 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/contacts?type=suppliers', 'token-1');
+    });
+
+    it('joins multiple selected types into a comma-separated value', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listContacts('dist-1', { type: ['customers', 'archived'] }, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/contacts?type=customers%2Carchived',
+        'token-1',
+      );
     });
   });
 
@@ -158,10 +176,19 @@ describe('AccountingService (BFF)', () => {
     it('forwards limit/cursor/search/status as query params', async () => {
       mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
 
-      await service.listProducts('dist-1', { limit: 20, cursor: 'abc', search: 'cab', status: 'SUGGESTED' }, 'token-1');
+      await service.listProducts('dist-1', { limit: 20, cursor: 'abc', search: 'cab', status: ['SUGGESTED'] }, 'token-1');
 
       expect(mockApi.get).toHaveBeenCalledWith(
         '/distributors/dist-1/accounting/products?limit=20&cursor=abc&search=cab&status=SUGGESTED',
+        'token-1',
+      );
+    });
+
+    it('joins multiple selected statuses into a comma-separated value', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listProducts('dist-1', { status: ['SUGGESTED', 'IGNORED'] }, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/products?status=SUGGESTED%2CIGNORED',
         'token-1',
       );
     });
@@ -174,8 +201,17 @@ describe('AccountingService (BFF)', () => {
 
     it('forwards the type filter (sold/purchased/tracked)', async () => {
       mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
-      await service.listProducts('dist-1', { type: 'tracked' }, 'token-1');
+      await service.listProducts('dist-1', { type: ['tracked'] }, 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products?type=tracked', 'token-1');
+    });
+
+    it('joins multiple selected types into a comma-separated value', async () => {
+      mockApi.get.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+      await service.listProducts('dist-1', { type: ['sold', 'purchased'] }, 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/products?type=sold%2Cpurchased',
+        'token-1',
+      );
     });
   });
 
@@ -231,6 +267,46 @@ describe('AccountingService (BFF)', () => {
     it('posts to the mapping-scoped unlink route', async () => {
       await service.unlinkProductMapping('dist-1', 'mapping-1', 'token-1');
       expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/mappings/mapping-1/unlink', 'token-1');
+    });
+  });
+
+  describe('bulkImportContacts', () => {
+    it('posts to the contacts bulk-import route with the selection body', async () => {
+      mockApi.post.mockResolvedValue({ jobId: 'job-1' });
+
+      const result = await service.bulkImportContacts('dist-1', { ids: ['ext-1'] }, 'token-1');
+
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/contacts/bulk-import', 'token-1', {
+        ids: ['ext-1'],
+      });
+      expect(result).toEqual({ jobId: 'job-1' });
+    });
+  });
+
+  describe('getContactBulkImportJob', () => {
+    it('gets the contacts bulk-import-job route', async () => {
+      await service.getContactBulkImportJob('dist-1', 'job-1', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/contacts/bulk-import-jobs/job-1', 'token-1');
+    });
+  });
+
+  describe('bulkImportProducts', () => {
+    it('posts to the products bulk-import route with the selection body', async () => {
+      mockApi.post.mockResolvedValue({ jobId: 'job-2' });
+
+      const result = await service.bulkImportProducts('dist-1', { filter: { status: ['READY_TO_IMPORT'] } }, 'token-1');
+
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/bulk-import', 'token-1', {
+        filter: { status: ['READY_TO_IMPORT'] },
+      });
+      expect(result).toEqual({ jobId: 'job-2' });
+    });
+  });
+
+  describe('getProductBulkImportJob', () => {
+    it('gets the products bulk-import-job route', async () => {
+      await service.getProductBulkImportJob('dist-1', 'job-2', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/bulk-import-jobs/job-2', 'token-1');
     });
   });
 

@@ -10,10 +10,11 @@ import { MatchExistingCustomerDialog } from './MatchExistingCustomerDialog';
 interface Props {
   contact: AccountingContactSummary;
   token: string;
+  providerLabel: string;
   onActionComplete: () => void;
 }
 
-export function ContactRowActions({ contact, token, onActionComplete }: Props) {
+export function ContactRowActions({ contact, token, providerLabel, onActionComplete }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
@@ -146,8 +147,10 @@ export function ContactRowActions({ contact, token, onActionComplete }: Props) {
           </button>
         )}
 
-        {contact.status === 'ARCHIVED' && <span className="text-xs text-muted">Archived in Xero</span>}
-        {contact.status === 'NOT_A_CUSTOMER' && <span className="text-xs text-muted">Supplier in Xero</span>}
+        {contact.status === 'ARCHIVED' && <span className="text-xs text-muted">Archived in {providerLabel}</span>}
+        {contact.status === 'NOT_A_CUSTOMER' && (
+          <span className="text-xs text-muted">Supplier in {providerLabel}</span>
+        )}
       </div>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
 

@@ -6,6 +6,7 @@ import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
 import { AccountingProductSyncScheduler } from './accounting/accounting-product-sync.scheduler';
+import { AccountingBulkImportModule } from './accounting-bulk-import/accounting-bulk-import.module';
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
 import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
@@ -17,6 +18,7 @@ import { OutboxModule } from './outbox/outbox.module';
 import { OutboxPublisherService } from './outbox/outbox-publisher.service';
 import { PrismaModule } from './prisma/prisma.module';
 import {
+  ACCOUNTING_BULK_IMPORT_QUEUE,
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
@@ -57,6 +59,18 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
       { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
       { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
       {
+        name: ACCOUNTING_BULK_IMPORT_QUEUE,
+        // Local DB operations per item, not external API calls — same
+        // reasoning as ANALYTICS_FACTS_QUEUE's backoff, just enough retries
+        // to ride out a transient DB blip on a systemic (job-level) failure.
+        defaultJobOptions: {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 5_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
+      {
         name: ANALYTICS_FACTS_QUEUE,
         // Fact writes are local DB operations, not external API calls — no
         // rate-limit-driven backoff needed, just enough retries to ride out a
@@ -72,6 +86,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     PrismaModule,
     MailModule,
     NotificationsModule,
+    AccountingBulkImportModule,
     AccountingInvoiceExportModule,
     AccountingModule,
     AccountingContactSyncModule,

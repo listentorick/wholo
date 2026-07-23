@@ -1,5 +1,5 @@
-import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
 export const ACCOUNTING_CONTACT_STATUS_VALUES = [
@@ -14,11 +14,18 @@ export const ACCOUNTING_CONTACT_STATUS_VALUES = [
 
 export type AccountingContactStatusFilter = (typeof ACCOUNTING_CONTACT_STATUS_VALUES)[number];
 
-// Mirrors the All/Customers/Suppliers/Archived split Xero's own contacts
-// screen already uses — distinct from the match-status filter above (which
-// is "what does Wholo need me to do"), this is "which Xero bucket".
+// The provider's own contact classification (customers/suppliers/archived)
+// — distinct from the match-status filter above (which is "what does Wholo
+// need me to do"), this is "which provider bucket".
 export const ACCOUNTING_CONTACT_TYPE_VALUES = ['customers', 'suppliers', 'archived'] as const;
 export type AccountingContactTypeFilter = (typeof ACCOUNTING_CONTACT_TYPE_VALUES)[number];
+
+// Query values arrive as a single comma-separated string (e.g. `?status=LINKED,IGNORED`)
+// since URLSearchParams naturally serializes one value per key.
+function splitCommaList({ value }: { value: unknown }): unknown {
+  if (value === undefined) return value;
+  return Array.isArray(value) ? value : String(value).split(',');
+}
 
 export class ContactQueryDto {
   @IsOptional()
@@ -34,13 +41,17 @@ export class ContactQueryDto {
   @IsOptional()
   search?: string;
 
-  @ApiProperty({ enum: ACCOUNTING_CONTACT_STATUS_VALUES, required: false })
+  @ApiProperty({ enum: ACCOUNTING_CONTACT_STATUS_VALUES, isArray: true, required: false })
   @IsOptional()
-  @IsIn(ACCOUNTING_CONTACT_STATUS_VALUES)
-  status?: AccountingContactStatusFilter;
+  @Transform(splitCommaList)
+  @IsArray()
+  @IsIn(ACCOUNTING_CONTACT_STATUS_VALUES, { each: true })
+  status?: AccountingContactStatusFilter[];
 
-  @ApiProperty({ enum: ACCOUNTING_CONTACT_TYPE_VALUES, required: false })
+  @ApiProperty({ enum: ACCOUNTING_CONTACT_TYPE_VALUES, isArray: true, required: false })
   @IsOptional()
-  @IsIn(ACCOUNTING_CONTACT_TYPE_VALUES)
-  type?: AccountingContactTypeFilter;
+  @Transform(splitCommaList)
+  @IsArray()
+  @IsIn(ACCOUNTING_CONTACT_TYPE_VALUES, { each: true })
+  type?: AccountingContactTypeFilter[];
 }

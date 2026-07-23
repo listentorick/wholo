@@ -1,5 +1,5 @@
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export const ACCOUNTING_CONTACT_STATUS_VALUES = [
   'LINKED',
@@ -12,6 +12,13 @@ export const ACCOUNTING_CONTACT_STATUS_VALUES = [
 ] as const;
 
 export const ACCOUNTING_CONTACT_TYPE_VALUES = ['customers', 'suppliers', 'archived'] as const;
+
+// Query values arrive as a single comma-separated string (e.g. `?status=LINKED,IGNORED`)
+// since URLSearchParams naturally serializes one value per key.
+function splitCommaList({ value }: { value: unknown }): unknown {
+  if (value === undefined) return value;
+  return Array.isArray(value) ? value : String(value).split(',');
+}
 
 export class ContactQueryDto {
   @IsOptional()
@@ -30,10 +37,14 @@ export class ContactQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsIn(ACCOUNTING_CONTACT_STATUS_VALUES)
-  status?: (typeof ACCOUNTING_CONTACT_STATUS_VALUES)[number];
+  @Transform(splitCommaList)
+  @IsArray()
+  @IsIn(ACCOUNTING_CONTACT_STATUS_VALUES, { each: true })
+  status?: (typeof ACCOUNTING_CONTACT_STATUS_VALUES)[number][];
 
   @IsOptional()
-  @IsIn(ACCOUNTING_CONTACT_TYPE_VALUES)
-  type?: (typeof ACCOUNTING_CONTACT_TYPE_VALUES)[number];
+  @Transform(splitCommaList)
+  @IsArray()
+  @IsIn(ACCOUNTING_CONTACT_TYPE_VALUES, { each: true })
+  type?: (typeof ACCOUNTING_CONTACT_TYPE_VALUES)[number][];
 }

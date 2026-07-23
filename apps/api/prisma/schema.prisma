@@ -180,6 +180,18 @@ enum AccountingInvoiceTargetStatus {
   AUTHORISED
 }
 
+enum AccountingBulkImportRecordType {
+  PRODUCT
+  CONTACT
+}
+
+enum AccountingBulkImportJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model Organisation {
   id                              String              @id @default(cuid())
   name                            String
@@ -228,6 +240,7 @@ model Organisation {
   productAccountingMappings       ProductAccountingMapping[]
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
   accountingInvoiceExports        AccountingInvoiceExport[]
+  accountingBulkImportJobs        AccountingBulkImportJob[]
 
   @@map("organisations")
 }
@@ -686,6 +699,7 @@ model AccountingConnection {
   productMappings          ProductAccountingMapping[]
   productMatchSuggestions  AccountingProductMatchSuggestion[]
   invoiceExports           AccountingInvoiceExport[]
+  bulkImportJobs           AccountingBulkImportJob[]
 
   @@index([distributorId])
   @@map("accounting_connections")
@@ -950,6 +964,40 @@ model AccountingInvoiceExport {
   @@map("accounting_invoice_exports")
 }
 
+// A bulk "import everything selected" run against one connection's cached
+// products or contacts, processed asynchronously by AccountingBulkImportProcessor.
+// selection captures how the caller chose the target set — either explicit
+// ids, or a filter (status/type/search) re-resolved against current data at
+// process time, never trusted as a client-supplied snapshot. results is a
+// flat per-item report (no child table — fine at this feature's volumes);
+// updatedAt doubles as the processor's crash-recovery heartbeat (see
+// PROCESSING_STALE_MS in the processor).
+model AccountingBulkImportJob {
+  id                     String                          @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  recordType             AccountingBulkImportRecordType
+  requestedByUserId      String
+  status                 AccountingBulkImportJobStatus   @default(QUEUED)
+  honourSuggestions      Boolean                         @default(false)
+  selection              Json
+  totalCount             Int                             @default(0)
+  importedCount          Int                             @default(0)
+  matchedCount           Int                             @default(0)
+  skippedCount           Int                             @default(0)
+  failedCount            Int                             @default(0)
+  results                Json                            @default("[]")
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime                        @updatedAt
+  completedAt            DateTime?
+
+  distributor Organisation         @relation(fields: [distributorId], references: [id])
+  connection  AccountingConnection @relation(fields: [accountingConnectionId], references: [id])
+
+  @@index([distributorId, createdAt])
+  @@map("accounting_bulk_import_jobs")
+}
+
 model TraderCustomerSettings {
   id                          String               @id @default(cuid())
   tradeRelationshipId         String               @unique
@@ -1022,6 +1070,33 @@ model NotificationDelivery {
   @@unique([notificationId, channel, recipient])
   @@index([status, createdAt])
   @@map("notification_deliveries")
+}
+
+// ─── Admin notifications ───────────────────────────────────────────────────────
+// Distinct from Notification/NotificationDelivery above: those are the
+// transactional email pipeline (order/invite emails, org/email-keyed, no read
+// state). AdminNotification is a per-admin-user in-app inbox — userId is a
+// User.id, readAt tracks read state, and it has no delivery/channel concept
+// (in-app is the only channel by design; a future push/email fan-out from the
+// same event would call the existing Notification pipeline alongside this,
+// not fold into it). type is a plain string rather than an enum: this is
+// meant to be a generalized mechanism with more than one producer over time,
+// and an enum would need a migration per new producer.
+model AdminNotification {
+  id             String    @id @default(cuid())
+  organisationId String
+  userId         String
+  type           String
+  title          String
+  body           String
+  linkPath       String?
+  payload        Json      @default("{}")
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("admin_notifications")
 }
 
 // ─── Catalogues ───────────────────────────────────────────────────────────────

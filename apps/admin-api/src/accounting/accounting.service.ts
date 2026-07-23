@@ -7,6 +7,8 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
 import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
+import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
+import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
 
 @Injectable()
 export class AccountingService {
@@ -37,8 +39,8 @@ export class AccountingService {
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.search) params.set('search', query.search);
-    if (query.status) params.set('status', query.status);
-    if (query.type) params.set('type', query.type);
+    if (query.status?.length) params.set('status', query.status.join(','));
+    if (query.type?.length) params.set('type', query.type.join(','));
     const qs = params.toString();
     return this.api.get(`/distributors/${distributorId}/accounting/contacts${qs ? `?${qs}` : ''}`, token);
   }
@@ -71,13 +73,21 @@ export class AccountingService {
     return this.api.post(`/distributors/${distributorId}/accounting/contacts/mappings/${mappingId}/unlink`, token);
   }
 
+  bulkImportContacts(distributorId: string, dto: BulkImportContactSelectionDto, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/contacts/bulk-import`, token, dto);
+  }
+
+  getContactBulkImportJob(distributorId: string, jobId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/accounting/contacts/bulk-import-jobs/${jobId}`, token);
+  }
+
   listProducts(distributorId: string, query: ProductQueryDto, token: string) {
     const params = new URLSearchParams();
     if (query.limit != null) params.set('limit', String(query.limit));
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.search) params.set('search', query.search);
-    if (query.status) params.set('status', query.status);
-    if (query.type) params.set('type', query.type);
+    if (query.status?.length) params.set('status', query.status.join(','));
+    if (query.type?.length) params.set('type', query.type.join(','));
     const qs = params.toString();
     return this.api.get(`/distributors/${distributorId}/accounting/products${qs ? `?${qs}` : ''}`, token);
   }
@@ -108,6 +118,14 @@ export class AccountingService {
 
   unlinkProductMapping(distributorId: string, mappingId: string, token: string) {
     return this.api.post(`/distributors/${distributorId}/accounting/products/mappings/${mappingId}/unlink`, token);
+  }
+
+  bulkImportProducts(distributorId: string, dto: BulkImportProductSelectionDto, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/products/bulk-import`, token, dto);
+  }
+
+  getProductBulkImportJob(distributorId: string, jobId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/accounting/products/bulk-import-jobs/${jobId}`, token);
   }
 
   // Server-to-server, no bearer token — this is admin-api forwarding Xero's

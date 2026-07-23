@@ -173,15 +173,54 @@ describe('AccountingProductService', () => {
         row({ id: 'ext-1' }),
         row({ id: 'ext-2', ignoredAt: new Date() }),
       ]);
-      const { data } = await service.listProducts('dist-1', { status: 'IGNORED' });
+      const { data } = await service.listProducts('dist-1', { status: ['IGNORED'] });
       expect(data).toHaveLength(1);
       expect(data[0].id).toBe('ext-2');
     });
 
+    it('matches any of multiple selected statuses', async () => {
+      prisma.externalAccountingProduct.findMany.mockResolvedValue([
+        row({ id: 'ext-1', ignoredAt: new Date() }),
+        row({ id: 'ext-2', isActive: false }),
+        row({ id: 'ext-3' }),
+      ]);
+      const { data } = await service.listProducts('dist-1', { status: ['IGNORED', 'INACTIVE'] });
+      expect(data.map((d) => d.id).sort()).toEqual(['ext-1', 'ext-2']);
+    });
+
     it('applies the provider type filter at the DB level', async () => {
-      await service.listProducts('dist-1', { type: 'tracked' });
+      await service.listProducts('dist-1', { type: ['tracked'] });
       const where = prisma.externalAccountingProduct.findMany.mock.calls[0][0].where;
-      expect(where.AND[0]).toMatchObject({ isTracked: true });
+      expect(where.AND[0]).toMatchObject({ OR: [{ isTracked: true }] });
+    });
+
+    it('combines multiple selected provider types with OR at the DB level', async () => {
+      await service.listProducts('dist-1', { type: ['sold', 'purchased'] });
+      const where = prisma.externalAccountingProduct.findMany.mock.calls[0][0].where;
+      expect(where.AND[0]).toMatchObject({ OR: [{ isSold: true }, { isPurchased: true }] });
+    });
+
+    it('computes hasMore/nextCursor from the status-filtered set, not the raw fetched rows', async () => {
+      prisma.externalAccountingProduct.findMany.mockResolvedValue([
+        row({ id: 'a', ignoredAt: new Date(), createdAt: new Date('2026-01-03') }),
+        row({ id: 'b', createdAt: new Date('2026-01-02') }),
+        row({ id: 'c', ignoredAt: new Date(), createdAt: new Date('2026-01-01') }),
+      ]);
+      const page1 = await service.listProducts('dist-1', { status: ['IGNORED'], limit: 1 });
+      expect(page1.data).toHaveLength(1);
+      expect(page1.data[0].id).toBe('a');
+      expect(page1.pagination.hasMore).toBe(true);
+      expect(page1.pagination.nextCursor).not.toBeNull();
+
+      const page2 = await service.listProducts('dist-1', {
+        status: ['IGNORED'],
+        limit: 1,
+        cursor: page1.pagination.nextCursor!,
+      });
+      expect(page2.data).toHaveLength(1);
+      expect(page2.data[0].id).toBe('c');
+      expect(page2.pagination.hasMore).toBe(false);
+      expect(page2.pagination.nextCursor).toBeNull();
     });
   });
 

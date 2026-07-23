@@ -9,6 +9,8 @@ import { MatchContactDto } from './dto/match-contact.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
+import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
+import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounting')
@@ -106,6 +108,18 @@ export class AccountingController {
     return this.service.unlinkMapping(organisationId, mappingId, token);
   }
 
+  @Post('contacts/bulk-import')
+  bulkImportContacts(@Body() dto: BulkImportContactSelectionDto, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.bulkImportContacts(organisationId, dto, token);
+  }
+
+  @Get('contacts/bulk-import-jobs/:jobId')
+  getContactBulkImportJob(@Param('jobId') jobId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.getContactBulkImportJob(organisationId, jobId, token);
+  }
+
   @Get('products')
   listProducts(@Query() query: ProductQueryDto, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
@@ -160,5 +174,17 @@ export class AccountingController {
   unlinkProductMapping(@Param('mappingId') mappingId: string, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.unlinkProductMapping(organisationId, mappingId, token);
+  }
+
+  @Post('products/bulk-import')
+  bulkImportProducts(@Body() dto: BulkImportProductSelectionDto, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.bulkImportProducts(organisationId, dto, token);
+  }
+
+  @Get('products/bulk-import-jobs/:jobId')
+  getProductBulkImportJob(@Param('jobId') jobId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.getProductBulkImportJob(organisationId, jobId, token);
   }
 }

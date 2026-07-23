@@ -304,12 +304,14 @@ export default function CustomersPage() {
       />
 
       {!metaLoading && (
-        <FilterBar
-          fields={filterFields}
-          filters={filters}
-          onFiltersChange={setFilters}
-          onClearAll={() => setFilters([])}
-        />
+        <div className="mb-4">
+          <FilterBar
+            fields={filterFields}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onClearAll={() => setFilters([])}
+          />
+        </div>
       )}
 
       {isLoading ? (

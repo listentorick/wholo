@@ -10,10 +10,11 @@ import { MatchExistingProductDialog } from './MatchExistingProductDialog';
 interface Props {
   product: AccountingProductSummary;
   token: string;
+  providerLabel: string;
   onActionComplete: () => void;
 }
 
-export function ProductRowActions({ product, token, onActionComplete }: Props) {
+export function ProductRowActions({ product, token, providerLabel, onActionComplete }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
@@ -146,8 +147,12 @@ export function ProductRowActions({ product, token, onActionComplete }: Props) {
           </button>
         )}
 
-        {product.status === 'INACTIVE' && <span className="text-xs text-muted">No longer in Xero</span>}
-        {product.status === 'NOT_SOLD' && <span className="text-xs text-muted">Purchase-only in Xero</span>}
+        {product.status === 'INACTIVE' && (
+          <span className="text-xs text-muted">No longer in {providerLabel}</span>
+        )}
+        {product.status === 'NOT_SOLD' && (
+          <span className="text-xs text-muted">Purchase-only in {providerLabel}</span>
+        )}
       </div>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
 

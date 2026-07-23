@@ -806,9 +806,9 @@ export type AccountingContactStatus =
   | 'ARCHIVED'
   | 'CONFLICT';
 
-// Mirrors Xero's own All/Customers/Suppliers/Archived contacts split —
+// The provider's own contact classification (customers/suppliers/archived) —
 // distinct from AccountingContactStatus, which is "what does Wholo need
-// you to do" rather than "which Xero bucket is this in".
+// you to do" rather than "which provider bucket is this in".
 export type AccountingContactType = 'customers' | 'suppliers' | 'archived';
 
 export type AccountingContactMatchMethod =
@@ -857,8 +857,8 @@ export interface AccountingContactListParams {
   limit?: number;
   cursor?: string;
   search?: string;
-  status?: AccountingContactStatus;
-  type?: AccountingContactType;
+  status?: AccountingContactStatus[];
+  type?: AccountingContactType[];
 }
 
 export interface AccountingContactListResponse {
@@ -866,6 +866,7 @@ export interface AccountingContactListResponse {
   pagination: {
     nextCursor: string | null;
     hasMore: boolean;
+    total: number;
   };
 }
 
@@ -908,7 +909,7 @@ export type AccountingProductStatus =
   | 'INACTIVE'
   | 'CONFLICT';
 
-// The provider's own item flags (Xero: IsSold/IsPurchased/IsTracked) —
+// The provider's own item flags (sold/purchased/tracked-as-inventory) —
 // distinct from AccountingProductStatus, which is "what does Wholo need
 // you to do" rather than "which provider bucket is this in".
 export type AccountingProductType = 'sold' | 'purchased' | 'tracked';
@@ -962,8 +963,8 @@ export interface AccountingProductListParams {
   limit?: number;
   cursor?: string;
   search?: string;
-  status?: AccountingProductStatus;
-  type?: AccountingProductType;
+  status?: AccountingProductStatus[];
+  type?: AccountingProductType[];
 }
 
 export interface AccountingProductListResponse {
@@ -971,6 +972,7 @@ export interface AccountingProductListResponse {
   pagination: {
     nextCursor: string | null;
     hasMore: boolean;
+    total: number;
   };
 }
 
@@ -993,6 +995,69 @@ export interface ImportAccountingProductRequest {
 
 export interface MatchAccountingProductRequest {
   productId: string;
+}
+
+// ─── Accounting bulk import ────────────────────────────────────────────────────
+// A bulk-import job runs asynchronously (batches can run into the thousands) —
+// the request just queues it; progress and the final per-item report are read
+// back via AccountingBulkImportJob. Product and contact selections share this
+// shape but are kept as distinct request types since their status/type
+// vocabularies differ (AccountingProductStatus/Type vs AccountingContactStatus/Type).
+
+export type AccountingBulkImportRecordType = 'PRODUCT' | 'CONTACT';
+export type AccountingBulkImportJobStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type AccountingBulkImportOutcome = 'imported' | 'matched' | 'skipped' | 'failed';
+
+export interface BulkImportProductSelectionRequest {
+  // Exactly one of ids/filter — selecting a few specific rows, or every row
+  // currently matching a server-side filter (re-resolved at process time).
+  ids?: string[];
+  filter?: {
+    status?: AccountingProductStatus[];
+    type?: AccountingProductType[];
+    search?: string;
+  };
+  // Default false: bulk import creates new products by default, ignoring any
+  // system-suggested match — this opts into linking suggested items instead.
+  honourSuggestions?: boolean;
+}
+
+export interface BulkImportContactSelectionRequest {
+  ids?: string[];
+  filter?: {
+    status?: AccountingContactStatus[];
+    type?: AccountingContactType[];
+    search?: string;
+  };
+  honourSuggestions?: boolean;
+}
+
+export interface BulkImportJobResponse {
+  jobId: string;
+}
+
+export interface AccountingBulkImportResultItem {
+  externalId: string;
+  displayName: string;
+  outcome: AccountingBulkImportOutcome;
+  error?: string;
+}
+
+export interface AccountingBulkImportJob {
+  id: string;
+  distributorId: string;
+  recordType: AccountingBulkImportRecordType;
+  status: AccountingBulkImportJobStatus;
+  honourSuggestions: boolean;
+  totalCount: number;
+  importedCount: number;
+  matchedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  results: AccountingBulkImportResultItem[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 }
 
 // ─── Asset Images ─────────────────────────────────────────────────────────────
@@ -1235,4 +1300,26 @@ export interface ActionItemsResponse {
   dueForFulfilment: ActionItemOrder[];
   invoiceFailures: ActionItemInvoiceFailure[];
   neverOrdered: ActionItemNeverOrderedCustomer[];
+}
+
+// ─── Admin notifications ───────────────────────────────────────────────────────
+// A general-purpose in-app notification inbox for admin users (the header
+// bell) — distinct from any customer/order transactional email pipeline.
+// type is a free-form string, not a closed union: this is meant to be a
+// generalized mechanism with more than one producer over time (the accounting
+// bulk-import job is only the first).
+
+export interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  linkPath: string | null;
+  payload: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface UnreadCountResponse {
+  count: number;
 }

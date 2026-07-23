@@ -7,7 +7,9 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
+import { SyncNowButton as ContactsSyncNowButton } from '@/components/integrations/contacts/SyncNowButton';
 import { ProductsTab } from '@/components/integrations/products/ProductsTab';
+import { SyncNowButton as ProductsSyncNowButton } from '@/components/integrations/products/SyncNowButton';
 import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
@@ -103,6 +105,8 @@ function AccountingPageInner() {
     );
   }
 
+  const providerLabel = PROVIDER_LABELS[connection.provider] ?? connection.provider;
+
   return (
     <AdminLayout>
       <div className="mb-6">
@@ -116,9 +120,17 @@ function AccountingPageInner() {
           Integrations
         </Link>
 
-        <h1 className="text-xl font-semibold text-text">
-          {PROVIDER_LABELS[connection.provider] ?? connection.provider} — {connection.externalOrganisationName}
-        </h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-text">
+            {providerLabel} — {connection.externalOrganisationName}
+          </h1>
+          {activeTab === 'contacts' && accessToken && (
+            <ContactsSyncNowButton token={accessToken} onQueued={fetchNeedsAttentionCount} />
+          )}
+          {activeTab === 'products' && accessToken && (
+            <ProductsSyncNowButton token={accessToken} onQueued={fetchProductsNeedsAttentionCount} />
+          )}
+        </div>
       </div>
 
       <div className="mb-6 border-b border-border">
@@ -152,10 +164,10 @@ function AccountingPageInner() {
       </div>
 
       {activeTab === 'contacts' && accessToken && (
-        <ContactsTab token={accessToken} onContactsChanged={fetchNeedsAttentionCount} />
+        <ContactsTab token={accessToken} providerLabel={providerLabel} onContactsChanged={fetchNeedsAttentionCount} />
       )}
       {activeTab === 'products' && accessToken && (
-        <ProductsTab token={accessToken} onProductsChanged={fetchProductsNeedsAttentionCount} />
+        <ProductsTab token={accessToken} providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
       )}
       {activeTab === 'settings' && accessToken && (
         <AccountingSettingsTab token={accessToken} connection={connection} onConnectionUpdated={setConnection} />

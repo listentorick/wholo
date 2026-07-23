@@ -53,7 +53,7 @@ export function FilterBar({ fields, filters, onFiltersChange, extraChip, onClear
   const showClearAll = filters.length > 0 || !!extraChip;
 
   return (
-    <div ref={containerRef} className="relative mb-4">
+    <div ref={containerRef} className="relative">
       <div className="flex flex-wrap items-center gap-2">
         {filters.map((f) => {
           const config = fields.find((fc) => fc.field === f.field);

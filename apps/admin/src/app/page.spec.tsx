@@ -28,6 +28,11 @@ vi.mock('@/lib/auth-context', () => ({
   useAuth: () => authState,
 }));
 
+// TopBar (rendered by AdminLayout on every page) reads this.
+vi.mock('@/lib/notification-context', () => ({
+  useNotifications: () => ({ unreadCount: 0, recent: [], fetchRecent: vi.fn(), markRead: vi.fn() }),
+}));
+
 const comparison = (current: number, overrides: Record<string, unknown> = {}) => ({
   current,
   comparison: 0,

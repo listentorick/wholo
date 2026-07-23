@@ -8,10 +8,12 @@ vi.mock('@wholo/admin-api-client', () => ({
   adminAccountingApi: {
     listContacts: vi.fn(),
     syncContacts: vi.fn(),
+    bulkImportContacts: vi.fn(),
   },
 }));
 
 const mockListContacts = adminAccountingApi.listContacts as ReturnType<typeof vi.fn>;
+const mockBulkImportContacts = adminAccountingApi.bulkImportContacts as ReturnType<typeof vi.fn>;
 
 function makeContact(id: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -33,6 +35,13 @@ function makeContact(id: string, overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function addFilter(user: ReturnType<typeof userEvent.setup>, fieldValue: string, checkboxLabel: string) {
+  await user.click(screen.getByRole('button', { name: 'Add filter' }));
+  await user.selectOptions(screen.getByLabelText('Field'), fieldValue);
+  await user.click(screen.getByLabelText(checkboxLabel));
+  await user.click(screen.getByRole('button', { name: 'Apply →' }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -41,53 +50,53 @@ describe('ContactsTab', () => {
   it('loads and renders contacts on mount', async () => {
     mockListContacts.mockResolvedValue({
       data: [makeContact('c1')],
-      pagination: { nextCursor: null, hasMore: false },
+      pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
 
-    render(<ContactsTab token="token-1" />);
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
 
     await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
-    expect(mockListContacts).toHaveBeenCalledWith(
-      { limit: 20, cursor: undefined, status: undefined, type: undefined },
-      'token-1',
-    );
+    expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined }, 'token-1');
   });
 
   it('shows an error banner when the initial load fails', async () => {
     mockListContacts.mockRejectedValue(new Error('boom'));
-    render(<ContactsTab token="token-1" />);
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
     await waitFor(() => expect(screen.getByText(/Failed to load contacts/)).toBeInTheDocument());
   });
 
   it('re-fetches with the selected status filter', async () => {
-    mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+    mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" />);
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
     await waitFor(() => expect(mockListContacts).toHaveBeenCalledTimes(1));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by status' }), 'SUGGESTED');
+    await addFilter(user, 'status', 'Suggested match');
 
     await waitFor(() =>
       expect(mockListContacts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: 'SUGGESTED', type: undefined },
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'] },
         'token-1',
       ),
     );
   });
 
   it('re-fetches with the selected type filter, composing with the status filter', async () => {
-    mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false } });
+    mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" />);
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
     await waitFor(() => expect(mockListContacts).toHaveBeenCalledTimes(1));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filter by type' }), 'suppliers');
+    await addFilter(user, 'status', 'Suggested match');
+    await waitFor(() => expect(mockListContacts).toHaveBeenCalledTimes(2));
+
+    await addFilter(user, 'type', 'Suppliers');
 
     await waitFor(() =>
       expect(mockListContacts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: undefined, type: 'suppliers' },
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'], type: ['suppliers'] },
         'token-1',
       ),
     );
@@ -95,11 +104,17 @@ describe('ContactsTab', () => {
 
   it('loads the next page and appends results on Load more', async () => {
     mockListContacts
-      .mockResolvedValueOnce({ data: [makeContact('c1')], pagination: { nextCursor: 'cursor-2', hasMore: true } })
-      .mockResolvedValueOnce({ data: [makeContact('c2')], pagination: { nextCursor: null, hasMore: false } });
+      .mockResolvedValueOnce({
+        data: [makeContact('c1')],
+        pagination: { nextCursor: 'cursor-2', hasMore: true, total: 2 },
+      })
+      .mockResolvedValueOnce({
+        data: [makeContact('c2')],
+        pagination: { nextCursor: null, hasMore: false, total: 2 },
+      });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" />);
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
     await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
     expect(screen.getByText('Load more')).toBeInTheDocument();
 
@@ -108,5 +123,28 @@ describe('ContactsTab', () => {
     await waitFor(() => expect(screen.getByText('Contact c2')).toBeInTheDocument());
     expect(screen.getByText('Contact c1')).toBeInTheDocument();
     expect(screen.queryByText('Load more')).not.toBeInTheDocument();
+  });
+
+  it('selecting a row enables bulk import and queues an import with the selected ids', async () => {
+    mockListContacts.mockResolvedValue({
+      data: [makeContact('c1')],
+      pagination: { nextCursor: null, hasMore: false, total: 1 },
+    });
+    mockBulkImportContacts.mockResolvedValue({ jobId: 'job-1' });
+    const user = userEvent.setup();
+
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
+
+    expect(screen.getByRole('button', { name: 'Bulk import' })).toBeDisabled();
+
+    await user.click(screen.getByLabelText('Select Contact c1'));
+    await user.click(screen.getByRole('button', { name: 'Bulk import (1)' }));
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    await waitFor(() =>
+      expect(mockBulkImportContacts).toHaveBeenCalledWith({ ids: ['c1'], honourSuggestions: false }, 'token-1'),
+    );
+    await waitFor(() => expect(screen.getByText(/Import queued/)).toBeInTheDocument());
   });
 });

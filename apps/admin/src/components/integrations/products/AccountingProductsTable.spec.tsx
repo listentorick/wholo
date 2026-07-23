@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AccountingProductsTable } from './AccountingProductsTable';
 import type { AccountingProductSummary } from '@wholo/types';
 
@@ -38,21 +39,28 @@ function makeProduct(overrides: Partial<AccountingProductSummary> = {}): Account
   };
 }
 
+const baseProps = {
+  token: 'token-1',
+  providerLabel: 'Xero',
+  hasMore: false,
+  isLoadingMore: false,
+  onLoadMore: () => {},
+  onActionComplete: () => {},
+  selectedIds: new Set<string>(),
+  selectAllMatching: false,
+  total: 1,
+  onToggleRow: () => {},
+  onToggleAllLoaded: () => {},
+  onSelectAllMatching: () => {},
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('AccountingProductsTable', () => {
   it('renders code, name, price and tracked quantity for each row', () => {
-    render(
-      <AccountingProductsTable
-        products={[makeProduct()]}
-        loading={false}
-        hasFilter={false}
-        token="token-1"
-        onActionComplete={() => {}}
-      />,
-    );
+    render(<AccountingProductsTable products={[makeProduct()]} loading={false} hasFilter={false} {...baseProps} />);
 
     expect(screen.getByText('CAB-SAUV-001')).toBeInTheDocument();
     expect(screen.getByText('Cabernet Sauvignon 2023')).toBeInTheDocument();
@@ -63,13 +71,7 @@ describe('AccountingProductsTable', () => {
 
   it('shows a dash for stock when the item is not tracked', () => {
     render(
-      <AccountingProductsTable
-        products={[makeProduct({ isTracked: false })]}
-        loading={false}
-        hasFilter={false}
-        token="token-1"
-        onActionComplete={() => {}}
-      />,
+      <AccountingProductsTable products={[makeProduct({ isTracked: false })]} loading={false} hasFilter={false} {...baseProps} />,
     );
 
     const row = screen.getByText('Cabernet Sauvignon 2023').closest('tr')!;
@@ -94,8 +96,7 @@ describe('AccountingProductsTable', () => {
         ]}
         loading={false}
         hasFilter={false}
-        token="token-1"
-        onActionComplete={() => {}}
+        {...baseProps}
       />,
     );
 
@@ -120,8 +121,7 @@ describe('AccountingProductsTable', () => {
         ]}
         loading={false}
         hasFilter={false}
-        token="token-1"
-        onActionComplete={() => {}}
+        {...baseProps}
       />,
     );
 
@@ -130,21 +130,87 @@ describe('AccountingProductsTable', () => {
   });
 
   it('shows the unfiltered empty state pointing at Sync now', () => {
-    render(
-      <AccountingProductsTable products={[]} loading={false} hasFilter={false} token="token-1" onActionComplete={() => {}} />,
-    );
+    render(<AccountingProductsTable products={[]} loading={false} hasFilter={false} {...baseProps} />);
     expect(screen.getByText('No products synced yet')).toBeInTheDocument();
     expect(screen.getByText(/Click Sync now/)).toBeInTheDocument();
   });
 
   it('shows the filtered empty state when a filter is active', () => {
-    render(
-      <AccountingProductsTable products={[]} loading={true} hasFilter={true} token="token-1" onActionComplete={() => {}} />,
-    );
-    // hasFilter takes effect once loading finishes with no rows
-    render(
-      <AccountingProductsTable products={[]} loading={false} hasFilter={true} token="token-1" onActionComplete={() => {}} />,
-    );
+    render(<AccountingProductsTable products={[]} loading={false} hasFilter={true} {...baseProps} />);
     expect(screen.getByText('No matching products')).toBeInTheDocument();
+  });
+
+  it('toggles a row checkbox via onToggleRow', async () => {
+    const onToggleRow = vi.fn();
+    render(
+      <AccountingProductsTable products={[makeProduct()]} loading={false} hasFilter={false} {...baseProps} onToggleRow={onToggleRow} />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Select Cabernet Sauvignon 2023'));
+    expect(onToggleRow).toHaveBeenCalledWith('ext-1');
+  });
+
+  it('shows the header checkbox checked when every loaded row is selected', () => {
+    render(
+      <AccountingProductsTable
+        products={[makeProduct()]}
+        loading={false}
+        hasFilter={false}
+        {...baseProps}
+        selectedIds={new Set(['ext-1'])}
+      />,
+    );
+
+    expect(screen.getByLabelText('Select all loaded products')).toBeChecked();
+  });
+
+  it('shows a "select all matching filters" banner only when more rows exist beyond the loaded page', () => {
+    render(
+      <AccountingProductsTable
+        products={[makeProduct()]}
+        loading={false}
+        hasFilter={false}
+        {...baseProps}
+        selectedIds={new Set(['ext-1'])}
+        hasMore={true}
+        total={50}
+      />,
+    );
+
+    expect(screen.getByText(/Select all 50 products matching filters/)).toBeInTheDocument();
+  });
+
+  it('does not show the select-all banner when there is no more data to load', () => {
+    render(
+      <AccountingProductsTable
+        products={[makeProduct()]}
+        loading={false}
+        hasFilter={false}
+        {...baseProps}
+        selectedIds={new Set(['ext-1'])}
+        hasMore={false}
+      />,
+    );
+
+    expect(screen.queryByText(/matching filters/)).not.toBeInTheDocument();
+  });
+
+  it('calls onSelectAllMatching when the banner link is clicked', async () => {
+    const onSelectAllMatching = vi.fn();
+    render(
+      <AccountingProductsTable
+        products={[makeProduct()]}
+        loading={false}
+        hasFilter={false}
+        {...baseProps}
+        selectedIds={new Set(['ext-1'])}
+        hasMore={true}
+        total={50}
+        onSelectAllMatching={onSelectAllMatching}
+      />,
+    );
+
+    await userEvent.click(screen.getByText(/Select all 50 products matching filters/));
+    expect(onSelectAllMatching).toHaveBeenCalled();
   });
 });

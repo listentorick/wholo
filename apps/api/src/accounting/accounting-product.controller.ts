@@ -7,6 +7,7 @@ import { AccountingProductService } from './accounting-product.service';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
+import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -84,5 +85,21 @@ export class AccountingProductController {
   @ApiOperation({ summary: 'Unlink a confirmed product-to-accounting-product mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
+  }
+
+  @Post('bulk-import')
+  @ApiOperation({ summary: 'Queue a bulk import of accounting products, by explicit ids or a server-side filter' })
+  requestBulkImport(
+    @Param('distributorId') distributorId: string,
+    @Body() dto: BulkImportProductSelectionDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.service.requestBulkImport(distributorId, req.user.sub, dto);
+  }
+
+  @Get('bulk-import-jobs/:jobId')
+  @ApiOperation({ summary: "Get a bulk import job's status and per-item report" })
+  getBulkImportJob(@Param('distributorId') distributorId: string, @Param('jobId') jobId: string) {
+    return this.service.getBulkImportJob(distributorId, jobId);
   }
 }

@@ -268,34 +268,36 @@ export default function OrdersPage() {
     <AdminLayout>
       <ListPageHeader title="Orders" count={!isLoading ? total : undefined} />
 
-      <FilterBar
-        fields={ORDER_FILTER_FIELDS}
-        filters={filters}
-        onFiltersChange={setFilters}
-        onClearAll={handleClearAll}
-        extraChip={
-          sortBy === 'requestedDeliveryDate' ? (
-            <span className="inline-flex items-center rounded-md border border-border bg-surface text-xs">
-              <button
-                type="button"
-                onClick={handleToggleDeliveryDateSort}
-                className="flex items-center gap-1 px-2 py-1 hover:bg-border/30 transition-colors rounded-l-md text-muted"
-              >
-                {sortOrder === 'asc' ? '↑' : '↓'}
-                <span>Delivery date</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleClearSort}
-                className="px-1.5 py-1 text-muted hover:text-red-500 transition-colors rounded-r-md"
-                aria-label="Remove sort"
-              >
-                ×
-              </button>
-            </span>
-          ) : undefined
-        }
-      />
+      <div className="mb-4">
+        <FilterBar
+          fields={ORDER_FILTER_FIELDS}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onClearAll={handleClearAll}
+          extraChip={
+            sortBy === 'requestedDeliveryDate' ? (
+              <span className="inline-flex items-center rounded-md border border-border bg-surface text-xs">
+                <button
+                  type="button"
+                  onClick={handleToggleDeliveryDateSort}
+                  className="flex items-center gap-1 px-2 py-1 hover:bg-border/30 transition-colors rounded-l-md text-muted"
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                  <span>Delivery date</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearSort}
+                  className="px-1.5 py-1 text-muted hover:text-red-500 transition-colors rounded-r-md"
+                  aria-label="Remove sort"
+                >
+                  ×
+                </button>
+              </span>
+            ) : undefined
+          }
+        />
+      </div>
 
       {isLoading ? (
         <ListTableShell>

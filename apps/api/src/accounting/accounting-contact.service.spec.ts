@@ -164,39 +164,68 @@ describe('AccountingContactService', () => {
         row({ id: 'a', isArchived: true }),
         row({ id: 'b' }),
       ]);
-      const { data } = await service.listContacts('dist-1', { status: 'ARCHIVED' });
+      const { data } = await service.listContacts('dist-1', { status: ['ARCHIVED'] });
       expect(data).toHaveLength(1);
       expect(data[0].id).toBe('a');
     });
 
+    it('matches any of multiple selected statuses', async () => {
+      prisma.externalAccountingContact.findMany.mockResolvedValue([
+        row({ id: 'a', isArchived: true }),
+        row({ id: 'b', ignoredAt: new Date() }),
+        row({ id: 'c' }),
+      ]);
+      const { data } = await service.listContacts('dist-1', { status: ['ARCHIVED', 'IGNORED'] });
+      expect(data.map((d) => d.id).sort()).toEqual(['a', 'b']);
+    });
+
     it('filters at the DB level by type=customers', async () => {
-      await service.listContacts('dist-1', { type: 'customers' });
+      await service.listContacts('dist-1', { type: ['customers'] });
       expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([expect.objectContaining({ isCustomer: true })]),
+            AND: expect.arrayContaining([
+              expect.objectContaining({ OR: expect.arrayContaining([{ isCustomer: true }]) }),
+            ]),
           }),
         }),
       );
     });
 
     it('filters at the DB level by type=suppliers', async () => {
-      await service.listContacts('dist-1', { type: 'suppliers' });
+      await service.listContacts('dist-1', { type: ['suppliers'] });
       expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([expect.objectContaining({ isSupplier: true })]),
+            AND: expect.arrayContaining([
+              expect.objectContaining({ OR: expect.arrayContaining([{ isSupplier: true }]) }),
+            ]),
           }),
         }),
       );
     });
 
     it('filters at the DB level by type=archived', async () => {
-      await service.listContacts('dist-1', { type: 'archived' });
+      await service.listContacts('dist-1', { type: ['archived'] });
       expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            AND: expect.arrayContaining([expect.objectContaining({ isArchived: true })]),
+            AND: expect.arrayContaining([
+              expect.objectContaining({ OR: expect.arrayContaining([{ isArchived: true }]) }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('combines multiple selected types with OR at the DB level', async () => {
+      await service.listContacts('dist-1', { type: ['customers', 'archived'] });
+      expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ OR: [{ isCustomer: true }, { isArchived: true }] }),
+            ]),
           }),
         }),
       );
@@ -207,6 +236,31 @@ describe('AccountingContactService', () => {
       const { pagination } = await service.listContacts('dist-1', { limit: 1 });
       expect(pagination.hasMore).toBe(true);
       expect(pagination.nextCursor).not.toBeNull();
+    });
+
+    it('computes hasMore/nextCursor from the status-filtered set, not the raw fetched rows', async () => {
+      // 3 rows fetched, but only 2 match the status filter — with limit 1,
+      // hasMore must reflect the 2 filtered matches, not the 3 raw rows.
+      prisma.externalAccountingContact.findMany.mockResolvedValue([
+        row({ id: 'a', isArchived: true, createdAt: new Date('2026-01-03') }),
+        row({ id: 'b', createdAt: new Date('2026-01-02') }),
+        row({ id: 'c', isArchived: true, createdAt: new Date('2026-01-01') }),
+      ]);
+      const page1 = await service.listContacts('dist-1', { status: ['ARCHIVED'], limit: 1 });
+      expect(page1.data).toHaveLength(1);
+      expect(page1.data[0].id).toBe('a');
+      expect(page1.pagination.hasMore).toBe(true);
+      expect(page1.pagination.nextCursor).not.toBeNull();
+
+      const page2 = await service.listContacts('dist-1', {
+        status: ['ARCHIVED'],
+        limit: 1,
+        cursor: page1.pagination.nextCursor!,
+      });
+      expect(page2.data).toHaveLength(1);
+      expect(page2.data[0].id).toBe('c');
+      expect(page2.pagination.hasMore).toBe(false);
+      expect(page2.pagination.nextCursor).toBeNull();
     });
   });
 

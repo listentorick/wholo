@@ -1,5 +1,6 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  AccountingBulkImportRecordType,
   AccountingConnectionStatus,
   AccountingProductMatchMethod,
   AccountingProductMatchStatus,
@@ -9,15 +10,19 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AdminProductsService } from '../admin-products/admin-products.service';
-import { ProductQueryDto, AccountingProductStatusFilter } from './dto/product-query.dto';
+import { ProductQueryDto, AccountingProductStatusFilter, AccountingProductTypeFilter } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
+import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
 
 interface CursorPayload {
   createdAt: string;
   id: string;
 }
 
-const productInclude = {
+// Exported so AccountingBulkImportProcessor can fetch+format a product row
+// with the same include/status logic this service uses for listing — single
+// source of truth for what SUGGESTED/CONFLICT/etc. mean.
+export const productInclude = {
   mappings: {
     where: { unlinkedAt: null },
     take: 1,
@@ -30,7 +35,7 @@ const productInclude = {
   },
 } satisfies Prisma.ExternalAccountingProductInclude;
 
-type ProductRow = Prisma.ExternalAccountingProductGetPayload<{ include: typeof productInclude }>;
+export type ProductRow = Prisma.ExternalAccountingProductGetPayload<{ include: typeof productInclude }>;
 
 @Injectable()
 export class AccountingProductService {
@@ -43,7 +48,14 @@ export class AccountingProductService {
   async listProducts(distributorId: string, query: ProductQueryDto) {
     const connection = await this.getActiveConnection(distributorId);
     const limit = query.limit ?? 20;
-    const take = limit + 1;
+
+    // The provider's own item flags — stored booleans, so (unlike the
+    // computed match-status filter below) applied at the DB level. Multiple
+    // selected types are OR'd: an item can genuinely be both sold and
+    // purchased, for example.
+    const typeConditions: Prisma.ExternalAccountingProductWhereInput[] = (query.type ?? []).map((t) =>
+      t === 'sold' ? { isSold: true } : t === 'purchased' ? { isPurchased: true } : { isTracked: true },
+    );
 
     const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
       accountingConnectionId: connection.id,
@@ -53,13 +65,34 @@ export class AccountingProductService {
           { externalProductCode: { contains: query.search, mode: 'insensitive' } },
         ],
       }),
-      // The provider's own item flags — stored booleans, so (unlike the
-      // computed match-status filter below) applied at the DB level.
-      ...(query.type === 'sold' && { isSold: true }),
-      ...(query.type === 'purchased' && { isPurchased: true }),
-      ...(query.type === 'tracked' && { isTracked: true }),
+      ...(typeConditions.length && { OR: typeConditions }),
     };
 
+    // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) aren't DB columns,
+    // so they can't be combined with DB-level take+cursor pagination — the
+    // DB page would already be fixed before the filter even runs, which
+    // would make hasMore/nextCursor wrong. When a status filter is active,
+    // fetch every row matching the DB-level predicates instead (org-scoped
+    // volumes here are in the thousands, not worth a schema change) and
+    // paginate the filtered, in-memory list — same approach as contacts.
+    if (query.status?.length) {
+      const [rows, conflictedProductIds] = await Promise.all([
+        this.prisma.externalAccountingProduct.findMany({
+          where: baseWhere,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: productInclude,
+        }),
+        this.findConflictedProductIds(connection.id),
+      ]);
+
+      const matches = rows
+        .map((row) => ({ row, formatted: this.formatProduct(row, conflictedProductIds) }))
+        .filter((m) => query.status!.includes(m.formatted.status));
+
+      return this.paginateFilteredMatches(matches, query.cursor, limit);
+    }
+
+    const take = limit + 1;
     let cursorWhere: Prisma.ExternalAccountingProductWhereInput = {};
     if (query.cursor) {
       let decoded: CursorPayload;
@@ -76,7 +109,7 @@ export class AccountingProductService {
       };
     }
 
-    const [rows, conflictedProductIds] = await Promise.all([
+    const [rows, conflictedProductIds, total] = await Promise.all([
       this.prisma.externalAccountingProduct.findMany({
         where: { AND: [baseWhere, cursorWhere] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -84,20 +117,12 @@ export class AccountingProductService {
         include: productInclude,
       }),
       this.findConflictedProductIds(connection.id),
+      this.prisma.externalAccountingProduct.count({ where: baseWhere }),
     ]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, -1) : rows;
-    let data = page.map((row) => this.formatProduct(row, conflictedProductIds));
-
-    // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) can't all be
-    // expressed as DB predicates cheaply, so the status filter — if any — is
-    // applied to the fetched page rather than the query itself. Item volumes
-    // here are modest (a distributor's catalogue), so this is a reasonable
-    // trade-off for a first release — same as the contacts list.
-    if (query.status) {
-      data = data.filter((p) => p.status === query.status);
-    }
+    const data = page.map((row) => this.formatProduct(row, conflictedProductIds));
 
     const nextCursor = hasMore
       ? Buffer.from(
@@ -105,7 +130,43 @@ export class AccountingProductService {
         ).toString('base64url')
       : null;
 
-    return { data, pagination: { nextCursor, hasMore } };
+    return { data, pagination: { nextCursor, hasMore, total } };
+  }
+
+  // Paginates an already status-filtered, createdAt-desc-sorted list in
+  // memory, using the same cursor shape/encoding as the DB-level path above
+  // so callers can't tell which strategy served a given page.
+  private paginateFilteredMatches<F>(
+    matches: { row: { id: string; createdAt: Date }; formatted: F }[],
+    cursor: string | undefined,
+    limit: number,
+  ): { data: F[]; pagination: { nextCursor: string | null; hasMore: boolean; total: number } } {
+    let startIndex = 0;
+    if (cursor) {
+      let decoded: CursorPayload;
+      try {
+        decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+      } catch {
+        throw new NotFoundException('Invalid cursor');
+      }
+      const decodedCreatedAt = new Date(decoded.createdAt).getTime();
+      const idx = matches.findIndex(
+        ({ row }) =>
+          row.createdAt.getTime() < decodedCreatedAt ||
+          (row.createdAt.getTime() === decodedCreatedAt && row.id < decoded.id),
+      );
+      startIndex = idx === -1 ? matches.length : idx;
+    }
+
+    const page = matches.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < matches.length;
+    const last = page[page.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(JSON.stringify({ createdAt: last.row.createdAt, id: last.row.id })).toString('base64url')
+        : null;
+
+    return { data: page.map((m) => m.formatted), pagination: { nextCursor, hasMore, total: matches.length } };
   }
 
   // Powers the "needs attention" badge on the Products tab — a cheap
@@ -145,6 +206,87 @@ export class AccountingProductService {
       this.outbox.writeEvent(tx, 'AccountingConnection', connection.id, 'AccountingProductSyncRequested', {}),
     );
     return { queued: true };
+  }
+
+  // Every external id currently matching a filter (status/type/search), with
+  // no pagination — the set a "select all N matching filters" bulk import
+  // resolves against. Re-run at process time by the bulk-import processor,
+  // never trusted as a client-supplied snapshot, so a job that runs minutes
+  // after being queued reflects current data.
+  async resolveExternalIdsForFilter(
+    distributorId: string,
+    filter: { status?: AccountingProductStatusFilter[]; type?: AccountingProductTypeFilter[]; search?: string },
+  ): Promise<string[]> {
+    const connection = await this.getActiveConnection(distributorId);
+
+    const typeConditions: Prisma.ExternalAccountingProductWhereInput[] = (filter.type ?? []).map((t) =>
+      t === 'sold' ? { isSold: true } : t === 'purchased' ? { isPurchased: true } : { isTracked: true },
+    );
+
+    const conditions: Prisma.ExternalAccountingProductWhereInput[] = [];
+    if (filter.search) {
+      conditions.push({
+        OR: [
+          { displayName: { contains: filter.search, mode: 'insensitive' } },
+          { externalProductCode: { contains: filter.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (typeConditions.length) {
+      conditions.push({ OR: typeConditions });
+    }
+    const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
+      accountingConnectionId: connection.id,
+      ...(conditions.length && { AND: conditions }),
+    };
+
+    const [rows, conflictedProductIds] = await Promise.all([
+      this.prisma.externalAccountingProduct.findMany({ where: baseWhere, include: productInclude }),
+      this.findConflictedProductIds(connection.id),
+    ]);
+
+    return rows
+      .map((row) => ({ id: row.id, status: this.formatProduct(row, conflictedProductIds).status }))
+      .filter((r) => !filter.status?.length || filter.status.includes(r.status))
+      .map((r) => r.id);
+  }
+
+  async requestBulkImport(
+    distributorId: string,
+    userId: string,
+    dto: BulkImportProductSelectionDto,
+  ): Promise<{ jobId: string }> {
+    if (!dto.ids?.length && !dto.filter) {
+      throw new BadRequestException('Either ids or filter must be provided');
+    }
+    const connection = await this.getActiveConnection(distributorId);
+
+    const job = await this.prisma.accountingBulkImportJob.create({
+      data: {
+        distributorId,
+        accountingConnectionId: connection.id,
+        recordType: AccountingBulkImportRecordType.PRODUCT,
+        requestedByUserId: userId,
+        honourSuggestions: dto.honourSuggestions ?? false,
+        selection: (dto.ids?.length ? { ids: dto.ids } : { filter: dto.filter }) as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.prisma.$transaction((tx) =>
+      this.outbox.writeEvent(tx, 'AccountingBulkImportJob', job.id, 'AccountingBulkImportRequested', {}),
+    );
+
+    return { jobId: job.id };
+  }
+
+  async getBulkImportJob(distributorId: string, jobId: string) {
+    const job = await this.prisma.accountingBulkImportJob.findFirst({
+      where: { id: jobId, distributorId, recordType: AccountingBulkImportRecordType.PRODUCT },
+    });
+    if (!job) {
+      throw new NotFoundException('Bulk import job not found');
+    }
+    return job;
   }
 
   async importAsNewProduct(distributorId: string, userId: string, externalProductId: string, dto: ImportProductDto) {
@@ -355,7 +497,9 @@ export class AccountingProductService {
     }
   }
 
-  private async findConflictedProductIds(accountingConnectionId: string): Promise<Set<string>> {
+  // Public: reused by AccountingBulkImportProcessor, which needs the same
+  // connection-wide conflict set to compute per-item status during a batch.
+  async findConflictedProductIds(accountingConnectionId: string): Promise<Set<string>> {
     const grouped = await this.prisma.accountingProductMatchSuggestion.groupBy({
       by: ['suggestedProductId'],
       where: { accountingConnectionId, status: AccountingProductMatchStatus.SUGGESTED },
@@ -364,7 +508,10 @@ export class AccountingProductService {
     return new Set(grouped.filter((g) => g._count._all > 1).map((g) => g.suggestedProductId));
   }
 
-  private formatProduct(row: ProductRow, conflictedProductIds: Set<string>) {
+  // Public: reused by AccountingBulkImportProcessor for per-item status
+  // recompute — single source of truth for the computed status, so a
+  // resumed/re-run bulk import always sees each item's current reality.
+  formatProduct(row: ProductRow, conflictedProductIds: Set<string>) {
     const mapping = row.mappings[0] ?? null;
     const suggestion = row.suggestions[0] ?? null;
 

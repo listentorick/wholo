@@ -7,6 +7,7 @@ import { AccountingContactService } from './accounting-contact.service';
 import { ContactQueryDto } from './dto/contact-query.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
 import { MatchContactDto } from './dto/match-contact.dto';
+import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -84,5 +85,21 @@ export class AccountingContactController {
   @ApiOperation({ summary: 'Unlink a confirmed customer-to-contact mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
+  }
+
+  @Post('bulk-import')
+  @ApiOperation({ summary: 'Queue a bulk import of accounting contacts, by explicit ids or a server-side filter' })
+  requestBulkImport(
+    @Param('distributorId') distributorId: string,
+    @Body() dto: BulkImportContactSelectionDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.service.requestBulkImport(distributorId, req.user.sub, dto);
+  }
+
+  @Get('bulk-import-jobs/:jobId')
+  @ApiOperation({ summary: "Get a bulk import job's status and per-item report" })
+  getBulkImportJob(@Param('distributorId') distributorId: string, @Param('jobId') jobId: string) {
+    return this.service.getBulkImportJob(distributorId, jobId);
   }
 }

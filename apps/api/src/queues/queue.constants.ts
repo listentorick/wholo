@@ -6,6 +6,7 @@ export const ACCOUNTING_INVOICE_EXPORT_QUEUE = 'accounting-invoice-export';
 export const ACCOUNTING_CONTACT_SYNC_QUEUE = 'accounting-contact-sync';
 export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
+export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
 
 // Domain event type → queues whose consumers care about it.
 // Activation rule (ADR-047): a route entry ships in the same PR as its
@@ -32,4 +33,5 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   AccountingInvoiceExportRequested: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
   AccountingContactSyncRequested: [ACCOUNTING_CONTACT_SYNC_QUEUE],
   AccountingProductSyncRequested: [ACCOUNTING_PRODUCT_SYNC_QUEUE],
+  AccountingBulkImportRequested: [ACCOUNTING_BULK_IMPORT_QUEUE],
 };

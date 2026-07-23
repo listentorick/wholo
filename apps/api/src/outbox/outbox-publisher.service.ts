@@ -5,6 +5,7 @@ import { OutboxEventStatus } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ACCOUNTING_BULK_IMPORT_QUEUE,
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
@@ -34,6 +35,7 @@ export class OutboxPublisherService {
     @InjectQueue(ACCOUNTING_CONTACT_SYNC_QUEUE) accountingContactSyncQueue: Queue,
     @InjectQueue(ACCOUNTING_PRODUCT_SYNC_QUEUE) accountingProductSyncQueue: Queue,
     @InjectQueue(ANALYTICS_FACTS_QUEUE) analyticsFactsQueue: Queue,
+    @InjectQueue(ACCOUNTING_BULK_IMPORT_QUEUE) accountingBulkImportQueue: Queue,
   ) {
     this.queues = new Map([
       [NOTIFICATIONS_QUEUE, notificationsQueue],
@@ -41,6 +43,7 @@ export class OutboxPublisherService {
       [ACCOUNTING_CONTACT_SYNC_QUEUE, accountingContactSyncQueue],
       [ACCOUNTING_PRODUCT_SYNC_QUEUE, accountingProductSyncQueue],
       [ANALYTICS_FACTS_QUEUE, analyticsFactsQueue],
+      [ACCOUNTING_BULK_IMPORT_QUEUE, accountingBulkImportQueue],
     ]);
   }
 

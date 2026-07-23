@@ -23,6 +23,7 @@ import { PortalModule } from './portal/portal.module';
 import { CustomersModule } from './customers/customers.module';
 import { DistributorsModule } from './distributors/distributors.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthController } from './health.controller';
 import { HealthModule } from './health/health.module';
@@ -55,6 +56,7 @@ import './asset-images/branding-asset-types';
     CustomersModule,
     DistributorsModule,
     AccountingModule,
+    AdminNotificationsModule,
     AnalyticsModule,
     HealthModule,
   ],

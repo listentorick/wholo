@@ -1,17 +1,27 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountingConnectionStatus, AccountingContactMatchMethod, AccountingContactMatchStatus, Prisma } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  AccountingBulkImportRecordType,
+  AccountingConnectionStatus,
+  AccountingContactMatchMethod,
+  AccountingContactMatchStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AdminCustomersService } from '../admin-customers/admin-customers.service';
-import { ContactQueryDto, AccountingContactStatusFilter } from './dto/contact-query.dto';
+import { ContactQueryDto, AccountingContactStatusFilter, AccountingContactTypeFilter } from './dto/contact-query.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
+import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
 
 interface CursorPayload {
   createdAt: string;
   id: string;
 }
 
-const contactInclude = {
+// Exported so AccountingBulkImportProcessor can fetch+format a contact row
+// with the same include/status logic this service uses for listing — single
+// source of truth for what SUGGESTED/CONFLICT/etc. mean.
+export const contactInclude = {
   mappings: {
     where: { unlinkedAt: null },
     take: 1,
@@ -24,7 +34,7 @@ const contactInclude = {
   },
 } satisfies Prisma.ExternalAccountingContactInclude;
 
-type ContactRow = Prisma.ExternalAccountingContactGetPayload<{ include: typeof contactInclude }>;
+export type ContactRow = Prisma.ExternalAccountingContactGetPayload<{ include: typeof contactInclude }>;
 
 @Injectable()
 export class AccountingContactService {
@@ -37,7 +47,14 @@ export class AccountingContactService {
   async listContacts(distributorId: string, query: ContactQueryDto) {
     const connection = await this.getActiveConnection(distributorId);
     const limit = query.limit ?? 20;
-    const take = limit + 1;
+
+    // The provider's own contact classification — stored booleans, so
+    // (unlike the computed match-status filter below) applied at the DB
+    // level. Multiple selected types are OR'd: a contact can genuinely be,
+    // say, both a customer and archived.
+    const typeConditions: Prisma.ExternalAccountingContactWhereInput[] = (query.type ?? []).map((t) =>
+      t === 'customers' ? { isCustomer: true } : t === 'suppliers' ? { isSupplier: true } : { isArchived: true },
+    );
 
     const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
       accountingConnectionId: connection.id,
@@ -47,14 +64,34 @@ export class AccountingContactService {
           { email: { contains: query.search, mode: 'insensitive' } },
         ],
       }),
-      // Xero's own All/Customers/Suppliers/Archived split — these are
-      // stored booleans, so (unlike the computed match-status filter below)
-      // this is applied at the DB level, not the fetched page.
-      ...(query.type === 'customers' && { isCustomer: true }),
-      ...(query.type === 'suppliers' && { isSupplier: true }),
-      ...(query.type === 'archived' && { isArchived: true }),
+      ...(typeConditions.length && { OR: typeConditions }),
     };
 
+    // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) aren't DB columns,
+    // so they can't be combined with DB-level take+cursor pagination — the
+    // DB page would already be fixed before the filter even runs, which
+    // would make hasMore/nextCursor wrong. When a status filter is active,
+    // fetch every row matching the DB-level predicates instead (org-scoped
+    // volumes here are in the thousands, not worth a schema change) and
+    // paginate the filtered, in-memory list.
+    if (query.status?.length) {
+      const [rows, conflictedTradeRelationshipIds] = await Promise.all([
+        this.prisma.externalAccountingContact.findMany({
+          where: baseWhere,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          include: contactInclude,
+        }),
+        this.findConflictedTradeRelationshipIds(connection.id),
+      ]);
+
+      const matches = rows
+        .map((row) => ({ row, formatted: this.formatContact(row, conflictedTradeRelationshipIds) }))
+        .filter((m) => query.status!.includes(m.formatted.status));
+
+      return this.paginateFilteredMatches(matches, query.cursor, limit);
+    }
+
+    const take = limit + 1;
     let cursorWhere: Prisma.ExternalAccountingContactWhereInput = {};
     if (query.cursor) {
       let decoded: CursorPayload;
@@ -71,7 +108,7 @@ export class AccountingContactService {
       };
     }
 
-    const [rows, conflictedTradeRelationshipIds] = await Promise.all([
+    const [rows, conflictedTradeRelationshipIds, total] = await Promise.all([
       this.prisma.externalAccountingContact.findMany({
         where: { AND: [baseWhere, cursorWhere] },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -79,20 +116,12 @@ export class AccountingContactService {
         include: contactInclude,
       }),
       this.findConflictedTradeRelationshipIds(connection.id),
+      this.prisma.externalAccountingContact.count({ where: baseWhere }),
     ]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, -1) : rows;
-    let data = page.map((row) => this.formatContact(row, conflictedTradeRelationshipIds));
-
-    // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) can't all be
-    // expressed as DB predicates cheaply, so the status filter — if any — is
-    // applied to the fetched page rather than the query itself. Contact
-    // volumes here are modest (a distributor's customer base), so this is a
-    // reasonable trade-off for a first release.
-    if (query.status) {
-      data = data.filter((c) => c.status === query.status);
-    }
+    const data = page.map((row) => this.formatContact(row, conflictedTradeRelationshipIds));
 
     const nextCursor = hasMore
       ? Buffer.from(
@@ -100,7 +129,43 @@ export class AccountingContactService {
         ).toString('base64url')
       : null;
 
-    return { data, pagination: { nextCursor, hasMore } };
+    return { data, pagination: { nextCursor, hasMore, total } };
+  }
+
+  // Paginates an already status-filtered, createdAt-desc-sorted list in
+  // memory, using the same cursor shape/encoding as the DB-level path above
+  // so callers can't tell which strategy served a given page.
+  private paginateFilteredMatches<F>(
+    matches: { row: { id: string; createdAt: Date }; formatted: F }[],
+    cursor: string | undefined,
+    limit: number,
+  ): { data: F[]; pagination: { nextCursor: string | null; hasMore: boolean; total: number } } {
+    let startIndex = 0;
+    if (cursor) {
+      let decoded: CursorPayload;
+      try {
+        decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+      } catch {
+        throw new NotFoundException('Invalid cursor');
+      }
+      const decodedCreatedAt = new Date(decoded.createdAt).getTime();
+      const idx = matches.findIndex(
+        ({ row }) =>
+          row.createdAt.getTime() < decodedCreatedAt ||
+          (row.createdAt.getTime() === decodedCreatedAt && row.id < decoded.id),
+      );
+      startIndex = idx === -1 ? matches.length : idx;
+    }
+
+    const page = matches.slice(startIndex, startIndex + limit);
+    const hasMore = startIndex + limit < matches.length;
+    const last = page[page.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(JSON.stringify({ createdAt: last.row.createdAt, id: last.row.id })).toString('base64url')
+        : null;
+
+    return { data: page.map((m) => m.formatted), pagination: { nextCursor, hasMore, total: matches.length } };
   }
 
   // Powers the "needs attention" badge (Contacts tab label + sidebar nav) —
@@ -140,6 +205,87 @@ export class AccountingContactService {
       this.outbox.writeEvent(tx, 'AccountingConnection', connection.id, 'AccountingContactSyncRequested', {}),
     );
     return { queued: true };
+  }
+
+  // Every external id currently matching a filter (status/type/search), with
+  // no pagination — the set a "select all N matching filters" bulk import
+  // resolves against. Re-run at process time by the bulk-import processor,
+  // never trusted as a client-supplied snapshot, so a job that runs minutes
+  // after being queued reflects current data.
+  async resolveExternalIdsForFilter(
+    distributorId: string,
+    filter: { status?: AccountingContactStatusFilter[]; type?: AccountingContactTypeFilter[]; search?: string },
+  ): Promise<string[]> {
+    const connection = await this.getActiveConnection(distributorId);
+
+    const typeConditions: Prisma.ExternalAccountingContactWhereInput[] = (filter.type ?? []).map((t) =>
+      t === 'customers' ? { isCustomer: true } : t === 'suppliers' ? { isSupplier: true } : { isArchived: true },
+    );
+
+    const conditions: Prisma.ExternalAccountingContactWhereInput[] = [];
+    if (filter.search) {
+      conditions.push({
+        OR: [
+          { displayName: { contains: filter.search, mode: 'insensitive' } },
+          { email: { contains: filter.search, mode: 'insensitive' } },
+        ],
+      });
+    }
+    if (typeConditions.length) {
+      conditions.push({ OR: typeConditions });
+    }
+    const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
+      accountingConnectionId: connection.id,
+      ...(conditions.length && { AND: conditions }),
+    };
+
+    const [rows, conflictedTradeRelationshipIds] = await Promise.all([
+      this.prisma.externalAccountingContact.findMany({ where: baseWhere, include: contactInclude }),
+      this.findConflictedTradeRelationshipIds(connection.id),
+    ]);
+
+    return rows
+      .map((row) => ({ id: row.id, status: this.formatContact(row, conflictedTradeRelationshipIds).status }))
+      .filter((r) => !filter.status?.length || filter.status.includes(r.status))
+      .map((r) => r.id);
+  }
+
+  async requestBulkImport(
+    distributorId: string,
+    userId: string,
+    dto: BulkImportContactSelectionDto,
+  ): Promise<{ jobId: string }> {
+    if (!dto.ids?.length && !dto.filter) {
+      throw new BadRequestException('Either ids or filter must be provided');
+    }
+    const connection = await this.getActiveConnection(distributorId);
+
+    const job = await this.prisma.accountingBulkImportJob.create({
+      data: {
+        distributorId,
+        accountingConnectionId: connection.id,
+        recordType: AccountingBulkImportRecordType.CONTACT,
+        requestedByUserId: userId,
+        honourSuggestions: dto.honourSuggestions ?? false,
+        selection: (dto.ids?.length ? { ids: dto.ids } : { filter: dto.filter }) as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.prisma.$transaction((tx) =>
+      this.outbox.writeEvent(tx, 'AccountingBulkImportJob', job.id, 'AccountingBulkImportRequested', {}),
+    );
+
+    return { jobId: job.id };
+  }
+
+  async getBulkImportJob(distributorId: string, jobId: string) {
+    const job = await this.prisma.accountingBulkImportJob.findFirst({
+      where: { id: jobId, distributorId, recordType: AccountingBulkImportRecordType.CONTACT },
+    });
+    if (!job) {
+      throw new NotFoundException('Bulk import job not found');
+    }
+    return job;
   }
 
   async importAsNewCustomer(distributorId: string, userId: string, externalContactId: string, dto: ImportContactDto) {
@@ -331,7 +477,9 @@ export class AccountingContactService {
     }
   }
 
-  private async findConflictedTradeRelationshipIds(accountingConnectionId: string): Promise<Set<string>> {
+  // Public: reused by AccountingBulkImportProcessor, which needs the same
+  // connection-wide conflict set to compute per-item status during a batch.
+  async findConflictedTradeRelationshipIds(accountingConnectionId: string): Promise<Set<string>> {
     const grouped = await this.prisma.accountingContactMatchSuggestion.groupBy({
       by: ['suggestedTradeRelationshipId'],
       where: { accountingConnectionId, status: AccountingContactMatchStatus.SUGGESTED },
@@ -340,7 +488,10 @@ export class AccountingContactService {
     return new Set(grouped.filter((g) => g._count._all > 1).map((g) => g.suggestedTradeRelationshipId));
   }
 
-  private formatContact(row: ContactRow, conflictedTradeRelationshipIds: Set<string>) {
+  // Public: reused by AccountingBulkImportProcessor for per-item status
+  // recompute — single source of truth for the computed status, so a
+  // resumed/re-run bulk import always sees each item's current reality.
+  formatContact(row: ContactRow, conflictedTradeRelationshipIds: Set<string>) {
     const mapping = row.mappings[0] ?? null;
     const suggestion = row.suggestions[0] ?? null;
 

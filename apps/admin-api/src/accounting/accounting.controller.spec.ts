@@ -15,6 +15,8 @@ const mockService = {
   matchContact: jest.fn(),
   ignoreContact: jest.fn(),
   unlinkMapping: jest.fn(),
+  bulkImportContacts: jest.fn(),
+  getContactBulkImportJob: jest.fn(),
   listProducts: jest.fn(),
   countProductsNeedingAttention: jest.fn(),
   syncProducts: jest.fn(),
@@ -23,6 +25,8 @@ const mockService = {
   matchProduct: jest.fn(),
   ignoreProduct: jest.fn(),
   unlinkProductMapping: jest.fn(),
+  bulkImportProducts: jest.fn(),
+  getProductBulkImportJob: jest.fn(),
 };
 
 function mockRequest() {
@@ -171,5 +175,27 @@ describe('AccountingController (BFF)', () => {
   it('unlinkProductMapping forwards the mapping id with the resolved organisationId', async () => {
     await controller.unlinkProductMapping('mapping-1', mockRequest());
     expect(mockService.unlinkProductMapping).toHaveBeenCalledWith('dist-1', 'mapping-1', 'token-1');
+  });
+
+  it('bulkImportContacts forwards the selection DTO with the resolved organisationId', async () => {
+    const dto = { ids: ['ext-1'] } as never;
+    await controller.bulkImportContacts(dto, mockRequest());
+    expect(mockService.bulkImportContacts).toHaveBeenCalledWith('dist-1', dto, 'token-1');
+  });
+
+  it('getContactBulkImportJob forwards the job id with the resolved organisationId', async () => {
+    await controller.getContactBulkImportJob('job-1', mockRequest());
+    expect(mockService.getContactBulkImportJob).toHaveBeenCalledWith('dist-1', 'job-1', 'token-1');
+  });
+
+  it('bulkImportProducts forwards the selection DTO with the resolved organisationId', async () => {
+    const dto = { filter: { status: ['READY_TO_IMPORT'] } } as never;
+    await controller.bulkImportProducts(dto, mockRequest());
+    expect(mockService.bulkImportProducts).toHaveBeenCalledWith('dist-1', dto, 'token-1');
+  });
+
+  it('getProductBulkImportJob forwards the job id with the resolved organisationId', async () => {
+    await controller.getProductBulkImportJob('job-2', mockRequest());
+    expect(mockService.getProductBulkImportJob).toHaveBeenCalledWith('dist-1', 'job-2', 'token-1');
   });
 });

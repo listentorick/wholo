@@ -65,7 +65,7 @@ describe('ProductRowActions', () => {
     });
     const user = userEvent.setup();
 
-    render(<ProductRowActions product={product} token="token-1" onActionComplete={onActionComplete} />);
+    render(<ProductRowActions product={product} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
     await user.click(screen.getByText('Confirm match'));
 
     await waitFor(() => expect(adminAccountingApi.confirmProductSuggestion).toHaveBeenCalledWith('sugg-1', 'token-1'));
@@ -77,7 +77,7 @@ describe('ProductRowActions', () => {
     const onActionComplete = vi.fn();
     const user = userEvent.setup();
 
-    render(<ProductRowActions product={makeProduct()} token="token-1" onActionComplete={onActionComplete} />);
+    render(<ProductRowActions product={makeProduct()} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
     await user.click(screen.getByText('Ignore'));
 
     await waitFor(() => expect(adminAccountingApi.ignoreProduct).toHaveBeenCalledWith('ext-1', 'token-1'));
@@ -86,7 +86,7 @@ describe('ProductRowActions', () => {
 
   it('opens the import dialog for a ready-to-import product', async () => {
     const user = userEvent.setup();
-    render(<ProductRowActions product={makeProduct()} token="token-1" onActionComplete={() => {}} />);
+    render(<ProductRowActions product={makeProduct()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
 
     await user.click(screen.getByText('Import as new'));
 
@@ -95,7 +95,7 @@ describe('ProductRowActions', () => {
 
   it('opens the match dialog for a ready-to-import product', async () => {
     const user = userEvent.setup();
-    render(<ProductRowActions product={makeProduct()} token="token-1" onActionComplete={() => {}} />);
+    render(<ProductRowActions product={makeProduct()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
 
     await user.click(screen.getByText('Match to existing'));
 
@@ -118,7 +118,7 @@ describe('ProductRowActions', () => {
     });
     const user = userEvent.setup();
 
-    render(<ProductRowActions product={product} token="token-1" onActionComplete={onActionComplete} />);
+    render(<ProductRowActions product={product} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
     expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1/edit');
 
     await user.click(screen.getByText('Unlink'));
@@ -128,13 +128,13 @@ describe('ProductRowActions', () => {
   });
 
   it('shows no actions for an inactive product', () => {
-    render(<ProductRowActions product={makeProduct({ status: 'INACTIVE' })} token="token-1" onActionComplete={() => {}} />);
+    render(<ProductRowActions product={makeProduct({ status: 'INACTIVE' })} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
     expect(screen.getByText('No longer in Xero')).toBeInTheDocument();
     expect(screen.queryByText('Import as new')).not.toBeInTheDocument();
   });
 
   it('shows a label only for a purchase-only product', () => {
-    render(<ProductRowActions product={makeProduct({ status: 'NOT_SOLD' })} token="token-1" onActionComplete={() => {}} />);
+    render(<ProductRowActions product={makeProduct({ status: 'NOT_SOLD' })} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
     expect(screen.getByText('Purchase-only in Xero')).toBeInTheDocument();
     expect(screen.queryByText('Import as new')).not.toBeInTheDocument();
   });
@@ -143,7 +143,7 @@ describe('ProductRowActions', () => {
     (adminAccountingApi.ignoreProduct as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<ProductRowActions product={makeProduct()} token="token-1" onActionComplete={() => {}} />);
+    render(<ProductRowActions product={makeProduct()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
     await user.click(screen.getByText('Ignore'));
 
     await waitFor(() => expect(screen.getByText('That action failed. Please try again.')).toBeInTheDocument());

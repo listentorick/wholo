@@ -24,6 +24,7 @@ describe('OutboxPublisherService', () => {
   let accountingContactSyncQueue: { add: jest.Mock };
   let accountingProductSyncQueue: { add: jest.Mock };
   let analyticsFactsQueue: { add: jest.Mock };
+  let accountingBulkImportQueue: { add: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -37,6 +38,7 @@ describe('OutboxPublisherService', () => {
     accountingContactSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingProductSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     analyticsFactsQueue = { add: jest.fn().mockResolvedValue({}) };
+    accountingBulkImportQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
@@ -44,6 +46,7 @@ describe('OutboxPublisherService', () => {
       accountingContactSyncQueue as unknown as Queue,
       accountingProductSyncQueue as unknown as Queue,
       analyticsFactsQueue as unknown as Queue,
+      accountingBulkImportQueue as unknown as Queue,
     );
   });
 
@@ -142,6 +145,21 @@ describe('OutboxPublisherService', () => {
     expect(accountingContactSyncQueue.add).not.toHaveBeenCalled();
     expect(notificationsQueue.add).not.toHaveBeenCalled();
     expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes AccountingBulkImportRequested to the accounting-bulk-import queue', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-9', eventType: 'AccountingBulkImportRequested', aggregateType: 'AccountingBulkImportJob', aggregateId: 'job-1' }),
+    ]);
+
+    await service.publishPending();
+
+    expect(accountingBulkImportQueue.add).toHaveBeenCalledWith(
+      'AccountingBulkImportRequested',
+      expect.anything(),
+      { jobId: 'evt-9' },
+    );
+    expect(notificationsQueue.add).not.toHaveBeenCalled();
   });
 
   it('marks unrouted event types PUBLISHED without enqueueing anything', async () => {

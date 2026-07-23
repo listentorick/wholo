@@ -1,5 +1,6 @@
 import type {
   AccountingAuthorizationUrlResponse,
+  AccountingBulkImportJob,
   AccountingConnectionStatusResponse,
   AccountingContactListParams,
   AccountingContactListResponse,
@@ -9,6 +10,9 @@ import type {
   AccountingProductListResponse,
   AccountingProductNeedsAttentionCountResponse,
   AccountingProductSyncRequestedResponse,
+  BulkImportContactSelectionRequest,
+  BulkImportJobResponse,
+  BulkImportProductSelectionRequest,
   Customer,
   ImportAccountingContactRequest,
   ImportAccountingProductRequest,
@@ -24,8 +28,8 @@ function buildListQuery(params: AccountingContactListParams | AccountingProductL
   if (params.limit != null) qs.set('limit', String(params.limit));
   if (params.cursor) qs.set('cursor', params.cursor);
   if (params.search) qs.set('search', params.search);
-  if (params.status) qs.set('status', params.status);
-  if (params.type) qs.set('type', params.type);
+  if (params.status?.length) qs.set('status', params.status.join(','));
+  if (params.type?.length) qs.set('type', params.type.join(','));
   const s = qs.toString();
   return s ? `?${s}` : '';
 }
@@ -126,6 +130,18 @@ export const adminAccountingApi = {
     });
   },
 
+  bulkImportContacts(dto: BulkImportContactSelectionRequest, token: string): Promise<BulkImportJobResponse> {
+    return apiFetch<BulkImportJobResponse>('/api/v1/accounting/contacts/bulk-import', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  getContactBulkImportJob(jobId: string, token: string): Promise<AccountingBulkImportJob> {
+    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/contacts/bulk-import-jobs/${jobId}`, { token });
+  },
+
   listProducts(params: AccountingProductListParams, token: string): Promise<AccountingProductListResponse> {
     return apiFetch<AccountingProductListResponse>(`/api/v1/accounting/products${buildListQuery(params)}`, { token });
   },
@@ -186,5 +202,17 @@ export const adminAccountingApi = {
       method: 'POST',
       token,
     });
+  },
+
+  bulkImportProducts(dto: BulkImportProductSelectionRequest, token: string): Promise<BulkImportJobResponse> {
+    return apiFetch<BulkImportJobResponse>('/api/v1/accounting/products/bulk-import', {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  getProductBulkImportJob(jobId: string, token: string): Promise<AccountingBulkImportJob> {
+    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/products/bulk-import-jobs/${jobId}`, { token });
   },
 };
