@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer } from '@wholo/types';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput } from './form-helpers';
+import type { OnTabSaveStateChange } from './tab-save-state';
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -20,15 +21,13 @@ interface Props {
   customer: Customer;
   token: string;
   onSaved?: () => void;
-  onDelete?: () => Promise<void>;
+  onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
+export function OverviewTab({ customer, token, onSaved, onSaveStateChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const org = customer.organisation;
 
@@ -64,16 +63,17 @@ export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
     }
   }
 
-  async function handleDelete() {
-    if (!onDelete) return;
-    setIsDeleting(true);
-    try {
-      await onDelete();
-    } catch {
-      setIsDeleting(false);
-      setDeleteConfirm(false);
-    }
-  }
+  useEffect(() => {
+    onSaveStateChange?.({
+      label: 'Save',
+      onSave: () => handleSubmit(onSubmit)(),
+      saving,
+      success: success ? 'Saved' : null,
+      error: apiError,
+    });
+    return () => onSaveStateChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saving, success, apiError]);
 
   const address = [
     org.addressLine1,
@@ -85,7 +85,7 @@ export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
 
   return (
     <div className="space-y-5">
-      <form id="overview-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormCard title="Business details">
           <div className="space-y-4">
             <div>
@@ -145,54 +145,6 @@ export function OverviewTab({ customer, token, onSaved, onDelete }: Props) {
 
         </FormCard>
       </form>
-      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
-        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-        <button
-          form="overview-form"
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
-
-      {onDelete && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-5">
-          <h3 className="mb-3 text-sm font-semibold text-red-800">Danger zone</h3>
-          {!deleteConfirm ? (
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(true)}
-              className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:border-red-400"
-            >
-              Remove customer
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-red-700">Remove this customer relationship? This cannot be undone.</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                >
-                  {isDeleting ? 'Removing…' : 'Yes, remove'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteConfirm(false)}
-                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

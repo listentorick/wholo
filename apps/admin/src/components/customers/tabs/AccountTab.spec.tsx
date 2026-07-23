@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { AccountTab } from './AccountTab';
 import { adminCustomersApi, ApiError } from '@wholo/admin-api-client';
 import type { Customer } from '@wholo/types';
+import type { TabSaveState } from './tab-save-state';
 
 vi.mock('@wholo/admin-api-client', async () => {
   const actual = await vi.importActual<typeof import('@wholo/admin-api-client')>('@wholo/admin-api-client');
@@ -50,38 +50,74 @@ describe('AccountTab', () => {
     expect(screen.getByLabelText('Account number')).toHaveValue('ACC-001');
   });
 
-  it('saves successfully and shows a Saved confirmation', async () => {
-    mockUpdate.mockResolvedValue(makeCustomer());
-    const user = userEvent.setup();
-
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" />);
-    await user.click(screen.getByText('Save'));
-
-    await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+  it('registers a save state with the sidebar via onSaveStateChange', () => {
+    const onSaveStateChange = vi.fn();
+    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+    expect(onSaveStateChange).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'Save', saving: false, onSave: expect.any(Function) }),
+    );
   });
 
-  it('shows a field-level error under Account number on a 409 conflict, not a generic banner', async () => {
+  it('clears the registered save state on unmount', () => {
+    const onSaveStateChange = vi.fn();
+    const { unmount } = render(
+      <AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />,
+    );
+    onSaveStateChange.mockClear();
+    unmount();
+    expect(onSaveStateChange).toHaveBeenCalledWith(null);
+  });
+
+  it('saves successfully and reports the Saved state through onSaveStateChange', async () => {
+    mockUpdate.mockResolvedValue(makeCustomer());
+    const captured: { state: TabSaveState | null } = { state: null };
+    const onSaveStateChange = vi.fn((state: TabSaveState | null) => {
+      captured.state = state;
+    });
+
+    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+
+    await act(async () => {
+      captured.state?.onSave();
+    });
+
+    await waitFor(() => expect(captured.state?.success).toBe('Saved'));
+  });
+
+  it('shows a field-level error under Account number on a 409 conflict, not a generic save-state error', async () => {
     mockUpdate.mockRejectedValue(
       new ApiError({ type: 'about:blank', title: 'Conflict', status: 409, detail: 'This account number is already in use by another customer' }, 409),
     );
-    const user = userEvent.setup();
+    const captured: { state: TabSaveState | null } = { state: null };
+    const onSaveStateChange = vi.fn((state: TabSaveState | null) => {
+      captured.state = state;
+    });
 
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" />);
-    await user.click(screen.getByText('Save'));
+    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+
+    await act(async () => {
+      captured.state?.onSave();
+    });
 
     await waitFor(() =>
       expect(screen.getByText('This account number is already in use by another customer')).toBeInTheDocument(),
     );
-    expect(screen.queryByText('Saved')).not.toBeInTheDocument();
+    expect(captured.state?.error).toBeFalsy();
   });
 
-  it('shows the generic error banner for a non-conflict failure', async () => {
+  it('reports the generic error through onSaveStateChange for a non-conflict failure', async () => {
     mockUpdate.mockRejectedValue(new Error('network down'));
-    const user = userEvent.setup();
+    const captured: { state: TabSaveState | null } = { state: null };
+    const onSaveStateChange = vi.fn((state: TabSaveState | null) => {
+      captured.state = state;
+    });
 
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" />);
-    await user.click(screen.getByText('Save'));
+    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
 
-    await waitFor(() => expect(screen.getByText('network down')).toBeInTheDocument());
+    await act(async () => {
+      captured.state?.onSave();
+    });
+
+    await waitFor(() => expect(captured.state?.error).toBe('network down'));
   });
 });

@@ -8,6 +8,7 @@ import type { Customer } from '@wholo/types';
 import type { DeliveryProfileSummary } from '@wholo/types';
 import { adminCustomersApi, adminDeliveryProfilesApi } from '@wholo/admin-api-client';
 import { FormCard, AddressGrid, WizardSectionHeading } from './form-helpers';
+import type { OnTabSaveStateChange } from './tab-save-state';
 
 const schema = z.object({
   deliveryLine1: z.string().optional(),
@@ -27,9 +28,10 @@ interface Props {
   onSaved?: () => void;
   onNext?: () => void;
   onBack?: () => void;
+  onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: Props) {
+export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -87,6 +89,19 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (mode !== 'tab') return;
+    onSaveStateChange?.({
+      label: 'Save',
+      onSave: () => handleSubmit(onSubmit)(),
+      saving,
+      success: success ? 'Saved' : null,
+      error: apiError,
+    });
+    return () => onSaveStateChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, saving, success, apiError]);
 
   if (mode === 'wizard') {
     return (
@@ -154,18 +169,6 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack }: 
           ))}
         </select>
       </FormCard>
-
-      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
-        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
     </form>
   );
 }

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer } from '@wholo/types';
 import { adminCustomersApi, ApiError } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput, Textarea, AddressGrid, WizardSectionHeading } from './form-helpers';
+import type { OnTabSaveStateChange } from './tab-save-state';
 
 const schema = z.object({
   accountNumber: z.string().optional(),
@@ -43,9 +44,10 @@ interface Props {
   onSaved?: () => void;
   onNext?: () => void;
   onBack?: () => void;
+  onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: Props) {
+export function AccountTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -109,6 +111,19 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
   }
 
   const disabled = saving;
+
+  useEffect(() => {
+    if (mode !== 'tab') return;
+    onSaveStateChange?.({
+      label: 'Save',
+      onSave: () => handleSubmit(onSubmit)(),
+      saving,
+      success: success ? 'Saved' : null,
+      error: apiError,
+    });
+    return () => onSaveStateChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, saving, success, apiError]);
 
   if (mode === 'wizard') {
     return (
@@ -214,18 +229,6 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack }: P
       <FormCard title="Billing address">
         <AddressGrid prefix="billing" register={register} disabled={disabled} />
       </FormCard>
-
-      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        {apiError && <span className="text-xs font-medium text-red-500">{apiError}</span>}
-        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-        <button
-          type="submit"
-          disabled={disabled}
-          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
     </form>
   );
 }

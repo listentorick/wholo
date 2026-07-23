@@ -5,6 +5,7 @@ import type { Customer, PriceListSummary } from '@wholo/types';
 import { adminPriceListsApi } from '@wholo/admin-api-client';
 import { CustomerCatalogues } from '../CustomerCatalogues';
 import { FormCard, WizardSectionHeading } from './form-helpers';
+import type { OnTabSaveStateChange } from './tab-save-state';
 
 interface Props {
   customer: Customer;
@@ -13,9 +14,10 @@ interface Props {
   onSaved?: () => void;
   onNext?: () => void;
   onBack?: () => void;
+  onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, onBack }: Props) {
+export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [priceLists, setPriceLists] = useState<PriceListSummary[]>([]);
   const [selectedPriceListId, setSelectedPriceListId] = useState(customer.priceListId ?? '');
   const [saving, setSaving] = useState(false);
@@ -52,6 +54,19 @@ export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, on
       setSaving(false);
     }
   }
+
+  useEffect(() => {
+    if (mode !== 'tab') return;
+    onSaveStateChange?.({
+      label: 'Save',
+      onSave: () => handleSave(false),
+      saving,
+      success: success ? 'Saved' : null,
+      error,
+    });
+    return () => onSaveStateChange?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, saving, success, error, selectedPriceListId]);
 
   const defaultList = priceLists.find((pl) => pl.isDefault);
 
@@ -120,18 +135,6 @@ export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, on
       <FormCard title="Price list">
         {priceListSelect}
       </FormCard>
-      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        {error && <span className="text-xs font-medium text-red-500">{error}</span>}
-        {success && <span className="text-xs font-medium text-green-600">Saved</span>}
-        <button
-          type="button"
-          onClick={() => handleSave(false)}
-          disabled={saving}
-          className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
-      </div>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
-import { FormCard, FieldLabel, TextInput, Textarea, SaveButton, SaveBanner } from '../shared';
+import { FormCard, FieldLabel, TextInput, Textarea, SaveButton, SaveBanner } from '@/components/form';
 import { WizardStepFooter } from '../../onboarding/WizardStepFooter';
 
 const schema = z.object({

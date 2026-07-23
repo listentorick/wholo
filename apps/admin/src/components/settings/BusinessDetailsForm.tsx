@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
-import { FormCard, FieldLabel, FieldError, TextInput, Select, SaveButton, SaveBanner } from './shared';
+import { FormCard, FieldLabel, FieldError, TextInput, SelectInput, SaveButton, SaveBanner } from '@/components/form';
 
 // Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
 // commonly-selected IANA identifier — add it back explicitly.
@@ -148,11 +148,11 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trading calendar</p>
               <div>
                 <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
-                <Select id="timezone" {...register('timezone')}>
+                <SelectInput id="timezone" {...register('timezone')}>
                   {IANA_TIMEZONES.map((tz) => (
                     <option key={tz} value={tz}>{tz}</option>
                   ))}
-                </Select>
+                </SelectInput>
                 <FieldError message={errors.timezone?.message} />
                 <p className="mt-1.5 text-xs text-muted">
                   Defines your trading day, week and month boundaries — used throughout order and sales reporting.

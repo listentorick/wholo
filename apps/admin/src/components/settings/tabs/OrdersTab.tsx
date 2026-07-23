@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { OrderAcceptanceMode } from '@wholo/types';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
-import { FormCard } from '../shared';
+import { FormCard } from '@/components/form';
 import { WizardSectionHeading } from '@/components/customers/tabs/form-helpers';
 import { WizardStepFooter } from '../../onboarding/WizardStepFooter';
 

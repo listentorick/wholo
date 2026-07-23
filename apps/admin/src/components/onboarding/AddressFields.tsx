@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { UseFormRegister, FieldErrors } from 'react-hook-form';
-import { FieldLabel, FieldError, TextInput } from '../settings/shared';
+import { FieldLabel, FieldError, TextInput } from '@/components/form';
 
 export interface AddressFormValues {
   addressLine1: string;

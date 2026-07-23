@@ -1,6 +1,6 @@
 'use client';
 
-import { FormCard } from '../shared';
+import { FormCard } from '@/components/form';
 import { WizardSectionHeading } from '@/components/customers/tabs/form-helpers';
 import { BrandingLogoUploader } from '@/components/branding/BrandingLogoUploader';
 import { BrandingBannerUploader } from '@/components/branding/BrandingBannerUploader';

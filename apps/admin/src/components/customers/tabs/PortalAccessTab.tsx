@@ -6,6 +6,7 @@ import type { Customer, CustomerInvitation } from '@wholo/types';
 import { InvitationStatus, TradeRelationshipStatus } from '@wholo/types';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, TextInput } from './form-helpers';
+import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 
 const INVITE_STATUS: Record<InvitationStatus, { label: string; color: string }> = {
   [InvitationStatus.PENDING]:  { label: 'Pending',  color: '#d97706' },
@@ -14,12 +15,12 @@ const INVITE_STATUS: Record<InvitationStatus, { label: string; color: string }> 
   [InvitationStatus.REVOKED]:  { label: 'Revoked',  color: '#6b7280' },
 };
 
-const STATUS_LABELS: Record<TradeRelationshipStatus, { label: string; bg: string; text: string }> = {
-  [TradeRelationshipStatus.PENDING_INVITE]:   { label: 'Pending invite',   bg: '#fef9c3', text: '#a16207' },
-  [TradeRelationshipStatus.PENDING_REQUEST]:  { label: 'Pending request',  bg: '#dbeafe', text: '#1d4ed8' },
-  [TradeRelationshipStatus.ACTIVE]:           { label: 'Active',           bg: '#dcfce7', text: '#15803d' },
-  [TradeRelationshipStatus.SUSPENDED]:        { label: 'Suspended',        bg: '#fee2e2', text: '#b91c1c' },
-  [TradeRelationshipStatus.INACTIVE]:         { label: 'Inactive',         bg: '#f3f4f6', text: '#6b7280' },
+const STATUS_LABELS: Record<TradeRelationshipStatus, { label: string; tone: StatusTone }> = {
+  [TradeRelationshipStatus.PENDING_INVITE]:   { label: 'Pending invite',  tone: 'yellow' },
+  [TradeRelationshipStatus.PENDING_REQUEST]:  { label: 'Pending request', tone: 'blue' },
+  [TradeRelationshipStatus.ACTIVE]:           { label: 'Active',          tone: 'green' },
+  [TradeRelationshipStatus.SUSPENDED]:        { label: 'Suspended',       tone: 'red' },
+  [TradeRelationshipStatus.INACTIVE]:         { label: 'Inactive',        tone: 'gray' },
 };
 
 function InviteRow({ inv }: { inv: CustomerInvitation }) {
@@ -160,13 +161,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
         <div className="space-y-5">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold uppercase tracking-wide text-muted">Status</span>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-              style={{ backgroundColor: statusMeta.bg, color: statusMeta.text }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusMeta.text }} />
-              {statusMeta.label}
-            </span>
+            <StatusBadge label={statusMeta.label} tone={statusMeta.tone} />
           </div>
 
           <div className="space-y-2">

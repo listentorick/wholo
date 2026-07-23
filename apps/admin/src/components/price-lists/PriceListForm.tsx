@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { adminPriceListsApi, adminProductsApi } from '@wholo/admin-api-client';
 import type { PriceList, PriceListRule, PriceListSummary, Product, CreatePriceListRequest } from '@wholo/types';
@@ -14,7 +13,11 @@ import {
   PriceListRuleDiscountBaseType,
   ProductStatus,
 } from '@wholo/types';
-import { PageHeading } from '@/components/PageHeading';
+import { FormCard, FieldLabel, TextInput, Textarea } from '@/components/form';
+import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
+import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
+import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
+import { StatusBadge } from '@/components/list/StatusBadge';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -35,39 +38,6 @@ type DrawerState =
   | null;
 
 // ─── Shared UI helpers ────────────────────────────────────────────────────────
-
-function FormCard({ title, children }: { title?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-white">
-      {title && (
-        <div className="border-b border-border px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-text">{title}</h2>
-        </div>
-      )}
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
-  return (
-    <label htmlFor={htmlFor} className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-      {children}
-    </label>
-  );
-}
-
-function TextInput({ id, placeholder, disabled, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      id={id}
-      placeholder={placeholder}
-      disabled={disabled}
-      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-      {...props}
-    />
-  );
-}
 
 const inputCls = 'rounded border border-border bg-white px-2 py-1.5 text-xs text-text outline-none focus:border-primary disabled:opacity-50';
 
@@ -848,7 +818,6 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
   const router = useRouter();
   const isDrawer = !!onCancel;
   const [apiError, setApiError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSettingDefault, setIsSettingDefault] = useState(false);
 
@@ -892,7 +861,6 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
       await onDelete();
     } catch {
       setIsDeleting(false);
-      setDeleteConfirm(false);
     }
   }
 
@@ -908,211 +876,119 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
 
   const disabled = isSubmitting;
 
+  const actions: ActionItem[] = [
+    {
+      key: 'save',
+      label: mode === 'create' ? 'Create price list' : 'Save changes',
+      tone: 'primary',
+      type: 'submit',
+      disabled,
+      loading: isSubmitting,
+      loadingLabel: 'Saving…',
+    },
+    isDrawer
+      ? { key: 'cancel', label: 'Cancel', onClick: onCancel }
+      : { key: 'discard', label: 'Discard', href: '/pricelists' },
+    ...(mode === 'edit' && onDelete && !isDrawer
+      ? ([
+          {
+            key: 'delete',
+            label: 'Deactivate price list',
+            tone: 'danger',
+            loading: isDeleting,
+            loadingLabel: 'Deactivating…',
+            onClick: handleDelete,
+            confirm: {
+              prompt: 'Deactivate this price list? Customers assigned to it will lose their prices.',
+              confirmLabel: 'Yes, deactivate',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
+  ];
+
   return (
     <>
-      {/* ── Header ── */}
-      <div className="mb-6 flex items-center gap-4">
-        {isDrawer ? (
-          <>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex items-center gap-1.5 text-sm text-muted hover:text-text transition-colors"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-            {mode === 'create' ? (
-              <PageHeading size="lg">New price list</PageHeading>
-            ) : (
-              <h1 className="text-lg font-semibold text-text">{initialValues?.name ?? 'Edit price list'}</h1>
-            )}
-            {initialValues?.isDefault && (
-              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#dbeafe] text-[#1d4ed8]">
-                Default
-              </span>
-            )}
-          </>
-        ) : (
-          <>
-            <Link
-              href="/pricelists"
-              className="flex items-center gap-1.5 text-sm text-muted hover:text-text transition-colors"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              Price lists
-            </Link>
-            <span className="text-border">/</span>
-            {mode === 'create' ? (
-              <PageHeading>New price list</PageHeading>
-            ) : (
-              <h1 className="text-xl font-semibold text-text">{initialValues?.name ?? 'Edit price list'}</h1>
-            )}
-            {initialValues?.isDefault && (
-              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-[#dbeafe] text-[#1d4ed8]">
-                Default
-              </span>
-            )}
-          </>
-        )}
-      </div>
+      <DetailPageHeader
+        backHref={isDrawer ? undefined : '/pricelists'}
+        backLabel="Price lists"
+        onClose={isDrawer ? onCancel : undefined}
+        heading={mode === 'create' ? 'New price list' : initialValues?.name ?? 'Edit price list'}
+        headingStyle={mode === 'create' ? 'accent' : 'plain'}
+        size={isDrawer ? 'lg' : 'xl'}
+        badge={initialValues?.isDefault ? <StatusBadge label="Default" tone="blue" /> : undefined}
+      />
 
       <form onSubmit={handleSubmit(onFormSubmit)} noValidate>
-        <div className={isDrawer ? 'space-y-5' : 'grid grid-cols-1 gap-5 lg:grid-cols-[1fr_256px]'}>
+        <DetailPageLayout
+          sidebar={
+            !isDrawer ? (
+              <>
+                <DetailActionsPanel layout="sidebar" actions={actions} banner={{ error: apiError }} />
 
-          {/* ── Main column ── */}
-          <div className="space-y-5">
-            <FormCard title="Details">
-              <div className="space-y-4">
-                <div>
-                  <FieldLabel htmlFor="name">Name</FieldLabel>
-                  <TextInput
-                    id="name"
-                    placeholder="e.g. Retail, Wholesale, VIP"
-                    disabled={disabled}
-                    {...register('name')}
-                  />
-                  {errors.name && <p className="mt-1.5 text-xs text-red-500">{errors.name.message}</p>}
-                </div>
-                <div>
-                  <FieldLabel htmlFor="description">Description</FieldLabel>
-                  <textarea
-                    id="description"
-                    rows={3}
-                    placeholder="Optional description…"
-                    disabled={disabled}
-                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                    {...register('description')}
-                  />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="currency">Currency</FieldLabel>
-                  <TextInput
-                    id="currency"
-                    placeholder="GBP"
-                    disabled={disabled || mode === 'edit'}
-                    {...register('currency')}
-                  />
-                  {mode === 'edit' && (
-                    <p className="mt-1 text-xs text-muted">Currency cannot be changed after creation.</p>
-                  )}
-                </div>
-              </div>
-            </FormCard>
-
-            {mode === 'edit' && initialValues && (
-              <FormCard title="Pricing rules">
-                <RulesTable token={token} priceListId={initialValues.id} />
-              </FormCard>
-            )}
-
-            {/* ── Drawer footer ── */}
-            {isDrawer && (
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={onCancel}
-                  className="rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
-                >
-                  Cancel
-                </button>
-                {apiError && (
-                  <p className="self-center text-xs text-red-500">{apiError}</p>
-                )}
-                <button
-                  type="submit"
-                  disabled={disabled}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Saving…' : mode === 'create' ? 'Create price list' : 'Save changes'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* ── Right column (full-page only) ── */}
-          {!isDrawer && (
-            <div className="space-y-5">
-              <FormCard>
-                <div className="space-y-2">
-                  {apiError && (
-                    <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                      {apiError}
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={disabled}
-                    className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-                  >
-                    {isSubmitting ? 'Saving…' : mode === 'create' ? 'Create price list' : 'Save changes'}
-                  </button>
-                  <Link
-                    href="/pricelists"
-                    className="block w-full rounded-md px-4 py-2 text-center text-sm font-medium text-muted transition-colors hover:text-text"
-                  >
-                    Discard
-                  </Link>
-                </div>
-              </FormCard>
-
-              {mode === 'edit' && onSetDefault && !initialValues?.isDefault && (
-                <FormCard title="Default price list">
-                  <p className="mb-3 text-sm text-muted">
-                    Set this as the default price list for customers with no explicit assignment.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSetDefault}
-                    disabled={isSettingDefault}
-                    className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
-                  >
-                    {isSettingDefault ? 'Saving…' : 'Set as default'}
-                  </button>
-                </FormCard>
-              )}
-
-              {mode === 'edit' && onDelete && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                  {!deleteConfirm ? (
+                {mode === 'edit' && onSetDefault && !initialValues?.isDefault && (
+                  <FormCard title="Default price list">
+                    <p className="mb-3 text-sm text-muted">
+                      Set this as the default price list for customers with no explicit assignment.
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setDeleteConfirm(true)}
-                      className="w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:border-red-400"
+                      onClick={handleSetDefault}
+                      disabled={isSettingDefault}
+                      className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
                     >
-                      Deactivate price list
+                      {isSettingDefault ? 'Saving…' : 'Set as default'}
                     </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-red-700">Deactivate this price list?</p>
-                      <p className="text-xs text-red-600">Customers assigned to it will lose their prices.</p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleDelete}
-                          disabled={isDeleting}
-                          className="flex-1 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {isDeleting ? 'Deactivating…' : 'Yes, deactivate'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteConfirm(false)}
-                          className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                  </FormCard>
+                )}
+              </>
+            ) : undefined
+          }
+        >
+          <FormCard title="Details">
+            <div className="space-y-4">
+              <div>
+                <FieldLabel htmlFor="name">Name</FieldLabel>
+                <TextInput
+                  id="name"
+                  placeholder="e.g. Retail, Wholesale, VIP"
+                  disabled={disabled}
+                  {...register('name')}
+                />
+                {errors.name && <p className="mt-1.5 text-xs text-red-500">{errors.name.message}</p>}
+              </div>
+              <div>
+                <FieldLabel htmlFor="description">Description</FieldLabel>
+                <Textarea
+                  id="description"
+                  placeholder="Optional description…"
+                  disabled={disabled}
+                  {...register('description')}
+                />
+              </div>
+              <div>
+                <FieldLabel htmlFor="currency">Currency</FieldLabel>
+                <TextInput
+                  id="currency"
+                  placeholder="GBP"
+                  disabled={disabled || mode === 'edit'}
+                  {...register('currency')}
+                />
+                {mode === 'edit' && (
+                  <p className="mt-1 text-xs text-muted">Currency cannot be changed after creation.</p>
+                )}
+              </div>
             </div>
+          </FormCard>
+
+          {mode === 'edit' && initialValues && (
+            <FormCard title="Pricing rules">
+              <RulesTable token={token} priceListId={initialValues.id} />
+            </FormCard>
           )}
-        </div>
+        </DetailPageLayout>
+
+        {isDrawer && <DetailActionsPanel layout="footer" actions={actions} banner={{ error: apiError }} />}
       </form>
     </>
   );

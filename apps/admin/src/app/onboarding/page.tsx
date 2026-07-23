@@ -9,7 +9,7 @@ import { adminOnboardingApi, adminSettingsApi, ApiError } from '@wholo/admin-api
 import type { DistributorOrganisation, DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
 import { useAuth } from '@/lib/auth-context';
 import { suggestSlug, SLUG_PATTERN } from '@/lib/slug';
-import { FieldLabel, FieldError, TextInput } from '@/components/settings/shared';
+import { FieldLabel, FieldError, TextInput } from '@/components/form';
 import { AddressFields } from '@/components/onboarding/AddressFields';
 import { BrandingTab } from '@/components/settings/tabs/BrandingTab';
 import { OrdersTab } from '@/components/settings/tabs/OrdersTab';

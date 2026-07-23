@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import Link from 'next/link';
 import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType } from '@wholo/types';
 import type { ProductType, Supplier, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
 import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi } from '@wholo/admin-api-client';
-import { PageHeading } from '@/components/PageHeading';
+import { FormCard, FieldLabel, FieldError, TextInput, SelectInput } from '@/components/form';
+import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
+import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
+import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { ProductImageUploader } from './ProductImageUploader';
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
@@ -41,78 +43,6 @@ const STATUS_OPTIONS: { value: ProductStatus; label: string; color: string }[] =
   { value: ProductStatus.DRAFT, label: 'Draft', color: '#d97706' },
   { value: ProductStatus.ARCHIVED, label: 'Archived', color: '#6b7280' },
 ];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function FormCard({ title, children }: { title?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-white">
-      {title && (
-        <div className="border-b border-border px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-text">{title}</h2>
-        </div>
-      )}
-      <div className="p-5">{children}</div>
-    </div>
-  );
-}
-
-function FieldLabel({ htmlFor, children }: { htmlFor?: string; children: React.ReactNode }) {
-  return (
-    <label
-      htmlFor={htmlFor}
-      className="block text-xs font-semibold uppercase tracking-wide text-text mb-1.5"
-    >
-      {children}
-    </label>
-  );
-}
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="mt-1.5 text-xs text-red-500">{message}</p>;
-}
-
-function TextInput({
-  id,
-  placeholder,
-  disabled,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      id={id}
-      placeholder={placeholder}
-      disabled={disabled}
-      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-      {...props}
-    />
-  );
-}
-
-function SelectInput({
-  id,
-  disabled,
-  children,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      id={id}
-      disabled={disabled}
-      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 appearance-none"
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
-        backgroundRepeat: 'no-repeat',
-        backgroundPosition: 'right 10px center',
-        paddingRight: '30px',
-      }}
-      {...props}
-    >
-      {children}
-    </select>
-  );
-}
 
 // ─── Product pricing table ────────────────────────────────────────────────────
 
@@ -513,7 +443,6 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const {
@@ -569,38 +498,81 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
       await onDelete();
     } catch {
       setIsDeleting(false);
-      setDeleteConfirm(false);
     }
   }
 
   const disabled = isSubmitting || metaLoading;
 
+  const actions: ActionItem[] = [
+    {
+      key: 'save',
+      label: mode === 'create' ? 'Save product' : 'Save changes',
+      tone: 'primary',
+      type: 'submit',
+      disabled,
+      loading: isSubmitting,
+      loadingLabel: 'Saving…',
+    },
+    { key: 'discard', label: 'Discard', href: '/products' },
+    ...(mode === 'edit' && onDelete
+      ? ([
+          {
+            key: 'delete',
+            label: 'Delete product',
+            tone: 'danger',
+            loading: isDeleting,
+            loadingLabel: 'Deleting…',
+            onClick: handleDelete,
+            confirm: { prompt: 'Are you sure? This cannot be undone.', confirmLabel: 'Yes, delete' },
+          },
+        ] satisfies ActionItem[])
+      : []),
+  ];
+
   return (
     <>
-      {/* Page header */}
-      <div className="mb-6 flex items-center gap-4">
-        <Link
-          href="/products"
-          className="flex items-center gap-1.5 text-sm text-muted hover:text-text transition-colors"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Products
-        </Link>
-        <span className="text-border">/</span>
-        {mode === 'create' ? (
-          <PageHeading>Add product</PageHeading>
-        ) : (
-          <h1 className="text-xl font-semibold text-text">{initialValues?.name ?? 'Edit product'}</h1>
-        )}
-      </div>
+      <DetailPageHeader
+        backHref="/products"
+        backLabel="Products"
+        heading={mode === 'create' ? 'Add product' : initialValues?.name ?? 'Edit product'}
+        headingStyle={mode === 'create' ? 'accent' : 'plain'}
+      />
 
-      {/* Two-column layout */}
       <form onSubmit={handleSubmit(onFormSubmit)} noValidate>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_288px]">
+        <DetailPageLayout
+          sidebar={
+            <>
+              <DetailActionsPanel layout="sidebar" actions={actions} banner={{ error: apiError }} />
 
-          {/* ── Left column ── */}
+              {/* Product status */}
+              <FormCard title="Product status">
+                <div className="space-y-2">
+                  {STATUS_OPTIONS.map(({ value, label, color }) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[hsl(var(--color-border)/20%)]"
+                    >
+                      <input
+                        type="radio"
+                        value={value}
+                        disabled={disabled}
+                        className="h-4 w-4 accent-primary"
+                        {...register('status')}
+                      />
+                      <span className="flex items-center gap-2 text-sm font-medium text-text">
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        {label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </FormCard>
+            </>
+          }
+        >
           <div className="space-y-5">
 
             {/* Title + Description */}
@@ -670,44 +642,6 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
               </div>
             </FormCard>
 
-            {/* Price list rules — edit mode only */}
-            {mode === 'edit' && initialValues && (
-              <FormCard title="Price list pricing">
-                <ProductPricingTable productId={initialValues.id} token={token} />
-              </FormCard>
-            )}
-          </div>
-
-          {/* ── Right column ── */}
-          <div className="space-y-5">
-
-            {/* Product status */}
-            <FormCard title="Product status">
-              <div className="space-y-2">
-                {STATUS_OPTIONS.map(({ value, label, color }) => (
-                  <label
-                    key={value}
-                    className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[hsl(var(--color-border)/20%)]"
-                  >
-                    <input
-                      type="radio"
-                      value={value}
-                      disabled={disabled}
-                      className="h-4 w-4 accent-primary"
-                      {...register('status')}
-                    />
-                    <span className="flex items-center gap-2 text-sm font-medium text-text">
-                      <span
-                        className="h-2 w-2 rounded-full"
-                        style={{ backgroundColor: color }}
-                      />
-                      {label}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </FormCard>
-
             {/* Product organization */}
             <FormCard title="Product organization">
               <div className="space-y-4">
@@ -761,74 +695,21 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
               </div>
             </FormCard>
 
-            {/* Danger zone — delete (edit mode only) */}
-            {mode === 'edit' && onDelete && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                {!deleteConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    className="w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:border-red-400"
-                  >
-                    Delete product
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-red-700">Are you sure? This cannot be undone.</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleDelete}
-                        disabled={isDeleting}
-                        className="flex-1 rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
-                      >
-                        {isDeleting ? 'Deleting…' : 'Yes, delete'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirm(false)}
-                        className="flex-1 rounded-md border border-border px-3 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* Price list rules — edit mode only */}
+            {mode === 'edit' && initialValues && (
+              <FormCard title="Price list pricing">
+                <ProductPricingTable productId={initialValues.id} token={token} />
+              </FormCard>
+            )}
+
+            {/* Product images — edit mode only */}
+            {mode === 'edit' && initialValues?.id && (
+              <FormCard title="Product images">
+                <ProductImageUploader token={token} productId={initialValues.id} />
+              </FormCard>
             )}
           </div>
-        </div>
-
-        {/* Product images — edit mode only */}
-        {mode === 'edit' && initialValues?.id && (
-          <div className="mt-5">
-            <FormCard title="Product images">
-              <ProductImageUploader token={token} productId={initialValues.id} />
-            </FormCard>
-          </div>
-        )}
-
-        {/* Form actions */}
-        {apiError && (
-          <div className="mt-5 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {apiError}
-          </div>
-        )}
-        <div className="mt-5 flex items-center justify-end gap-3 border-t border-border pt-5">
-          <Link
-            href="/products"
-            className="rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
-          >
-            Discard
-          </Link>
-          <button
-            type="submit"
-            disabled={disabled}
-            className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-          >
-            {isSubmitting ? 'Saving…' : mode === 'create' ? 'Save product' : 'Save changes'}
-          </button>
-        </div>
+        </DetailPageLayout>
       </form>
     </>
   );

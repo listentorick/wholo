@@ -10,7 +10,10 @@ import type {
   UpdateDeliveryProfileRequest,
   CreateDeliveryProfileCutoffRuleRequest,
 } from '@wholo/types';
-import { FormCard, FieldLabel, TextInput, SaveButton, SaveBanner } from '@/components/settings/shared';
+import { FormCard, FieldLabel, TextInput } from '@/components/form';
+import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
+import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
+import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -458,7 +461,6 @@ export function DeliveryProfileForm({ profile, token }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   function toggleWeekday(day: number) {
@@ -523,11 +525,57 @@ export function DeliveryProfileForm({ profile, token }: Props) {
     setCutoffRules((prev) => prev.map((r) => (r.id === rule.id ? rule : r)));
   }, []);
 
+  const actions: ActionItem[] = [
+    {
+      key: 'save',
+      label: isNew ? 'Create profile' : 'Save changes',
+      tone: 'primary',
+      type: 'submit',
+      disabled: !name.trim(),
+      loading: isSubmitting,
+      loadingLabel: 'Saving…',
+    },
+    {
+      key: 'back',
+      label: 'Back',
+      onClick: () => router.push('/delivery-profiles'),
+    },
+    ...(!isNew
+      ? ([
+          {
+            key: 'delete',
+            label: 'Delete profile',
+            tone: 'danger',
+            loading: isDeleting,
+            loadingLabel: 'Deleting…',
+            onClick: handleDelete,
+            confirm: {
+              description: 'Deactivates this profile. Customers will have no delivery dates available.',
+              prompt: 'Are you sure?',
+              confirmLabel: 'Yes, delete',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
+  ];
+
   return (
     <form onSubmit={handleSubmit}>
-      <div className="lg:grid lg:grid-cols-[1fr_240px] lg:gap-6">
-        {/* Left column — form sections */}
-        <div className="space-y-5">
+      <DetailPageHeader
+        backHref="/delivery-profiles"
+        backLabel="Delivery Profiles"
+        heading={isNew ? 'New delivery profile' : profile!.name}
+        headingStyle={isNew ? 'accent' : 'plain'}
+      />
+      <DetailPageLayout
+        sidebar={
+          <DetailActionsPanel
+            layout="sidebar"
+            actions={actions}
+            banner={{ success: success ? 'Saved' : null, error: saveError }}
+          />
+        }
+      >
 
           {/* Name & status */}
           <FormCard title="Profile details">
@@ -668,67 +716,7 @@ export function DeliveryProfileForm({ profile, token }: Props) {
               )}
             </div>
           </FormCard>
-
-        </div>
-
-        {/* Right column — actions */}
-        <div className="mt-5 lg:mt-0">
-          <div className="sticky top-6 space-y-4">
-            <div className="rounded-lg border border-border bg-white p-4 space-y-3">
-              <button
-                type="submit"
-                disabled={isSubmitting || !name.trim()}
-                className="w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSubmitting ? 'Saving…' : isNew ? 'Create profile' : 'Save changes'}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/delivery-profiles')}
-                className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20"
-              >
-                Back
-              </button>
-              <SaveBanner success={success} error={saveError} />
-            </div>
-
-            {!isNew && (
-              <div className="rounded-lg border border-red-200 bg-white p-4">
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-600">Danger zone</h3>
-                <p className="mb-3 text-xs text-muted">Deactivates this profile. Customers will have no delivery dates available.</p>
-                {showDeleteConfirm ? (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-red-600">Are you sure?</p>
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={handleDelete}
-                      className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                    >
-                      {isDeleting ? 'Deleting…' : 'Yes, delete'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="w-full rounded-md border border-border px-4 py-2 text-sm font-medium text-text hover:bg-border/20"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-                  >
-                    Delete profile
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      </DetailPageLayout>
     </form>
   );
 }

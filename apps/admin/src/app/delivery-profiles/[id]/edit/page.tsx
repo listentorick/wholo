@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -48,14 +47,6 @@ export default function EditDeliveryProfilePage() {
 
   return (
     <AdminLayout>
-      <div className="mb-6">
-        <div className="mb-1 flex items-center gap-2 text-sm text-muted">
-          <Link href="/delivery-profiles" className="hover:text-text transition-colors">Delivery Profiles</Link>
-          <span>/</span>
-          <span className="text-text">{profile.name}</span>
-        </div>
-        <h1 className="text-xl font-semibold text-text">{profile.name}</h1>
-      </div>
       <DeliveryProfileForm profile={profile} token={accessToken} />
     </AdminLayout>
   );
