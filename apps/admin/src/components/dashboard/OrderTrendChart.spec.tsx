@@ -1,6 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { OrderTrendChart } from './OrderTrendChart';
+
+// ECharts needs a real canvas backend, which jsdom doesn't provide — mock it
+// at the module boundary and treat it as a trusted, separately-tested black
+// box. These tests only assert on what this component itself is responsible
+// for (legend, accessible name, table-view fallback), not chart internals.
+vi.mock('echarts/core', () => ({
+  init: vi.fn(() => ({ setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() })),
+  use: vi.fn(),
+}));
+vi.mock('echarts/charts', () => ({ LineChart: {} }));
+vi.mock('echarts/components', () => ({ GridComponent: {}, TooltipComponent: {} }));
+vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
 
 describe('OrderTrendChart', () => {
   it('shows a no-data message when there are no points', () => {

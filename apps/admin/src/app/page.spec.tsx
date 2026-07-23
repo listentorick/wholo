@@ -33,6 +33,17 @@ vi.mock('@/lib/notification-context', () => ({
   useNotifications: () => ({ unreadCount: 0, recent: [], fetchRecent: vi.fn(), markRead: vi.fn() }),
 }));
 
+// OrderTrendChart (rendered on this page) needs a real canvas backend, which
+// jsdom doesn't provide — mock it at the module boundary, same as
+// OrderTrendChart.spec.tsx.
+vi.mock('echarts/core', () => ({
+  init: vi.fn(() => ({ setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn() })),
+  use: vi.fn(),
+}));
+vi.mock('echarts/charts', () => ({ LineChart: {} }));
+vi.mock('echarts/components', () => ({ GridComponent: {}, TooltipComponent: {} }));
+vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
+
 const comparison = (current: number, overrides: Record<string, unknown> = {}) => ({
   current,
   comparison: 0,
