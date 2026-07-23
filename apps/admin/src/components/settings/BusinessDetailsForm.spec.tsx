@@ -104,6 +104,24 @@ describe('BusinessDetailsForm', () => {
     expect(screen.getByRole('combobox', { name: /timezone/i })).toHaveValue('Europe/London');
   });
 
+  it('renders UTC as a selectable, selected timezone', () => {
+    render(<BusinessDetailsForm settings={{ ...baseSettings, timezone: 'UTC' }} onSave={onSave} />);
+
+    expect(screen.getByRole('combobox', { name: /timezone/i })).toHaveValue('UTC');
+  });
+
+  it('submits UTC verbatim when saving without touching the timezone field', async () => {
+    render(<BusinessDetailsForm settings={{ ...baseSettings, timezone: 'UTC' }} onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ timezone: 'UTC' }),
+      );
+    });
+  });
+
   it('includes the selected timezone on submit', async () => {
     render(<BusinessDetailsForm settings={baseSettings} onSave={onSave} />);
 

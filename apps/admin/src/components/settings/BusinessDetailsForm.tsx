@@ -7,7 +7,9 @@ import { z } from 'zod';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
 import { FormCard, FieldLabel, FieldError, TextInput, Select, SaveButton, SaveBanner } from './shared';
 
-const IANA_TIMEZONES = Intl.supportedValuesOf('timeZone');
+// Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
+// commonly-selected IANA identifier — add it back explicitly.
+const IANA_TIMEZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC'];
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),

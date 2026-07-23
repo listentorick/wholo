@@ -1,5 +1,9 @@
 import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, IsDecimal, IsIn, MinLength } from 'class-validator';
 
+// Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
+// commonly-selected IANA identifier — add it back explicitly.
+const IANA_TIMEZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC'];
+
 export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
@@ -43,7 +47,7 @@ export class UpdateSettingsDto {
   addressCountry?: string;
 
   @IsOptional()
-  @IsIn(Intl.supportedValuesOf('timeZone'), { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
+  @IsIn(IANA_TIMEZONES, { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
   timezone?: string;
 
   @IsOptional()

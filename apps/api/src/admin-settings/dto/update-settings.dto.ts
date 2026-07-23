@@ -15,6 +15,10 @@ import {
 import { OrderAcceptanceMode } from '@prisma/client';
 import { SLUG_PATTERN } from '../../common/slug';
 
+// Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
+// commonly-selected IANA identifier — add it back explicitly.
+const IANA_TIMEZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC'];
+
 export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
@@ -62,7 +66,7 @@ export class UpdateSettingsDto {
   // Defines calendar-day/week/month boundaries for analytics period
   // comparisons — see the wholesaler homepage dashboard PRD, §4.1.
   @IsOptional()
-  @IsIn(Intl.supportedValuesOf('timeZone'), { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
+  @IsIn(IANA_TIMEZONES, { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
   timezone?: string;
 
   @IsOptional()
