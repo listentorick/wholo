@@ -17,32 +17,23 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'hsl(var(--color-surface))',
       }}
     >
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', marginBottom: '12px' }}>
-          <div
-            style={{
-              width: '7px',
-              height: '7px',
-              backgroundColor: '#D97036',
-              transform: 'rotate(45deg)',
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontSize: '34px',
-              fontWeight: '700',
-              letterSpacing: '-0.03em',
-              color: '#1A1A1A',
-              lineHeight: 1,
-            }}
-          >
-            Wholo
-          </span>
-        </div>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logos/stocdup-logo-only.png" alt="" style={{ width: '40px', height: '40px', flexShrink: 0 }} />
+        <span
+          style={{
+            fontSize: '34px',
+            fontWeight: '700',
+            letterSpacing: '-0.03em',
+            color: 'hsl(var(--color-text))',
+            lineHeight: 1,
+          }}
+        >
+          stocd<span style={{ color: 'hsl(var(--color-primary))' }}>up</span>
+        </span>
       </div>
     </div>
   );

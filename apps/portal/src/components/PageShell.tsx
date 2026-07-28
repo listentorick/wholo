@@ -61,7 +61,7 @@ export function PageSpinner() {
     <div
       role="status"
       aria-label="Loading"
-      className="h-7 w-7 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent"
+      className="h-7 w-7 animate-spin rounded-full border-2 border-accent border-t-transparent"
     />
   );
 }

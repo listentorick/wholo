@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, OrganisationType, ProductStatus } from '@prisma/client';
+import { Prisma, OrganisationType, ProductStatus, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
@@ -58,12 +58,15 @@ export class CatalogueService {
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
-    const [logoImage, bannerImage] = await Promise.all([
+    const [logoImage, bannerImage, customerCount] = await Promise.all([
       this.prisma.assetImage.findFirst({
         where: { assetType: 'distributor-logo', entityId: distributor.id, distributorId: distributor.id },
       }),
       this.prisma.assetImage.findFirst({
         where: { assetType: 'distributor-banner', entityId: distributor.id, distributorId: distributor.id },
+      }),
+      this.prisma.tradeRelationship.count({
+        where: { distributorId: distributor.id, status: TradeRelationshipStatus.ACTIVE },
       }),
     ]);
 
@@ -91,6 +94,7 @@ export class CatalogueService {
         ? this.r2Storage.getPublicUrl((bannerImage.variants as Record<string, string>).mobile)
         : null,
       bannerDominantColor: bannerImage?.dominantColor ?? null,
+      customerCount,
     };
   }
 

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { DistributorPageHeader, formatDeliveryParts } from './DistributorPageHeader';
+import { DistributorPageHeader } from './DistributorPageHeader';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -42,39 +42,10 @@ beforeEach(() => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('DistributorPageHeader', () => {
-  it('renders distributor name', () => {
-    render(<DistributorPageHeader distributorSlug={slug} />);
-    expect(screen.getByText('Fine Wines Co')).toBeTruthy();
-  });
-
-  it('renders logo when logoUrl is present', () => {
+  it('does not render distributor name or logo (shown in the header above the tabs instead)', () => {
     const { container } = render(<DistributorPageHeader distributorSlug={slug} />);
-    const img = container.querySelector('img');
-    expect(img?.getAttribute('src')).toBe('https://example.com/logo.png');
-  });
-
-  it('omits logo element when logoUrl is null', () => {
-    vi.mocked(useDistributor).mockReturnValue({
-      distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: null } as any,
-      hasRelationship: false,
-      relationshipMinSpend: null,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
-    });
-    const { container } = render(<DistributorPageHeader distributorSlug={slug} />);
+    expect(screen.queryByText('Fine Wines Co')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
-  });
-
-  it('falls back to slug when distributor is not loaded', () => {
-    vi.mocked(useDistributor).mockReturnValue({
-      distributor: null,
-      hasRelationship: null,
-      relationshipMinSpend: null,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
-    });
-    render(<DistributorPageHeader distributorSlug={slug} />);
-    expect(screen.getByText(slug)).toBeTruthy();
   });
 
   it('shows delivery line when dates are returned', async () => {
@@ -171,35 +142,5 @@ describe('DistributorPageHeader', () => {
     });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.queryByText(/minimum order value/)).toBeNull();
-  });
-});
-
-describe('formatDeliveryParts', () => {
-  it('returns parts with time, cutoffDayLabel, dayName, dayOrdinal', () => {
-    const parts = formatDeliveryParts('2026-07-07', '2026-07-06T11:50:00.000Z');
-    expect(parts.time).toMatch(/\d+:\d+(am|pm)/);
-    expect(parts.dayName).toBeTruthy();
-    expect(parts.dayOrdinal).toMatch(/\d+(st|nd|rd|th)/);
-    expect(parts.cutoffDayLabel).toBeTruthy();
-  });
-
-  it('returns 1st ordinal for day 1', () => {
-    const parts = formatDeliveryParts('2026-07-01', '2026-06-30T10:00:00.000Z');
-    expect(parts.dayOrdinal).toBe('1st');
-  });
-
-  it('returns 2nd ordinal for day 2', () => {
-    const parts = formatDeliveryParts('2026-07-02', '2026-07-01T10:00:00.000Z');
-    expect(parts.dayOrdinal).toBe('2nd');
-  });
-
-  it('returns 11th ordinal for day 11 (special case)', () => {
-    const parts = formatDeliveryParts('2026-07-11', '2026-07-10T10:00:00.000Z');
-    expect(parts.dayOrdinal).toBe('11th');
-  });
-
-  it('returns 21st ordinal for day 21', () => {
-    const parts = formatDeliveryParts('2026-07-21', '2026-07-20T10:00:00.000Z');
-    expect(parts.dayOrdinal).toBe('21st');
   });
 });

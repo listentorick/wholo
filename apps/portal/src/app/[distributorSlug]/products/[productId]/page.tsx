@@ -89,9 +89,27 @@ export default function ProductDetailPage() {
           transition: border-color 0.15s, color 0.15s;
           flex-shrink: 0; padding: 0;
         }
-        .stepper-btn:hover  { border-color: #D97036; color: #D97036; }
-        .stepper-btn:active { background: #FEF3EC; }
+        .stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
+        .stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
         .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .pd-img-placeholder { position: relative; }
+        .pd-img-placeholder::after {
+          content: '';
+          position: absolute;
+          top: 50%; left: 50%;
+          width: 35%; height: 35%;
+          transform: translate(-50%, -50%);
+          background-color: hsl(var(--color-text) / 0.15);
+          -webkit-mask-image: url('/logos/stocdup-logo-only.png');
+          mask-image: url('/logos/stocdup-logo-only.png');
+          -webkit-mask-size: contain;
+          mask-size: contain;
+          -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+          -webkit-mask-position: center;
+          mask-position: center;
+        }
       `}</style>
 
       <PageSubHeader
@@ -111,10 +129,14 @@ export default function ProductDetailPage() {
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
             />
           ) : (
-            <div style={{
-              width: '100%', height: '100%',
-              background: 'linear-gradient(145deg, #EDE8E1 0%, #DDD4C6 100%)',
-            }} aria-hidden="true" />
+            <div
+              className="pd-img-placeholder"
+              style={{
+                width: '100%', height: '100%',
+                background: 'linear-gradient(145deg, hsl(var(--color-canvas)) 0%, hsl(var(--color-border)) 100%)',
+              }}
+              aria-hidden="true"
+            />
           )}
         </div>
 

@@ -30,7 +30,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
   const cartCount = cartCtx?.cartCount ?? 0;
   const { logout } = useAuth();
 
-  const distributorName = distributor?.name ?? distributorSlug ?? contextName ?? 'Wholo';
+  const distributorName = distributor?.name ?? distributorSlug ?? contextName ?? 'Stocdup';
 
   function toggleCollapsed() {
     const next = !isCollapsed;
@@ -73,20 +73,23 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
       'group flex items-center py-2.5 border-l-2 transition-colors duration-150',
       isCollapsed ? 'md:justify-center md:px-0 gap-3 px-4' : 'gap-3 px-4',
       active
-        ? 'bg-[#FDF0E8] border-[#D97036] text-[#D97036] font-medium'
-        : 'border-transparent text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#1A1A1A]',
+        ? 'bg-sidebar-accent/20 border-sidebar-accent text-sidebar-accent font-medium'
+        : 'border-transparent text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
     ].join(' ');
   }
 
   const sidebarPanel = (
-    <aside className="flex h-full w-full flex-col bg-[#F9F8F6] border-r border-[#E5E7EB] overflow-y-auto">
+    <aside className="flex h-full w-full flex-col bg-sidebar-bg overflow-y-auto">
       {/* Mobile header — always full, isCollapsed is a desktop-only concept */}
-      <div className="md:hidden flex items-center gap-2 px-5 py-4 border-b border-[#E5E7EB]">
-        <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#D97036]" />
-        <span className="text-base font-semibold tracking-tight text-[#D97036]">Wholo</span>
+      <div className="md:hidden flex items-center gap-2.5 px-5 py-4 border-b border-border bg-topbar-bg">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
+        <span className="text-base font-bold tracking-tight text-text">
+          stocd<span className="text-primary">up</span>
+        </span>
         <button
           onClick={() => setIsOpen(false)}
-          className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[#9CA3AF] hover:text-[#1A1A1A]"
+          className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-muted hover:text-text"
           aria-label="Close navigation"
         >
           <X className="h-5 w-5" strokeWidth={1.5} />
@@ -95,24 +98,28 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
 
       {/* Desktop header — respects isCollapsed */}
       <div className={[
-        'hidden md:flex border-b border-[#E5E7EB]',
-        isCollapsed ? 'justify-center px-3 py-4' : 'items-center gap-2 px-5 py-4',
+        'hidden md:flex border-b border-border bg-topbar-bg',
+        isCollapsed ? 'justify-center px-3 py-4' : 'items-center gap-2.5 px-5 py-4',
       ].join(' ')}>
         {isCollapsed ? (
           <button
             onClick={toggleCollapsed}
-            className="flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-[#F3F4F6]"
+            className="flex h-8 w-8 items-center justify-center rounded transition-colors hover:bg-canvas"
             aria-label="Expand navigation"
           >
-            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#D97036]" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
           </button>
         ) : (
           <>
-            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-[#D97036]" />
-            <span className="text-base font-semibold tracking-tight text-[#D97036]">Wholo</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
+            <span className="text-base font-bold tracking-tight text-text">
+              stocd<span className="text-primary">up</span>
+            </span>
             <button
               onClick={toggleCollapsed}
-              className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-[#9CA3AF] hover:text-[#1A1A1A]"
+              className="ml-auto flex h-8 w-8 flex-shrink-0 items-center justify-center rounded text-muted hover:text-text"
               aria-label="Collapse navigation"
             >
               <X className="h-5 w-5" strokeWidth={1.5} />
@@ -127,7 +134,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           {mainNavItems.map((item) => (
             <li key={item.href}>
               <Link href={item.href} className={navItemClass(isActive(item))}>
-                <span className={isActive(item) ? 'text-[#D97036]' : 'text-[#9CA3AF] group-hover:text-[#4B5563]'}>
+                <span className={isActive(item) ? 'text-sidebar-accent' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
                   {item.icon}
                 </span>
                 <span className={`text-sm ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
@@ -136,13 +143,13 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           ))}
         </ul>
 
-        <div className="mx-4 my-3 h-px bg-[#E5E7EB]" />
+        <div className="mx-4 my-3 h-px bg-sidebar-border" />
 
         <ul>
           {accountNavItems.map((item) => (
             <li key={item.href}>
               <Link href={item.href} className={navItemClass(isActive(item))}>
-                <span className={isActive(item) ? 'text-[#D97036]' : 'text-[#9CA3AF] group-hover:text-[#4B5563]'}>
+                <span className={isActive(item) ? 'text-sidebar-accent' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
                   {item.icon}
                 </span>
                 <span className={`text-sm ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
@@ -153,15 +160,15 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
       </nav>
 
       {/* Sign out */}
-      <div className="border-t border-[#E5E7EB] py-3">
+      <div className="border-t border-sidebar-border py-3">
         <button
           onClick={logout}
           className={[
-            'group flex w-full items-center border-l-2 border-transparent py-2.5 text-sm text-[#4B5563] transition-colors duration-150 hover:bg-[#F3F4F6] hover:text-[#1A1A1A]',
+            'group flex w-full items-center border-l-2 border-transparent py-2.5 text-sm text-sidebar-fg/70 transition-colors duration-150 hover:bg-sidebar-hover hover:text-sidebar-fg',
             isCollapsed ? 'md:justify-center md:px-0 gap-3 px-4' : 'gap-3 px-4',
           ].join(' ')}
         >
-          <span className="text-[#9CA3AF] group-hover:text-[#4B5563]">
+          <span className="text-sidebar-fg/50 group-hover:text-sidebar-fg/80">
             <LogOut className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
           </span>
           <span className={isCollapsed ? 'md:hidden' : ''}>Sign out</span>
@@ -173,26 +180,26 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
   return (
     <>
       {/* Mobile top bar */}
-      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-white border-b border-[#E5E7EB] px-4 h-14 md:hidden">
+      <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-surface border-b border-border px-4 h-14 md:hidden">
         <button
           onClick={() => setIsOpen(true)}
-          className="flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
+          className="flex h-9 w-9 items-center justify-center text-text"
           aria-label="Open navigation"
         >
           <Menu className="h-5 w-5" strokeWidth={1.5} />
         </button>
 
-        <span className="text-sm font-medium tracking-wide text-[#1A1A1A]">{distributorName}</span>
+        <span className="text-sm font-medium tracking-wide text-text">{distributorName}</span>
 
         <div className="flex items-center gap-0.5">
           {distributorSlug ? (
             <button
               onClick={() => router.push(`/${distributorSlug}/checkout`)}
-              className="relative flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
+              className="relative flex h-9 w-9 items-center justify-center text-text"
               aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`}
             >
               {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-1 text-[11px] font-semibold leading-none text-[#1A1A1A]">
+                <span className="absolute -top-0.5 -right-1 text-[11px] font-semibold leading-none text-primary">
                   {cartCount}
                 </span>
               )}

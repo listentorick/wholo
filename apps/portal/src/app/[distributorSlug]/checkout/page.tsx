@@ -159,9 +159,9 @@ export default function CheckoutPage() {
           <button
             onClick={() => router.push(`/${distributorSlug}/products`)}
             style={{
-              border: '1.5px solid #D97036',
+              border: '1.5px solid hsl(var(--color-primary))',
               background: 'transparent',
-              color: '#D97036',
+              color: 'hsl(var(--color-primary))',
               padding: '11px 28px',
               fontSize: 11,
               fontWeight: 600,
@@ -192,8 +192,8 @@ export default function CheckoutPage() {
           color: #6B7280; transition: border-color 0.15s, color 0.15s;
           flex-shrink: 0; padding: 0; font-family: inherit;
         }
-        .co-stepper-btn:hover  { border-color: #D97036; color: #D97036; }
-        .co-stepper-btn:active { background: #FEF3EC; }
+        .co-stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
+        .co-stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
         .co-stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
         .co-trash-btn {
@@ -210,7 +210,7 @@ export default function CheckoutPage() {
           display: flex; align-items: center; gap: 6px;
           background: none; border: none; cursor: pointer;
           padding: 0; font-family: inherit;
-          color: #D97036; font-size: 11px; font-weight: 600;
+          color: hsl(var(--color-primary)); font-size: 11px; font-weight: 600;
           letter-spacing: 0.1em; text-transform: uppercase;
         }
 
@@ -226,20 +226,20 @@ export default function CheckoutPage() {
           border-bottom: 1.5px solid #E5E7EB;
           background: transparent; padding: 8px 0 10px;
           font-size: 14px; color: #1A1A1A; outline: none;
-          font-family: inherit; caret-color: #D97036;
+          font-family: inherit; caret-color: hsl(var(--color-primary));
         }
         .co-field::placeholder { color: #C4B5A8; }
-        .co-field:focus { border-bottom-color: #D97036; }
+        .co-field:focus { border-bottom-color: hsl(var(--color-primary)); }
 
         .co-place-order {
-          width: 100%; border: 1.5px solid #D97036; background: transparent;
-          color: #D97036; padding: 15px 20px; font-size: 13px; font-weight: 600;
+          width: 100%; border: 1.5px solid hsl(var(--color-primary)); background: transparent;
+          color: hsl(var(--color-primary)); padding: 15px 20px; font-size: 13px; font-weight: 600;
           letter-spacing: 0.08em; cursor: pointer;
           font-family: inherit; text-align: center;
           display: flex; align-items: center; justify-content: center; gap: 8px;
           transition: background 0.15s, color 0.15s;
         }
-        .co-place-order:hover:not(:disabled) { background: #FEF3EC; }
+        .co-place-order:hover:not(:disabled) { background: hsl(var(--color-primary-subtle)); }
         .co-place-order:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .co-ghost-btn {
@@ -432,7 +432,7 @@ export default function CheckoutPage() {
             </p>
             {loadingDates ? (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-[#D97036]" />
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-primary" />
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -450,8 +450,8 @@ export default function CheckoutPage() {
                       type="button"
                       onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
                       style={{
-                        border: `1.5px solid ${isSelected ? '#D97036' : '#E5E7EB'}`,
-                        background: isSelected ? '#FEF3EC' : 'transparent',
+                        border: `1.5px solid ${isSelected ? 'hsl(var(--color-primary))' : '#E5E7EB'}`,
+                        background: isSelected ? 'hsl(var(--color-primary-subtle))' : 'transparent',
                         padding: '12px 14px',
                         display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
                         gap: 3, cursor: 'pointer', fontFamily: 'inherit',
@@ -459,7 +459,7 @@ export default function CheckoutPage() {
                         textAlign: 'left', width: '100%',
                       }}
                     >
-                      <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? '#D97036' : '#1A1A1A' }}>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? 'hsl(var(--color-primary))' : '#1A1A1A' }}>
                         {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                       </span>
                       <span style={{ fontSize: 12, color: '#9CA3AF' }}>
@@ -481,7 +481,7 @@ export default function CheckoutPage() {
             onClick={handlePlaceOrder}
           >
             {submitting ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#D97036] border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             ) : null}
             {submitting ? 'Placing Order…' : 'Place Order'}
           </button>

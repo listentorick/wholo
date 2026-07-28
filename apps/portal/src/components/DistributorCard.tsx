@@ -23,17 +23,17 @@ function LockIcon() {
 function CardInner({ distributor, hover }: { distributor: PortalDistributorSummary; hover: boolean }) {
   return (
     <div className="flex items-start gap-4">
-      <div className="flex-shrink-0 h-10 w-10 rounded-full border border-[#E5E7EB] overflow-hidden flex items-center justify-center bg-[#FDF0E8]">
+      <div className="flex-shrink-0 h-10 w-10 rounded-full border border-[#E5E7EB] overflow-hidden flex items-center justify-center bg-accent-light">
         {distributor.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={distributor.logoUrl} alt="" className="h-full w-full object-cover" draggable={false} />
         ) : (
-          <span className="text-xs font-semibold text-[#D97036]">{initials(distributor.name)}</span>
+          <span className="text-xs font-semibold text-accent">{initials(distributor.name)}</span>
         )}
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className={`text-sm font-semibold text-[#1A1A1A] truncate${hover ? ' group-hover:text-[#D97036] transition-colors' : ''}`}>
+        <p className={`text-sm font-semibold text-[#1A1A1A] truncate${hover ? ' group-hover:text-accent transition-colors' : ''}`}>
           {distributor.name}
         </p>
         {distributor.email && (
@@ -69,7 +69,7 @@ export function DistributorCard({ distributor, locked = false }: { distributor: 
   return (
     <button
       onClick={() => router.push(`/${distributor.slug}`)}
-      className="group w-full text-left bg-white border border-[#E5E7EB] p-5 shadow-sm hover:border-[#D97036] hover:shadow-md transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D97036]"
+      className="group w-full text-left bg-white border border-[#E5E7EB] p-5 shadow-sm hover:border-accent hover:shadow-md transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <CardInner distributor={distributor} hover={true} />
     </button>

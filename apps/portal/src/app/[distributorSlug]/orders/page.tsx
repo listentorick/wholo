@@ -8,7 +8,7 @@ import { PageShell, PageSpinner } from '@/components/PageShell';
 import type { OrderSummary, OrderStatus } from '@wholo/types';
 
 const STATUS_BADGE: Record<string, { color: string; bg: string; label: string }> = {
-  SUBMITTED:  { color: '#D97036', bg: '#FEF3EC', label: 'Submitted' },
+  SUBMITTED:  { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', label: 'Submitted' },
   ACCEPTED:   { color: '#16A34A', bg: '#DCFCE7', label: 'Accepted'  },
   REJECTED:   { color: '#DC2626', bg: '#FEE2E2', label: 'Rejected'  },
   CANCELLED:  { color: '#6B7280', bg: '#F3F4F6', label: 'Cancelled' },
@@ -144,7 +144,7 @@ export default function OrdersPage() {
             <button
               onClick={() => router.push(`/${distributorSlug}/products`)}
               style={{
-                border: '1.5px solid #D97036', background: 'transparent', color: '#D97036',
+                border: '1.5px solid hsl(var(--color-primary))', background: 'transparent', color: 'hsl(var(--color-primary))',
                 padding: '11px 28px', fontSize: 11, fontWeight: 600,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 cursor: 'pointer', fontFamily: 'inherit',

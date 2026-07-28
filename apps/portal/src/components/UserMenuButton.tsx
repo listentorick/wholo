@@ -35,8 +35,8 @@ export function UserMenuButton() {
       {isOpen && user && (
         <div className="absolute right-0 top-full z-50 mt-2 w-[80vw] overflow-hidden bg-white shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.05] md:w-64">
 
-          {/* Identity — warm grey header */}
-          <div className="flex items-center gap-3 bg-surface-sidebar px-4 py-4">
+          {/* Identity — highlighted header */}
+          <div className="flex items-center gap-3 bg-surface-highlight px-4 py-4">
             <div className="flex h-9 w-9 flex-shrink-0 select-none items-center justify-center rounded-full bg-accent text-sm font-semibold text-white">
               {(user.firstName?.[0] ?? '').toUpperCase()}{(user.lastName?.[0] ?? '').toUpperCase()}
             </div>

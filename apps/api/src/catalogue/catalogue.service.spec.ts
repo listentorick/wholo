@@ -45,7 +45,7 @@ const makeProduct = (id: string) => ({
 
 const mockPrisma = {
   organisation: { findFirst: jest.fn() },
-  tradeRelationship: { findFirst: jest.fn() },
+  tradeRelationship: { findFirst: jest.fn(), count: jest.fn() },
   customerCatalogue: { findMany: jest.fn() },
   product: { findFirst: jest.fn(), findMany: jest.fn(), count: jest.fn() },
   priceListRule: { findMany: jest.fn() },
@@ -91,6 +91,7 @@ describe('CatalogueService', () => {
     mockPrisma.assetImage.findMany.mockResolvedValue([]);
     mockPrisma.assetImage.findFirst.mockResolvedValue(null);
     mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+    mockPrisma.tradeRelationship.count.mockResolvedValue(0);
     mockPrisma.customerCatalogue.findMany.mockResolvedValue([]);
     mockPrisma.priceListRule.findMany.mockResolvedValue([]);
     mockPriceResolution.resolvePriceListId.mockResolvedValue(null);
@@ -152,6 +153,16 @@ describe('CatalogueService', () => {
     it('throws NotFoundException when distributor does not exist', async () => {
       mockPrisma.organisation.findFirst.mockResolvedValue(null);
       await expect(service.getDistributor('unknown')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns customerCount from active trade relationships', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
+      mockPrisma.tradeRelationship.count.mockResolvedValue(42);
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.customerCount).toBe(42);
+      expect(mockPrisma.tradeRelationship.count).toHaveBeenCalledWith({
+        where: { distributorId: DISTRIBUTOR_ID, status: 'ACTIVE' },
+      });
     });
   });
 

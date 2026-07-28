@@ -41,7 +41,7 @@ describe('DistributorNav', () => {
   it('marks About as active when on the root slug path', () => {
     render(<DistributorNav distributorSlug="winos" />);
     const aboutLink = screen.getByText('About').closest('a');
-    expect(aboutLink?.className).toContain('border-[#D97036]');
+    expect(aboutLink?.className).toContain('border-accent');
   });
 
   it('marks inactive tabs with transparent border', () => {

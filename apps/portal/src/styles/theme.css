@@ -1,0 +1,38 @@
+/* Stocdup Portal — design token definitions.
+   To rebrand: replace values on :root only. No component files need touching. */
+
+:root {
+  /* Sidebar */
+  --color-sidebar-bg:      217 68% 14%;   /* Deep Navy #0B1D3A */
+  --color-sidebar-fg:      0 0% 95%;      /* near-white text */
+  --color-sidebar-accent:  220 100% 54%;  /* Cobalt Blue #1565FF — active item */
+  --color-sidebar-border:  217 50% 20%;   /* navy tint */
+  --color-sidebar-hover:   217 50% 19%;   /* navy tint */
+
+  /* Top bar */
+  --color-topbar-bg:       210 25% 98%;   /* Warm Off White #FAFBFC */
+
+  /* Brand / CTA */
+  --color-primary:         220 100% 54%;  /* Cobalt Blue #1565FF */
+  --color-primary-fg:      0 0% 100%;
+  --color-primary-hover:   220 100% 46%;  /* Cobalt Blue, darkened */
+  --color-primary-light:   220 100% 95%;  /* light cobalt tint — selected/hover bg */
+  --color-primary-subtle:  220 60%  97%;  /* very light cobalt tint */
+
+  /* Content area */
+  --color-surface:         0 0% 100%;     /* card/panel white */
+  --color-canvas:          216 24% 96%;   /* Pale Stone #F2F4F7 — page background */
+  --color-border:          210 32% 93%;   /* Light Blue Grey #E6ECF2 */
+  --color-muted:           213 17% 43%;   /* Slate Blue #5B6B7F */
+  --color-text:            217 68% 14%;   /* Deep Navy #0B1D3A */
+
+  /* Brand accent */
+  --color-accent:          21 86% 63%;    /* Amber Accent #F2864D */
+  --color-accent-fg:       217 68% 14%;   /* Deep Navy — text on amber fills */
+  --color-accent-light:    21 90% 95%;    /* light amber tint — pending/status badges */
+  --color-accent-border:   21 70% 85%;    /* amber badge border */
+
+  /* Secondary highlight */
+  --color-highlight:       215 90% 70%;   /* Sky Blue #6EA8F7 — decorative/secondary highlight, non-interactive */
+  --color-highlight-light: 215 90% 96%;   /* pale Sky Blue tint — subtle highlighted card backgrounds */
+}

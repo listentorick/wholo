@@ -7,12 +7,13 @@ import { invitationsApi, ApiError } from '@wholo/api-client';
 
 type Status = 'loading' | 'unauthenticated' | 'error' | 'accepted' | 'already-accepted';
 
-function WholoLogo() {
+function StocdupLogo() {
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', marginBottom: '24px' }}>
-      <div style={{ width: '7px', height: '7px', backgroundColor: '#D97036', transform: 'rotate(45deg)' }} />
-      <span style={{ fontFamily: 'system-ui, sans-serif', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', color: '#111' }}>
-        wholo
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logos/stocdup-logo-only.png" alt="" style={{ width: '20px', height: '20px', flexShrink: 0 }} />
+      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', color: 'hsl(var(--color-text))' }}>
+        stocd<span style={{ color: 'hsl(var(--color-primary))' }}>up</span>
       </span>
     </div>
   );
@@ -22,8 +23,8 @@ function Spinner({ label }: { label: string }) {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
       <div style={{ textAlign: 'center' }}>
-        <WholoLogo />
-        <div style={{ width: '24px', height: '24px', border: '2px solid #e5e7eb', borderTopColor: '#D97036', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+        <StocdupLogo />
+        <div style={{ width: '24px', height: '24px', border: '2px solid #e5e7eb', borderTopColor: 'hsl(var(--color-primary))', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
         <p style={{ fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#6b7280', marginTop: '16px' }}>{label}</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -104,9 +105,9 @@ function AcceptInviteContent() {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: '24px' }}>
         <div style={{ maxWidth: '400px', textAlign: 'center' }}>
-          <WholoLogo />
+          <StocdupLogo />
           <h1 style={{ fontFamily: 'system-ui, sans-serif', fontSize: '22px', fontWeight: 700, color: '#111', margin: '0 0 12px' }}>
-            You&apos;ve been invited to join Wholo
+            You&apos;ve been invited to join Stocdup
           </h1>
           <p style={{ fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#6b7280', lineHeight: '1.6', margin: '0 0 28px' }}>
             Create an account or sign in to accept your invitation and start ordering.
@@ -117,7 +118,7 @@ function AcceptInviteContent() {
               onClick={handleCreateAccount}
               style={{
                 display: 'block', width: '100%', padding: '12px 24px',
-                backgroundColor: '#D97036', color: '#fff', border: 'none',
+                backgroundColor: 'hsl(var(--color-primary))', color: '#fff', border: 'none',
                 borderRadius: '8px', fontFamily: 'system-ui, sans-serif',
                 fontSize: '15px', fontWeight: 600, cursor: 'pointer',
               }}
@@ -146,7 +147,7 @@ function AcceptInviteContent() {
   return (
     <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: '24px' }}>
       <div style={{ maxWidth: '400px', textAlign: 'center' }}>
-        <WholoLogo />
+        <StocdupLogo />
         <div style={{
           width: '48px', height: '48px', borderRadius: '50%',
           backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center',

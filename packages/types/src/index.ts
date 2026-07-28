@@ -362,6 +362,7 @@ export interface DistributorInfo {
   addressPostcode: string | null;
   addressCountry: string | null;
   minimumOrderSpend: number | null;
+  customerCount: number;
 }
 
 export interface PortalDistributorSummary {

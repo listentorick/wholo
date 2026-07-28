@@ -10,7 +10,7 @@ import type { AddressSnapshot, Order } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
-  SUBMITTED: { color: '#D97036', bg: '#FEF3EC', border: '#FDDCBE', label: 'Awaiting Confirmation' },
+  SUBMITTED: { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', border: 'hsl(var(--color-accent-border))', label: 'Awaiting Confirmation' },
   ACCEPTED:  { color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0', label: 'Confirmed'             },
   REJECTED:  { color: '#DC2626', bg: '#FEE2E2', border: '#FECACA', label: 'Rejected'               },
   CANCELLED: { color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB', label: 'Cancelled'              },

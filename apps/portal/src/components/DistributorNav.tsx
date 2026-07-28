@@ -29,7 +29,7 @@ export function DistributorNav({ distributorSlug }: Props) {
               className={[
                 'inline-flex items-center px-5 py-3 text-sm font-medium border-b-[3px] transition-colors',
                 isActive
-                  ? 'text-[#1A1A1A] border-[#D97036]'
+                  ? 'text-[#1A1A1A] border-accent'
                   : 'text-[#9CA3AF] border-transparent hover:text-[#1A1A1A]',
               ].join(' ')}
             >

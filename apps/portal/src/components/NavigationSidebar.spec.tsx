@@ -87,15 +87,15 @@ describe('NavigationSidebar', () => {
     mockPathname = '/';
     render(<NavigationSidebar />);
     const suppliersLink = screen.getByText('Our Suppliers').closest('a');
-    expect(suppliersLink?.className).toContain('bg-[#FDF0E8]');
-    expect(suppliersLink?.className).toContain('border-[#D97036]');
+    expect(suppliersLink?.className).toContain('bg-sidebar-accent/20');
+    expect(suppliersLink?.className).toContain('border-sidebar-accent');
   });
 
   it('does not mark Our Suppliers active on sub-pages', () => {
     mockPathname = `/${slug}/delivery-settings`;
     renderSidebar();
     const suppliersLink = screen.getByText('Our Suppliers').closest('a');
-    expect(suppliersLink?.className).not.toContain('bg-[#FDF0E8]');
+    expect(suppliersLink?.className).not.toContain('bg-sidebar-accent/20');
   });
 
   it('calls logout when Sign out is clicked', () => {
@@ -135,9 +135,10 @@ describe('NavigationSidebar', () => {
     expect(document.body.style.overflow).toBe('');
   });
 
-  it('shows Wholo wordmark in sidebar', () => {
-    renderSidebar();
-    expect(screen.getAllByText('Wholo').length).toBeGreaterThanOrEqual(1);
+  it('shows Stocdup logo in sidebar', () => {
+    const { container } = renderSidebar();
+    const logos = container.querySelectorAll('img[src="/logos/stocdup-logo-only.png"]');
+    expect(logos.length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows distributor name in mobile top bar', () => {
@@ -146,10 +147,10 @@ describe('NavigationSidebar', () => {
     expect(screen.getByText('Fine Wines Ltd')).toBeTruthy();
   });
 
-  it('shows Wholo in mobile top bar when no distributor context', () => {
+  it('shows Stocdup in mobile top bar when no distributor context', () => {
     mockDistributor = null;
     render(<NavigationSidebar />);
-    const topBars = screen.getAllByText('Wholo');
+    const topBars = screen.getAllByText('Stocdup');
     expect(topBars.length).toBeGreaterThanOrEqual(1);
   });
 

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useDistributor } from '@/lib/distributor-context';
-import { portalApi } from '@wholo/api-client';
+import { useDeliveryParts } from '@/lib/hooks/use-delivery-parts';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { TruckIcon } from '@/components/DistributorPageHeader';
 import type { DistributorInfo } from '@wholo/types';
 
 function MapPinIcon() {
@@ -35,7 +35,7 @@ function MailIcon() {
   );
 }
 
-function GetInTouch({ distributor }: { distributor: DistributorInfo }) {
+function GetInTouch({ distributor, className = '' }: { distributor: DistributorInfo; className?: string }) {
   const hasAddress = distributor.addressLine1 || distributor.addressCity;
   const hasContact = hasAddress || distributor.phone || distributor.email;
 
@@ -50,12 +50,12 @@ function GetInTouch({ distributor }: { distributor: DistributorInfo }) {
   ].filter(Boolean);
 
   return (
-    <div className="bg-surface-sidebar p-6">
+    <div className={`bg-surface-highlight p-6 ${className}`}>
       <p className="text-xs font-semibold text-foreground-secondary mb-0.5 uppercase tracking-wider">
         Get in touch
       </p>
       <p className="text-base font-semibold text-foreground">
-        <span className="text-accent mr-1.5">··</span>Got questions?
+        <span className="text-highlight mr-1.5">··</span>Got questions?
       </p>
       <p className="text-sm text-muted mt-1 mb-4">We&apos;d love to hear from you.</p>
 
@@ -93,22 +93,82 @@ function GetInTouch({ distributor }: { distributor: DistributorInfo }) {
   );
 }
 
+function StatTile({ value, label }: { value: string; label: string }) {
+  return (
+    <div>
+      <p className="text-2xl font-semibold leading-none text-foreground">{value}</p>
+      <p className="text-xs text-muted mt-1">{label}</p>
+    </div>
+  );
+}
+
+function KeyInfo({
+  distributor,
+  hasRelationship,
+  effectiveMinSpend,
+  distributorSlug,
+  accessToken,
+  className = '',
+}: {
+  distributor: DistributorInfo;
+  hasRelationship: boolean | null;
+  effectiveMinSpend: number | null;
+  distributorSlug: string;
+  accessToken: string | null;
+  className?: string;
+}) {
+  const deliveryParts = useDeliveryParts(distributorSlug, accessToken, { enabled: hasRelationship === true });
+
+  const hasCustomerStat = distributor.customerCount > 0;
+  const hasMinSpendStat = effectiveMinSpend !== null;
+  const hasStats = hasCustomerStat || hasMinSpendStat;
+  const showCta = hasRelationship === false;
+
+  return (
+    <div className={`bg-surface-highlight p-6 ${className}`}>
+      <p className="text-xs font-semibold text-foreground-secondary mb-3 uppercase tracking-wider">
+        Key Info
+      </p>
+
+      {hasStats && (
+        <div className="flex gap-6">
+          {hasCustomerStat && <StatTile value={String(distributor.customerCount)} label="active customers" />}
+          {hasMinSpendStat && <StatTile value={`£${effectiveMinSpend!.toFixed(2)}`} label="minimum order" />}
+        </div>
+      )}
+
+      {deliveryParts && (
+        <div className={`flex items-center gap-2 text-sm text-foreground-tertiary ${hasStats ? 'mt-4' : ''}`}>
+          <TruckIcon />
+          <span>
+            Order by <strong className="font-semibold text-foreground">{deliveryParts.time}</strong>
+            {', '}{deliveryParts.cutoffDayLabel} for delivery on{' '}
+            <strong className="font-semibold text-foreground">{deliveryParts.dayName} {deliveryParts.dayOrdinal}</strong>
+          </span>
+        </div>
+      )}
+
+      {showCta && (
+        <div className={hasStats ? 'mt-4' : ''}>
+          <button
+            className="w-full bg-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-accent-hover transition-colors"
+            onClick={() => {}}
+          >
+            Connect with this business
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DistributorHomePage() {
   const params = useParams();
   const distributorSlug = params.distributorSlug as string;
   const pathname = usePathname();
 
   const { user, accessToken, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { distributor } = useDistributor();
-  const [hasRelationship, setHasRelationship] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    portalApi
-      .getMyDistributors(accessToken)
-      .then((distributors) => setHasRelationship(distributors.some((d) => d.slug === distributorSlug)))
-      .catch(() => setHasRelationship(null));
-  }, [accessToken, distributorSlug]);
+  const { distributor, hasRelationship, relationshipMinSpend } = useDistributor();
 
   if (isLoading) {
     return (
@@ -126,50 +186,63 @@ export default function DistributorHomePage() {
     distributor.addressLine1 || distributor.addressCity
   );
 
+  const effectiveMinSpend =
+    hasRelationship === true
+      ? relationshipMinSpend
+      : hasRelationship === false
+        ? (distributor?.minimumOrderSpend ?? null)
+        : null;
+  const hasKeyInfo = distributor != null && (
+    distributor.customerCount > 0 || effectiveMinSpend !== null || hasRelationship === false
+  );
+
+  const hasSidebar = hasKeyInfo || hasContact;
+
   return (
-    <>
-      <PageShell width="wide" padding="none" className={`px-5 py-8 ${hasRelationship === false ? 'pb-24' : ''}`}>
-        <div className={`grid grid-cols-1 gap-8 ${hasContact ? 'md:grid-cols-[1fr_280px]' : ''}`}>
+    <PageShell width="full" padding="none" className="px-5 py-8">
+      <div className={`grid grid-cols-1 gap-8 items-start ${hasSidebar ? 'md:grid-cols-[1fr_280px] xl:grid-cols-[1fr_280px_280px]' : ''}`}>
 
-          {/* About column */}
-          <div>
-            {hasAbout && (
-              <div className="mb-6">
-                {distributor?.tagline && (
-                  <p className="text-sm text-accent tracking-wide">{distributor.tagline}</p>
-                )}
-              </div>
-            )}
-            {distributor?.aboutText && (
-              <div className="prose prose-sm prose-gray">
-                <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
-              </div>
-            )}
-          </div>
-
-          {/* Get in touch column */}
-          {distributor && (
-            <>
-              {/* Mobile: divider before contact */}
-              {hasContact && (
-                <div className="md:hidden border-t border-border -mt-2" />
+        {/* About column */}
+        <div className="md:col-start-1 md:row-start-1">
+          {hasAbout && (
+            <div className="mb-6">
+              {distributor?.tagline && (
+                <p className="text-sm text-highlight tracking-wide">{distributor.tagline}</p>
               )}
-              <GetInTouch distributor={distributor} />
-            </>
+            </div>
+          )}
+          {distributor?.aboutText && (
+            <div className="prose prose-sm prose-gray">
+              <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
+            </div>
           )}
         </div>
-      </PageShell>
 
-      {hasRelationship === false && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center pb-6 pointer-events-none">
-          <button
-            className="pointer-events-auto bg-accent text-white px-8 py-3 text-sm font-medium hover:bg-accent-hover transition-colors shadow-lg"
-            onClick={() => {}}
-          >
-            Connect with this business
-          </button>
-        </div>
-      )}
-    </>
+        {/* Mobile: divider before the sidebar content */}
+        {hasSidebar && <div className="md:hidden border-t border-border -mt-2" />}
+
+        {hasSidebar && (
+          <div className="md:col-start-2 md:row-start-1 flex flex-col gap-8 xl:contents">
+            {distributor && hasKeyInfo && (
+              <KeyInfo
+                distributor={distributor}
+                hasRelationship={hasRelationship}
+                effectiveMinSpend={effectiveMinSpend}
+                distributorSlug={distributorSlug}
+                accessToken={accessToken}
+                className="xl:col-start-2 xl:row-start-1"
+              />
+            )}
+
+            {distributor && (
+              <GetInTouch
+                distributor={distributor}
+                className="xl:col-start-3 xl:row-start-1"
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </PageShell>
   );
 }

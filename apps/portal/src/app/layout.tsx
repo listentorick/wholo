@@ -3,8 +3,8 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 
 export const metadata: Metadata = {
-  title: 'Wholo',
-  description: 'Wholesale commerce platform',
+  title: 'Stocdup Portal',
+  description: 'Stocdup trade customer portal',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

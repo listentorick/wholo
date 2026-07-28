@@ -23,9 +23,12 @@ export function DistributorHeader({ distributorSlug }: { distributorSlug: string
   const logoUrl = distributor?.logoUrl ?? null;
 
   return (
-    <header className="hidden md:flex sticky top-0 z-20 items-center justify-between bg-white border-b border-[#E5E7EB] h-14 px-4">
+    <header className="hidden md:grid md:grid-cols-[1fr_auto_1fr] sticky top-0 z-20 items-center bg-white border-b border-[#E5E7EB] h-14 px-4">
+      {/* Left spacer — balances the right actions so the identity block below is truly centered */}
+      <div />
+
       {/* Distributor identity */}
-      <button className="flex items-center gap-2 text-sm font-medium tracking-wide text-[#1A1A1A]">
+      <div className="flex items-center gap-2 justify-self-center text-sm font-medium tracking-wide text-[#1A1A1A]">
         {logoUrl && (
           <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#E5E7EB]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -33,13 +36,10 @@ export function DistributorHeader({ distributorSlug }: { distributorSlug: string
           </span>
         )}
         {distributorName}
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 text-[#9CA3AF]">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+      </div>
 
       {/* Right actions */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 justify-self-end">
         <button
           onClick={() => router.push(`/${distributorSlug}/checkout`)}
           className="relative flex h-9 w-9 items-center justify-center text-[#1A1A1A]"
