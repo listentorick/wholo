@@ -287,11 +287,6 @@ export class CatalogueService {
           ? (p.price as { toFixed: (n: number) => string }).toFixed(2)
           : String(p.price)
         : null,
-      compareAtPrice: p.compareAtPrice
-        ? typeof p.compareAtPrice === 'object' && 'toFixed' in (p.compareAtPrice as object)
-          ? (p.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
-          : String(p.compareAtPrice)
-        : null,
       resolvedPrice: resolvedPrices.get(p.id)?.toFixed(2) ?? null,
       thumbnailUrl: thumbnailUrls.get(p.id) ?? null,
     }));
@@ -376,11 +371,6 @@ export class CatalogueService {
         ? typeof product.price === 'object' && 'toFixed' in (product.price as object)
           ? (product.price as { toFixed: (n: number) => string }).toFixed(2)
           : String(product.price)
-        : null,
-      compareAtPrice: product.compareAtPrice
-        ? typeof product.compareAtPrice === 'object' && 'toFixed' in (product.compareAtPrice as object)
-          ? (product.compareAtPrice as { toFixed: (n: number) => string }).toFixed(2)
-          : String(product.compareAtPrice)
         : null,
       resolvedPrice,
       thumbnailUrl,

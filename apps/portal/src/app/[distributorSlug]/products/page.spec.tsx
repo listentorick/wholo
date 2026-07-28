@@ -54,7 +54,6 @@ const makeProduct = (id: string, name: string) => ({
   description: null,
   sku: `SKU-${id}`,
   price: '10.00',
-  compareAtPrice: null,
   resolvedPrice: null,
   productType: null,
   thumbnailUrl: null,

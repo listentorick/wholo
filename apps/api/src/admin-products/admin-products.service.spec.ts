@@ -34,7 +34,6 @@ const baseProduct = {
   sku: 'SKU-1',
   status: 'ACTIVE',
   price: null,
-  compareAtPrice: null,
   productTypeId: null,
   supplierId: null,
   deletedAt: null,

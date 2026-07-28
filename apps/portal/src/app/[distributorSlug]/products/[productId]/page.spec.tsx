@@ -54,7 +54,6 @@ const mockProduct = {
   description: 'These are the best egg tarts you will ever buy. Fresh from our oven!',
   sku: 'EGG-TART-4',
   price: '10.00',
-  compareAtPrice: null,
   resolvedPrice: null,
   productType: { id: 'pt-1', name: 'box', code: 'box' },
   thumbnailUrl: null,

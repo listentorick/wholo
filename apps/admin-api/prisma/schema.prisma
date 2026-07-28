@@ -330,7 +330,6 @@ model Product {
   sku                String?
   status             ProductStatus              @default(DRAFT)
   price              Decimal?                   @db.Decimal(10, 2)
-  compareAtPrice     Decimal?                   @db.Decimal(10, 2)
   deletedAt          DateTime?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
@@ -392,12 +391,18 @@ model ProductExternalReference {
   @@map("product_external_references")
 }
 
+// unique_active_account_number (see ADR-052): activeAccountNumber mirrors
+// accountNumber only while deletedAt is null, and is null otherwise, so a
+// soft-deleted customer's account number can be reused by a live one.
+// Maintained automatically by the trade_relationships_set_marker trigger
+// (see the add_active_marker_triggers migration) — not application code.
 model TradeRelationship {
   id               String                  @id @default(cuid())
   distributorId    String
   customerId       String
   status           TradeRelationshipStatus @default(PENDING_INVITE)
   accountNumber    String?
+  activeAccountNumber String?
   creditLimit          Decimal?                @db.Decimal(10, 2)
   minimumOrderSpend    Decimal?                @db.Decimal(10, 2)
   paymentTerms         String?
@@ -421,6 +426,7 @@ model TradeRelationship {
   accountingMatchSuggestions AccountingContactMatchSuggestion[]
 
   @@unique([distributorId, customerId])
+  @@unique([distributorId, activeAccountNumber])
   @@index([distributorId, createdAt])
   @@index([distributorId, status])
   @@index([customerId, status])
@@ -609,6 +615,7 @@ model OrderFact {
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
   @@index([orderId])
+  @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_facts")
 }
 
@@ -628,6 +635,7 @@ model OrderLineFact {
   @@id([eventId, orderLineId, occurredAt])
   @@index([distributorId, distributorLocalDate])
   @@index([productId])
+  @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_line_facts")
 }
 
@@ -671,11 +679,18 @@ model DistributorSettings {
 // Provider-neutral: Xero is the first AccountingProvider, not the shape of the
 // model. Historical rows are kept (never deleted) when a distributor
 // disconnects/reconnects — "one active connection per distributor" is enforced
-// by a partial unique index added by hand in the generated migration (Prisma's
-// schema DSL cannot express a WHERE clause on a unique index).
+// via connectedDistributorId (see ADR-052): it mirrors distributorId only
+// while status is CONNECTED, and is null otherwise. Postgres never treats two
+// nulls as equal in a unique index, so disconnected/error/revoked history rows
+// (null) never collide with each other, while at most one row per distributor
+// can hold a real value there. Maintained automatically by the
+// accounting_connections_set_marker trigger (see the
+// add_active_marker_triggers migration) — not application code — so the
+// rule holds regardless of what writes the row.
 model AccountingConnection {
   id                       String                     @id @default(cuid())
   distributorId            String
+  connectedDistributorId   String?
   provider                 AccountingProvider
   status                   AccountingConnectionStatus
   externalOrganisationId   String
@@ -701,6 +716,7 @@ model AccountingConnection {
   invoiceExports           AccountingInvoiceExport[]
   bulkImportJobs           AccountingBulkImportJob[]
 
+  @@unique([connectedDistributorId])
   @@index([distributorId])
   @@map("accounting_connections")
 }
@@ -777,6 +793,12 @@ model CustomerAccountingMapping {
   linkedByUserId         String
   linkedAt               DateTime                      @default(now())
   unlinkedAt             DateTime?
+  // See ADR-052: true while linked (unlinkedAt is null), null once unlinked —
+  // rides along in both uniques below so an unlink-then-relink of the same
+  // pair never collides with the closed-out row. Maintained automatically by
+  // the customer_accounting_mappings_set_marker trigger (see the
+  // add_active_marker_triggers migration) — not application code.
+  linkedMarker           Boolean?
   createdAt              DateTime                      @default(now())
   updatedAt              DateTime                      @updatedAt
 
@@ -785,12 +807,8 @@ model CustomerAccountingMapping {
   tradeRelationship TradeRelationship          @relation(fields: [tradeRelationshipId], references: [id])
   externalContact    ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
 
-  // Both uniques below are made partial (WHERE "unlinkedAt" IS NULL) by hand
-  // in the generated migration — same precedent as
-  // unique_active_accounting_connection above. An unlink-then-relink of the
-  // same pair must not collide with the closed-out row.
-  @@unique([accountingConnectionId, tradeRelationshipId])
-  @@unique([accountingConnectionId, externalContactId])
+  @@unique([accountingConnectionId, tradeRelationshipId, linkedMarker])
+  @@unique([accountingConnectionId, externalContactId, linkedMarker])
   @@index([distributorId])
   @@map("customer_accounting_mappings")
 }
@@ -884,6 +902,11 @@ model ProductAccountingMapping {
   linkedByUserId         String
   linkedAt               DateTime                     @default(now())
   unlinkedAt             DateTime?
+  // See ADR-052: true while linked (unlinkedAt is null), null once unlinked —
+  // same pattern as CustomerAccountingMapping.linkedMarker. Maintained
+  // automatically by the product_accounting_mappings_set_marker trigger (see
+  // the add_active_marker_triggers migration) — not application code.
+  linkedMarker           Boolean?
   createdAt              DateTime                     @default(now())
   updatedAt              DateTime                     @updatedAt
 
@@ -892,12 +915,8 @@ model ProductAccountingMapping {
   product         Product                   @relation(fields: [productId], references: [id])
   externalProduct ExternalAccountingProduct @relation(fields: [externalProductId], references: [id])
 
-  // Both uniques below are made partial (WHERE "unlinkedAt" IS NULL) by hand
-  // in the generated migration — same precedent as
-  // CustomerAccountingMapping. An unlink-then-relink of the same pair must
-  // not collide with the closed-out row.
-  @@unique([accountingConnectionId, productId])
-  @@unique([accountingConnectionId, externalProductId])
+  @@unique([accountingConnectionId, productId, linkedMarker])
+  @@unique([accountingConnectionId, externalProductId, linkedMarker])
   @@index([distributorId])
   @@map("product_accounting_mappings")
 }

@@ -94,7 +94,6 @@ export class AdminProductsService {
           productTypeId: dto.productTypeId || null,
           supplierId: dto.supplierId || null,
           price: dto.price != null ? new Prisma.Decimal(dto.price) : null,
-          compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
         },
         include: productInclude,
       });
@@ -116,9 +115,6 @@ export class AdminProductsService {
           ...(dto.productTypeId !== undefined && { productTypeId: dto.productTypeId || null }),
           ...(dto.supplierId !== undefined && { supplierId: dto.supplierId || null }),
           ...(dto.price !== undefined && { price: dto.price != null ? new Prisma.Decimal(dto.price) : null }),
-          ...(dto.compareAtPrice !== undefined && {
-            compareAtPrice: dto.compareAtPrice != null ? new Prisma.Decimal(dto.compareAtPrice) : null,
-          }),
         },
         include: productInclude,
       });

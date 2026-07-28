@@ -291,7 +291,6 @@ export interface Product {
   sku: string | null;
   status: ProductStatus;
   price: string | null;
-  compareAtPrice: string | null;
   productType: ProductType | null;
   supplier: Supplier | null;
   createdAt: string;
@@ -329,7 +328,6 @@ export interface CatalogueProduct {
   description: string | null;
   sku: string | null;
   price: string | null;
-  compareAtPrice: string | null;
   resolvedPrice: string | null;
   productType: CatalogueProductType | null;
   thumbnailUrl?: string | null;
@@ -395,7 +393,6 @@ export interface CreateProductRequest {
   productTypeId?: string;
   supplierId?: string;
   price?: string;
-  compareAtPrice?: string;
 }
 
 export type UpdateProductRequest = Partial<CreateProductRequest>;

@@ -32,9 +32,4 @@ export class UpdateProductDto {
   @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })
   price?: string;
-
-  @ApiProperty({ type: String, description: 'Decimal string, e.g. "39.99"', required: false })
-  @IsOptional()
-  @IsDecimal({ decimal_digits: '0,2' })
-  compareAtPrice?: string;
 }

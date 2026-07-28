@@ -31,7 +31,6 @@ const schema = z.object({
   productTypeId: z.string().optional(),
   supplierId: z.string().optional(),
   price: priceField,
-  compareAtPrice: priceField,
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -459,7 +458,6 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
       productTypeId: initialValues?.productType?.id ?? '',
       supplierId: initialValues?.supplier?.id ?? '',
       price: initialValues?.price ?? '',
-      compareAtPrice: initialValues?.compareAtPrice ?? '',
     },
   });
 
@@ -484,7 +482,6 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
         productTypeId: data.productTypeId || undefined,
         supplierId: data.supplierId || undefined,
         price: data.price || undefined,
-        compareAtPrice: data.compareAtPrice || undefined,
       });
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
@@ -605,40 +602,21 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
 
             {/* Pricing */}
             <FormCard title="Pricing">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <FieldLabel htmlFor="price">Price</FieldLabel>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
-                    <TextInput
-                      id="price"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      disabled={disabled}
-                      style={{ paddingLeft: '1.75rem' }}
-                      {...register('price')}
-                    />
-                  </div>
-                  <FieldError message={errors.price?.message} />
+              <div className="max-w-[calc(50%-0.5rem)]">
+                <FieldLabel htmlFor="price">Price</FieldLabel>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
+                  <TextInput
+                    id="price"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    disabled={disabled}
+                    style={{ paddingLeft: '1.75rem' }}
+                    {...register('price')}
+                  />
                 </div>
-                <div>
-                  <FieldLabel htmlFor="compareAtPrice">Compare-at price</FieldLabel>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
-                    <TextInput
-                      id="compareAtPrice"
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      disabled={disabled}
-                      style={{ paddingLeft: '1.75rem' }}
-                      {...register('compareAtPrice')}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-muted">Show a crossed-out original price</p>
-                  <FieldError message={errors.compareAtPrice?.message} />
-                </div>
+                <FieldError message={errors.price?.message} />
               </div>
             </FormCard>
 

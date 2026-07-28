@@ -29,8 +29,4 @@ export class UpdateProductDto {
   @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })
   price?: string;
-
-  @IsOptional()
-  @IsDecimal({ decimal_digits: '0,2' })
-  compareAtPrice?: string;
 }

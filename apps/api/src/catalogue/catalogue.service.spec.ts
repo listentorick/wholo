@@ -36,7 +36,6 @@ const makeProduct = (id: string) => ({
   sku: `SKU-${id}`,
   status: ProductStatus.ACTIVE,
   price: null,
-  compareAtPrice: null,
   productTypeId: null,
   deletedAt: null,
   createdAt: NOW,

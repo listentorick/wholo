@@ -137,6 +137,15 @@ kubectl port-forward svc/wholo-postgresql 5432:5432
 
 **Test structure**: Use `beforeAll` to create fixed-ID test organisations (`upsert` for idempotency), `beforeEach` to clean child records between tests, and `afterAll` to tear everything down. Use `supertest` to drive the HTTP layer — these tests exercise the full stack from controller to database.
 
+### Prisma schema conventions
+
+**Never introduce a schema/index/constraint construct that `schema.prisma` cannot fully and correctly describe** — no hand-edited migration SQL adding partial/filtered indexes, check constraints, or anything else Prisma's schema DSL has no syntax for. Every migration's *schema* content must be a faithful diff of `schema.prisma`; if it isn't, `prisma migrate dev` will keep mis-diffing it forever on every future migration. See [ADR-052](docs/adrs/ADR-052-avoid-prisma-unsupported-schema-constructs.md).
+
+- **"Unique among active/current rows only"** → use a nullable **marker column** that mirrors the natural key while the row is active and is `null` otherwise, with a plain `@@unique` on it (Postgres never treats two `null`s as equal). Do **not** use a partial (`WHERE`-clause) unique index, and do not enable Prisma's `partialIndexes` preview feature — it has multiple open upstream bugs including infinite-migration-drift reports for exactly this repo's pattern (string/enum column in the `WHERE` clause).
+- **The marker column must be maintained by a Postgres trigger (`BEFORE INSERT OR UPDATE`), never by application code.** Hand-setting it in service methods is not bypass-proof — a raw insert, script, or future code path that forgets to set it silently defeats the uniqueness rule (this happened once; caught by an integration test that inserts directly via raw Prisma specifically to prove the constraint holds independent of app-level code — that test pattern is deliberate, keep it). Triggers are the one sanctioned exception to "no hand-edited migration SQL": verified against Prisma's docs/issue tracker that triggers have zero footprint anywhere in Prisma's tooling (no schema DSL, no preview feature, no introspection/diffing awareness at all), so they can never cause the drift this ADR eliminates for indexes.
+- **Never blind-confirm a migration.** Use `prisma migrate dev --create-only --name <name>` to generate the SQL without applying it, read the generated file, then `prisma migrate deploy` to apply exactly what was reviewed.
+- `apps/admin-api/prisma/schema.prisma` is a byte-for-byte copy of `apps/api/prisma/schema.prisma`, kept in sync by hand after every schema change (admin-api never owns a migration or a real DB connection — see ADR-026 — the copy exists solely so its Prisma Client generates matching enum types).
+
 ## Deployment
 
 ### Local dev (Docker Desktop Kubernetes)
