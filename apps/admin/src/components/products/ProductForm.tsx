@@ -616,8 +616,18 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
                     {...register('price')}
                   />
                 </div>
+                <p className="mt-1 text-xs text-muted">The price customers pay by default.</p>
                 <FieldError message={errors.price?.message} />
               </div>
+
+              {/* Price list rules — edit mode only */}
+              {mode === 'edit' && initialValues && (
+                <div className="mt-5 border-t border-border pt-5">
+                  <FieldLabel>Price list overrides</FieldLabel>
+                  <p className="mb-3 text-xs text-muted">Overrides the default price above for customers on a matching price list.</p>
+                  <ProductPricingTable productId={initialValues.id} token={token} />
+                </div>
+              )}
             </FormCard>
 
             {/* Product organization */}
@@ -672,13 +682,6 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
                 </div>
               </div>
             </FormCard>
-
-            {/* Price list rules — edit mode only */}
-            {mode === 'edit' && initialValues && (
-              <FormCard title="Price list pricing">
-                <ProductPricingTable productId={initialValues.id} token={token} />
-              </FormCard>
-            )}
 
             {/* Product images — edit mode only */}
             {mode === 'edit' && initialValues?.id && (
