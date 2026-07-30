@@ -18,6 +18,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   isLoading: boolean;
+  authError: string | null;
   orderAsMode: boolean;
   orderAsCustomerId: string | null;
   orderAsCustomerName: string | null;
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
 
   useEffect(() => {
@@ -80,8 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const profile = await authApi.me(token);
           setUser(profile as AuthUser);
-        } catch {
-          // Token valid but Wholo profile unavailable
+        } catch (err) {
+          // Keycloak session is valid but Wholo rejected the identity (e.g. no matching
+          // Wholo user record) — surface this rather than letting callers treat it as
+          // "not logged in" and loop back into Keycloak's still-valid SSO session.
+          setAuthError(err instanceof ApiError ? (err.problem.detail ?? err.message) : 'Unable to verify your account.');
         }
       })
       .finally(() => setIsLoading(false));
@@ -165,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       accessToken,
       isLoading,
+      authError,
       orderAsMode: orderAsState !== null,
       orderAsCustomerId: orderAsState?.customerId ?? null,
       orderAsCustomerName: orderAsState?.customerName ?? null,

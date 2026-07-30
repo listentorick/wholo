@@ -12,6 +12,7 @@ function makeAuth(overrides: Partial<ReturnType<typeof useAuth>>) {
     user: null,
     accessToken: null,
     isLoading: false,
+    authError: null,
     orderAsMode: false,
     orderAsCustomerName: null,
     login: vi.fn(),
@@ -52,5 +53,27 @@ describe('useRequireAuth', () => {
     mockUseAuth.mockReturnValue(makeAuth({ isLoading: false, user, login }));
     renderHook(() => useRequireAuth('/winos'));
     expect(login).not.toHaveBeenCalled();
+  });
+
+  it('does not call login when authError is set, even though user is null', () => {
+    const login = vi.fn();
+    mockUseAuth.mockReturnValue(makeAuth({
+      isLoading: false,
+      user: null,
+      authError: 'No Wholo user found for this identity',
+      login,
+    }));
+    renderHook(() => useRequireAuth('/winos'));
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it('returns authError so callers can render it', () => {
+    mockUseAuth.mockReturnValue(makeAuth({
+      isLoading: false,
+      user: null,
+      authError: 'No Wholo user found for this identity',
+    }));
+    const { result } = renderHook(() => useRequireAuth('/winos'));
+    expect(result.current.authError).toBe('No Wholo user found for this identity');
   });
 });

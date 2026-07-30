@@ -3,14 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NavigationSidebar } from './NavigationSidebar';
 
 const mockLogout = vi.fn();
-const mockPush = vi.fn();
 let mockPathname = '/test-distributor';
-let mockCartCount = 0;
 let mockDistributor: { name: string; logoUrl: string | null } | null = null;
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
-  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock('next/link', () => ({
@@ -21,10 +18,6 @@ vi.mock('next/link', () => ({
 
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ logout: mockLogout }),
-}));
-
-vi.mock('@/lib/cart-context', () => ({
-  useCartSafe: () => ({ cartCount: mockCartCount }),
 }));
 
 vi.mock('@/lib/distributor-context', () => ({
@@ -42,7 +35,6 @@ describe('NavigationSidebar', () => {
     vi.clearAllMocks();
     localStorage.clear();
     mockPathname = `/${slug}`;
-    mockCartCount = 0;
     mockDistributor = null;
     document.body.style.overflow = '';
   });
@@ -52,13 +44,8 @@ describe('NavigationSidebar', () => {
     expect(screen.getByText('Our Suppliers')).toBeTruthy();
   });
 
-  it('renders Delivery Settings when distributorSlug is provided', () => {
+  it('does not render Delivery Settings', () => {
     renderSidebar();
-    expect(screen.getByText('Delivery Settings')).toBeTruthy();
-  });
-
-  it('does not render Delivery Settings when no distributorSlug', () => {
-    render(<NavigationSidebar />);
     expect(screen.queryByText('Delivery Settings')).toBeNull();
   });
 
@@ -92,7 +79,7 @@ describe('NavigationSidebar', () => {
   });
 
   it('does not mark Our Suppliers active on sub-pages', () => {
-    mockPathname = `/${slug}/delivery-settings`;
+    mockPathname = `/${slug}/products`;
     renderSidebar();
     const suppliersLink = screen.getByText('Our Suppliers').closest('a');
     expect(suppliersLink?.className).not.toContain('bg-sidebar-accent/20');
@@ -102,24 +89,6 @@ describe('NavigationSidebar', () => {
     renderSidebar();
     fireEvent.click(screen.getByText('Sign out'));
     expect(mockLogout).toHaveBeenCalledOnce();
-  });
-
-  it('shows cart count badge when cartCount > 0', () => {
-    mockCartCount = 3;
-    renderSidebar();
-    expect(screen.getByText('3')).toBeTruthy();
-  });
-
-  it('hides cart badge when cartCount is 0', () => {
-    mockCartCount = 0;
-    renderSidebar();
-    expect(screen.queryByText('0')).toBeNull();
-  });
-
-  it('hides cart button when no distributorSlug', () => {
-    mockCartCount = 5;
-    render(<NavigationSidebar />);
-    expect(screen.queryByLabelText(/Cart/)).toBeNull();
   });
 
   it('opens mobile sidebar when burger is clicked', () => {

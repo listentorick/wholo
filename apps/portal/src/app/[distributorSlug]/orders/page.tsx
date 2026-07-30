@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { Hash, Calendar, Truck, FileText, PoundSterling, CircleDot } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { ordersApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
-import type { OrderSummary, OrderStatus } from '@wholo/types';
+import type { OrderSummary, OrderStatus, OrderInvoiceSummary } from '@wholo/types';
 
 const STATUS_BADGE: Record<string, { color: string; bg: string; label: string }> = {
   SUBMITTED:  { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', label: 'Submitted' },
@@ -28,12 +29,76 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function SkeletonRow() {
+function invoiceStatusLabel(summary: OrderInvoiceSummary | null | undefined) {
+  if (!summary) return 'Not yet raised';
+  switch (summary.status) {
+    case 'COMPLETED':
+      return summary.externalInvoiceStatus ? `Raised (${summary.externalInvoiceStatus})` : 'Raised';
+    case 'FAILED':
+      return 'Export failed';
+    default:
+      return 'Raising invoice…';
+  }
+}
+
+function invoiceStatusColor(summary: OrderInvoiceSummary | null | undefined) {
+  if (!summary) return '#D1D5DB';
+  switch (summary.status) {
+    case 'COMPLETED':
+      return 'hsl(var(--color-primary))';
+    case 'FAILED':
+      return '#DC2626';
+    default:
+      return '#F59E0B';
+  }
+}
+
+function InvoiceCell({ summary }: { summary: OrderInvoiceSummary | null | undefined }) {
+  return (
+    <span className="inline-flex items-center gap-2" style={{ fontSize: 13, color: '#6B7280' }}>
+      <span
+        style={{ width: 6, height: 6, borderRadius: 9999, background: invoiceStatusColor(summary), flexShrink: 0 }}
+        aria-hidden="true"
+      />
+      {invoiceStatusLabel(summary)}
+    </span>
+  );
+}
+
+function Th({ icon, align = 'left', children }: { icon: React.ReactNode; align?: 'left' | 'right'; children: React.ReactNode }) {
+  return (
+    <th
+      className={`px-4 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}
+      style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF' }}
+    >
+      <span className={`inline-flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}>
+        {icon}
+        {children}
+      </span>
+    </th>
+  );
+}
+
+function SkeletonTableRow() {
+  return (
+    <tr className="border-b border-[#E5E7EB]" style={{ opacity: 0.5 }}>
+      <td className="px-4 py-3"><div style={{ height: 13, width: 96, background: '#E5E7EB', borderRadius: 3 }} /></td>
+      <td className="px-4 py-3"><div style={{ height: 12, width: 72, background: '#F3F4F6', borderRadius: 3 }} /></td>
+      <td className="px-4 py-3"><div style={{ height: 12, width: 72, background: '#F3F4F6', borderRadius: 3 }} /></td>
+      <td className="px-4 py-3"><div style={{ height: 12, width: 96, background: '#F3F4F6', borderRadius: 3 }} /></td>
+      <td className="px-4 py-3 text-right"><div style={{ height: 13, width: 56, background: '#E5E7EB', borderRadius: 3, marginLeft: 'auto' }} /></td>
+      <td className="px-4 py-3"><div style={{ height: 16, width: 64, background: '#F3F4F6', borderRadius: 3 }} /></td>
+    </tr>
+  );
+}
+
+function SkeletonCard() {
   return (
     <div className="border-b border-[#E5E7EB] px-4 py-4" style={{ opacity: 0.5 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div>
           <div style={{ height: 13, width: 96, background: '#E5E7EB', borderRadius: 3, marginBottom: 8 }} />
+          <div style={{ height: 11, width: 64, background: '#F3F4F6', borderRadius: 3, marginBottom: 4 }} />
           <div style={{ height: 11, width: 64, background: '#F3F4F6', borderRadius: 3 }} />
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -112,10 +177,19 @@ export default function OrdersPage() {
         .ol-row:hover { background: #FAFAFA; }
       `}</style>
 
-      <PageShell padding="none">
+      <PageShell padding="none" width="full">
         {loading ? (
           <>
-            {[0, 1, 2, 3].map((i) => <SkeletonRow key={i} />)}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full border-collapse">
+                <tbody>
+                  {[0, 1, 2, 3].map((i) => <SkeletonTableRow key={i} />)}
+                </tbody>
+              </table>
+            </div>
+            <div className="md:hidden">
+              {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} />)}
+            </div>
           </>
         ) : error ? (
           <div className="flex flex-1 items-center justify-center py-20 px-6 text-center">
@@ -164,36 +238,94 @@ export default function OrdersPage() {
               Order History
             </p>
 
-            {orders.map((order, i) => {
-              const delay = Math.min(0.06 + i * 0.04, 0.45);
-              return (
-                <div
-                  key={order.id}
-                  className="ol-row border-b border-[#E5E7EB] px-4 py-4"
-                  style={{ animationDelay: `${delay}s` }}
-                  onClick={() => router.push(`/${distributorSlug}/orders/${order.id}`)}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                    {/* Left: order number + date */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', marginBottom: 4 }}>
-                        {order.orderNumber}
-                      </p>
-                      <p style={{ fontSize: 12, color: '#9CA3AF' }}>
-                        {fmtDate(order.submittedAt ?? order.createdAt)}
-                      </p>
-                    </div>
-                    {/* Right: total + status */}
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', marginBottom: 6 }}>
-                        £{parseFloat(order.totalAmount).toFixed(2)}
-                      </p>
-                      <StatusBadge status={order.status} />
+            {/* Desktop: real table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-[#E5E7EB]">
+                    <Th icon={<Hash className="h-3.5 w-3.5" strokeWidth={1.5} />}>Order</Th>
+                    <Th icon={<Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />}>Order Date</Th>
+                    <Th icon={<Truck className="h-3.5 w-3.5" strokeWidth={1.5} />}>Delivery Date</Th>
+                    <Th icon={<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />}>Invoice</Th>
+                    <Th icon={<PoundSterling className="h-3.5 w-3.5" strokeWidth={1.5} />} align="right">Amount</Th>
+                    <Th icon={<CircleDot className="h-3.5 w-3.5" strokeWidth={1.5} />}>Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order, i) => {
+                    const delay = Math.min(0.06 + i * 0.04, 0.45);
+                    return (
+                      <tr
+                        key={order.id}
+                        className="ol-row border-b border-[#E5E7EB]"
+                        style={{ animationDelay: `${delay}s` }}
+                        onClick={() => router.push(`/${distributorSlug}/orders/${order.id}`)}
+                      >
+                        <td className="px-4 py-3" style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A' }}>
+                          {order.orderNumber}
+                        </td>
+                        <td className="px-4 py-3" style={{ fontSize: 13, color: '#6B7280' }}>
+                          {fmtDate(order.submittedAt ?? order.createdAt)}
+                        </td>
+                        <td className="px-4 py-3" style={{ fontSize: 13, color: '#6B7280' }}>
+                          {order.requestedDeliveryDate ? fmtDate(order.requestedDeliveryDate) : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <InvoiceCell summary={order.invoiceSummary} />
+                        </td>
+                        <td className="px-4 py-3 text-right" style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A' }}>
+                          £{parseFloat(order.totalAmount).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={order.status} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile: card list */}
+            <div className="md:hidden">
+              {orders.map((order, i) => {
+                const delay = Math.min(0.06 + i * 0.04, 0.45);
+                return (
+                  <div
+                    key={order.id}
+                    className="ol-row border-b border-[#E5E7EB] px-4 py-4"
+                    style={{ animationDelay: `${delay}s` }}
+                    onClick={() => router.push(`/${distributorSlug}/orders/${order.id}`)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', marginBottom: 4 }}>
+                          {order.orderNumber}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#9CA3AF' }}>
+                            <Calendar className="h-3 w-3 flex-shrink-0" strokeWidth={1.5} />
+                            {fmtDate(order.submittedAt ?? order.createdAt)}
+                          </span>
+                          {order.requestedDeliveryDate && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#9CA3AF' }}>
+                              <Truck className="h-3 w-3 flex-shrink-0" strokeWidth={1.5} />
+                              {fmtDate(order.requestedDeliveryDate)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', marginBottom: 6 }}>
+                          £{parseFloat(order.totalAmount).toFixed(2)}
+                        </p>
+                        <StatusBadge status={order.status} />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
 
             {hasMore && (
               <div className="px-4 py-4 text-center">

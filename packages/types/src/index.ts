@@ -154,6 +154,7 @@ export interface OrderLine {
   traderCustomerId: string;
   productId: string;
   productVariantId: string | null;
+  productThumbnailUrl: string | null;
   skuSnapshot: string | null;
   productNameSnapshot: string;
   unitOfMeasureSnapshot: string | null;
@@ -204,6 +205,10 @@ export interface Order {
   // responses never carry it, hence optional. Types declared in the
   // Accounting Integration section below.
   invoiceExport?: OrderInvoiceExportSummary | null;
+  // Customer-safe projection of the same export, available on both the
+  // admin and portal order resources (unlike invoiceExport above). Omits
+  // internal diagnostics (ids, error detail) that are admin-only.
+  invoiceSummary?: OrderInvoiceSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -221,6 +226,11 @@ export interface OrderInvoiceExportSummary {
   createdAt: string;
 }
 
+export interface OrderInvoiceSummary {
+  status: AccountingInvoiceExportStatus;
+  externalInvoiceStatus: string | null;
+}
+
 export interface OrderSummary {
   id: string;
   orderNumber: string;
@@ -233,6 +243,7 @@ export interface OrderSummary {
   cancelledAt: string | null;
   createdAt: string;
   requestedDeliveryDate: string | null;
+  invoiceSummary?: OrderInvoiceSummary | null;
 }
 
 export interface SubmitOrderRequest {

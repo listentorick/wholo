@@ -1,9 +1,13 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DistributorNav } from './DistributorNav';
+
+const mockPush = vi.fn();
+let mockCartCount = 0;
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/winos',
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock('next/link', () => ({
@@ -21,6 +25,15 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
+
+vi.mock('@/lib/cart-context', () => ({
+  useCart: () => ({ cartCount: mockCartCount }),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockCartCount = 0;
+});
 
 describe('DistributorNav', () => {
   it('renders three tab labels', () => {
@@ -48,5 +61,23 @@ describe('DistributorNav', () => {
     render(<DistributorNav distributorSlug="winos" />);
     const shopLink = screen.getByText('Shop').closest('a');
     expect(shopLink?.className).toContain('border-transparent');
+  });
+
+  it('shows cart badge when cartCount > 0', () => {
+    mockCartCount = 3;
+    render(<DistributorNav distributorSlug="winos" />);
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('hides cart badge when cartCount is 0', () => {
+    mockCartCount = 0;
+    render(<DistributorNav distributorSlug="winos" />);
+    expect(screen.queryByText('0')).toBeNull();
+  });
+
+  it('navigates to checkout when cart is clicked', () => {
+    render(<DistributorNav distributorSlug="winos" />);
+    fireEvent.click(screen.getByLabelText(/Cart/));
+    expect(mockPush).toHaveBeenCalledWith('/winos/checkout');
   });
 });

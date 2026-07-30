@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 const widthClasses = {
-  /** 480px commerce shell — product lists, orders, checkout */
+  /** 480px commerce shell — checkout, order detail, product detail */
   narrow: 'max-w-[480px] mx-auto',
   /** reading column — home */
   reading: 'max-w-3xl mx-auto',

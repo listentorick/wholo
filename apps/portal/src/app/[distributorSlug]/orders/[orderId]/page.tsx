@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
+import { Truck } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
@@ -105,12 +106,33 @@ export default function OrderDetailPage() {
       <style>{`
         @keyframes od-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .od-section { animation: od-fade-up 0.32s ease both; }
+
+        .od-img-placeholder {
+          background: linear-gradient(145deg, hsl(var(--color-canvas)) 0%, hsl(var(--color-border)) 100%);
+          flex-shrink: 0;
+          position: relative;
+        }
+        .od-img-placeholder::after {
+          content: '';
+          position: absolute;
+          top: 50%; left: 50%;
+          width: 35%; height: 35%;
+          transform: translate(-50%, -50%);
+          background-color: hsl(var(--color-text) / 0.15);
+          -webkit-mask-image: url('/logos/stocdup-logo-only.png');
+          mask-image: url('/logos/stocdup-logo-only.png');
+          -webkit-mask-size: contain;
+          mask-size: contain;
+          -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+          -webkit-mask-position: center;
+          mask-position: center;
+        }
       `}</style>
 
       <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title={order.orderNumber} />
 
-      <PageShell padding="none" className="pb-12">
-
+      <PageShell padding="none" className="pb-12" width="full">
         {/* Status banner */}
         <div
           className="od-section mx-4 mt-4 mb-1 rounded"
@@ -181,6 +203,19 @@ export default function OrderDetailPage() {
               style={{ borderBottom: i < order.lines.length - 1 ? '1px solid #F3F4F6' : 'none' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                {line.productThumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={line.productThumbnailUrl}
+                    alt=""
+                    width={56}
+                    height={56}
+                    loading="lazy"
+                    className="h-14 w-14 flex-shrink-0 rounded object-cover"
+                  />
+                ) : (
+                  <div className="od-img-placeholder h-14 w-14 rounded" aria-hidden="true" />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', marginBottom: 2 }}>
                     {line.productNameSnapshot}
@@ -221,14 +256,24 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Delivery address */}
-        {delivAddrText && (
+        {/* Delivery */}
+        {(order.requestedDeliveryDate || delivAddrText) && (
           <>
-            <SectionLabel>Delivery Address</SectionLabel>
+            <SectionLabel>Delivery</SectionLabel>
             <div className="od-section px-4 pb-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.25s' }}>
-              <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7 }}>
-                {delivAddrText}
-              </p>
+              {order.requestedDeliveryDate && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: delivAddrText ? 8 : 0 }}>
+                  <Truck className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} style={{ color: '#6B7280' }} />
+                  <p style={{ fontSize: 13, color: '#1A1A1A' }}>
+                    {fmtDate(order.requestedDeliveryDate)}
+                  </p>
+                </div>
+              )}
+              {delivAddrText && (
+                <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7 }}>
+                  {delivAddrText}
+                </p>
+              )}
             </div>
           </>
         )}

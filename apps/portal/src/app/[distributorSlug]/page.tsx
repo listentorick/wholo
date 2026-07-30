@@ -199,7 +199,7 @@ export default function DistributorHomePage() {
   const hasSidebar = hasKeyInfo || hasContact;
 
   return (
-    <PageShell width="full" padding="none" className="px-5 py-8">
+    <PageShell width="full" padding="none" className="px-5 pb-8">
       <div className={`grid grid-cols-1 gap-8 items-start ${hasSidebar ? 'md:grid-cols-[1fr_280px] xl:grid-cols-[1fr_280px_280px]' : ''}`}>
 
         {/* About column */}
@@ -212,7 +212,7 @@ export default function DistributorHomePage() {
             </div>
           )}
           {distributor?.aboutText && (
-            <div className="prose prose-sm prose-gray">
+            <div className="prose prose-sm prose-gray max-w-none">
               <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
             </div>
           )}

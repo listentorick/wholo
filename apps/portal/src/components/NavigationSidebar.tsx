@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Home, LogOut, Menu, Settings, ShoppingBasket, Truck, X } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { Home, LogOut, Menu, Settings, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { useCartSafe } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { UserMenuButton } from './UserMenuButton';
 
@@ -24,10 +23,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
   });
 
   const pathname = usePathname();
-  const router = useRouter();
   const { distributor } = useDistributor();
-  const cartCtx = useCartSafe();
-  const cartCount = cartCtx?.cartCount ?? 0;
   const { logout } = useAuth();
 
   const distributorName = distributor?.name ?? distributorSlug ?? contextName ?? 'Stocdup';
@@ -55,9 +51,6 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
 
   const mainNavItems: NavItem[] = [
     { href: '/', label: 'Our Suppliers', icon: <Home className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />, exact: true },
-    ...(distributorSlug ? [
-      { href: `/${distributorSlug}/delivery-settings`, label: 'Delivery Settings', icon: <Truck className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} /> },
-    ] : []),
   ];
 
   const accountNavItems: NavItem[] = [
@@ -81,7 +74,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
   const sidebarPanel = (
     <aside className="flex h-full w-full flex-col bg-sidebar-bg overflow-y-auto">
       {/* Mobile header — always full, isCollapsed is a desktop-only concept */}
-      <div className="md:hidden flex items-center gap-2.5 px-5 py-4 border-b border-border bg-topbar-bg">
+      <div className="md:hidden flex h-14 items-center gap-2.5 px-5 border-b border-border bg-topbar-bg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
         <span className="text-base font-bold tracking-tight text-text">
@@ -98,8 +91,8 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
 
       {/* Desktop header — respects isCollapsed */}
       <div className={[
-        'hidden md:flex border-b border-border bg-topbar-bg',
-        isCollapsed ? 'justify-center px-3 py-4' : 'items-center gap-2.5 px-5 py-4',
+        'hidden md:flex h-14 items-center border-b border-border bg-topbar-bg',
+        isCollapsed ? 'justify-center px-3' : 'gap-2.5 px-5',
       ].join(' ')}>
         {isCollapsed ? (
           <button
@@ -192,20 +185,6 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
         <span className="text-sm font-medium tracking-wide text-text">{distributorName}</span>
 
         <div className="flex items-center gap-0.5">
-          {distributorSlug ? (
-            <button
-              onClick={() => router.push(`/${distributorSlug}/checkout`)}
-              className="relative flex h-9 w-9 items-center justify-center text-text"
-              aria-label={`Cart, ${cartCount} item${cartCount !== 1 ? 's' : ''}`}
-            >
-              {cartCount > 0 && (
-                <span className="absolute -top-0.5 -right-1 text-[11px] font-semibold leading-none text-primary">
-                  {cartCount}
-                </span>
-              )}
-              <ShoppingBasket className="h-5 w-5 mt-0.5" strokeWidth={1.5} />
-            </button>
-          ) : null}
           <UserMenuButton />
         </div>
       </header>

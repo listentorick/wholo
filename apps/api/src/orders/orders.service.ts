@@ -17,12 +17,20 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 
 interface CursorPayload {
   createdAt: string;
   id: string;
+}
+
+interface AssetImageVariants {
+  thumb?: string;
+  catalogue?: string;
+  large?: string;
+  [key: string]: string | undefined;
 }
 
 const orderLineSelect = {
@@ -80,6 +88,11 @@ const orderSelect = {
   updatedAt: true,
   customer: { select: { id: true, name: true } },
   lines: { select: orderLineSelect },
+  invoiceExports: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: { status: true, externalInvoiceStatus: true },
+  },
 } satisfies Prisma.OrderSelect;
 
 @Injectable()
@@ -88,6 +101,7 @@ export class OrdersService {
     private prisma: PrismaService,
     private outbox: OutboxService,
     private deliveryAvailability: DeliveryAvailabilityService,
+    private r2Storage: R2StorageService,
   ) {}
 
   async submitOrder(
@@ -336,8 +350,13 @@ export class OrdersService {
         select: {
           id: true, orderNumber: true, status: true, totalAmount: true,
           submittedAt: true, acceptedAt: true, rejectedAt: true, cancelledAt: true,
-          createdAt: true,
+          createdAt: true, requestedDeliveryDate: true,
           customer: { select: { id: true, name: true } },
+          invoiceExports: {
+            orderBy: { createdAt: 'desc' as const },
+            take: 1,
+            select: { status: true, externalInvoiceStatus: true },
+          },
         },
       }),
       this.prisma.order.count({ where: baseWhere }),
@@ -362,6 +381,12 @@ export class OrdersService {
         rejectedAt: o.rejectedAt?.toISOString() ?? null,
         cancelledAt: o.cancelledAt?.toISOString() ?? null,
         createdAt: o.createdAt.toISOString(),
+        requestedDeliveryDate: o.requestedDeliveryDate
+          ? o.requestedDeliveryDate.toISOString().slice(0, 10)
+          : null,
+        invoiceSummary: o.invoiceExports[0]
+          ? { status: o.invoiceExports[0].status, externalInvoiceStatus: o.invoiceExports[0].externalInvoiceStatus }
+          : null,
       })),
       pagination: { nextCursor, hasMore, total },
     };
@@ -446,11 +471,30 @@ export class OrdersService {
     };
   }
 
-  private formatOrder(order: Prisma.OrderGetPayload<{ select: typeof orderSelect }>) {
+  private async formatOrder(order: Prisma.OrderGetPayload<{ select: typeof orderSelect }>) {
     const dec = (v: unknown) =>
       typeof v === 'object' && v !== null && 'toFixed' in v
         ? (v as { toFixed: (n: number) => string }).toFixed(2)
         : String(v);
+
+    const thumbnailUrls = new Map<string, string>();
+    const productIds = [...new Set(order.lines.map((l) => l.productId))];
+    if (productIds.length > 0) {
+      const images = await this.prisma.assetImage.findMany({
+        where: {
+          assetType: 'product-image',
+          entityId: { in: productIds },
+          distributorId: order.distributorId,
+          isPrimary: true,
+        },
+        select: { entityId: true, variants: true },
+      });
+      for (const img of images) {
+        const variants = img.variants as AssetImageVariants;
+        const thumbKey = variants?.thumb ?? null;
+        if (thumbKey) thumbnailUrls.set(img.entityId, this.r2Storage.getPublicUrl(thumbKey));
+      }
+    }
 
     return {
       id: order.id,
@@ -483,6 +527,9 @@ export class OrdersService {
       cancelledByUserId: order.cancelledByUserId,
       cancellationReason: order.cancellationReason,
       traderCustomer: order.customer ? { id: order.customer.id, name: order.customer.name } : null,
+      invoiceSummary: order.invoiceExports[0]
+        ? { status: order.invoiceExports[0].status, externalInvoiceStatus: order.invoiceExports[0].externalInvoiceStatus }
+        : null,
       lines: order.lines.map((l) => ({
         id: l.id,
         orderId: l.orderId,
@@ -490,6 +537,7 @@ export class OrdersService {
         traderCustomerId: l.traderCustomerId,
         productId: l.productId,
         productVariantId: l.productVariantId,
+        productThumbnailUrl: thumbnailUrls.get(l.productId) ?? null,
         skuSnapshot: l.skuSnapshot,
         productNameSnapshot: l.productNameSnapshot,
         unitOfMeasureSnapshot: l.unitOfMeasureSnapshot,

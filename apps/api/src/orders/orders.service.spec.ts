@@ -5,6 +5,7 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 
 const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';
@@ -45,12 +46,14 @@ describe('OrdersService — delivery date revalidation', () => {
       order: { create: jest.fn() },
       orderLine: { createMany: jest.fn() },
       cartOrderLine: { deleteMany: jest.fn() },
+      assetImage: { findMany: jest.fn().mockResolvedValue([]) },
       $queryRaw: jest.fn(),
       $transaction: jest.fn(),
     };
 
     const mockOutbox = { writeEvent: jest.fn() };
     const mockDelivery = { getAvailableDates: jest.fn() };
+    const mockR2Storage = { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,6 +61,7 @@ describe('OrdersService — delivery date revalidation', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: mockOutbox },
         { provide: DeliveryAvailabilityService, useValue: mockDelivery },
+        { provide: R2StorageService, useValue: mockR2Storage },
       ],
     }).compile();
 
@@ -77,7 +81,7 @@ describe('OrdersService — delivery date revalidation', () => {
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ nextval: BigInt(1) }]);
     (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
       fn({
-        order: { create: jest.fn().mockResolvedValue({ id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.SUBMITTED, currency: 'GBP', subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '20.00' }, billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null, customerReference: null, notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT, submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null, rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null, cancellationReason: null, createdAt: new Date(), updatedAt: new Date(), customer: { id: CUSTOMER_ID, name: 'Test Customer' }, lines: [] }) },
+        order: { create: jest.fn().mockResolvedValue({ id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.SUBMITTED, currency: 'GBP', subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '20.00' }, billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null, customerReference: null, notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT, submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null, rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null, cancellationReason: null, createdAt: new Date(), updatedAt: new Date(), customer: { id: CUSTOMER_ID, name: 'Test Customer' }, invoiceExports: [], lines: [] }) },
         orderLine: { createMany: jest.fn().mockResolvedValue({}) },
         cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
         cartOrder: { delete: jest.fn().mockResolvedValue({}) },
@@ -202,6 +206,7 @@ describe('OrdersService — listCustomerOrders', () => {
       order: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       orderLine: { createMany: jest.fn() },
       cartOrderLine: { deleteMany: jest.fn() },
+      assetImage: { findMany: jest.fn().mockResolvedValue([]) },
       $queryRaw: jest.fn(),
       $transaction: jest.fn(),
     };
@@ -212,6 +217,7 @@ describe('OrdersService — listCustomerOrders', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();
 
@@ -262,5 +268,161 @@ describe('OrdersService — listCustomerOrders', () => {
     await expect(
       service.listCustomerOrders(CUSTOMER_ID, { distributorSlug: 'unknown-slug' }),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('maps invoiceSummary and requestedDeliveryDate when an invoice export exists', async () => {
+    (prisma.order.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'order-1', orderNumber: 'ORD-2024-00001', status: OrderStatus.ACCEPTED,
+        totalAmount: { toFixed: () => '20.00' },
+        submittedAt: new Date(), acceptedAt: new Date(), rejectedAt: null, cancelledAt: null,
+        createdAt: new Date(), requestedDeliveryDate: new Date('2024-06-14T00:00:00.000Z'),
+        customer: { id: CUSTOMER_ID, name: 'Test Customer' },
+        invoiceExports: [{ status: 'COMPLETED', externalInvoiceStatus: 'AUTHORISED' }],
+      },
+    ]);
+
+    const result = await service.listCustomerOrders(CUSTOMER_ID, {});
+
+    expect(result.data[0].requestedDeliveryDate).toBe('2024-06-14');
+    expect(result.data[0].invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'AUTHORISED' });
+  });
+
+  it('maps invoiceSummary as null and requestedDeliveryDate as null when absent', async () => {
+    (prisma.order.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'order-1', orderNumber: 'ORD-2024-00001', status: OrderStatus.SUBMITTED,
+        totalAmount: { toFixed: () => '20.00' },
+        submittedAt: new Date(), acceptedAt: null, rejectedAt: null, cancelledAt: null,
+        createdAt: new Date(), requestedDeliveryDate: null,
+        customer: { id: CUSTOMER_ID, name: 'Test Customer' },
+        invoiceExports: [],
+      },
+    ]);
+
+    const result = await service.listCustomerOrders(CUSTOMER_ID, {});
+
+    expect(result.data[0].requestedDeliveryDate).toBeNull();
+    expect(result.data[0].invoiceSummary).toBeNull();
+  });
+});
+
+describe('OrdersService — getCustomerOrder', () => {
+  let service: OrdersService;
+  let prisma: jest.Mocked<PrismaService>;
+
+  function makeOrderPayload(invoiceExports: unknown[], lines: unknown[] = []) {
+    return {
+      id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID,
+      traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.ACCEPTED,
+      currency: 'GBP', subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' },
+      totalAmount: { toFixed: () => '20.00' }, billingAddressSnapshot: null, deliveryAddressSnapshot: null,
+      requestedDeliveryDate: null, customerReference: null, notes: null,
+      acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT,
+      submittedAt: new Date(), acceptedAt: new Date(), acceptedByActorType: null, acceptedByUserId: null,
+      rejectedAt: null, rejectedByUserId: null, rejectionReason: null,
+      cancelledAt: null, cancelledByUserId: null, cancellationReason: null,
+      createdAt: new Date(), updatedAt: new Date(),
+      customer: { id: CUSTOMER_ID, name: 'Test Customer' },
+      invoiceExports,
+      lines,
+    };
+  }
+
+  function makeLine(overrides: Partial<{ id: string; productId: string }> = {}) {
+    return {
+      id: 'line-1', orderId: 'order-1', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID,
+      productId: 'prod-1', productVariantId: null, skuSnapshot: 'SKU-1', productNameSnapshot: 'Wine',
+      unitOfMeasureSnapshot: null, quantityOrdered: 2, unitPriceSnapshot: { toFixed: () => '12.23' },
+      taxRateSnapshot: '0', subtotalAmount: { toFixed: () => '24.46' }, taxAmount: { toFixed: () => '0.00' },
+      totalAmount: { toFixed: () => '24.46' }, priceListIdSnapshot: null, priceListRuleIdSnapshot: null,
+      status: 'ACCEPTED', createdAt: new Date(), updatedAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  let assetImageFindMany: jest.Mock;
+
+  beforeEach(async () => {
+    assetImageFindMany = jest.fn().mockResolvedValue([]);
+    const mockPrisma = {
+      order: { findFirst: jest.fn() },
+      assetImage: { findMany: assetImageFindMany },
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+      ],
+    }).compile();
+
+    service = module.get(OrdersService);
+    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+  });
+
+  it('maps invoiceSummary from the latest invoice export', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(
+      makeOrderPayload([{ status: 'COMPLETED', externalInvoiceStatus: 'DRAFT' }]),
+    );
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'DRAFT' });
+  });
+
+  it('maps invoiceSummary as null when no invoice export exists', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(makeOrderPayload([]));
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.invoiceSummary).toBeNull();
+  });
+
+  it('throws NotFoundException when the order does not exist', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(service.getCustomerOrder('missing', CUSTOMER_ID)).rejects.toThrow(NotFoundException);
+  });
+
+  it('maps productThumbnailUrl from the primary product image', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(
+      makeOrderPayload([], [makeLine({ productId: 'prod-1' })]),
+    );
+    assetImageFindMany.mockResolvedValue([
+      { entityId: 'prod-1', variants: { thumb: 'distributors/d/products/prod-1/images/img-1/thumb.webp' } },
+    ]);
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(assetImageFindMany).toHaveBeenCalledWith({
+      where: { assetType: 'product-image', entityId: { in: ['prod-1'] }, distributorId: DISTRIBUTOR_ID, isPrimary: true },
+      select: { entityId: true, variants: true },
+    });
+    expect(result.lines[0].productThumbnailUrl).toBe(
+      'https://cdn.test/distributors/d/products/prod-1/images/img-1/thumb.webp',
+    );
+  });
+
+  it('maps productThumbnailUrl as null when the product has no image', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(
+      makeOrderPayload([], [makeLine({ productId: 'prod-1' })]),
+    );
+    assetImageFindMany.mockResolvedValue([]);
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.lines[0].productThumbnailUrl).toBeNull();
+  });
+
+  it('does not query assetImage when the order has no lines', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(makeOrderPayload([], []));
+
+    await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(assetImageFindMany).not.toHaveBeenCalled();
   });
 });
