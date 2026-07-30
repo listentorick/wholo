@@ -181,53 +181,77 @@ describe('AccountingContactService', () => {
 
     it('filters at the DB level by type=customers', async () => {
       await service.listContacts('dist-1', { type: ['customers'] });
-      expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            AND: expect.arrayContaining([
-              expect.objectContaining({ OR: expect.arrayContaining([{ isCustomer: true }]) }),
-            ]),
-          }),
+      expect(prisma.externalAccountingContact.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: expect.arrayContaining([{ isCustomer: true }]) }),
+          ]),
         }),
-      );
+      });
     });
 
     it('filters at the DB level by type=suppliers', async () => {
       await service.listContacts('dist-1', { type: ['suppliers'] });
-      expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            AND: expect.arrayContaining([
-              expect.objectContaining({ OR: expect.arrayContaining([{ isSupplier: true }]) }),
-            ]),
-          }),
+      expect(prisma.externalAccountingContact.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: expect.arrayContaining([{ isSupplier: true }]) }),
+          ]),
         }),
-      );
+      });
     });
 
     it('filters at the DB level by type=archived', async () => {
       await service.listContacts('dist-1', { type: ['archived'] });
-      expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            AND: expect.arrayContaining([
-              expect.objectContaining({ OR: expect.arrayContaining([{ isArchived: true }]) }),
-            ]),
-          }),
+      expect(prisma.externalAccountingContact.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: expect.arrayContaining([{ isArchived: true }]) }),
+          ]),
         }),
-      );
+      });
     });
 
     it('combines multiple selected types with OR at the DB level', async () => {
       await service.listContacts('dist-1', { type: ['customers', 'archived'] });
-      expect(prisma.externalAccountingContact.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            AND: expect.arrayContaining([
-              expect.objectContaining({ OR: [{ isCustomer: true }, { isArchived: true }] }),
-            ]),
-          }),
+      expect(prisma.externalAccountingContact.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ OR: [{ isCustomer: true }, { isArchived: true }] }),
+          ]),
         }),
+      });
+    });
+
+    it('filters at the DB level by search, matching displayName or email', async () => {
+      await service.listContacts('dist-1', { search: 'blackbird' });
+      expect(prisma.externalAccountingContact.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({
+              OR: [
+                { displayName: { contains: 'blackbird', mode: 'insensitive' } },
+                { email: { contains: 'blackbird', mode: 'insensitive' } },
+              ],
+            }),
+          ]),
+        }),
+      });
+    });
+
+    it('combines search and type as separate AND-ed conditions, not a clobbered OR', async () => {
+      await service.listContacts('dist-1', { search: 'blackbird', type: ['customers'] });
+      const call = prisma.externalAccountingContact.count.mock.calls[0][0];
+      expect(call.where.AND).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { displayName: { contains: 'blackbird', mode: 'insensitive' } },
+              { email: { contains: 'blackbird', mode: 'insensitive' } },
+            ],
+          }),
+          expect.objectContaining({ OR: [{ isCustomer: true }] }),
+        ]),
       );
     });
 

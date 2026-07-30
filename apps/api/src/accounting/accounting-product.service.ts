@@ -57,15 +57,25 @@ export class AccountingProductService {
       t === 'sold' ? { isSold: true } : t === 'purchased' ? { isPurchased: true } : { isTracked: true },
     );
 
-    const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
-      accountingConnectionId: connection.id,
-      ...(query.search && {
+    // search and type each contribute an OR clause of their own — combined
+    // via AND so neither overwrites the other (see resolveExternalIdsForFilter
+    // below, which already gets this right).
+    const conditions: Prisma.ExternalAccountingProductWhereInput[] = [];
+    if (query.search) {
+      conditions.push({
         OR: [
           { displayName: { contains: query.search, mode: 'insensitive' } },
           { externalProductCode: { contains: query.search, mode: 'insensitive' } },
         ],
-      }),
-      ...(typeConditions.length && { OR: typeConditions }),
+      });
+    }
+    if (typeConditions.length) {
+      conditions.push({ OR: typeConditions });
+    }
+
+    const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
+      accountingConnectionId: connection.id,
+      ...(conditions.length && { AND: conditions }),
     };
 
     // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) aren't DB columns,

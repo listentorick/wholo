@@ -37,18 +37,20 @@ function buildApiParams(filters: ActiveFilter[], cursor: string | undefined): Ac
     const values = Array.isArray(f.value) ? f.value : [f.value];
     if (f.field === 'status') params.status = values as AccountingProductListParams['status'];
     else if (f.field === 'type') params.type = values as AccountingProductListParams['type'];
+    else if (f.field === 'search') params.search = f.value as string;
   }
   return params;
 }
 
-// Same status/type extraction as buildApiParams, minus pagination — the
-// shape a "select all matching filters" bulk import queues against.
-function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingProductListParams['status']; type?: AccountingProductListParams['type'] } {
-  const filter: { status?: AccountingProductListParams['status']; type?: AccountingProductListParams['type'] } = {};
+// Same status/type/search extraction as buildApiParams, minus pagination —
+// the shape a "select all matching filters" bulk import queues against.
+function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingProductListParams['status']; type?: AccountingProductListParams['type']; search?: string } {
+  const filter: { status?: AccountingProductListParams['status']; type?: AccountingProductListParams['type']; search?: string } = {};
   for (const f of filters) {
     const values = Array.isArray(f.value) ? f.value : [f.value];
     if (f.field === 'status') filter.status = values as AccountingProductListParams['status'];
     else if (f.field === 'type') filter.type = values as AccountingProductListParams['type'];
+    else if (f.field === 'search') filter.search = f.value as string;
   }
   return filter;
 }
@@ -56,6 +58,7 @@ function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingPro
 export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) {
   const filterFields = useMemo<FilterFieldConfig[]>(
     () => [
+      { field: 'search', label: 'Name', operators: [{ value: 'contains', label: 'contains' }], valueKind: 'text' },
       { field: 'type', label: 'Type', operators: [{ value: 'is', label: 'is' }], valueKind: 'multi-select', options: TYPE_OPTIONS },
       { field: 'status', label: 'Status', operators: [{ value: 'is', label: 'is' }], valueKind: 'multi-select', options: STATUS_OPTIONS },
     ],

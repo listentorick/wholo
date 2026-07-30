@@ -56,15 +56,25 @@ export class AccountingContactService {
       t === 'customers' ? { isCustomer: true } : t === 'suppliers' ? { isSupplier: true } : { isArchived: true },
     );
 
-    const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
-      accountingConnectionId: connection.id,
-      ...(query.search && {
+    // search and type each contribute an OR clause of their own — combined
+    // via AND so neither overwrites the other (see resolveExternalIdsForFilter
+    // below, which already gets this right).
+    const conditions: Prisma.ExternalAccountingContactWhereInput[] = [];
+    if (query.search) {
+      conditions.push({
         OR: [
           { displayName: { contains: query.search, mode: 'insensitive' } },
           { email: { contains: query.search, mode: 'insensitive' } },
         ],
-      }),
-      ...(typeConditions.length && { OR: typeConditions }),
+      });
+    }
+    if (typeConditions.length) {
+      conditions.push({ OR: typeConditions });
+    }
+
+    const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
+      accountingConnectionId: connection.id,
+      ...(conditions.length && { AND: conditions }),
     };
 
     // Computed statuses (LINKED/SUGGESTED/CONFLICT/...) aren't DB columns,

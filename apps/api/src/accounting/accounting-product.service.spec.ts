@@ -190,14 +190,41 @@ describe('AccountingProductService', () => {
 
     it('applies the provider type filter at the DB level', async () => {
       await service.listProducts('dist-1', { type: ['tracked'] });
-      const where = prisma.externalAccountingProduct.findMany.mock.calls[0][0].where;
+      const where = prisma.externalAccountingProduct.count.mock.calls[0][0].where;
       expect(where.AND[0]).toMatchObject({ OR: [{ isTracked: true }] });
     });
 
     it('combines multiple selected provider types with OR at the DB level', async () => {
       await service.listProducts('dist-1', { type: ['sold', 'purchased'] });
-      const where = prisma.externalAccountingProduct.findMany.mock.calls[0][0].where;
+      const where = prisma.externalAccountingProduct.count.mock.calls[0][0].where;
       expect(where.AND[0]).toMatchObject({ OR: [{ isSold: true }, { isPurchased: true }] });
+    });
+
+    it('filters at the DB level by search, matching displayName or externalProductCode', async () => {
+      await service.listProducts('dist-1', { search: 'chardonnay' });
+      const where = prisma.externalAccountingProduct.count.mock.calls[0][0].where;
+      expect(where.AND[0]).toMatchObject({
+        OR: [
+          { displayName: { contains: 'chardonnay', mode: 'insensitive' } },
+          { externalProductCode: { contains: 'chardonnay', mode: 'insensitive' } },
+        ],
+      });
+    });
+
+    it('combines search and type as separate AND-ed conditions, not a clobbered OR', async () => {
+      await service.listProducts('dist-1', { search: 'chardonnay', type: ['sold'] });
+      const where = prisma.externalAccountingProduct.count.mock.calls[0][0].where;
+      expect(where.AND).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { displayName: { contains: 'chardonnay', mode: 'insensitive' } },
+              { externalProductCode: { contains: 'chardonnay', mode: 'insensitive' } },
+            ],
+          }),
+          expect.objectContaining({ OR: [{ isSold: true }] }),
+        ]),
+      );
     });
 
     it('computes hasMore/nextCursor from the status-filtered set, not the raw fetched rows', async () => {
