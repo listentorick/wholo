@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -85,6 +85,47 @@ describe('AuthProvider', () => {
         <StatusProbe />
       </AuthProvider>,
     );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('has-user');
+    });
+  });
+
+  it('refreshSession clears a stale authError once the underlying call succeeds', async () => {
+    // Simulates the invite-accept race: the initial mount fetch loses (401,
+    // no Wholo user yet), then the caller re-fetches after the user was created.
+    (authApi.me as any)
+      .mockRejectedValueOnce(
+        new ApiError(
+          { type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'No Wholo user found for this identity' },
+          401,
+        ),
+      )
+      .mockResolvedValueOnce({ id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B' });
+
+    const { AuthProvider, useAuth } = await import('./auth-context');
+
+    function StatusProbe() {
+      const { user, authError, isLoading, refreshSession } = useAuth();
+      return (
+        <div>
+          <div data-testid="status">{isLoading ? 'loading' : authError ?? (user ? 'has-user' : 'no-user')}</div>
+          <button onClick={() => refreshSession()}>refresh</button>
+        </div>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <StatusProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('No Wholo user found for this identity');
+    });
+
+    fireEvent.click(screen.getByText('refresh'));
 
     await waitFor(() => {
       expect(screen.getByTestId('status').textContent).toBe('has-user');

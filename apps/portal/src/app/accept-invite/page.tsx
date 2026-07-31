@@ -37,7 +37,7 @@ const INVITE_TOKEN_STORAGE_KEY = 'wholo_pending_invite_token';
 function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { accessToken, isLoading, loginWithRedirect, registerWithRedirect } = useAuth();
+  const { accessToken, isLoading, loginWithRedirect, registerWithRedirect, refreshSession } = useAuth();
 
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
@@ -67,7 +67,11 @@ function AcceptInviteContent() {
     sessionStorage.removeItem(INVITE_TOKEN_STORAGE_KEY);
 
     invitationsApi.accept(accessToken, token)
-      .then((result) => {
+      .then(async (result) => {
+        // The accept call just created this user's Wholo account — re-fetch the
+        // session so the app doesn't land on a stale "couldn't sign in" state left
+        // over from the root AuthProvider's own /auth/me fetch racing this one.
+        await refreshSession();
         setStatus('accepted');
         const dest = result.distributorSlug ? `/${result.distributorSlug}` : '/';
         router.replace(dest);
@@ -85,7 +89,7 @@ function AcceptInviteContent() {
         }
         setStatus('error');
       });
-  }, [isLoading, accessToken, token, router]);
+  }, [isLoading, accessToken, token, router, refreshSession]);
 
   const handleCreateAccount = useCallback(() => {
     if (token) sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);

@@ -28,6 +28,8 @@ interface AuthContextValue {
   registerWithRedirect: (redirectUri: string) => void;
   changePassword: () => void;
   logout: () => void;
+  /** Re-fetch the profile (e.g. right after an action that just created it, like accepting an invite). */
+  refreshSession: () => Promise<void>;
   setOrderAsSession: (data: OrderAsState) => void;
   clearOrderAsSession: () => void;
 }
@@ -75,6 +77,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
   }, []);
 
+  const loadProfile = useCallback(async (token: string) => {
+    try {
+      const profile = await authApi.me(token);
+      setUser(profile as AuthUser);
+      // Clears a stale error from an earlier failed fetch (see refreshSession) —
+      // this is what lets a caller resync state after it fixes the underlying cause.
+      setAuthError(null);
+    } catch (err) {
+      // Keycloak session is valid but Wholo rejected the identity (e.g. no matching
+      // Wholo user record) — surface this rather than letting callers treat it as
+      // "not logged in" and loop back into Keycloak's still-valid SSO session.
+      setAuthError(err instanceof ApiError ? (err.problem.detail ?? err.message) : 'Unable to verify your account.');
+    }
+  }, []);
+
   useEffect(() => {
     getKeycloakAuth(handleTokenExpired)
       .then(async (authenticated) => {
@@ -83,19 +100,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const token: string = kc.token;
         setAccessToken(token);
-
-        try {
-          const profile = await authApi.me(token);
-          setUser(profile as AuthUser);
-        } catch (err) {
-          // Keycloak session is valid but Wholo rejected the identity (e.g. no matching
-          // Wholo user record) — surface this rather than letting callers treat it as
-          // "not logged in" and loop back into Keycloak's still-valid SSO session.
-          setAuthError(err instanceof ApiError ? (err.problem.detail ?? err.message) : 'Unable to verify your account.');
-        }
+        await loadProfile(token);
       })
       .finally(() => setIsLoading(false));
-  }, [handleTokenExpired]);
+  }, [handleTokenExpired, loadProfile]);
+
+  // Re-fetch the profile on demand — for a caller that just performed an action
+  // (e.g. accepting an invite) which may have created the Wholo user record that
+  // the initial mount fetch above raced against and lost. See ADR/invite-accept fix.
+  const refreshSession = useCallback(async () => {
+    const kc = (window as any).__kc;
+    const token: string | undefined = kc?.token;
+    if (token) await loadProfile(token);
+  }, [loadProfile]);
 
   const login = useCallback((returnUrlOverride?: string) => {
     const kc = (window as any).__kc;
@@ -185,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       registerWithRedirect,
       changePassword,
       logout,
+      refreshSession,
       setOrderAsSession,
       clearOrderAsSession,
     }}>
