@@ -11,7 +11,7 @@ const mockUser = {
     {
       role: 'DISTRIBUTOR_ADMIN',
       organisationId: 'org-1',
-      organisation: { id: 'org-1', name: 'Vine & Co' },
+      organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR' },
     },
   ],
 };
@@ -47,6 +47,7 @@ describe('AuthService', () => {
         role: 'DISTRIBUTOR_ADMIN',
         organisationId: 'org-1',
         organisationName: 'Vine & Co',
+        organisationType: 'DISTRIBUTOR',
       });
     });
 
@@ -62,6 +63,55 @@ describe('AuthService', () => {
       expect(result?.role).toBeUndefined();
       expect(result?.organisationId).toBeUndefined();
       expect(result?.organisationName).toBeUndefined();
+      expect(result?.organisationType).toBeUndefined();
+    });
+
+    it('returns the TRADE_CUSTOMER membership when that is the only one held', async () => {
+      const tradeCustomerUser = {
+        ...mockUser,
+        memberships: [
+          {
+            role: 'TRADE_CUSTOMER',
+            organisationId: 'org-2',
+            organisation: { id: 'org-2', name: 'Blackbird Restaurant', type: 'TRADE_CUSTOMER' },
+          },
+        ],
+      };
+      mockUsersService.findById.mockResolvedValue(tradeCustomerUser);
+      const result = await service.getProfile('user-1');
+      expect(result).toMatchObject({
+        role: 'TRADE_CUSTOMER',
+        organisationId: 'org-2',
+        organisationType: 'TRADE_CUSTOMER',
+      });
+    });
+
+    it('prefers a DISTRIBUTOR membership over a TRADE_CUSTOMER one regardless of array order', async () => {
+      // Guards against picking an arbitrary "first" membership (ADR-053) — a user
+      // holding both must resolve to the distributor-side one so admin-api's
+      // organisationType gate sees it correctly.
+      const multiMembershipUser = {
+        ...mockUser,
+        memberships: [
+          {
+            role: 'TRADE_CUSTOMER',
+            organisationId: 'org-2',
+            organisation: { id: 'org-2', name: 'Blackbird Restaurant', type: 'TRADE_CUSTOMER' },
+          },
+          {
+            role: 'DISTRIBUTOR_ADMIN',
+            organisationId: 'org-1',
+            organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR' },
+          },
+        ],
+      };
+      mockUsersService.findById.mockResolvedValue(multiMembershipUser);
+      const result = await service.getProfile('user-1');
+      expect(result).toMatchObject({
+        role: 'DISTRIBUTOR_ADMIN',
+        organisationId: 'org-1',
+        organisationType: 'DISTRIBUTOR',
+      });
     });
   });
 });

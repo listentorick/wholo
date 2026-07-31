@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { passportJwtSecret } from 'jwks-rsa';
+import { OrganisationType } from '@prisma/client';
 import { ApiClientService } from '../../api-client/api-client.service';
 
 interface WholoProfile {
@@ -10,6 +11,7 @@ interface WholoProfile {
   email: string;
   role: string;
   organisationId: string;
+  organisationType?: OrganisationType;
 }
 
 @Injectable()
@@ -39,6 +41,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       profile = await this.apiClient.get<WholoProfile>('/auth/me', token);
     } catch {
       throw new UnauthorizedException('No Wholo user found for this identity');
+    }
+    // Trade customers must not reach the admin surface at all (ADR-053) — this is
+    // decided from Wholo's own Membership/Organisation data via /auth/me, never from
+    // which Keycloak client issued the token.
+    if (profile.organisationType !== OrganisationType.DISTRIBUTOR) {
+      throw new UnauthorizedException('This application is for distributor accounts');
     }
     return {
       sub: profile.id,

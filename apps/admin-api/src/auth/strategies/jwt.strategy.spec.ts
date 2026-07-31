@@ -13,6 +13,7 @@ const mockProfile = {
   email: 'james@vineandco.com',
   role: 'DISTRIBUTOR_ADMIN',
   organisationId: 'seed-distributor-1',
+  organisationType: 'DISTRIBUTOR',
 };
 
 const mockReq = {
@@ -77,6 +78,31 @@ describe('JwtStrategy (admin-api)', () => {
 
   it('throws UnauthorizedException on network error (apps/api unreachable)', async () => {
     mockApiClient.get.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    await expect(strategy.validate(mockReq as any, mockPayload)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('throws UnauthorizedException for a trade-customer profile (ADR-053)', async () => {
+    mockApiClient.get.mockResolvedValueOnce({
+      ...mockProfile,
+      role: 'TRADE_CUSTOMER',
+      organisationType: 'TRADE_CUSTOMER',
+    });
+
+    await expect(strategy.validate(mockReq as any, mockPayload)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('throws UnauthorizedException when organisationType is missing (no membership at all)', async () => {
+    mockApiClient.get.mockResolvedValueOnce({
+      ...mockProfile,
+      role: undefined,
+      organisationId: undefined,
+      organisationType: undefined,
+    });
 
     await expect(strategy.validate(mockReq as any, mockPayload)).rejects.toThrow(
       UnauthorizedException,
