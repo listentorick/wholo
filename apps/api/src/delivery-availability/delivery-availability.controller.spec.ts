@@ -4,8 +4,11 @@ import { OrganisationType } from '@prisma/client';
 import { DeliveryAvailabilityController } from './delivery-availability.controller';
 import { DeliveryAvailabilityService } from './delivery-availability.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ORDER_AS_CONTEXT_KEY } from '../order-as/order-as.interceptor';
 
+// The @ActingCustomerId() decorator resolves the order-as context vs. a plain
+// JWT's organisationId — that resolution logic itself is covered by
+// acting-customer.decorator.spec.ts. Here the controller is exercised with the
+// already-resolved value, exactly as Nest's request pipeline would supply it.
 describe('DeliveryAvailabilityController', () => {
   let controller: DeliveryAvailabilityController;
   let service: jest.Mocked<DeliveryAvailabilityService>;
@@ -28,31 +31,23 @@ describe('DeliveryAvailabilityController', () => {
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
   });
 
-  function makeReq(overrides: Record<string, unknown> = {}) {
-    return { user: { sub: 'user-1', organisationId: 'dist-1' }, ...overrides } as any;
-  }
-
   it('throws NotFoundException when distributor slug is not found', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
-    await expect(controller.getAvailableDates('bad-slug', makeReq())).rejects.toThrow(NotFoundException);
+    await expect(controller.getAvailableDates('bad-slug', 'dist-1')).rejects.toThrow(NotFoundException);
   });
 
-  it('uses req.user.organisationId when no order-as context', async () => {
+  it('passes the resolved customerId through to the service (no order-as session)', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
 
-    await controller.getAvailableDates('winos', makeReq());
+    await controller.getAvailableDates('winos', 'dist-1');
 
     expect(service.getAvailableDates).toHaveBeenCalledWith('dist-1', 'dist-1');
   });
 
-  it('uses orderAs.customerId when order-as context is present', async () => {
+  it('passes the impersonated customerId through when an order-as session resolved it', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
 
-    const req = makeReq({
-      [ORDER_AS_CONTEXT_KEY]: { sessionToken: 'tok', customerId: 'cust-1', distributorId: 'dist-1' },
-    });
-
-    await controller.getAvailableDates('winos', req);
+    await controller.getAvailableDates('winos', 'cust-1');
 
     expect(service.getAvailableDates).toHaveBeenCalledWith('dist-1', 'cust-1');
   });

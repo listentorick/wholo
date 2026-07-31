@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ORDER_AS_CONTEXT_KEY, OrderAsContext } from '../order-as/order-as.interceptor';
+import { OrderAsContext } from '../order-as/order-as.interceptor';
+import { ActingCustomerId, OrderAsSession } from '../order-as/acting-customer.decorator';
 import {
   ApiBearerAuth, ApiTags, ApiOperation,
   ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse,
@@ -26,18 +27,19 @@ export class OrdersController {
   @ApiOperation({ summary: 'Submit a new order' })
   @ApiCreatedResponse({ description: 'Order submitted successfully' })
   @ApiBadRequestResponse({ description: 'Invalid order data' })
-  submitOrder(@Body() dto: SubmitOrderDto, @Req() req: RequestWithUser) {
-    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
-    const customerId = orderAs?.customerId ?? req.user.organisationId;
+  submitOrder(
+    @Body() dto: SubmitOrderDto,
+    @ActingCustomerId() customerId: string,
+    @OrderAsSession() orderAs: OrderAsContext | undefined,
+    @Req() req: RequestWithUser,
+  ) {
     return this.ordersService.submitOrder(dto, req.user.sub, customerId, orderAs?.sessionToken, orderAs?.distributorId);
   }
 
   @Get()
   @ApiOperation({ summary: 'List orders for the authenticated trade customer' })
   @ApiOkResponse({ description: 'Paginated list of orders' })
-  listOrders(@Query() query: OrderQueryDto, @Req() req: RequestWithUser) {
-    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
-    const customerId = orderAs?.customerId ?? req.user.organisationId;
+  listOrders(@Query() query: OrderQueryDto, @ActingCustomerId() customerId: string) {
     return this.ordersService.listCustomerOrders(customerId, query);
   }
 
@@ -45,9 +47,7 @@ export class OrdersController {
   @ApiOperation({ summary: 'Get a single order' })
   @ApiOkResponse({ description: 'Order detail' })
   @ApiNotFoundResponse({ description: 'Order not found' })
-  getOrder(@Param('id') id: string, @Req() req: RequestWithUser) {
-    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
-    const customerId = orderAs?.customerId ?? req.user.organisationId;
+  getOrder(@Param('id') id: string, @ActingCustomerId() customerId: string) {
     return this.ordersService.getCustomerOrder(id, customerId);
   }
 
@@ -59,10 +59,8 @@ export class OrdersController {
   cancelOrder(
     @Param('id') id: string,
     @Body() dto: CancelOrderDto,
-    @Req() req: RequestWithUser,
+    @ActingCustomerId() customerId: string,
   ) {
-    const orderAs = (req as any)[ORDER_AS_CONTEXT_KEY] as OrderAsContext | undefined;
-    const customerId = orderAs?.customerId ?? req.user.organisationId;
     return this.ordersService.cancelCustomerOrder(id, customerId, dto.reason);
   }
 }
