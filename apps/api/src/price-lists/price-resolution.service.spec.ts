@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Prisma, PriceListRuleDiscountBaseType, PriceListRuleSelectorType, PriceListRuleValueType } from '@prisma/client';
-import { PriceResolutionService, ResolvedPrice } from './price-resolution.service';
+import { PriceResolutionService } from './price-resolution.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DISTRIBUTOR_ID = 'dist-1';
@@ -9,6 +9,9 @@ const PRODUCT_ID_1 = 'prod-1';
 const PRODUCT_ID_2 = 'prod-2';
 const PRICE_LIST_ID = 'pl-1';
 const PRICE_LIST_ID_2 = 'pl-2';
+const PRICE_LIST_ID_3 = 'pl-3';
+const PRICE_LIST_ID_4 = 'pl-4';
+const PRICE_LIST_ID_5 = 'pl-5';
 const RULE_ID = 'rule-1';
 
 const dec = (v: string) => new Prisma.Decimal(v);
@@ -47,6 +50,18 @@ const pctPriceListRule = (basePriceListId: string, discountPercentage = dec('20'
   id: RULE_ID,
   selectorType: PriceListRuleSelectorType.ALL_PRODUCTS,
   productId: null,
+  minQuantity: 1,
+  valueType: PriceListRuleValueType.PERCENTAGE_DISCOUNT,
+  unitPrice: null,
+  discountPercentage,
+  discountBaseType: PriceListRuleDiscountBaseType.PRICE_LIST,
+  basePriceListId,
+});
+
+const pctPriceListRuleForProduct = (productId: string, basePriceListId: string, discountPercentage = dec('10')) => ({
+  id: `rule-for-${productId}`,
+  selectorType: PriceListRuleSelectorType.PRODUCT,
+  productId,
   minQuantity: 1,
   valueType: PriceListRuleValueType.PERCENTAGE_DISCOUNT,
   unitPrice: null,
@@ -148,7 +163,7 @@ describe('PriceResolutionService', () => {
       mockPrisma.priceListRule.findMany.mockResolvedValue([
         pctProductPriceRule({ discountPercentage: dec('10') }),
       ]);
-      mockPrisma.product.findUnique.mockResolvedValue({ price: dec('100.00') });
+      mockPrisma.product.findMany.mockResolvedValue([{ id: PRODUCT_ID_1, price: dec('100.00') }]);
       const result = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
       // 10% off $100 = $90
       expect(result!.unitPrice.toFixed(2)).toBe('90.00');
@@ -176,16 +191,71 @@ describe('PriceResolutionService', () => {
       );
     });
 
-    it('returns null for PRICE_LIST base when depth reaches MAX_DEPTH', async () => {
-      // Pass depth=3 directly to trigger the guard
-      const result = await service.resolvePrice(
-        DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1, 3, PRICE_LIST_ID,
-      );
-      // No rules fetched because priceListId is provided, but even if there were a PRICE_LIST rule,
-      // depth >= MAX_DEPTH means it would return null for the base resolution.
-      // Here we test the boundary: depth=3 means the recursive call would be at depth=4 > MAX_DEPTH.
-      // With no rules returned the result is null regardless.
+    it('resolves a legitimate 3-hop price-list chain (exactly at MAX_DEPTH)', async () => {
+      // pl-1 -20%-> pl-2 -10%-> pl-3 -5%-> pl-4 (fixed $100)
+      mockPrisma.priceListRule.findMany
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_2, dec('20'))])
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_3, dec('10'))])
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_4, dec('5'))])
+        .mockResolvedValueOnce([fixedRule({ unitPrice: dec('100.00') })]);
+
+      const result = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
+      // $100 -> 95 (5% off) -> 85.50 (10% off) -> 68.40 (20% off)
+      expect(result!.unitPrice.toFixed(2)).toBe('68.40');
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(4);
+    });
+
+    it('returns null for a chain one hop past MAX_DEPTH, without querying the 5th list', async () => {
+      // Same chain as above, but pl-4's rule is ALSO PRICE_LIST-based (-> pl-5), a 4th hop.
+      mockPrisma.priceListRule.findMany
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_2, dec('20'))])
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_3, dec('10'))])
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_4, dec('5'))])
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_5, dec('1'))]);
+
+      const result = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
       expect(result).toBeNull();
+      // The 5th list is never queried — the depth guard blocks the recursive call itself.
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(4);
+    });
+
+    it('returns null for a direct self-reference without an infinite loop', async () => {
+      mockPrisma.priceListRule.findMany.mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID, dec('10'))]);
+
+      const result = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
+      expect(result).toBeNull();
+      // Cycle caught immediately — the second (self-referencing) level is never queried.
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns null for a 2-list cycle without an infinite loop', async () => {
+      mockPrisma.priceListRule.findMany
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_2, dec('10'))]) // pl-1 -> pl-2
+        .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID, dec('20'))]); // pl-2 -> pl-1 (cycle)
+
+      const result = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
+      expect(result).toBeNull();
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('resolvePrice and resolvePricesForProducts agree on the same chain (regression test for the depth-divergence bug)', async () => {
+      const chainResponses = () => [
+        [pctPriceListRule(PRICE_LIST_ID_2, dec('20'))],
+        [pctPriceListRule(PRICE_LIST_ID_3, dec('10'))],
+        [pctPriceListRule(PRICE_LIST_ID_4, dec('5'))],
+        [fixedRule({ unitPrice: dec('100.00') })],
+      ];
+
+      chainResponses().forEach((rules) => mockPrisma.priceListRule.findMany.mockResolvedValueOnce(rules));
+      const viaSingle = await service.resolvePrice(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID_1, 1);
+
+      jest.clearAllMocks();
+      chainResponses().forEach((rules) => mockPrisma.priceListRule.findMany.mockResolvedValueOnce(rules));
+      const viaBatch = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, [PRODUCT_ID_1], 1);
+
+      expect(viaSingle).not.toBeNull();
+      expect(viaBatch.get(PRODUCT_ID_1)).toBeDefined();
+      expect(viaBatch.get(PRODUCT_ID_1)!.toFixed(2)).toBe(viaSingle!.unitPrice.toFixed(2));
     });
   });
 
@@ -248,19 +318,39 @@ describe('PriceResolutionService', () => {
       expect(mockPrisma.product.findUnique).not.toHaveBeenCalled();
     });
 
-    it('delegates PRICE_LIST discount base to resolvePrice per affected product', async () => {
+    it('resolves a PRICE_LIST discount base for multiple products sharing one base list in a single recursive call (N+1 fix)', async () => {
       mockPrisma.priceListRule.findMany
-        // Batch call: one PRICE_LIST rule
+        // Top-level ALL_PRODUCTS rule — applies to both products
         .mockResolvedValueOnce([pctPriceListRule(PRICE_LIST_ID_2, dec('10'))])
-        // resolvePrice recursive call for PRODUCT_ID_1: base fixed at $50
-        .mockResolvedValueOnce([fixedRule({ unitPrice: dec('50.00') })])
-        // resolvePrice recursive call for PRODUCT_ID_2: base fixed at $80
-        .mockResolvedValueOnce([fixedRule({ unitPrice: dec('80.00') })]);
+        // ONE batched call for the shared base list, with per-product fixed prices
+        .mockResolvedValueOnce([
+          fixedRule({ id: 'base-rule-1', selectorType: PriceListRuleSelectorType.PRODUCT, productId: PRODUCT_ID_1, unitPrice: dec('50.00') }),
+          fixedRule({ id: 'base-rule-2', selectorType: PriceListRuleSelectorType.PRODUCT, productId: PRODUCT_ID_2, unitPrice: dec('80.00') }),
+        ]);
 
       const result = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, [PRODUCT_ID_1, PRODUCT_ID_2]);
       // 10% off $50 = $45; 10% off $80 = $72
       expect(result.get(PRODUCT_ID_1)!.toFixed(2)).toBe('45.00');
       expect(result.get(PRODUCT_ID_2)!.toFixed(2)).toBe('72.00');
+      // 2 calls total (1 top + 1 shared base), not 3 — proves the N+1 fix.
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('resolves PRICE_LIST bases independently when different products point at different base lists', async () => {
+      mockPrisma.priceListRule.findMany
+        .mockResolvedValueOnce([
+          pctPriceListRuleForProduct(PRODUCT_ID_1, PRICE_LIST_ID_2, dec('10')),
+          pctPriceListRuleForProduct(PRODUCT_ID_2, PRICE_LIST_ID_3, dec('20')),
+        ])
+        .mockResolvedValueOnce([fixedRule({ unitPrice: dec('50.00') })]) // base for PRODUCT_ID_1's chain
+        .mockResolvedValueOnce([fixedRule({ unitPrice: dec('80.00') })]); // base for PRODUCT_ID_2's chain
+
+      const result = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, [PRODUCT_ID_1, PRODUCT_ID_2]);
+      // 10% off $50 = $45; 20% off $80 = $64
+      expect(result.get(PRODUCT_ID_1)!.toFixed(2)).toBe('45.00');
+      expect(result.get(PRODUCT_ID_2)!.toFixed(2)).toBe('64.00');
+      // 1 top + 1 per distinct base list = 3 calls total.
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(3);
     });
 
     it('excludes products with no matching rule from the result Map', async () => {
@@ -271,6 +361,21 @@ describe('PriceResolutionService', () => {
       const result = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, [PRODUCT_ID_1, PRODUCT_ID_2]);
       expect(result.has(PRODUCT_ID_1)).toBe(true);
       expect(result.has(PRODUCT_ID_2)).toBe(false);
+    });
+
+    it('excludes only the cycling product from a batch, resolving its non-cycling sibling normally', async () => {
+      mockPrisma.priceListRule.findMany.mockResolvedValueOnce([
+        // PRODUCT_ID_1's rule bases off the SAME list it's already in — a self-cycle.
+        pctPriceListRuleForProduct(PRODUCT_ID_1, PRICE_LIST_ID, dec('10')),
+        // PRODUCT_ID_2 has an unrelated, perfectly normal fixed-price rule.
+        fixedRule({ id: 'ok-rule', selectorType: PriceListRuleSelectorType.PRODUCT, productId: PRODUCT_ID_2, unitPrice: dec('30.00') }),
+      ]);
+
+      const result = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, [PRODUCT_ID_1, PRODUCT_ID_2]);
+      expect(result.has(PRODUCT_ID_1)).toBe(false);
+      expect(result.get(PRODUCT_ID_2)!.toFixed(2)).toBe('30.00');
+      // The cycle is caught before any second query is ever made.
+      expect(mockPrisma.priceListRule.findMany).toHaveBeenCalledTimes(1);
     });
 
     it('filters rules by minQuantity — rules requiring qty > requested quantity are excluded', async () => {
