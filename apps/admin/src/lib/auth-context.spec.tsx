@@ -3,8 +3,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock('@wholo/api-client', () => ({
-  authApi: { me: vi.fn() },
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
+vi.mock('@wholo/admin-api-client', () => ({
+  adminAuthApi: { session: vi.fn() },
+  adminAssetImagesApi: { list: vi.fn().mockResolvedValue([]) },
   ApiError: class ApiError extends Error {
     problem: { type: string; title: string; status: number; detail?: string };
     status: number;
@@ -35,7 +40,7 @@ vi.mock('keycloak-js', () => ({
   }),
 }));
 
-import { authApi, ApiError } from '@wholo/api-client';
+import { adminAuthApi } from '@wholo/admin-api-client';
 
 describe('AuthProvider', () => {
   beforeEach(() => {
@@ -44,40 +49,17 @@ describe('AuthProvider', () => {
     delete (window as any).__kc;
   });
 
-  it('captures the ApiError detail into authError and leaves user null when Wholo rejects the identity', async () => {
-    (authApi.me as any).mockRejectedValue(
-      new ApiError(
-        { type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'No Wholo user found for this identity' },
-        401,
-      ),
-    );
-
-    const { AuthProvider, useAuth } = await import('./auth-context');
-
-    function StatusProbe() {
-      const { user, authError, isLoading } = useAuth();
-      return <div data-testid="status">{isLoading ? 'loading' : authError ?? (user ? 'has-user' : 'no-user')}</div>;
-    }
-
-    render(
-      <AuthProvider>
-        <StatusProbe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('No Wholo user found for this identity');
+  it('sets user when the session check resolves ACTIVE', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
     });
-  });
-
-  it('sets user and leaves authError null when authApi.me resolves', async () => {
-    (authApi.me as any).mockResolvedValue({ id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B' });
 
     const { AuthProvider, useAuth } = await import('./auth-context');
 
     function StatusProbe() {
-      const { user, authError, isLoading } = useAuth();
-      return <div data-testid="status">{isLoading ? 'loading' : authError ?? (user ? 'has-user' : 'no-user')}</div>;
+      const { user, isLoading } = useAuth();
+      return <div data-testid="status">{isLoading ? 'loading' : user ? 'has-user' : 'no-user'}</div>;
     }
 
     render(
@@ -88,6 +70,34 @@ describe('AuthProvider', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('status').textContent).toBe('has-user');
+    });
+  });
+
+  it('flags onboarding when the session check resolves ONBOARDING_REQUIRED', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ONBOARDING_REQUIRED',
+      identity: { email: 'a@b.com' },
+    });
+
+    const { AuthProvider, useAuth } = await import('./auth-context');
+
+    function StatusProbe() {
+      const { user, onboardingRequired, isLoading } = useAuth();
+      return (
+        <div data-testid="status">
+          {isLoading ? 'loading' : onboardingRequired ? 'onboarding' : user ? 'has-user' : 'no-user'}
+        </div>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <StatusProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('onboarding');
     });
   });
 });

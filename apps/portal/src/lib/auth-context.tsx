@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 let initPromise: Promise<boolean> | null = null;
 
-async function getKeycloakAuth(): Promise<boolean> {
+async function getKeycloakAuth(onTokenExpired: () => void): Promise<boolean> {
   if (initPromise) return initPromise;
 
   const { default: Keycloak } = await import('keycloak-js');
@@ -45,6 +45,10 @@ async function getKeycloakAuth(): Promise<boolean> {
     realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
     clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-portal',
   });
+
+  // Must be assigned before init() — keycloak-js only arms its silent-refresh
+  // timer if onTokenExpired is already set when init() installs the initial token.
+  kc.onTokenExpired = onTokenExpired;
 
   initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
     (window as any).__kc = kc;
@@ -61,23 +65,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
 
+  const handleTokenExpired = useCallback(() => {
+    const kc = (window as any).__kc;
+    kc?.updateToken(30)
+      .then(() => setAccessToken(kc.token ?? null))
+      .catch(() => {
+        setUser(null);
+        setAccessToken(null);
+      });
+  }, []);
+
   useEffect(() => {
-    getKeycloakAuth()
+    getKeycloakAuth(handleTokenExpired)
       .then(async (authenticated) => {
         const kc = (window as any).__kc;
         if (!authenticated || !kc?.token) return;
 
         const token: string = kc.token;
         setAccessToken(token);
-
-        kc.onTokenExpired = () => {
-          kc.updateToken(30)
-            .then(() => setAccessToken(kc.token ?? null))
-            .catch(() => {
-              setUser(null);
-              setAccessToken(null);
-            });
-        };
 
         try {
           const profile = await authApi.me(token);
@@ -90,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [handleTokenExpired]);
 
   const login = useCallback((returnUrlOverride?: string) => {
     const kc = (window as any).__kc;
@@ -100,33 +105,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (kc) {
       kc.login({ redirectUri });
     } else {
-      getKeycloakAuth().then(() => {
+      getKeycloakAuth(handleTokenExpired).then(() => {
         (window as any).__kc?.login({ redirectUri });
       });
     }
-  }, []);
+  }, [handleTokenExpired]);
 
   const loginWithRedirect = useCallback((redirectUri: string) => {
     const kc = (window as any).__kc;
     if (kc) {
       kc.login({ redirectUri });
     } else {
-      getKeycloakAuth().then(() => {
+      getKeycloakAuth(handleTokenExpired).then(() => {
         (window as any).__kc?.login({ redirectUri });
       });
     }
-  }, []);
+  }, [handleTokenExpired]);
 
   const registerWithRedirect = useCallback((redirectUri: string) => {
     const kc = (window as any).__kc;
     if (kc) {
       kc.register({ redirectUri });
     } else {
-      getKeycloakAuth().then(() => {
+      getKeycloakAuth(handleTokenExpired).then(() => {
         (window as any).__kc?.register({ redirectUri });
       });
     }
-  }, []);
+  }, [handleTokenExpired]);
 
   const changePassword = useCallback(() => {
     const kc = (window as any).__kc;
@@ -134,11 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (kc) {
       kc.login({ action: 'UPDATE_PASSWORD', redirectUri });
     } else {
-      getKeycloakAuth().then(() => {
+      getKeycloakAuth(handleTokenExpired).then(() => {
         (window as any).__kc?.login({ action: 'UPDATE_PASSWORD', redirectUri });
       });
     }
-  }, []);
+  }, [handleTokenExpired]);
 
   const logout = useCallback(() => {
     sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);

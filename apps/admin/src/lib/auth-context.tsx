@@ -39,7 +39,7 @@ async function fetchLogoUrl(
 // Module-level state so init only happens once across React Strict Mode double-effects
 let initPromise: Promise<boolean> | null = null;
 
-async function getKeycloakAuth(): Promise<boolean> {
+async function getKeycloakAuth(onTokenExpired: () => void): Promise<boolean> {
   if (initPromise) return initPromise;
 
   const { default: Keycloak } = await import('keycloak-js');
@@ -48,6 +48,10 @@ async function getKeycloakAuth(): Promise<boolean> {
     realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
     clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-admin',
   });
+
+  // Must be assigned before init() — keycloak-js only arms its silent-refresh
+  // timer if onTokenExpired is already set when init() installs the initial token.
+  kc.onTokenExpired = onTokenExpired;
 
   initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
     // Store instance globally so login/logout can access it
@@ -90,23 +94,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const handleTokenExpired = useCallback(() => {
+    const kc = (window as any).__kc;
+    kc?.updateToken(30)
+      .then(() => setAccessToken(kc.token ?? null))
+      .catch(() => {
+        setUser(null);
+        setAccessToken(null);
+      });
+  }, []);
+
   useEffect(() => {
-    getKeycloakAuth()
+    getKeycloakAuth(handleTokenExpired)
       .then(async (authenticated) => {
         const kc = (window as any).__kc;
         if (!authenticated || !kc?.token) return;
 
         const token: string = kc.token;
         setAccessToken(token);
-
-        kc.onTokenExpired = () => {
-          kc.updateToken(30)
-            .then(() => setAccessToken(kc.token ?? null))
-            .catch(() => {
-              setUser(null);
-              setAccessToken(null);
-            });
-        };
 
         const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
         if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
@@ -119,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .finally(() => setIsLoading(false));
-  }, [loadSession]);
+  }, [loadSession, handleTokenExpired]);
 
   const refreshSession = useCallback(async () => {
     const kc = (window as any).__kc;
@@ -136,11 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (kc) {
       kc.login({ redirectUri });
     } else {
-      getKeycloakAuth().then(() => {
+      getKeycloakAuth(handleTokenExpired).then(() => {
         (window as any).__kc?.login({ redirectUri });
       });
     }
-  }, []);
+  }, [handleTokenExpired]);
 
   const logout = useCallback(() => {
     setUser(null);
