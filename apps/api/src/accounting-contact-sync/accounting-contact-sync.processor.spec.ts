@@ -138,6 +138,42 @@ describe('AccountingContactSyncProcessor', () => {
     );
   });
 
+  it('mirrors billing and delivery address fields onto the cache row', async () => {
+    listContacts.mockResolvedValue([
+      {
+        externalId: 'x-1',
+        displayName: 'Blackbird Vine & Co',
+        isCustomer: true,
+        isSupplier: false,
+        isArchived: false,
+        billingLine1: 'PO Box 42',
+        billingCity: 'London',
+        deliveryLine1: '1 Vine Street',
+        deliveryCity: 'London',
+        raw: {},
+      },
+    ]);
+
+    await processor.process(makeJob());
+
+    expect(prisma.externalAccountingContact.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          billingLine1: 'PO Box 42',
+          billingCity: 'London',
+          deliveryLine1: '1 Vine Street',
+          deliveryCity: 'London',
+        }),
+        update: expect.objectContaining({
+          billingLine1: 'PO Box 42',
+          billingCity: 'London',
+          deliveryLine1: '1 Vine Street',
+          deliveryCity: 'London',
+        }),
+      }),
+    );
+  });
+
   it('does not run the matcher for an archived contact', async () => {
     listContacts.mockResolvedValue([{ externalId: 'x-1', displayName: 'X', isCustomer: true, isSupplier: false, isArchived: true, raw: {} }]);
     prisma.externalAccountingContact.upsert.mockResolvedValue({ ...cachedContactRow, isArchived: true });

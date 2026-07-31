@@ -138,7 +138,7 @@ describe('XeroAccountingAdapter', () => {
       scope: 'openid accounting.contacts',
     };
 
-    it('maps xero-node contacts to the provider-neutral shape', async () => {
+    it('maps a single STREET address to both billing (fallback) and delivery', async () => {
       mockGetContacts.mockResolvedValueOnce({
         body: {
           contacts: [
@@ -181,6 +181,12 @@ describe('XeroAccountingAdapter', () => {
           billingState: undefined,
           billingPostcode: 'E1 1AA',
           billingCountry: 'UK',
+          deliveryLine1: '1 Vine Street',
+          deliveryLine2: undefined,
+          deliveryCity: 'London',
+          deliveryState: undefined,
+          deliveryPostcode: 'E1 1AA',
+          deliveryCountry: 'UK',
           isCustomer: true,
           isSupplier: false,
           isArchived: false,
@@ -198,6 +204,76 @@ describe('XeroAccountingAdapter', () => {
         1,
         true,
       );
+    });
+
+    it('maps POBOX to billing and STREET to delivery when a contact has both', async () => {
+      mockGetContacts.mockResolvedValueOnce({
+        body: {
+          contacts: [
+            {
+              contactID: 'contact-2',
+              name: 'Acme Spirits',
+              isCustomer: true,
+              isSupplier: false,
+              contactStatus: 'ACTIVE',
+              addresses: [
+                {
+                  addressType: 'STREET',
+                  addressLine1: '1 Vine Street',
+                  city: 'London',
+                  postalCode: 'E1 1AA',
+                  country: 'UK',
+                },
+                {
+                  addressType: 'POBOX',
+                  addressLine1: 'PO Box 42',
+                  city: 'London',
+                  postalCode: 'E1 2BB',
+                  country: 'UK',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(contact.billingLine1).toBe('PO Box 42');
+      expect(contact.billingPostcode).toBe('E1 2BB');
+      expect(contact.deliveryLine1).toBe('1 Vine Street');
+      expect(contact.deliveryPostcode).toBe('E1 1AA');
+    });
+
+    it('maps a single POBOX address to billing only, leaving delivery empty', async () => {
+      mockGetContacts.mockResolvedValueOnce({
+        body: {
+          contacts: [
+            {
+              contactID: 'contact-3',
+              name: 'Mail Order Co',
+              isCustomer: true,
+              isSupplier: false,
+              contactStatus: 'ACTIVE',
+              addresses: [
+                {
+                  addressType: 'POBOX',
+                  addressLine1: 'PO Box 7',
+                  city: 'Bristol',
+                  postalCode: 'BS1 1AA',
+                  country: 'UK',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(contact.billingLine1).toBe('PO Box 7');
+      expect(contact.deliveryLine1).toBeUndefined();
+      expect(contact.deliveryCity).toBeUndefined();
     });
 
     it('marks archived contacts based on contactStatus', async () => {

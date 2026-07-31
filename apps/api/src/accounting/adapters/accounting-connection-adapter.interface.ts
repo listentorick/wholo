@@ -28,6 +28,12 @@ export interface AccountingExternalContact {
   billingState?: string;
   billingPostcode?: string;
   billingCountry?: string;
+  deliveryLine1?: string;
+  deliveryLine2?: string;
+  deliveryCity?: string;
+  deliveryState?: string;
+  deliveryPostcode?: string;
+  deliveryCountry?: string;
   isCustomer: boolean;
   isSupplier: boolean;
   isArchived: boolean;

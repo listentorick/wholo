@@ -325,12 +325,18 @@ describe('AccountingContactService', () => {
       displayName: 'Blackbird Vine & Co',
       externalContactCode: 'XC-1',
       externalAccountNumber: null,
-      billingLine1: '1 Vine St',
+      billingLine1: 'PO Box 42',
       billingLine2: null,
       billingCity: 'London',
       billingState: null,
-      billingPostcode: 'E1 1AA',
+      billingPostcode: 'E1 2BB',
       billingCountry: 'UK',
+      deliveryLine1: '1 Vine St',
+      deliveryLine2: null,
+      deliveryCity: 'London',
+      deliveryState: null,
+      deliveryPostcode: 'E1 1AA',
+      deliveryCountry: 'UK',
     };
 
     beforeEach(() => {
@@ -369,6 +375,27 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ name: 'Renamed Co', accountNumber: 'OVERRIDE' }),
+      );
+    });
+
+    it('forwards both billing and delivery addresses from the cached contact', async () => {
+      await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', {});
+      expect(adminCustomers.create).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({
+          billingLine1: 'PO Box 42',
+          billingPostcode: 'E1 2BB',
+          deliveryLine1: '1 Vine St',
+          deliveryPostcode: 'E1 1AA',
+        }),
+      );
+    });
+
+    it('applies DTO delivery-address overrides over the cached contact defaults', async () => {
+      await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', { deliveryLine1: 'Overridden Line 1' });
+      expect(adminCustomers.create).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({ deliveryLine1: 'Overridden Line 1' }),
       );
     });
 

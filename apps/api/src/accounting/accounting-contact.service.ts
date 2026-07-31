@@ -321,6 +321,12 @@ export class AccountingContactService {
       billingState: dto.billingState ?? contact.billingState ?? undefined,
       billingPostcode: dto.billingPostcode ?? contact.billingPostcode ?? undefined,
       billingCountry: dto.billingCountry ?? contact.billingCountry ?? undefined,
+      deliveryLine1: dto.deliveryLine1 ?? contact.deliveryLine1 ?? undefined,
+      deliveryLine2: dto.deliveryLine2 ?? contact.deliveryLine2 ?? undefined,
+      deliveryCity: dto.deliveryCity ?? contact.deliveryCity ?? undefined,
+      deliveryState: dto.deliveryState ?? contact.deliveryState ?? undefined,
+      deliveryPostcode: dto.deliveryPostcode ?? contact.deliveryPostcode ?? undefined,
+      deliveryCountry: dto.deliveryCountry ?? contact.deliveryCountry ?? undefined,
       // Deliberately no email — importing an accounting contact must never
       // create a login user or an implicit invitation.
     });

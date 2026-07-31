@@ -756,6 +756,12 @@ model ExternalAccountingContact {
   billingState           String?
   billingPostcode        String?
   billingCountry         String?
+  deliveryLine1          String?
+  deliveryLine2          String?
+  deliveryCity           String?
+  deliveryState          String?
+  deliveryPostcode       String?
+  deliveryCountry        String?
   isCustomer             Boolean            @default(false)
   isSupplier             Boolean            @default(false)
   isArchived             Boolean            @default(false)

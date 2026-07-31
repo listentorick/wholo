@@ -42,4 +42,28 @@ export class ImportContactDto {
   @IsOptional()
   @IsString()
   billingCountry?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryLine1?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryLine2?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryCity?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryState?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryPostcode?: string;
+
+  @IsOptional()
+  @IsString()
+  deliveryCountry?: string;
 }

@@ -277,22 +277,35 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
   }
 
   private toAccountingExternalContact(contact: Contact): AccountingExternalContact {
-    // Xero has no distinct "billing address" type — STREET is the closest
-    // equivalent to a postal/billing address; POBOX is the fallback.
-    const address =
-      contact.addresses?.find((a) => a.addressType === Address.AddressTypeEnum.STREET) ?? contact.addresses?.[0];
+    // DELIVERY is not a valid AddressType for Contacts (it's Xero-org-only) —
+    // a contact can only ever carry POBOX and/or STREET. This matches Xero's
+    // own UI convention, which by default sends the UI's Billing address to
+    // POBOX and its Delivery/Shipping address to STREET. POBOX falls back to
+    // STREET for billing when no POBOX is set (a contact with only one
+    // address on file still gets a usable billing address); STREET has no
+    // fallback for delivery — a PO box isn't a deliverable address.
+    const billingAddress =
+      contact.addresses?.find((a) => a.addressType === Address.AddressTypeEnum.POBOX) ??
+      contact.addresses?.find((a) => a.addressType === Address.AddressTypeEnum.STREET);
+    const deliveryAddress = contact.addresses?.find((a) => a.addressType === Address.AddressTypeEnum.STREET);
     return {
       externalId: contact.contactID ?? '',
       code: contact.contactNumber || undefined,
       accountNumber: contact.accountNumber || undefined,
       displayName: contact.name ?? '',
       email: contact.emailAddress || undefined,
-      billingLine1: address?.addressLine1 || undefined,
-      billingLine2: address?.addressLine2 || undefined,
-      billingCity: address?.city || undefined,
-      billingState: address?.region || undefined,
-      billingPostcode: address?.postalCode || undefined,
-      billingCountry: address?.country || undefined,
+      billingLine1: billingAddress?.addressLine1 || undefined,
+      billingLine2: billingAddress?.addressLine2 || undefined,
+      billingCity: billingAddress?.city || undefined,
+      billingState: billingAddress?.region || undefined,
+      billingPostcode: billingAddress?.postalCode || undefined,
+      billingCountry: billingAddress?.country || undefined,
+      deliveryLine1: deliveryAddress?.addressLine1 || undefined,
+      deliveryLine2: deliveryAddress?.addressLine2 || undefined,
+      deliveryCity: deliveryAddress?.city || undefined,
+      deliveryState: deliveryAddress?.region || undefined,
+      deliveryPostcode: deliveryAddress?.postalCode || undefined,
+      deliveryCountry: deliveryAddress?.country || undefined,
       isCustomer: !!contact.isCustomer,
       isSupplier: !!contact.isSupplier,
       isArchived: contact.contactStatus === Contact.ContactStatusEnum.ARCHIVED,
