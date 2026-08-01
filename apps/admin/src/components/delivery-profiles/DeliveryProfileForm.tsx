@@ -546,6 +546,7 @@ export function DeliveryProfileForm({ profile, token }: Props) {
             key: 'delete',
             label: 'Delete profile',
             tone: 'danger',
+            dangerZone: true,
             loading: isDeleting,
             loadingLabel: 'Deleting…',
             onClick: handleDelete,

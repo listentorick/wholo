@@ -35,6 +35,7 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
     billingLine1: null, billingLine2: null, billingCity: null, billingState: null, billingPostcode: null, billingCountry: null,
     priceListId: null, priceList: null, deliveryProfileId: null, deliveryProfile: null,
     catalogues: [], invitations: [],
+    recentContactSelfDeclared: null,
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };

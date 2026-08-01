@@ -58,6 +58,10 @@ function CustomerPageInner() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isOrderingAs, setIsOrderingAs] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false);
+  const [isUnsuspending, setIsUnsuspending] = useState(false);
   const [activeSaveState, setActiveSaveState] = useState<TabSaveState | null>(null);
 
   const fetchCustomer = useCallback(() => {
@@ -97,6 +101,58 @@ function CustomerPageInner() {
     }
   }
 
+  async function handleAcceptRequest() {
+    if (!accessToken || !customer) return;
+    setIsAccepting(true);
+    try {
+      await adminCustomersApi.acceptRequest(accessToken, customer.id);
+      fetchCustomer();
+    } catch {
+      // silently ignore — user sees the button un-disable
+    } finally {
+      setIsAccepting(false);
+    }
+  }
+
+  async function handleDeclineRequest() {
+    if (!accessToken || !customer) return;
+    setIsDeclining(true);
+    try {
+      await adminCustomersApi.declineRequest(accessToken, customer.id);
+      fetchCustomer();
+    } catch {
+      // silently ignore — user sees the button un-disable
+    } finally {
+      setIsDeclining(false);
+    }
+  }
+
+  async function handleSuspend() {
+    if (!accessToken || !customer) return;
+    setIsSuspending(true);
+    try {
+      await adminCustomersApi.suspend(accessToken, customer.id);
+      fetchCustomer();
+    } catch {
+      // silently ignore — user sees the button un-disable
+    } finally {
+      setIsSuspending(false);
+    }
+  }
+
+  async function handleUnsuspend() {
+    if (!accessToken || !customer) return;
+    setIsUnsuspending(true);
+    try {
+      await adminCustomersApi.unsuspend(accessToken, customer.id);
+      fetchCustomer();
+    } catch {
+      // silently ignore — user sees the button un-disable
+    } finally {
+      setIsUnsuspending(false);
+    }
+  }
+
   if (authLoading || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-canvas">
@@ -116,6 +172,17 @@ function CustomerPageInner() {
   }
 
   const statusMeta = STATUS_META[customer.status];
+
+  const missingSetup = [
+    customer.catalogues.length === 0 && 'a catalogue',
+    !customer.priceListId && 'a price list',
+    !customer.deliveryProfileId && 'a delivery profile',
+  ].filter((x): x is string => Boolean(x));
+
+  const acceptDescription =
+    missingSetup.length > 0
+      ? `Heads up: this customer doesn't have ${new Intl.ListFormat('en', { type: 'conjunction' }).format(missingSetup)} set up yet. You can still accept and configure this afterwards.`
+      : `${customer.organisation.name} will be notified and can start browsing your catalogue immediately.`;
 
   const actions: ActionItem[] = [
     ...(activeSaveState
@@ -137,18 +204,83 @@ function CustomerPageInner() {
       onClick: handleOrderAs,
       disabled: isOrderingAs,
     },
-    {
-      key: 'remove',
-      label: 'Remove customer',
-      tone: 'danger',
-      loading: isDeleting,
-      loadingLabel: 'Removing…',
-      onClick: handleDelete,
-      confirm: {
-        prompt: 'Remove this customer relationship? This cannot be undone.',
-        confirmLabel: 'Yes, remove',
-      },
-    },
+    ...(customer.status === TradeRelationshipStatus.PENDING_REQUEST
+      ? ([
+          {
+            key: 'accept-request',
+            label: 'Accept connection request',
+            tone: 'primary',
+            loading: isAccepting,
+            loadingLabel: 'Accepting…',
+            onClick: handleAcceptRequest,
+            confirm: {
+              prompt: acceptDescription,
+              confirmLabel: 'Yes, accept',
+            },
+          },
+          {
+            key: 'decline-request',
+            label: 'Decline connection request',
+            tone: 'danger',
+            loading: isDeclining,
+            loadingLabel: 'Declining…',
+            onClick: handleDeclineRequest,
+            confirm: {
+              prompt: `${customer.organisation.name} will be notified and can request again later.`,
+              confirmLabel: 'Yes, decline',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
+    ...(customer.status === TradeRelationshipStatus.ACTIVE
+      ? ([
+          {
+            key: 'suspend',
+            label: 'Suspend',
+            tone: 'danger',
+            loading: isSuspending,
+            loadingLabel: 'Suspending…',
+            onClick: handleSuspend,
+            confirm: {
+              prompt: "They won't be able to order until you unsuspend them.",
+              confirmLabel: 'Yes, suspend',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
+    ...(customer.status === TradeRelationshipStatus.SUSPENDED
+      ? ([
+          {
+            key: 'unsuspend',
+            label: 'Unsuspend',
+            tone: 'primary',
+            loading: isUnsuspending,
+            loadingLabel: 'Unsuspending…',
+            onClick: handleUnsuspend,
+            confirm: {
+              prompt: "They'll immediately be able to browse and order again.",
+              confirmLabel: 'Yes, unsuspend',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
+    ...(customer.status !== TradeRelationshipStatus.PENDING_REQUEST
+      ? ([
+          {
+            key: 'remove',
+            label: 'Remove customer',
+            tone: 'danger',
+            dangerZone: true,
+            loading: isDeleting,
+            loadingLabel: 'Removing…',
+            onClick: handleDelete,
+            confirm: {
+              prompt: 'Remove this customer relationship? This cannot be undone.',
+              confirmLabel: 'Yes, remove',
+            },
+          },
+        ] satisfies ActionItem[])
+      : []),
   ];
 
   return (

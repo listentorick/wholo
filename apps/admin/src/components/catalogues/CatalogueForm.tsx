@@ -122,6 +122,7 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
             key: 'delete',
             label: 'Delete catalogue',
             tone: 'danger',
+            dangerZone: true,
             loading: isDeleting,
             loadingLabel: 'Deleting…',
             onClick: handleDelete,

@@ -71,7 +71,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     setIsActivating(true);
     setActivateError(null);
     try {
-      await adminCustomersApi.update(token, customer.id, { status: TradeRelationshipStatus.ACTIVE });
+      await adminCustomersApi.activate(token, customer.id);
       const email = inviteEmail.trim() || undefined;
       if (email || customer.organisation.email) {
         try { await adminCustomersApi.invite(token, customer.id, email); } catch { /* no email — skip */ }

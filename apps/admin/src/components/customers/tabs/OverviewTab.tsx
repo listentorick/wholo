@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { Customer } from '@wholo/types';
+import { TradeRelationshipStatus, type Customer } from '@wholo/types';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput } from './form-helpers';
 import type { OnTabSaveStateChange } from './tab-save-state';
@@ -85,6 +85,13 @@ export function OverviewTab({ customer, token, onSaved, onSaveStateChange }: Pro
 
   return (
     <div className="space-y-5">
+      {customer.status === TradeRelationshipStatus.PENDING_REQUEST && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <span className="font-medium">Connection request pending</span> — {org.name} wants to connect and order
+          through your catalogue. Review or set up their pricing, delivery, and catalogue access below, then accept
+          to activate the relationship or decline to reject it.
+        </div>
+      )}
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormCard title="Business details">
           <div className="space-y-4">

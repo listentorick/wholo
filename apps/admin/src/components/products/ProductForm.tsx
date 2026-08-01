@@ -517,6 +517,7 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
             key: 'delete',
             label: 'Delete product',
             tone: 'danger',
+            dangerZone: true,
             loading: isDeleting,
             loadingLabel: 'Deleting…',
             onClick: handleDelete,
