@@ -7,6 +7,7 @@ import { CustomerInviteNotificationService } from './customer-invite-notificatio
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationsProcessor } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
+import { TradeRelationshipNotificationService } from './trade-relationship-notification.service';
 
 // Worker-only module: registers the queue processors. Do not import into the
 // API's AppModule — the API process only writes outbox rows (ADR-034/047).
@@ -30,6 +31,7 @@ import { OrderPlacedNotificationService } from './order-placed-notification.serv
   providers: [
     OrderPlacedNotificationService,
     CustomerInviteNotificationService,
+    TradeRelationshipNotificationService,
     NotificationsProcessor,
     NotificationDeliveryProcessor,
     EmailChannelSender,
@@ -39,6 +41,6 @@ import { OrderPlacedNotificationService } from './order-placed-notification.serv
       inject: [EmailChannelSender],
     },
   ],
-  exports: [OrderPlacedNotificationService, CustomerInviteNotificationService],
+  exports: [OrderPlacedNotificationService, CustomerInviteNotificationService, TradeRelationshipNotificationService],
 })
 export class NotificationsModule {}

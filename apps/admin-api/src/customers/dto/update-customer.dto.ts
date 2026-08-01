@@ -1,6 +1,7 @@
-import { IsString, IsOptional, IsEmail, IsDecimal, IsEnum, MinLength } from 'class-validator';
-import { TradeRelationshipStatus } from '@prisma/client';
+import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
 
+// Status is intentionally not editable here — see apps/api's UpdateCustomerDto
+// for why (moves only through the dedicated transition endpoints).
 export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
@@ -14,10 +15,6 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   phone?: string;
-
-  @IsOptional()
-  @IsEnum(TradeRelationshipStatus)
-  status?: TradeRelationshipStatus;
 
   @IsOptional()
   @IsString()

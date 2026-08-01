@@ -12,6 +12,7 @@ import {
   OrderAcceptanceMode,
   AcceptanceModeSource,
   AcceptedByActorType,
+  TradeRelationshipStatus,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -118,6 +119,30 @@ export class OrdersService {
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
+    // Relationship must be ACTIVE to place an order — mirrors cart.service.ts's
+    // add-to-cart guard, so a relationship suspended between "add to cart" and
+    // "submit" (or a stale cart) can't still be converted into a real order.
+    // Also doubles as the single source for the address-snapshot and
+    // acceptance-mode-override data this method needs below.
+    const relationship = await this.prisma.tradeRelationship.findFirst({
+      where: { distributorId: distributor.id, customerId: traderCustomerId, deletedAt: null },
+      select: {
+        status: true,
+        deliveryLine1: true, deliveryLine2: true, deliveryCity: true,
+        deliveryState: true, deliveryPostcode: true, deliveryCountry: true,
+        traderCustomerSettings: { select: { orderAcceptanceModeOverride: true } },
+        customer: {
+          select: {
+            billingLine1: true, billingLine2: true, billingCity: true,
+            billingState: true, billingPostcode: true, billingCountry: true,
+          },
+        },
+      },
+    });
+    if (!relationship || relationship.status !== TradeRelationshipStatus.ACTIVE) {
+      throw new ForbiddenException('No active trade relationship');
+    }
+
     // Load cart
     const cart = await this.prisma.cartOrder.findUnique({
       where: {
@@ -143,7 +168,7 @@ export class OrdersService {
     }
 
     // Resolve acceptance mode
-    const { mode, source } = await this.resolveAcceptanceMode(distributor.id, traderCustomerId);
+    const { mode, source } = await this.resolveAcceptanceMode(distributor.id, relationship.traderCustomerSettings);
 
     // Revalidate requested delivery date against availability
     if (dto.requestedDeliveryDate) {
@@ -155,31 +180,17 @@ export class OrdersService {
     }
 
     // Snapshot addresses: billing from Organisation, delivery from TradeRelationship
-    const tradeRel = await this.prisma.tradeRelationship.findUnique({
-      where: { distributorId_customerId: { distributorId: distributor.id, customerId: traderCustomerId } },
-      select: {
-        deliveryLine1: true, deliveryLine2: true, deliveryCity: true,
-        deliveryState: true, deliveryPostcode: true, deliveryCountry: true,
-        customer: {
-          select: {
-            billingLine1: true, billingLine2: true, billingCity: true,
-            billingState: true, billingPostcode: true, billingCountry: true,
-          },
-        },
-      },
-    });
+    const billingAddressSnapshot = {
+      line1: relationship.customer.billingLine1, line2: relationship.customer.billingLine2,
+      city: relationship.customer.billingCity, state: relationship.customer.billingState,
+      postcode: relationship.customer.billingPostcode, country: relationship.customer.billingCountry,
+    };
 
-    const billingAddressSnapshot = tradeRel ? {
-      line1: tradeRel.customer.billingLine1, line2: tradeRel.customer.billingLine2,
-      city: tradeRel.customer.billingCity, state: tradeRel.customer.billingState,
-      postcode: tradeRel.customer.billingPostcode, country: tradeRel.customer.billingCountry,
-    } : null;
-
-    const deliveryAddressSnapshot = tradeRel ? {
-      line1: tradeRel.deliveryLine1, line2: tradeRel.deliveryLine2,
-      city: tradeRel.deliveryCity, state: tradeRel.deliveryState,
-      postcode: tradeRel.deliveryPostcode, country: tradeRel.deliveryCountry,
-    } : null;
+    const deliveryAddressSnapshot = {
+      line1: relationship.deliveryLine1, line2: relationship.deliveryLine2,
+      city: relationship.deliveryCity, state: relationship.deliveryState,
+      postcode: relationship.deliveryPostcode, country: relationship.deliveryCountry,
+    };
 
     // Compute totals (tax = 0 for Phase 1)
     const lines = cart.lines.map((line) => {
@@ -233,8 +244,8 @@ export class OrdersService {
           subtotalAmount,
           taxAmount,
           totalAmount,
-          billingAddressSnapshot: billingAddressSnapshot ?? Prisma.JsonNull,
-          deliveryAddressSnapshot: deliveryAddressSnapshot ?? Prisma.JsonNull,
+          billingAddressSnapshot,
+          deliveryAddressSnapshot,
           requestedDeliveryDate: dto.requestedDeliveryDate ? new Date(dto.requestedDeliveryDate) : null,
           customerReference: dto.customerReference ?? null,
           notes: dto.notes ?? null,
@@ -444,15 +455,8 @@ export class OrdersService {
 
   private async resolveAcceptanceMode(
     distributorId: string,
-    traderCustomerId: string,
+    customerSettings: { orderAcceptanceModeOverride: OrderAcceptanceMode | null } | null | undefined,
   ): Promise<{ mode: OrderAcceptanceMode; source: AcceptanceModeSource }> {
-    const rel = await this.prisma.tradeRelationship.findUnique({
-      where: { distributorId_customerId: { distributorId, customerId: traderCustomerId } },
-      select: { traderCustomerSettings: { select: { orderAcceptanceModeOverride: true } } },
-    });
-
-    const customerSettings = rel?.traderCustomerSettings;
-
     if (customerSettings?.orderAcceptanceModeOverride) {
       return {
         mode: customerSettings.orderAcceptanceModeOverride,

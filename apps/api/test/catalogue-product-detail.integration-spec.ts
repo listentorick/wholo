@@ -12,7 +12,14 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, ProductStatus, TradeRelationshipStatus, Role } from '@prisma/client';
+import {
+  OrganisationType,
+  ProductStatus,
+  TradeRelationshipStatus,
+  Role,
+  PriceListRuleSelectorType,
+  PriceListRuleValueType,
+} from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
@@ -91,6 +98,9 @@ describe('Catalogue Product Detail (integration)', () => {
     await prisma.catalogueProduct.deleteMany({ where: { catalogue: { distributorId: { in: [DIST_A, DIST_B] } } } });
     await prisma.customerCatalogue.deleteMany({ where: { catalogue: { distributorId: { in: [DIST_A, DIST_B] } } } });
     await prisma.catalogue.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.traderCustomerSettings.deleteMany({ where: { tradeRelationship: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.priceListRule.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.priceList.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: CUSTOMER_USER } });
@@ -105,6 +115,9 @@ describe('Catalogue Product Detail (integration)', () => {
     await prisma.catalogueProduct.deleteMany({ where: { catalogue: { distributorId: { in: [DIST_A, DIST_B] } } } });
     await prisma.customerCatalogue.deleteMany({ where: { catalogue: { distributorId: { in: [DIST_A, DIST_B] } } } });
     await prisma.catalogue.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.traderCustomerSettings.deleteMany({ where: { tradeRelationship: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.priceListRule.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.priceList.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
 
@@ -224,6 +237,40 @@ describe('Catalogue Product Detail (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.imageUrl).toContain('catalogue.webp');
+    });
+
+    it('falls back to public catalogue visibility and default pricing (not the negotiated price list) when the relationship is SUSPENDED', async () => {
+      const priceList = await prisma.priceList.create({
+        data: { distributorId: DIST_A, name: 'Negotiated List', isDefault: false, active: true },
+      });
+      await prisma.priceListRule.create({
+        data: {
+          distributorId: DIST_A,
+          priceListId: priceList.id,
+          selectorType: PriceListRuleSelectorType.PRODUCT,
+          productId: productAId,
+          valueType: PriceListRuleValueType.FIXED_PRICE,
+          unitPrice: 5,
+        },
+      });
+      await prisma.traderCustomerSettings.create({
+        data: { tradeRelationshipId: relationshipId, priceListId: priceList.id },
+      });
+      await prisma.tradeRelationship.update({
+        where: { id: relationshipId },
+        data: { status: TradeRelationshipStatus.SUSPENDED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      // Still visible (public/default browsing, unaffected by SUSPENDED) but the
+      // negotiated $5 fixed price must not leak through — no default price list
+      // exists in this fixture, so the correct fallback is no resolved price at all.
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(productAId);
+      expect(res.body.resolvedPrice).toBeNull();
     });
 
     it('returns imageUrl null when no primary image exists', async () => {

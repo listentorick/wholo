@@ -203,4 +203,92 @@ describe('Customers (integration)', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  describe('POST /api/v1/distributors/:distributorId/customers/:customerId', () => {
+    it('creates a PENDING_REQUEST relationship with the self-declared answer when none exists', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_A}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ recentContact: true });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('PENDING_REQUEST');
+      expect(res.body.recentContactSelfDeclared).toBe(true);
+
+      const row = await prisma.tradeRelationship.findUnique({
+        where: { distributorId_customerId: { distributorId: DIST_Y, customerId: CUSTOMER_A } },
+      });
+      expect(row?.status).toBe(TradeRelationshipStatus.PENDING_REQUEST);
+      expect(row?.recentContactSelfDeclared).toBe(true);
+    });
+
+    it('re-requesting against an INACTIVE relationship flips the same row rather than creating a duplicate', async () => {
+      // Proves the [distributorId, customerId] unique constraint holds independent
+      // of app code — a second create() for this pair is impossible, so the only
+      // way to reach PENDING_REQUEST here is the update-in-place branch.
+      const created = await prisma.tradeRelationship.create({
+        data: { distributorId: DIST_Y, customerId: CUSTOMER_A, status: TradeRelationshipStatus.INACTIVE },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_A}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ recentContact: false });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('PENDING_REQUEST');
+
+      const rows = await prisma.tradeRelationship.findMany({
+        where: { distributorId: DIST_Y, customerId: CUSTOMER_A },
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(created.id);
+      expect(rows[0].status).toBe(TradeRelationshipStatus.PENDING_REQUEST);
+      expect(rows[0].recentContactSelfDeclared).toBe(false);
+    });
+
+    it('returns 403 when the relationship is SUSPENDED, with no customer-triggered reinstatement', async () => {
+      await prisma.tradeRelationship.create({
+        data: { distributorId: DIST_Y, customerId: CUSTOMER_A, status: TradeRelationshipStatus.SUSPENDED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_A}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ recentContact: true });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 409 when the relationship is already ACTIVE', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_X}/customers/${CUSTOMER_A}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ recentContact: true });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('returns 403 when requesting access on behalf of another customer', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_B}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ recentContact: true });
+
+      expect(res.status).toBe(403);
+
+      const row = await prisma.tradeRelationship.findUnique({
+        where: { distributorId_customerId: { distributorId: DIST_Y, customerId: CUSTOMER_B } },
+      });
+      expect(row).toBeNull();
+    });
+
+    it('returns 401 without an Authorization header', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_A}`)
+        .send({ recentContact: true });
+
+      expect(res.status).toBe(401);
+    });
+  });
 });

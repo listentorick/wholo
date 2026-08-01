@@ -9,7 +9,7 @@ import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
-import type { CatalogueProduct, CatalogueProductsResponse } from '@wholo/types';
+import { TradeRelationshipStatus, type CatalogueProduct, type CatalogueProductsResponse } from '@wholo/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -25,7 +25,7 @@ export default function CataloguePage() {
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { quantities, savingItems, adjustQty } = useCart();
-  const { hasRelationship } = useDistributor();
+  const { relationshipStatus } = useDistributor();
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
@@ -205,7 +205,7 @@ export default function CataloguePage() {
                       {formatPrice(product.resolvedPrice ?? product.price)}
                     </span>
 
-                    {hasRelationship === true && (
+                    {relationshipStatus === TradeRelationshipStatus.ACTIVE && (
                       <div className="flex items-center gap-2 mt-2">
                         <button
                           className="stepper-btn"

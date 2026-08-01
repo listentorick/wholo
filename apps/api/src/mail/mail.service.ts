@@ -213,6 +213,125 @@ export class MailService {
     await this.send(to, subject, text, html, 'order-confirmed customer');
   }
 
+  async sendTradeRelationshipRequestAccepted(
+    to: string,
+    params: { distributorName: string; portalUrl: string | null },
+  ): Promise<void> {
+    const { distributorName, portalUrl } = params;
+    const subject = `${headerSafe(distributorName)} accepted your connection request`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `Good news — ${distributorName} has accepted your request to connect.`,
+      ...(portalUrl ? ['', `Browse their catalogue and place an order:`, portalUrl] : []),
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
+        Good news — <strong>${esc(distributorName)}</strong> has accepted your request to connect.
+      </p>
+      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
+    `);
+
+    await this.send(to, subject, text, html, 'trade-relationship request-accepted');
+  }
+
+  async sendTradeRelationshipRequestDeclined(
+    to: string,
+    params: { distributorName: string; portalUrl: string | null },
+  ): Promise<void> {
+    const { distributorName } = params;
+    const subject = `Your request to connect with ${headerSafe(distributorName)}`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `${distributorName} has declined your request to connect. You're welcome to send another request in future.`,
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0;">
+        <strong>${esc(distributorName)}</strong> has declined your request to connect. You're welcome to send another request in future.
+      </p>
+    `);
+
+    await this.send(to, subject, text, html, 'trade-relationship request-declined');
+  }
+
+  async sendTradeRelationshipSuspended(
+    to: string,
+    params: { distributorName: string; portalUrl: string | null },
+  ): Promise<void> {
+    const { distributorName } = params;
+    const subject = `Your account with ${headerSafe(distributorName)} has been suspended`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `${distributorName} has suspended your account. You won't be able to place orders with them until they unsuspend it.`,
+      ``,
+      `If you have questions, contact ${distributorName} directly.`,
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
+        <strong>${esc(distributorName)}</strong> has suspended your account. You won't be able to place orders with them until they unsuspend it.
+      </p>
+      <p style="font-size:13px; color:${BRAND.muted}; text-align:center; margin:0;">If you have questions, contact ${esc(distributorName)} directly.</p>
+    `);
+
+    await this.send(to, subject, text, html, 'trade-relationship suspended');
+  }
+
+  async sendTradeRelationshipUnsuspended(
+    to: string,
+    params: { distributorName: string; portalUrl: string | null },
+  ): Promise<void> {
+    const { distributorName, portalUrl } = params;
+    const subject = `${headerSafe(distributorName)} reactivated your account`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `Good news — ${distributorName} has reactivated your account. You can order with them again.`,
+      ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
+        Good news — <strong>${esc(distributorName)}</strong> has reactivated your account. You can order with them again.
+      </p>
+      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
+    `);
+
+    await this.send(to, subject, text, html, 'trade-relationship unsuspended');
+  }
+
+  async sendTradeRelationshipActivated(
+    to: string,
+    params: { distributorName: string; portalUrl: string | null },
+  ): Promise<void> {
+    const { distributorName, portalUrl } = params;
+    const subject = `${headerSafe(distributorName)} activated your account`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `Good news — ${distributorName} has activated your account. You can now browse their catalogue and place orders.`,
+      ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
+        Good news — <strong>${esc(distributorName)}</strong> has activated your account. You can now browse their catalogue and place orders.
+      </p>
+      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
+    `);
+
+    await this.send(to, subject, text, html, 'trade-relationship activated');
+  }
+
   private async send(to: string, subject: string, text: string, html: string, kind: string): Promise<void> {
     try {
       await this.transporter.sendMail({ from: this.from, to, subject, text, html });

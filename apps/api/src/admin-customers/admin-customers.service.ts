@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -308,7 +309,6 @@ export class AdminCustomersService {
       this.prisma.tradeRelationship.update({
         where: { id },
         data: {
-          ...(dto.status !== undefined && { status: dto.status }),
           ...(dto.accountNumber !== undefined && { accountNumber: dto.accountNumber }),
           ...(dto.creditLimit !== undefined && {
             creditLimit:
@@ -394,6 +394,109 @@ export class AdminCustomersService {
       inviteUrl,
       expiresAt: expiresAt.toISOString(),
     };
+  }
+
+  async acceptRequest(id: string, distributorId: string) {
+    return this.transitionStatus(
+      id, distributorId,
+      TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.ACTIVE,
+      'TradeRelationshipRequestAccepted',
+    );
+  }
+
+  async declineRequest(id: string, distributorId: string) {
+    // INACTIVE, not a hard delete — the customer can request again later
+    // (see the portal's requestAccess, which re-allows a request from INACTIVE).
+    return this.transitionStatus(
+      id, distributorId,
+      TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.INACTIVE,
+      'TradeRelationshipRequestDeclined',
+    );
+  }
+
+  async suspend(id: string, distributorId: string) {
+    return this.transitionStatus(
+      id, distributorId,
+      TradeRelationshipStatus.ACTIVE, TradeRelationshipStatus.SUSPENDED,
+      'TradeRelationshipSuspended',
+    );
+  }
+
+  async unsuspend(id: string, distributorId: string) {
+    return this.transitionStatus(
+      id, distributorId,
+      TradeRelationshipStatus.SUSPENDED, TradeRelationshipStatus.ACTIVE,
+      'TradeRelationshipUnsuspended',
+    );
+  }
+
+  // Admin-initiated activation from the new-customer wizard, bypassing actual
+  // invite acceptance — the distributor is vouching for the customer directly
+  // (e.g. a known contact onboarded by phone), not the customer verifying
+  // their own email. A different trust model than acceptRequest above, so it
+  // gets its own endpoint/event rather than reusing "accepted".
+  async activate(id: string, distributorId: string) {
+    return this.transitionStatus(
+      id, distributorId,
+      TradeRelationshipStatus.PENDING_INVITE, TradeRelationshipStatus.ACTIVE,
+      'TradeRelationshipActivated',
+    );
+  }
+
+  /**
+   * Shared engine for the four admin-triggered status transitions above. The
+   * update is guarded by `status: from` inside the transaction (not a naive
+   * pre-check-then-update) so two concurrent actions on the same relationship
+   * can't both succeed — the loser gets a 422 instead of silently clobbering
+   * the winner's change (admin-orders' accept/reject/cancel has this exact
+   * unguarded race; not repeating it here).
+   */
+  private async transitionStatus(
+    id: string,
+    distributorId: string,
+    from: TradeRelationshipStatus,
+    to: TradeRelationshipStatus,
+    eventType: string,
+  ) {
+    const rel = await this.prisma.tradeRelationship.findFirst({
+      where: { id, distributorId, deletedAt: null },
+      include: {
+        customer: { select: { id: true, name: true, email: true } },
+        distributor: { select: { name: true, slug: true } },
+      },
+    });
+    if (!rel) throw new NotFoundException('Customer not found');
+
+    // No portal link while suspended — nothing to browse. Otherwise, the
+    // distributor's storefront (slug should always be set for a distributor
+    // in practice, but there's no DB constraint enforcing that — fall back
+    // to no link rather than a broken one).
+    const portalUrl =
+      to === TradeRelationshipStatus.SUSPENDED || !rel.distributor.slug
+        ? null
+        : `${this.config.get<string>('PORTAL_URL', 'http://localhost:3010')}/${rel.distributor.slug}`;
+
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.tradeRelationship.updateMany({
+        where: { id, distributorId, status: from },
+        data: { status: to },
+      });
+      if (updated.count === 0) {
+        throw new UnprocessableEntityException(`Customer must be ${from} for this action`);
+      }
+
+      await this.outbox.writeEvent(tx, 'TradeRelationship', id, eventType, {
+        relationshipId: id,
+        distributorId,
+        customerId: rel.customerId,
+        customerName: rel.customer.name,
+        customerEmail: rel.customer.email,
+        distributorName: rel.distributor.name,
+        portalUrl,
+      });
+    });
+
+    return this.findOne(id, distributorId);
   }
 
   private formatCustomer(rel: any) {

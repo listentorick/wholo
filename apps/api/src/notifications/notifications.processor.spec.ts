@@ -2,6 +2,7 @@ import { Job } from 'bullmq';
 import { CustomerInviteNotificationService } from './customer-invite-notification.service';
 import { NotificationsProcessor, OutboxEventJobData } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
+import { TradeRelationshipNotificationService } from './trade-relationship-notification.service';
 
 function makeJob(name: string, payload: unknown = { orderId: 'order-1' }): Job<OutboxEventJobData> {
   return {
@@ -14,13 +15,28 @@ describe('NotificationsProcessor', () => {
   let processor: NotificationsProcessor;
   let orderPlaced: { handleOrderSubmitted: jest.Mock };
   let customerInvite: { handleCustomerInviteSent: jest.Mock };
+  let tradeRelationship: {
+    handleTradeRelationshipRequestAccepted: jest.Mock;
+    handleTradeRelationshipRequestDeclined: jest.Mock;
+    handleTradeRelationshipSuspended: jest.Mock;
+    handleTradeRelationshipUnsuspended: jest.Mock;
+    handleTradeRelationshipActivated: jest.Mock;
+  };
 
   beforeEach(() => {
     orderPlaced = { handleOrderSubmitted: jest.fn().mockResolvedValue(undefined) };
     customerInvite = { handleCustomerInviteSent: jest.fn().mockResolvedValue(undefined) };
+    tradeRelationship = {
+      handleTradeRelationshipRequestAccepted: jest.fn().mockResolvedValue(undefined),
+      handleTradeRelationshipRequestDeclined: jest.fn().mockResolvedValue(undefined),
+      handleTradeRelationshipSuspended: jest.fn().mockResolvedValue(undefined),
+      handleTradeRelationshipUnsuspended: jest.fn().mockResolvedValue(undefined),
+      handleTradeRelationshipActivated: jest.fn().mockResolvedValue(undefined),
+    };
     processor = new NotificationsProcessor(
       orderPlaced as unknown as OrderPlacedNotificationService,
       customerInvite as unknown as CustomerInviteNotificationService,
+      tradeRelationship as unknown as TradeRelationshipNotificationService,
     );
   });
 
@@ -38,9 +54,23 @@ describe('NotificationsProcessor', () => {
     expect(customerInvite.handleCustomerInviteSent).toHaveBeenCalledWith(payload);
   });
 
+  it.each([
+    ['TradeRelationshipRequestAccepted', 'handleTradeRelationshipRequestAccepted'],
+    ['TradeRelationshipRequestDeclined', 'handleTradeRelationshipRequestDeclined'],
+    ['TradeRelationshipSuspended', 'handleTradeRelationshipSuspended'],
+    ['TradeRelationshipUnsuspended', 'handleTradeRelationshipUnsuspended'],
+    ['TradeRelationshipActivated', 'handleTradeRelationshipActivated'],
+  ] as const)('routes %s jobs to %s, passing the outbox event id', async (jobName, handlerName) => {
+    const payload = { relationshipId: 'rel-1', customerEmail: 'buyer@winebar.example' };
+    await processor.process(makeJob(jobName, payload));
+
+    expect(tradeRelationship[handlerName]).toHaveBeenCalledWith(payload, 'evt-1');
+  });
+
   it('completes without a handler for unknown event types (no endless retry)', async () => {
     await expect(processor.process(makeJob('SomethingElse'))).resolves.toBeUndefined();
     expect(orderPlaced.handleOrderSubmitted).not.toHaveBeenCalled();
     expect(customerInvite.handleCustomerInviteSent).not.toHaveBeenCalled();
+    expect(tradeRelationship.handleTradeRelationshipRequestAccepted).not.toHaveBeenCalled();
   });
 });

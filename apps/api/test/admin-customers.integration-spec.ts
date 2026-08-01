@@ -95,15 +95,19 @@ describe('Admin Customers (integration)', () => {
     }
   });
 
-  const createCustomer = async (distributorId: string, name = 'Test Customer') => {
+  const createCustomer = async (
+    distributorId: string,
+    name = 'Test Customer',
+    status: TradeRelationshipStatus = TradeRelationshipStatus.ACTIVE,
+  ) => {
     const org = await prisma.organisation.create({
-      data: { name, type: OrganisationType.TRADE_CUSTOMER },
+      data: { name, type: OrganisationType.TRADE_CUSTOMER, email: 'customer@integration.test' },
     });
     return prisma.tradeRelationship.create({
       data: {
         distributorId,
         customerId: org.id,
-        status: TradeRelationshipStatus.ACTIVE,
+        status,
       },
     });
   };
@@ -276,5 +280,67 @@ describe('Admin Customers (integration)', () => {
       expect(res.status).toBe(200);
       expect(res.body.accountNumber).toBe('ACC-SELF');
     });
+  });
+
+  // ── Status transition actions ───────────────────────────────────────────────
+
+  describe('POST .../accept-request, decline-request, suspend, unsuspend, activate', () => {
+    const cases = [
+      { action: 'accept-request', from: TradeRelationshipStatus.PENDING_REQUEST, to: TradeRelationshipStatus.ACTIVE },
+      { action: 'decline-request', from: TradeRelationshipStatus.PENDING_REQUEST, to: TradeRelationshipStatus.INACTIVE },
+      { action: 'suspend', from: TradeRelationshipStatus.ACTIVE, to: TradeRelationshipStatus.SUSPENDED },
+      { action: 'unsuspend', from: TradeRelationshipStatus.SUSPENDED, to: TradeRelationshipStatus.ACTIVE },
+      { action: 'activate', from: TradeRelationshipStatus.PENDING_INVITE, to: TradeRelationshipStatus.ACTIVE },
+    ] as const;
+
+    for (const { action, from, to } of cases) {
+      it(`${action}: returns 404 and leaves status unchanged when the customer belongs to a different distributor`, async () => {
+        const relB = await createCustomer(DIST_B, 'Other Distributor Customer', from);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}/${action}`)
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(404);
+
+        const inDb = await prisma.tradeRelationship.findUnique({ where: { id: relB.id } });
+        expect(inDb?.status).toBe(from);
+      });
+
+      it(`${action}: transitions ${from} -> ${to} for the correct distributor and records an outbox event`, async () => {
+        const rel = await createCustomer(DIST_A, 'Transition Customer', from);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}/${action}`)
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe(to);
+
+        const inDb = await prisma.tradeRelationship.findUnique({ where: { id: rel.id } });
+        expect(inDb?.status).toBe(to);
+
+        const events = await prisma.outboxEvent.findMany({
+          where: { aggregateType: 'TradeRelationship', aggregateId: rel.id },
+        });
+        expect(events.length).toBeGreaterThan(0);
+      });
+
+      const wrongStatus =
+        from === TradeRelationshipStatus.ACTIVE ? TradeRelationshipStatus.SUSPENDED : TradeRelationshipStatus.ACTIVE;
+
+      it(`${action}: returns 422 and leaves status unchanged when the customer is not currently ${from}`, async () => {
+        const rel = await createCustomer(DIST_A, 'Wrong Status Customer', wrongStatus);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}/${action}`)
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(422);
+
+        const inDb = await prisma.tradeRelationship.findUnique({ where: { id: rel.id } });
+        expect(inDb?.status).toBe(wrongStatus);
+      });
+    }
   });
 });

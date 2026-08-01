@@ -335,6 +335,48 @@ describe('CatalogueService', () => {
 
       expect(result.data[0].resolvedPrice).toBeNull();
     });
+
+    it('queries tradeRelationship with a status ACTIVE filter, not just existence', async () => {
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            distributorId: DISTRIBUTOR_ID,
+            customerId: CUSTOMER_ORG_ID,
+            status: 'ACTIVE',
+          }),
+        }),
+      );
+    });
+
+    it('omits the product-id filter (shows the full active catalogue) when the customer has no ACTIVE relationship', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      const [{ where }] = mockPrisma.product.findMany.mock.calls[0];
+      expect(where.AND[0]).not.toHaveProperty('id');
+    });
+
+    it('restricts to the assigned catalogue product ids when the customer has an ACTIVE relationship', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
+      ]);
+      mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
+      mockPrisma.product.count.mockResolvedValue(1);
+
+      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+
+      const [{ where }] = mockPrisma.product.findMany.mock.calls[0];
+      expect(where.AND[0].id).toEqual({ in: [PRODUCT_ID_1] });
+    });
   });
 
   describe('getProducts with search', () => {
@@ -463,6 +505,34 @@ describe('CatalogueService', () => {
       mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
 
       await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('queries tradeRelationship with a status ACTIVE filter, not just existence', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: RELATIONSHIP_ID });
+      mockPrisma.customerCatalogue.findMany.mockResolvedValue([
+        { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
+      ]);
+
+      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            distributorId: DISTRIBUTOR_ID,
+            customerId: CUSTOMER_ORG_ID,
+            status: 'ACTIVE',
+          }),
+        }),
+      );
+    });
+
+    it('returns the product with public/default visibility when the customer has no ACTIVE relationship', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+      mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
+
+      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+
+      expect(result.id).toBe(PRODUCT_ID_1);
     });
 
     it('returns the correct product by id rather than an arbitrary catalogue entry', async () => {

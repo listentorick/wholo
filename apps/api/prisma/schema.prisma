@@ -88,6 +88,11 @@ enum OutboxEventStatus {
 enum NotificationType {
   ORDER_PLACED
   CUSTOMER_INVITE_SENT
+  TRADE_RELATIONSHIP_REQUEST_ACCEPTED
+  TRADE_RELATIONSHIP_REQUEST_DECLINED
+  TRADE_RELATIONSHIP_SUSPENDED
+  TRADE_RELATIONSHIP_UNSUSPENDED
+  TRADE_RELATIONSHIP_ACTIVATED
 }
 
 enum NotificationChannel {
@@ -407,6 +412,7 @@ model TradeRelationship {
   minimumOrderSpend    Decimal?                @db.Decimal(10, 2)
   paymentTerms         String?
   notes            String?
+  recentContactSelfDeclared Boolean?
   deliveryLine1    String?
   deliveryLine2    String?
   deliveryCity     String?

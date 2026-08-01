@@ -1,7 +1,8 @@
 import { Test } from '@nestjs/testing';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { PortalService } from './portal.service';
 
-const mockApi = { get: jest.fn(), patch: jest.fn() };
+const mockApi = { get: jest.fn(), patch: jest.fn(), post: jest.fn() };
 
 describe('PortalService (portal-api)', () => {
   let service: PortalService;
@@ -100,6 +101,54 @@ describe('PortalService (portal-api)', () => {
       await expect(service.getMyDeliveryAddress('tok-123', 'nope', 'cust-1')).rejects.toThrow(
         'Distributor not found',
       );
+    });
+  });
+
+  describe('getDistributorRelationship', () => {
+    it('resolves the slug then returns the customer record', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockResolvedValueOnce({ id: 'rel-1', status: 'ACTIVE' });
+
+      const result = await service.getDistributorRelationship('tok-123', 'winos', 'cust-1');
+
+      expect(mockApi.get).toHaveBeenNthCalledWith(1, '/distributors/winos', 'tok-123');
+      expect(mockApi.get).toHaveBeenNthCalledWith(2, '/distributors/dist-1/customers/cust-1', 'tok-123');
+      expect(result).toEqual({ id: 'rel-1', status: 'ACTIVE' });
+    });
+
+    it('returns null when the customer has no relationship with the distributor (404)', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockRejectedValueOnce(new HttpException('Customer not found', HttpStatus.NOT_FOUND));
+
+      const result = await service.getDistributorRelationship('tok-123', 'winos', 'cust-1');
+      expect(result).toBeNull();
+    });
+
+    it('propagates a non-404 upstream failure', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockRejectedValueOnce(new HttpException('Forbidden', HttpStatus.FORBIDDEN));
+
+      await expect(service.getDistributorRelationship('tok-123', 'winos', 'cust-1')).rejects.toThrow('Forbidden');
+    });
+  });
+
+  describe('requestDistributorAccess', () => {
+    it('resolves the slug then POSTs the self-declared answer', async () => {
+      mockApi.get.mockResolvedValueOnce({ id: 'dist-1' });
+      mockApi.post.mockResolvedValueOnce({ id: 'rel-1', status: 'PENDING_REQUEST' });
+
+      const result = await service.requestDistributorAccess('tok-123', 'winos', 'cust-1', true);
+
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/winos', 'tok-123');
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/distributors/dist-1/customers/cust-1',
+        'tok-123',
+        { recentContact: true },
+      );
+      expect(result).toEqual({ id: 'rel-1', status: 'PENDING_REQUEST' });
     });
   });
 });

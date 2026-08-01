@@ -14,7 +14,7 @@ import {
 import {
   ApiParam, ApiTags, ApiOperation, ApiBearerAuth,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse,
-  ApiNotFoundResponse, ApiBadRequestResponse,
+  ApiNotFoundResponse, ApiBadRequestResponse, ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
@@ -109,5 +109,70 @@ export class AdminCustomersController {
     @Body() body: { email?: string },
   ) {
     return this.service.invite(id, distributorId, body.email);
+  }
+
+  @Post('customers/:id/accept-request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept a pending connection request from a trade customer' })
+  @ApiOkResponse({ description: 'Customer accepted' })
+  @ApiNotFoundResponse({ description: 'Customer not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Customer does not have a pending request' })
+  acceptRequest(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.acceptRequest(id, distributorId);
+  }
+
+  @Post('customers/:id/decline-request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decline a pending connection request from a trade customer' })
+  @ApiOkResponse({ description: 'Request declined' })
+  @ApiNotFoundResponse({ description: 'Customer not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Customer does not have a pending request' })
+  declineRequest(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.declineRequest(id, distributorId);
+  }
+
+  @Post('customers/:id/suspend')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suspend an active trade customer' })
+  @ApiOkResponse({ description: 'Customer suspended' })
+  @ApiNotFoundResponse({ description: 'Customer not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Customer is not active' })
+  suspend(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.suspend(id, distributorId);
+  }
+
+  @Post('customers/:id/unsuspend')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Unsuspend a suspended trade customer' })
+  @ApiOkResponse({ description: 'Customer unsuspended' })
+  @ApiNotFoundResponse({ description: 'Customer not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Customer is not suspended' })
+  unsuspend(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.unsuspend(id, distributorId);
+  }
+
+  @Post('customers/:id/activate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin-activate a customer directly from pending invite (new-customer wizard)' })
+  @ApiOkResponse({ description: 'Customer activated' })
+  @ApiNotFoundResponse({ description: 'Customer not found' })
+  @ApiUnprocessableEntityResponse({ description: 'Customer is not pending invite' })
+  activate(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.activate(id, distributorId);
   }
 }

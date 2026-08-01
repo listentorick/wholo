@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { useDistributor } from '@/lib/distributor-context';
+import { useDistributor, connectCtaKind, type RelationshipStatus } from '@/lib/distributor-context';
 import { useDeliveryParts } from '@/lib/hooks/use-delivery-parts';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { TruckIcon } from '@/components/DistributorPageHeader';
-import type { DistributorInfo } from '@wholo/types';
+import { RelationshipStatusBadge } from '@/components/RelationshipStatusBadge';
+import { ConnectConfirmationModal } from '@/components/ConnectConfirmationModal';
+import { TradeRelationshipStatus, type DistributorInfo } from '@wholo/types';
 
 function MapPinIcon() {
   return (
@@ -104,25 +107,34 @@ function StatTile({ value, label }: { value: string; label: string }) {
 
 function KeyInfo({
   distributor,
-  hasRelationship,
+  relationshipStatus,
   effectiveMinSpend,
   distributorSlug,
   accessToken,
   className = '',
 }: {
   distributor: DistributorInfo;
-  hasRelationship: boolean | null;
+  relationshipStatus: RelationshipStatus | null;
   effectiveMinSpend: number | null;
   distributorSlug: string;
   accessToken: string | null;
   className?: string;
 }) {
-  const deliveryParts = useDeliveryParts(distributorSlug, accessToken, { enabled: hasRelationship === true });
+  const { requestAccess } = useDistributor();
+  const [showConfirm, setShowConfirm] = useState(false);
+  const deliveryParts = useDeliveryParts(distributorSlug, accessToken, {
+    enabled: relationshipStatus === TradeRelationshipStatus.ACTIVE,
+  });
+
+  async function handleConfirm(recentContact: boolean) {
+    await requestAccess(recentContact);
+    setShowConfirm(false);
+  }
 
   const hasCustomerStat = distributor.customerCount > 0;
   const hasMinSpendStat = effectiveMinSpend !== null;
   const hasStats = hasCustomerStat || hasMinSpendStat;
-  const showCta = hasRelationship === false;
+  const ctaKind = connectCtaKind(relationshipStatus);
 
   return (
     <div className={`bg-surface-highlight p-6 ${className}`}>
@@ -148,15 +160,36 @@ function KeyInfo({
         </div>
       )}
 
-      {showCta && (
+      {ctaKind === 'connect' && (
         <div className={hasStats ? 'mt-4' : ''}>
           <button
             className="w-full bg-accent text-white px-6 py-2.5 text-sm font-medium hover:bg-accent-hover transition-colors"
-            onClick={() => {}}
+            onClick={() => setShowConfirm(true)}
           >
             Connect with this business
           </button>
         </div>
+      )}
+
+      {ctaKind === 'pending' && (
+        <div className={hasStats ? 'mt-4' : ''}>
+          <RelationshipStatusBadge label="Pending" tone="yellow" />
+        </div>
+      )}
+
+      {ctaKind === 'suspended' && (
+        <div className={`flex flex-col gap-1.5 ${hasStats ? 'mt-4' : ''}`}>
+          <RelationshipStatusBadge label="Suspended" tone="red" />
+          <p className="text-xs text-muted">Suspended — contact this wholesaler</p>
+        </div>
+      )}
+
+      {showConfirm && (
+        <ConnectConfirmationModal
+          distributorName={distributor.name}
+          onConfirm={handleConfirm}
+          onClose={() => setShowConfirm(false)}
+        />
       )}
     </div>
   );
@@ -168,7 +201,7 @@ export default function DistributorHomePage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { distributor, hasRelationship, relationshipMinSpend } = useDistributor();
+  const { distributor, relationshipStatus, relationshipMinSpend } = useDistributor();
 
   if (isLoading) {
     return (
@@ -187,13 +220,14 @@ export default function DistributorHomePage() {
   );
 
   const effectiveMinSpend =
-    hasRelationship === true
+    relationshipStatus === TradeRelationshipStatus.ACTIVE
       ? relationshipMinSpend
-      : hasRelationship === false
+      : relationshipStatus != null
         ? (distributor?.minimumOrderSpend ?? null)
         : null;
+  const ctaKind = connectCtaKind(relationshipStatus);
   const hasKeyInfo = distributor != null && (
-    distributor.customerCount > 0 || effectiveMinSpend !== null || hasRelationship === false
+    distributor.customerCount > 0 || effectiveMinSpend !== null || ctaKind !== null
   );
 
   const hasSidebar = hasKeyInfo || hasContact;
@@ -226,7 +260,7 @@ export default function DistributorHomePage() {
             {distributor && hasKeyInfo && (
               <KeyInfo
                 distributor={distributor}
-                hasRelationship={hasRelationship}
+                relationshipStatus={relationshipStatus}
                 effectiveMinSpend={effectiveMinSpend}
                 distributorSlug={distributorSlug}
                 accessToken={accessToken}

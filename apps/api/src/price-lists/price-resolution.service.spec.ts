@@ -71,7 +71,7 @@ const pctPriceListRuleForProduct = (productId: string, basePriceListId: string, 
 });
 
 const mockPrisma = {
-  tradeRelationship: { findUnique: jest.fn() },
+  tradeRelationship: { findFirst: jest.fn() },
   priceList: { findFirst: jest.fn() },
   priceListRule: { findMany: jest.fn() },
   product: { findUnique: jest.fn(), findMany: jest.fn() },
@@ -92,7 +92,7 @@ describe('PriceResolutionService', () => {
     jest.clearAllMocks();
 
     // Sensible defaults — override in each test as needed
-    mockPrisma.tradeRelationship.findUnique.mockResolvedValue(null);
+    mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
     mockPrisma.priceList.findFirst.mockResolvedValue({ id: PRICE_LIST_ID });
     mockPrisma.priceListRule.findMany.mockResolvedValue([]);
     mockPrisma.product.findUnique.mockResolvedValue(null);
@@ -103,7 +103,7 @@ describe('PriceResolutionService', () => {
 
   describe('resolvePriceListId', () => {
     it('returns customer-specific price list when relationship has one assigned', async () => {
-      mockPrisma.tradeRelationship.findUnique.mockResolvedValue({
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({
         traderCustomerSettings: { priceListId: 'customer-pl' },
       });
       const result = await service.resolvePriceListId(DISTRIBUTOR_ID, CUSTOMER_ID);
@@ -112,7 +112,7 @@ describe('PriceResolutionService', () => {
     });
 
     it('falls back to default price list when no customer-specific list assigned', async () => {
-      mockPrisma.tradeRelationship.findUnique.mockResolvedValue({
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({
         traderCustomerSettings: { priceListId: null },
       });
       mockPrisma.priceList.findFirst.mockResolvedValue({ id: PRICE_LIST_ID });
@@ -124,6 +124,28 @@ describe('PriceResolutionService', () => {
       mockPrisma.priceList.findFirst.mockResolvedValue(null);
       const result = await service.resolvePriceListId(DISTRIBUTOR_ID, CUSTOMER_ID);
       expect(result).toBeNull();
+    });
+
+    it('queries the relationship with a status ACTIVE filter, not just existence', async () => {
+      await service.resolvePriceListId(DISTRIBUTOR_ID, CUSTOMER_ID);
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            distributorId: DISTRIBUTOR_ID,
+            customerId: CUSTOMER_ID,
+            status: 'ACTIVE',
+          }),
+        }),
+      );
+    });
+
+    it('falls back to the default price list when the relationship is not ACTIVE (e.g. suspended)', async () => {
+      // A SUSPENDED relationship is excluded by the query's status filter, so the
+      // DB returns null here exactly as it would for "no relationship at all".
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+      mockPrisma.priceList.findFirst.mockResolvedValue({ id: PRICE_LIST_ID });
+      const result = await service.resolvePriceListId(DISTRIBUTOR_ID, CUSTOMER_ID);
+      expect(result).toBe(PRICE_LIST_ID);
     });
   });
 
@@ -265,7 +287,7 @@ describe('PriceResolutionService', () => {
     it('returns empty Map immediately without DB calls when productIds is empty', async () => {
       const result = await service.resolvePricesForProducts(DISTRIBUTOR_ID, CUSTOMER_ID, []);
       expect(result.size).toBe(0);
-      expect(mockPrisma.tradeRelationship.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.tradeRelationship.findFirst).not.toHaveBeenCalled();
       expect(mockPrisma.priceListRule.findMany).not.toHaveBeenCalled();
     });
 

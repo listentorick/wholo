@@ -43,6 +43,26 @@ export class CustomersService {
     return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/invite`, token, { email });
   }
 
+  acceptRequest(id: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/accept-request`, token);
+  }
+
+  declineRequest(id: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/decline-request`, token);
+  }
+
+  suspend(id: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/suspend`, token);
+  }
+
+  unsuspend(id: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/unsuspend`, token);
+  }
+
+  activate(id: string, distributorId: string, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/activate`, token);
+  }
+
   getCatalogues(id: string, distributorId: string, token: string) {
     return this.api.get(`/admin/distributors/${distributorId}/trade-relationships/${id}/catalogues`, token);
   }

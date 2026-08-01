@@ -494,6 +494,7 @@ export interface Customer {
   minimumOrderSpend: string | null;
   paymentTerms: string | null;
   notes: string | null;
+  recentContactSelfDeclared: boolean | null;
   deliveryLine1: string | null;
   deliveryLine2: string | null;
   deliveryCity: string | null;
@@ -573,9 +574,9 @@ export interface CreateCustomerRequest {
   billingCountry?: string;
 }
 
-export type UpdateCustomerRequest = Partial<CreateCustomerRequest> & {
-  status?: TradeRelationshipStatus;
-};
+// Status is not settable here — it moves only through the dedicated
+// accept-request/decline-request/suspend/unsuspend actions on adminCustomersApi.
+export type UpdateCustomerRequest = Partial<CreateCustomerRequest>;
 
 export interface InviteResponse {
   inviteUrl: string;

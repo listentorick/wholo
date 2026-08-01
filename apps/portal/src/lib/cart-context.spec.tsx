@@ -56,7 +56,7 @@ beforeEach(() => {
     user: { id: 'user-1' },
     accessToken: 'test-token',
   });
-  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: true });
+  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
   (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [] });
   (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [] });
 });

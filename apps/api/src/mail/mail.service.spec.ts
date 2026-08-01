@@ -132,6 +132,92 @@ describe('MailService — order emails', () => {
   });
 });
 
+describe('MailService — trade-relationship emails', () => {
+  let service: MailService;
+  let sendMail: jest.Mock;
+
+  beforeEach(() => {
+    sendMail = jest.fn().mockResolvedValue({});
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+    } as unknown as ConfigService;
+
+    service = new MailService(config);
+  });
+
+  it('sendTradeRelationshipRequestAccepted includes a catalogue link when a portal URL is given', async () => {
+    await service.sendTradeRelationshipRequestAccepted('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      portalUrl: 'http://localhost:3010/vinos-direct',
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe('Vinos Direct accepted your connection request');
+    expect(mail.html).toContain('http://localhost:3010/vinos-direct');
+    expect(mail.text).toContain('http://localhost:3010/vinos-direct');
+  });
+
+  it('sendTradeRelationshipRequestDeclined omits a link and does not blame the customer', async () => {
+    await service.sendTradeRelationshipRequestDeclined('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      portalUrl: null,
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe('Your request to connect with Vinos Direct');
+    expect(mail.text).toContain('welcome to send another request');
+  });
+
+  it('sendTradeRelationshipSuspended never includes a portal link, even if one were passed', async () => {
+    await service.sendTradeRelationshipSuspended('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      portalUrl: 'http://localhost:3010/vinos-direct',
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe('Your account with Vinos Direct has been suspended');
+    // The mail method itself doesn't render a button for this event regardless
+    // of payload — the "no browsing while suspended" rule is enforced at the
+    // point the payload is built (admin-customers.service.ts), this just checks
+    // the template doesn't independently add one back.
+    expect(mail.html).not.toContain('View catalogue');
+  });
+
+  it('sendTradeRelationshipUnsuspended includes a catalogue link when a portal URL is given', async () => {
+    await service.sendTradeRelationshipUnsuspended('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      portalUrl: 'http://localhost:3010/vinos-direct',
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe('Vinos Direct reactivated your account');
+    expect(mail.html).toContain('http://localhost:3010/vinos-direct');
+  });
+
+  it('sendTradeRelationshipActivated includes a catalogue link when a portal URL is given', async () => {
+    await service.sendTradeRelationshipActivated('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      portalUrl: 'http://localhost:3010/vinos-direct',
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.subject).toBe('Vinos Direct activated your account');
+    expect(mail.html).toContain('http://localhost:3010/vinos-direct');
+  });
+
+  it('omits the catalogue button across all four link-eligible emails when portalUrl is null', async () => {
+    await service.sendTradeRelationshipRequestAccepted('a@b.example', { distributorName: 'X', portalUrl: null });
+    await service.sendTradeRelationshipUnsuspended('a@b.example', { distributorName: 'X', portalUrl: null });
+    await service.sendTradeRelationshipActivated('a@b.example', { distributorName: 'X', portalUrl: null });
+
+    for (const call of sendMail.mock.calls) {
+      expect(call[0].html).not.toContain('View catalogue');
+    }
+  });
+});
+
 describe('MailService — invite from-address', () => {
   let sendMail: jest.Mock;
 

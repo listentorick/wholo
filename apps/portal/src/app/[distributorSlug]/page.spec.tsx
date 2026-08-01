@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import DistributorHomePage from './page';
 import type { DistributorInfo } from '@wholo/types';
@@ -45,20 +45,26 @@ const baseDistributor: DistributorInfo = {
 
 let mockDistributorValue: {
   distributor: DistributorInfo | null;
-  hasRelationship: boolean | null;
+  relationshipStatus: string | null;
   relationshipMinSpend: number | null;
+  requestAccess: (recentContact: boolean) => Promise<void>;
 };
 
-vi.mock('@/lib/distributor-context', () => ({
-  useDistributor: () => mockDistributorValue,
-}));
+vi.mock('@/lib/distributor-context', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/distributor-context')>('@/lib/distributor-context');
+  return {
+    ...actual,
+    useDistributor: () => mockDistributorValue,
+  };
+});
 
 beforeEach(() => {
   mockDeliveryParts = null;
   mockDistributorValue = {
     distributor: baseDistributor,
-    hasRelationship: false,
+    relationshipStatus: 'NONE',
     relationshipMinSpend: null,
+    requestAccess: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -78,7 +84,7 @@ describe('DistributorHomePage — Key Info', () => {
 
   it('shows the distributor default minimum order value pre-relationship', () => {
     mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: 150 };
-    mockDistributorValue.hasRelationship = false;
+    mockDistributorValue.relationshipStatus = 'NONE';
     render(<DistributorHomePage />);
     expect(screen.getByText('£150.00')).toBeInTheDocument();
     expect(screen.getByText('minimum order')).toBeInTheDocument();
@@ -86,7 +92,7 @@ describe('DistributorHomePage — Key Info', () => {
 
   it('shows the relationship-specific minimum order value once connected', () => {
     mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: 150, customerCount: 1 };
-    mockDistributorValue.hasRelationship = true;
+    mockDistributorValue.relationshipStatus = 'ACTIVE';
     mockDistributorValue.relationshipMinSpend = 75;
     render(<DistributorHomePage />);
     expect(screen.getByText('£75.00')).toBeInTheDocument();
@@ -100,7 +106,7 @@ describe('DistributorHomePage — Key Info', () => {
 
   it('shows delivery info only when a relationship exists', () => {
     mockDistributorValue.distributor = { ...baseDistributor, customerCount: 1 };
-    mockDistributorValue.hasRelationship = true;
+    mockDistributorValue.relationshipStatus = 'ACTIVE';
     mockDeliveryParts = { time: '6:00pm', cutoffDayLabel: 'today', dayName: 'Wednesday', dayOrdinal: '30th' };
     render(<DistributorHomePage />);
     expect(screen.getByText(/Order by/)).toBeInTheDocument();
@@ -108,35 +114,84 @@ describe('DistributorHomePage — Key Info', () => {
 
   it('does not show delivery info pre-relationship', () => {
     mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: 100 };
-    mockDistributorValue.hasRelationship = false;
+    mockDistributorValue.relationshipStatus = 'NONE';
     mockDeliveryParts = null;
     render(<DistributorHomePage />);
     expect(screen.queryByText(/Order by/)).toBeNull();
   });
 
   it('shows the "Connect with this business" CTA pre-relationship', () => {
-    mockDistributorValue.hasRelationship = false;
+    mockDistributorValue.relationshipStatus = 'NONE';
     render(<DistributorHomePage />);
     expect(screen.getByRole('button', { name: 'Connect with this business' })).toBeInTheDocument();
   });
 
   it('hides the CTA once a relationship exists', () => {
     mockDistributorValue.distributor = { ...baseDistributor, customerCount: 1 };
-    mockDistributorValue.hasRelationship = true;
+    mockDistributorValue.relationshipStatus = 'ACTIVE';
     render(<DistributorHomePage />);
     expect(screen.queryByRole('button', { name: 'Connect with this business' })).toBeNull();
   });
 
   it('does not render a fixed floating CTA bar (moved into Key Info)', () => {
-    mockDistributorValue.hasRelationship = false;
+    mockDistributorValue.relationshipStatus = 'NONE';
     const { container } = render(<DistributorHomePage />);
     expect(container.querySelector('.fixed')).toBeNull();
   });
 
   it('hides Key Info entirely when there is nothing to show', () => {
     mockDistributorValue.distributor = { ...baseDistributor, customerCount: 0, minimumOrderSpend: null };
-    mockDistributorValue.hasRelationship = true;
+    mockDistributorValue.relationshipStatus = 'ACTIVE';
     render(<DistributorHomePage />);
     expect(screen.queryByText('Key Info')).toBeNull();
+  });
+
+  it('shows a locked Pending badge instead of the CTA when a request is pending', () => {
+    mockDistributorValue.relationshipStatus = 'PENDING_REQUEST';
+    render(<DistributorHomePage />);
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect with this business' })).toBeNull();
+  });
+
+  it('shows a locked Suspended message with no CTA when suspended', () => {
+    mockDistributorValue.relationshipStatus = 'SUSPENDED';
+    render(<DistributorHomePage />);
+    expect(screen.getByText('Suspended')).toBeInTheDocument();
+    expect(screen.getByText('Suspended — contact this wholesaler')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect with this business' })).toBeNull();
+  });
+
+  it('opens the confirmation modal when the Connect CTA is clicked', () => {
+    mockDistributorValue.distributor = { ...baseDistributor, name: 'Winos Co' };
+    mockDistributorValue.relationshipStatus = 'NONE';
+    render(<DistributorHomePage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with this business' }));
+    expect(
+      screen.getByText('Have you spoken with or ordered from Winos Co in the last 90 days?'),
+    ).toBeInTheDocument();
+  });
+
+  it('calls requestAccess with the answer and closes the modal on success', async () => {
+    mockDistributorValue.relationshipStatus = 'NONE';
+    render(<DistributorHomePage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with this business' }));
+    fireEvent.click(screen.getByRole('button', { name: /Yes, we're already in touch/ }));
+
+    await waitFor(() => expect(mockDistributorValue.requestAccess).toHaveBeenCalledWith(true));
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Have you spoken with or ordered from Winos in the last 90 days?'),
+      ).toBeNull(),
+    );
+  });
+
+  it('does not create a request when the modal is dismissed without answering', () => {
+    mockDistributorValue.relationshipStatus = 'NONE';
+    render(<DistributorHomePage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect with this business' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(mockDistributorValue.requestAccess).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Have you spoken with or ordered from/)).toBeNull();
   });
 });

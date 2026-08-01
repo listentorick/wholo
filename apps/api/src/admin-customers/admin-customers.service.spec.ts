@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { OrganisationType, TradeRelationshipStatus, InvitationStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { AdminCustomersService } from './admin-customers.service';
@@ -15,6 +15,7 @@ const mockPrisma = {
     count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   },
   organisation: {
     create: jest.fn(),
@@ -67,6 +68,7 @@ const makeRel = (overrides = {}) => ({
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   customer: makeOrg(),
+  distributor: { name: 'Acme Distributor', slug: 'acme' },
   invitations: [],
   traderCustomerSettings: null,
   catalogues: [],
@@ -532,6 +534,111 @@ describe('AdminCustomersService', () => {
         makeRel({ customer: makeOrg({ email: null }) }),
       );
       await expect(service.invite('rel-1', 'dist-1')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── status transitions: acceptRequest / declineRequest / suspend / unsuspend / activate ──
+
+  type TransitionMethod = 'acceptRequest' | 'declineRequest' | 'suspend' | 'unsuspend' | 'activate';
+
+  const transitions: {
+    method: TransitionMethod;
+    from: TradeRelationshipStatus;
+    to: TradeRelationshipStatus;
+    eventType: string;
+  }[] = [
+    { method: 'acceptRequest', from: TradeRelationshipStatus.PENDING_REQUEST, to: TradeRelationshipStatus.ACTIVE, eventType: 'TradeRelationshipRequestAccepted' },
+    { method: 'declineRequest', from: TradeRelationshipStatus.PENDING_REQUEST, to: TradeRelationshipStatus.INACTIVE, eventType: 'TradeRelationshipRequestDeclined' },
+    { method: 'suspend', from: TradeRelationshipStatus.ACTIVE, to: TradeRelationshipStatus.SUSPENDED, eventType: 'TradeRelationshipSuspended' },
+    { method: 'unsuspend', from: TradeRelationshipStatus.SUSPENDED, to: TradeRelationshipStatus.ACTIVE, eventType: 'TradeRelationshipUnsuspended' },
+    { method: 'activate', from: TradeRelationshipStatus.PENDING_INVITE, to: TradeRelationshipStatus.ACTIVE, eventType: 'TradeRelationshipActivated' },
+  ];
+
+  function callTransition(method: TransitionMethod, id: string, distributorId: string) {
+    return (service[method] as (id: string, distributorId: string) => Promise<unknown>)(id, distributorId);
+  }
+
+  describe('status transition actions', () => {
+    beforeEach(() => {
+      mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({ tradeRelationship: { updateMany: mockPrisma.tradeRelationship.updateMany } }),
+      );
+    });
+
+    for (const { method, from, to, eventType } of transitions) {
+      it(`${method}: transitions ${from} -> ${to}, writing the outbox event with a status-guarded update`, async () => {
+        mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+          makeRel({ status: from, customer: makeOrg({ email: 'buyer@winebar.example' }) }),
+        );
+        mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
+
+        const result: any = await callTransition(method, 'rel-1', 'dist-1');
+
+        expect(result.id).toBe('rel-1');
+        // Guarded by `status: from` in the same query — this is what closes the
+        // lost-update race admin-orders' accept/reject/cancel doesn't guard against.
+        expect(mockPrisma.tradeRelationship.updateMany).toHaveBeenCalledWith({
+          where: { id: 'rel-1', distributorId: 'dist-1', status: from },
+          data: { status: to },
+        });
+        expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+          expect.anything(),
+          'TradeRelationship',
+          'rel-1',
+          eventType,
+          expect.objectContaining({
+            relationshipId: 'rel-1',
+            distributorId: 'dist-1',
+            customerEmail: 'buyer@winebar.example',
+          }),
+        );
+      });
+
+      it(`${method}: throws UnprocessableEntityException when the relationship is not currently ${from}`, async () => {
+        mockPrisma.tradeRelationship.findFirst.mockResolvedValue(makeRel({ status: from }));
+        // Guard fails — another request already moved it, or it was never in `from`.
+        mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 0 });
+
+        await expect(callTransition(method, 'rel-1', 'dist-1')).rejects.toThrow(UnprocessableEntityException);
+      });
+
+      it(`${method}: throws NotFoundException for a relationship belonging to a different distributor`, async () => {
+        mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
+        await expect(callTransition(method, 'rel-1', 'dist-2')).rejects.toThrow(NotFoundException);
+        expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      });
+    }
+
+    it('omits the portal link when suspending (nothing to browse while suspended)', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({ status: TradeRelationshipStatus.ACTIVE, customer: makeOrg({ email: 'buyer@winebar.example' }) }),
+      );
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.suspend('rel-1', 'dist-1');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipSuspended',
+        expect.objectContaining({ portalUrl: null }),
+      );
+    });
+
+    it('includes a portal link (distributor slug) when accepting a request', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({
+          status: TradeRelationshipStatus.PENDING_REQUEST,
+          customer: makeOrg({ email: 'buyer@winebar.example' }),
+          distributor: { name: 'Acme Distributor', slug: 'acme' },
+        }),
+      );
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.acceptRequest('rel-1', 'dist-1');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipRequestAccepted',
+        expect.objectContaining({ portalUrl: 'http://portal.test/acme' }),
+      );
     });
   });
 });

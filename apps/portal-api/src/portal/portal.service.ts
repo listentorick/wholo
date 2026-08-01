@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import type { CustomerSelfView, MyDeliveryAddressResponse } from '@wholo/types';
 import { ApiClientService } from '../api-client/api-client.service';
 
@@ -39,5 +39,36 @@ export class PortalService {
     };
     const hasAddress = Object.values(address).some(Boolean);
     return { deliveryAddress: hasAddress ? address : null };
+  }
+
+  async getDistributorRelationship(
+    token: string,
+    distributorSlug: string,
+    customerId: string,
+  ): Promise<CustomerSelfView | null> {
+    const distributor = await this.api.get<{ id: string }>(`/distributors/${distributorSlug}`, token);
+    try {
+      return await this.api.get<CustomerSelfView>(
+        `/distributors/${distributor.id}/customers/${customerId}`,
+        token,
+      );
+    } catch (e) {
+      if (e instanceof HttpException && e.getStatus() === HttpStatus.NOT_FOUND) return null;
+      throw e;
+    }
+  }
+
+  async requestDistributorAccess(
+    token: string,
+    distributorSlug: string,
+    customerId: string,
+    recentContact: boolean,
+  ): Promise<CustomerSelfView> {
+    const distributor = await this.api.get<{ id: string }>(`/distributors/${distributorSlug}`, token);
+    return this.api.post<CustomerSelfView>(
+      `/distributors/${distributor.id}/customers/${customerId}`,
+      token,
+      { recentContact },
+    );
   }
 }

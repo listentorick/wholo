@@ -24,6 +24,11 @@ export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
 export const EVENT_ROUTES: Record<string, string[]> = {
   OrderSubmitted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   CustomerInviteSent: [NOTIFICATIONS_QUEUE],
+  TradeRelationshipRequestAccepted: [NOTIFICATIONS_QUEUE],
+  TradeRelationshipRequestDeclined: [NOTIFICATIONS_QUEUE],
+  TradeRelationshipSuspended: [NOTIFICATIONS_QUEUE],
+  TradeRelationshipUnsuspended: [NOTIFICATIONS_QUEUE],
+  TradeRelationshipActivated: [NOTIFICATIONS_QUEUE],
   OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE, ANALYTICS_FACTS_QUEUE],
   OrderRejected: [ANALYTICS_FACTS_QUEUE],
   OrderCancelled: [ANALYTICS_FACTS_QUEUE],

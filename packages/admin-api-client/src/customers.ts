@@ -58,4 +58,24 @@ export const adminCustomersApi = {
       token,
     });
   },
+
+  acceptRequest(token: string, id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/accept-request`, { method: 'POST', token });
+  },
+
+  declineRequest(token: string, id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/decline-request`, { method: 'POST', token });
+  },
+
+  suspend(token: string, id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/suspend`, { method: 'POST', token });
+  },
+
+  unsuspend(token: string, id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/unsuspend`, { method: 'POST', token });
+  },
+
+  activate(token: string, id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/activate`, { method: 'POST', token });
+  },
 };

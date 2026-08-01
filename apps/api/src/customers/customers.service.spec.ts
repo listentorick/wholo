@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CustomersService } from './customers.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -47,7 +47,12 @@ describe('CustomersService', () => {
   beforeEach(async () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
-      tradeRelationship: { findFirst: jest.fn() },
+      tradeRelationship: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -105,5 +110,72 @@ describe('CustomersService', () => {
     (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
 
     await expect(service.getSelfView('dist-1', 'cust-1')).rejects.toThrow(NotFoundException);
+  });
+
+  describe('requestAccess', () => {
+    beforeEach(() => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(relRow);
+    });
+
+    it('throws NotFoundException when the distributor does not exist', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
+      await expect(service.requestAccess('nope', 'cust-1', true)).rejects.toThrow(NotFoundException);
+    });
+
+    it('creates a PENDING_REQUEST relationship with the self-declared answer when none exists', async () => {
+      (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await service.requestAccess('dist-1', 'cust-1', true);
+
+      expect(prisma.tradeRelationship.create).toHaveBeenCalledWith({
+        data: {
+          distributorId: 'dist-1',
+          customerId: 'cust-1',
+          status: 'PENDING_REQUEST',
+          recentContactSelfDeclared: true,
+        },
+      });
+      expect(prisma.tradeRelationship.update).not.toHaveBeenCalled();
+    });
+
+    it('re-requesting flips an INACTIVE relationship back to PENDING_REQUEST, overwriting the prior answer', async () => {
+      (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({ id: 'rel-1', status: 'INACTIVE' });
+
+      await service.requestAccess('dist-1', 'cust-1', false);
+
+      expect(prisma.tradeRelationship.update).toHaveBeenCalledWith({
+        where: { id: 'rel-1' },
+        data: { status: 'PENDING_REQUEST', recentContactSelfDeclared: false },
+      });
+      expect(prisma.tradeRelationship.create).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when the relationship is SUSPENDED, with no customer-triggered reinstatement', async () => {
+      (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({ id: 'rel-1', status: 'SUSPENDED' });
+
+      await expect(service.requestAccess('dist-1', 'cust-1', true)).rejects.toThrow(ForbiddenException);
+      expect(prisma.tradeRelationship.create).not.toHaveBeenCalled();
+      expect(prisma.tradeRelationship.update).not.toHaveBeenCalled();
+    });
+
+    it.each(['ACTIVE', 'PENDING_INVITE', 'PENDING_REQUEST'])(
+      'throws ConflictException when the relationship is already %s',
+      async (status) => {
+        (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue({ id: 'rel-1', status });
+
+        await expect(service.requestAccess('dist-1', 'cust-1', true)).rejects.toThrow(ConflictException);
+        expect(prisma.tradeRelationship.create).not.toHaveBeenCalled();
+        expect(prisma.tradeRelationship.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('returns the self view after a successful request', async () => {
+      (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.requestAccess('dist-1', 'cust-1', true);
+
+      expect(result).toMatchObject({ id: 'rel-1', status: 'ACTIVE' });
+    });
   });
 });

@@ -1,4 +1,4 @@
-import type { MyDeliveryAddressResponse, MyProfileResponse, PortalDistributorSummary } from '@wholo/types';
+import type { CustomerSelfView, MyDeliveryAddressResponse, MyProfileResponse, PortalDistributorSummary } from '@wholo/types';
 import { apiFetch } from './base';
 
 export const portalApi = {
@@ -25,5 +25,30 @@ export const portalApi = {
       body: JSON.stringify(body),
       token,
     });
+  },
+
+  getDistributorRelationship(
+    distributorSlug: string,
+    customerId: string,
+    token: string,
+  ): Promise<CustomerSelfView | null> {
+    const params = new URLSearchParams({ customerId });
+    return apiFetch<CustomerSelfView | null>(
+      `/api/v1/portal/me/distributors/${distributorSlug}/relationship?${params}`,
+      { token },
+    );
+  },
+
+  requestDistributorAccess(
+    distributorSlug: string,
+    customerId: string,
+    recentContact: boolean,
+    token: string,
+  ): Promise<CustomerSelfView> {
+    const params = new URLSearchParams({ customerId });
+    return apiFetch<CustomerSelfView>(
+      `/api/v1/portal/me/distributors/${distributorSlug}/relationship?${params}`,
+      { method: 'POST', body: JSON.stringify({ recentContact }), token },
+    );
   },
 };

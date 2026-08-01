@@ -1,8 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { useDistributor } from '@/lib/distributor-context';
+import { useDistributor, connectCtaKind } from '@/lib/distributor-context';
 import { useDeliveryParts } from '@/lib/hooks/use-delivery-parts';
+import { RelationshipStatusBadge } from './RelationshipStatusBadge';
+import { ConnectConfirmationModal } from './ConnectConfirmationModal';
+import { TradeRelationshipStatus } from '@wholo/types';
 
 export function TruckIcon() {
   return (
@@ -16,16 +20,23 @@ export function TruckIcon() {
 }
 
 export function DistributorPageHeader({ distributorSlug }: { distributorSlug: string }) {
-  const { distributor, hasRelationship, relationshipMinSpend } = useDistributor();
+  const { distributor, relationshipStatus, relationshipMinSpend, requestAccess } = useDistributor();
   const { accessToken, orderAsMode } = useAuth();
   const deliveryParts = useDeliveryParts(distributorSlug, accessToken, { refreshKey: orderAsMode });
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const effectiveMinSpend =
-    hasRelationship === true
+    relationshipStatus === TradeRelationshipStatus.ACTIVE
       ? relationshipMinSpend
-      : hasRelationship === false
+      : relationshipStatus != null
         ? (distributor?.minimumOrderSpend ?? null)
         : null;
+  const ctaKind = connectCtaKind(relationshipStatus);
+
+  async function handleConfirm(recentContact: boolean) {
+    await requestAccess(recentContact);
+    setShowConfirm(false);
+  }
 
   return (
     <div className="border-b border-border px-5 py-5">
@@ -47,15 +58,36 @@ export function DistributorPageHeader({ distributorSlug }: { distributorSlug: st
         </div>
       )}
 
-      {hasRelationship === false && (
+      {ctaKind === 'connect' && (
         <div className="mt-3">
           <button
             className="rounded bg-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            onClick={() => {}}
+            onClick={() => setShowConfirm(true)}
           >
             Add this supplier
           </button>
         </div>
+      )}
+
+      {ctaKind === 'pending' && (
+        <div className="mt-3">
+          <RelationshipStatusBadge label="Pending" tone="yellow" />
+        </div>
+      )}
+
+      {ctaKind === 'suspended' && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          <RelationshipStatusBadge label="Suspended" tone="red" />
+          <p className="text-xs text-muted">Suspended — contact this wholesaler</p>
+        </div>
+      )}
+
+      {showConfirm && distributor && (
+        <ConnectConfirmationModal
+          distributorName={distributor.name}
+          onConfirm={handleConfirm}
+          onClose={() => setShowConfirm(false)}
+        />
       )}
     </div>
   );

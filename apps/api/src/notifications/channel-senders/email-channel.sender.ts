@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
-import { CustomerInviteNotificationPayload, OrderPlacedNotificationPayload } from '../notification-payload';
+import { CustomerInviteNotificationPayload, OrderPlacedNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
 import { ChannelSender } from './channel-sender.interface';
 
 @Injectable()
@@ -22,6 +22,34 @@ export class EmailChannelSender implements ChannelSender {
     if (notification.type === NotificationType.CUSTOMER_INVITE_SENT) {
       const invitePayload = notification.payload as unknown as CustomerInviteNotificationPayload;
       await this.mail.sendInvite(delivery.recipient, invitePayload.distributorName, invitePayload.inviteUrl);
+      return;
+    }
+
+    if (
+      notification.type === NotificationType.TRADE_RELATIONSHIP_REQUEST_ACCEPTED ||
+      notification.type === NotificationType.TRADE_RELATIONSHIP_REQUEST_DECLINED ||
+      notification.type === NotificationType.TRADE_RELATIONSHIP_SUSPENDED ||
+      notification.type === NotificationType.TRADE_RELATIONSHIP_UNSUSPENDED ||
+      notification.type === NotificationType.TRADE_RELATIONSHIP_ACTIVATED
+    ) {
+      const relPayload = notification.payload as unknown as TradeRelationshipNotificationPayload;
+      const params = { distributorName: relPayload.distributorName, portalUrl: relPayload.portalUrl };
+      switch (notification.type) {
+        case NotificationType.TRADE_RELATIONSHIP_REQUEST_ACCEPTED:
+          await this.mail.sendTradeRelationshipRequestAccepted(delivery.recipient, params);
+          break;
+        case NotificationType.TRADE_RELATIONSHIP_REQUEST_DECLINED:
+          await this.mail.sendTradeRelationshipRequestDeclined(delivery.recipient, params);
+          break;
+        case NotificationType.TRADE_RELATIONSHIP_SUSPENDED:
+          await this.mail.sendTradeRelationshipSuspended(delivery.recipient, params);
+          break;
+        case NotificationType.TRADE_RELATIONSHIP_UNSUSPENDED:
+          await this.mail.sendTradeRelationshipUnsuspended(delivery.recipient, params);
+          break;
+        default:
+          await this.mail.sendTradeRelationshipActivated(delivery.recipient, params);
+      }
       return;
     }
 

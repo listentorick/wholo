@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { cartApi } from '@wholo/api-client';
-import type { CartItem } from '@wholo/types';
+import { TradeRelationshipStatus, type CartItem } from '@wholo/types';
 import { useAuth } from './auth-context';
 import { useDistributor } from './distributor-context';
 
@@ -28,7 +28,7 @@ export function CartProvider({
   children: React.ReactNode;
 }) {
   const { user, accessToken } = useAuth();
-  const { hasRelationship } = useDistributor();
+  const { relationshipStatus } = useDistributor();
   const [cartLoading, setCartLoading] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -62,7 +62,7 @@ export function CartProvider({
 
   const syncItem = useCallback(
     async (productId: string, quantity: number) => {
-      if (!accessToken || hasRelationship === false) return;
+      if (!accessToken || (relationshipStatus != null && relationshipStatus !== TradeRelationshipStatus.ACTIVE)) return;
       setSavingItems((prev) => new Set([...prev, productId]));
 
       setInCart((prev) => new Set([...prev, productId]));
@@ -85,7 +85,7 @@ export function CartProvider({
         });
       }
     },
-    [accessToken, hasRelationship, distributorSlug, reconcile],
+    [accessToken, relationshipStatus, distributorSlug, reconcile],
   );
 
   const adjustQty = useCallback((productId: string, delta: number) => {

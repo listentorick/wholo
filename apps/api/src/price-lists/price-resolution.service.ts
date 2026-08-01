@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, PriceListRuleDiscountBaseType, PriceListRuleSelectorType, PriceListRuleValueType } from '@prisma/client';
+import {
+  Prisma,
+  PriceListRuleDiscountBaseType,
+  PriceListRuleSelectorType,
+  PriceListRuleValueType,
+  TradeRelationshipStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface ResolvedPrice {
@@ -52,8 +58,8 @@ export class PriceResolutionService {
   constructor(private prisma: PrismaService) {}
 
   async resolvePriceListId(distributorId: string, customerId: string): Promise<string | null> {
-    const rel = await this.prisma.tradeRelationship.findUnique({
-      where: { distributorId_customerId: { distributorId, customerId } },
+    const rel = await this.prisma.tradeRelationship.findFirst({
+      where: { distributorId, customerId, status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
       select: { traderCustomerSettings: { select: { priceListId: true } } },
     });
 

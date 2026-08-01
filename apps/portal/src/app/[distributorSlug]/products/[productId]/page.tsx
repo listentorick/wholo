@@ -6,7 +6,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
-import type { CatalogueProductDetail } from '@wholo/types';
+import { TradeRelationshipStatus, type CatalogueProductDetail } from '@wholo/types';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 
@@ -28,7 +28,7 @@ export default function ProductDetailPage() {
     pathname ?? `/${distributorSlug}/products/${productId}`,
   );
   const { quantities, savingItems, adjustQty } = useCart();
-  const { hasRelationship } = useDistributor();
+  const { relationshipStatus } = useDistributor();
 
   const [product, setProduct] = useState<CatalogueProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -175,7 +175,7 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Quantity stepper + add/update */}
-          {hasRelationship === true && (
+          {relationshipStatus === TradeRelationshipStatus.ACTIVE && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <button
                 className="stepper-btn"

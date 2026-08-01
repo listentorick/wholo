@@ -112,7 +112,12 @@ export class CatalogueService {
       catalogueProductIdFilter = [];
     } else {
       const relationship = await this.prisma.tradeRelationship.findFirst({
-        where: { distributorId: distributor.id, customerId: customerOrgId, deletedAt: null },
+        where: {
+          distributorId: distributor.id,
+          customerId: customerOrgId,
+          status: TradeRelationshipStatus.ACTIVE,
+          deletedAt: null,
+        },
         select: { id: true },
       });
       if (relationship) {
@@ -134,7 +139,7 @@ export class CatalogueService {
         }
         catalogueProductIdFilter = [...ids];
       }
-      // else: authenticated, no relationship → catalogueProductIdFilter stays undefined → all active products
+      // else: authenticated, no ACTIVE relationship → catalogueProductIdFilter stays undefined → all active products
     }
 
     const limit = query.limit ?? 50;
@@ -308,7 +313,12 @@ export class CatalogueService {
       catalogueProductIdFilter = [];
     } else {
       const relationship = await this.prisma.tradeRelationship.findFirst({
-        where: { distributorId: distributor.id, customerId: customerOrgId, deletedAt: null },
+        where: {
+          distributorId: distributor.id,
+          customerId: customerOrgId,
+          status: TradeRelationshipStatus.ACTIVE,
+          deletedAt: null,
+        },
         select: { id: true },
       });
       if (relationship) {
@@ -326,7 +336,7 @@ export class CatalogueService {
         }
         catalogueProductIdFilter = [...ids];
       }
-      // else: authenticated, no relationship → show all products for browsing
+      // else: authenticated, no ACTIVE relationship → show all products for browsing
     }
 
     const product = await this.prisma.product.findFirst({

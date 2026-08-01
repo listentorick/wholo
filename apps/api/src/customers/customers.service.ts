@@ -1,5 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { OrganisationType } from '@prisma/client';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -28,6 +28,7 @@ export class CustomersService {
         accountNumber: true,
         minimumOrderSpend: true,
         paymentTerms: true,
+        recentContactSelfDeclared: true,
         deliveryLine1: true,
         deliveryLine2: true,
         deliveryCity: true,
@@ -70,6 +71,7 @@ export class CustomersService {
       accountNumber: rel.accountNumber,
       minimumOrderSpend: rel.minimumOrderSpend,
       paymentTerms: rel.paymentTerms,
+      recentContactSelfDeclared: rel.recentContactSelfDeclared,
       deliveryLine1: rel.deliveryLine1,
       deliveryLine2: rel.deliveryLine2,
       deliveryCity: rel.deliveryCity,
@@ -85,5 +87,51 @@ export class CustomersService {
       createdAt: rel.createdAt,
       updatedAt: rel.updatedAt,
     };
+  }
+
+  /**
+   * Customer-initiated request to connect with a distributor. The unique
+   * constraint on [distributorId, customerId] means a second row can never be
+   * created for the same pair — a prior relationship is transitioned in place
+   * instead, branching on its current status.
+   */
+  async requestAccess(distributorId: string, customerId: string, recentContact: boolean) {
+    const distributor = await this.prisma.organisation.findFirst({
+      where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      select: { id: true },
+    });
+    if (!distributor) throw new NotFoundException('Distributor not found');
+
+    const existing = await this.prisma.tradeRelationship.findUnique({
+      where: { distributorId_customerId: { distributorId, customerId } },
+      select: { id: true, status: true },
+    });
+
+    if (!existing) {
+      await this.prisma.tradeRelationship.create({
+        data: {
+          distributorId,
+          customerId,
+          status: TradeRelationshipStatus.PENDING_REQUEST,
+          recentContactSelfDeclared: recentContact,
+        },
+      });
+    } else if (existing.status === TradeRelationshipStatus.INACTIVE) {
+      // The only status a customer can self-reactivate from — mirrors "suspended
+      // is not customer-reactivatable" by excluding SUSPENDED from this branch.
+      await this.prisma.tradeRelationship.update({
+        where: { id: existing.id },
+        data: { status: TradeRelationshipStatus.PENDING_REQUEST, recentContactSelfDeclared: recentContact },
+      });
+    } else if (existing.status === TradeRelationshipStatus.SUSPENDED) {
+      throw new ForbiddenException('This relationship is suspended — contact the distributor directly');
+    } else {
+      // ACTIVE, PENDING_INVITE, PENDING_REQUEST — the UI should never surface
+      // the request-access action in these states; this is a defensive
+      // server-side guard against a stale client or a replayed request.
+      throw new ConflictException('A relationship with this distributor already exists');
+    }
+
+    return this.getSelfView(distributorId, customerId);
   }
 }

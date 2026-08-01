@@ -30,6 +30,11 @@ describe('EmailChannelSender', () => {
       sendOrderReceivedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendOrderConfirmedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendInvite: jest.fn().mockResolvedValue(undefined),
+      sendTradeRelationshipRequestAccepted: jest.fn().mockResolvedValue(undefined),
+      sendTradeRelationshipRequestDeclined: jest.fn().mockResolvedValue(undefined),
+      sendTradeRelationshipSuspended: jest.fn().mockResolvedValue(undefined),
+      sendTradeRelationshipUnsuspended: jest.fn().mockResolvedValue(undefined),
+      sendTradeRelationshipActivated: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<MailService>;
 
     const config = {
@@ -92,4 +97,31 @@ describe('EmailChannelSender', () => {
     expect(mail.sendOrderReceivedToCustomer).not.toHaveBeenCalled();
     expect(mail.sendOrderConfirmedToCustomer).not.toHaveBeenCalled();
   });
+
+  const tradeRelationshipCases = [
+    { type: NotificationType.TRADE_RELATIONSHIP_REQUEST_ACCEPTED, method: 'sendTradeRelationshipRequestAccepted' as const },
+    { type: NotificationType.TRADE_RELATIONSHIP_REQUEST_DECLINED, method: 'sendTradeRelationshipRequestDeclined' as const },
+    { type: NotificationType.TRADE_RELATIONSHIP_SUSPENDED, method: 'sendTradeRelationshipSuspended' as const },
+    { type: NotificationType.TRADE_RELATIONSHIP_UNSUSPENDED, method: 'sendTradeRelationshipUnsuspended' as const },
+    { type: NotificationType.TRADE_RELATIONSHIP_ACTIVATED, method: 'sendTradeRelationshipActivated' as const },
+  ];
+
+  for (const { type, method } of tradeRelationshipCases) {
+    it(`routes ${type} notifications to MailService.${method}`, async () => {
+      const notification = {
+        type,
+        payload: { relationshipId: 'rel-1', distributorName: 'Vinos Direct', portalUrl: 'http://localhost:3010/vinos-direct' },
+      } as unknown as Notification;
+
+      await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'), notification);
+
+      expect(mail[method]).toHaveBeenCalledWith('buyer@winebar.example', {
+        distributorName: 'Vinos Direct',
+        portalUrl: 'http://localhost:3010/vinos-direct',
+      });
+      for (const { method: otherMethod } of tradeRelationshipCases) {
+        if (otherMethod !== method) expect(mail[otherMethod]).not.toHaveBeenCalled();
+      }
+    });
+  }
 });

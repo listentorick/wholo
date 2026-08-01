@@ -85,7 +85,7 @@ beforeEach(() => {
     isLoading: false,
   });
   (useCart as ReturnType<typeof vi.fn>).mockReturnValue(mockCart);
-  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: true });
+  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
   (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue(
     makeResponse([makeProduct('prod-1', 'Egg tarts'), makeProduct('prod-2', 'Custard buns')]),
   );
@@ -204,7 +204,7 @@ describe('CataloguePage', () => {
   });
 
   it('hides stepper when no active trade relationship', async () => {
-    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: false });
+    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'NONE' });
 
     render(<CataloguePage />);
     await waitFor(() => screen.getByText('Egg tarts'));

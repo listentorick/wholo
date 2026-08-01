@@ -1,7 +1,11 @@
-import { IsString, IsOptional, IsEmail, IsDecimal, IsEnum, MinLength } from 'class-validator';
-import { TradeRelationshipStatus } from '@prisma/client';
+import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
+// Status is intentionally not editable here — it moves only through the
+// dedicated, validated transition endpoints (accept-request/decline-request/
+// suspend/unsuspend), each of which checks the relationship's current status
+// before changing it. A free-form status field on this generic update let
+// any status be set from any other with no guard.
 export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
@@ -15,11 +19,6 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   phone?: string;
-
-  @ApiProperty({ enum: TradeRelationshipStatus, enumName: 'TradeRelationshipStatus', required: false })
-  @IsOptional()
-  @IsEnum(TradeRelationshipStatus)
-  status?: TradeRelationshipStatus;
 
   @IsOptional()
   @IsString()

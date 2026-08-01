@@ -62,6 +62,41 @@ export class CustomersController {
     return this.customersService.invite(id, organisationId, token, body.email);
   }
 
+  @Post(':id/accept-request')
+  @HttpCode(HttpStatus.OK)
+  acceptRequest(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.acceptRequest(id, organisationId, token);
+  }
+
+  @Post(':id/decline-request')
+  @HttpCode(HttpStatus.OK)
+  declineRequest(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.declineRequest(id, organisationId, token);
+  }
+
+  @Post(':id/suspend')
+  @HttpCode(HttpStatus.OK)
+  suspend(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.suspend(id, organisationId, token);
+  }
+
+  @Post(':id/unsuspend')
+  @HttpCode(HttpStatus.OK)
+  unsuspend(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.unsuspend(id, organisationId, token);
+  }
+
+  @Post(':id/activate')
+  @HttpCode(HttpStatus.OK)
+  activate(@Req() req: Request, @Param('id') id: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.customersService.activate(id, organisationId, token);
+  }
+
   @Get(':id/catalogues')
   getCatalogues(@Req() req: Request, @Param('id') id: string) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };

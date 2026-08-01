@@ -13,7 +13,10 @@ describe('CustomersController', () => {
   let service: jest.Mocked<CustomersService>;
 
   beforeEach(async () => {
-    const mockService = { getSelfView: jest.fn().mockResolvedValue({ id: 'rel-1' }) };
+    const mockService = {
+      getSelfView: jest.fn().mockResolvedValue({ id: 'rel-1' }),
+      requestAccess: jest.fn().mockResolvedValue({ id: 'rel-1', status: 'PENDING_REQUEST' }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CustomersController],
@@ -52,5 +55,18 @@ describe('CustomersController', () => {
     await expect(controller.getCustomer('dist-1', 'dist-1', 'cust-2')).rejects.toThrow(
       ForbiddenException,
     );
+  });
+
+  it('requests access when the path customerId matches the authenticated customer', async () => {
+    const result = await controller.requestAccess('dist-1', 'cust-1', { recentContact: true }, 'cust-1');
+    expect(service.requestAccess).toHaveBeenCalledWith('dist-1', 'cust-1', true);
+    expect(result).toEqual({ id: 'rel-1', status: 'PENDING_REQUEST' });
+  });
+
+  it('throws ForbiddenException on requestAccess when the path customerId is another customer', async () => {
+    await expect(
+      controller.requestAccess('dist-1', 'cust-other', { recentContact: true }, 'cust-1'),
+    ).rejects.toThrow(ForbiddenException);
+    expect(service.requestAccess).not.toHaveBeenCalled();
   });
 });

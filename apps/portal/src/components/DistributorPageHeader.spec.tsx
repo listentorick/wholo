@@ -1,12 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { DistributorPageHeader } from './DistributorPageHeader';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
-vi.mock('@/lib/distributor-context', () => ({
-  useDistributor: vi.fn(),
-}));
+vi.mock('@/lib/distributor-context', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/distributor-context')>('@/lib/distributor-context');
+  return {
+    ...actual,
+    useDistributor: vi.fn(),
+  };
+});
 
 vi.mock('@/lib/auth-context', () => ({
   useAuth: vi.fn(),
@@ -25,16 +29,25 @@ import { deliveryApi } from '@wholo/api-client';
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
 const slug = 'fine-wines-co';
+const requestAccess = vi.fn().mockResolvedValue(undefined);
 
-beforeEach(() => {
-  vi.clearAllMocks();
+function mockDistributorReturn(overrides: Record<string, unknown> = {}) {
   vi.mocked(useDistributor).mockReturnValue({
     distributor: { name: 'Fine Wines Co', logoUrl: 'https://example.com/logo.png', minimumOrderSpend: null } as any,
-    hasRelationship: false,
+    relationshipStatus: 'NONE',
     relationshipMinSpend: null,
     bannerScrolledPast: false,
     setBannerScrolledPast: vi.fn(),
+    requestAccess,
+    refetchRelationship: vi.fn(),
+    ...overrides,
   });
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  requestAccess.mockClear().mockResolvedValue(undefined);
+  mockDistributorReturn();
   vi.mocked(useAuth).mockReturnValue({ accessToken: 'test-token' } as any);
   vi.mocked(deliveryApi.getAvailableDates).mockResolvedValue({ dates: [], profileId: null });
 });
@@ -89,16 +102,36 @@ describe('DistributorPageHeader', () => {
     expect(screen.getByRole('button', { name: 'Add this supplier' })).toBeTruthy();
   });
 
-  it('hides Add this supplier button when relationship exists', () => {
-    vi.mocked(useDistributor).mockReturnValue({
-      distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: null } as any,
-      hasRelationship: true,
-      relationshipMinSpend: null,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
-    });
+  it('hides Add this supplier button when relationship is active', () => {
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE' });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.queryByRole('button', { name: 'Add this supplier' })).toBeNull();
+  });
+
+  it('shows a locked Pending badge, not the CTA, when a request is pending', () => {
+    mockDistributorReturn({ relationshipStatus: 'PENDING_INVITE' });
+    render(<DistributorPageHeader distributorSlug={slug} />);
+    expect(screen.getByText('Pending')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add this supplier' })).toBeNull();
+  });
+
+  it('shows a locked Suspended message, not the CTA, when suspended', () => {
+    mockDistributorReturn({ relationshipStatus: 'SUSPENDED' });
+    render(<DistributorPageHeader distributorSlug={slug} />);
+    expect(screen.getByText('Suspended')).toBeTruthy();
+    expect(screen.getByText('Suspended — contact this wholesaler')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add this supplier' })).toBeNull();
+  });
+
+  it('opens the confirmation modal and requests access with the chosen answer', async () => {
+    render(<DistributorPageHeader distributorSlug={slug} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add this supplier' }));
+    expect(
+      screen.getByText('Have you spoken with or ordered from Fine Wines Co in the last 90 days?'),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /No, this is a first introduction/ }));
+    await waitFor(() => expect(requestAccess).toHaveBeenCalledWith(false));
   });
 
   it('does not call delivery API when no access token', () => {
@@ -108,38 +141,23 @@ describe('DistributorPageHeader', () => {
   });
 
   it('shows minimum order spend when active relationship has one set', () => {
-    vi.mocked(useDistributor).mockReturnValue({
-      distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: null } as any,
-      hasRelationship: true,
-      relationshipMinSpend: 150,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
-    });
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE', relationshipMinSpend: 150 });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.getByText(/minimum order value/)).toBeTruthy();
     expect(screen.getByText(/150\.00/)).toBeTruthy();
   });
 
   it('shows distributor default minimum spend when no active relationship', () => {
-    vi.mocked(useDistributor).mockReturnValue({
+    mockDistributorReturn({
       distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: 200 } as any,
-      hasRelationship: false,
-      relationshipMinSpend: null,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
+      relationshipStatus: 'NONE',
     });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.getByText(/200\.00 minimum order value/)).toBeTruthy();
   });
 
   it('hides minimum order spend when none is set', () => {
-    vi.mocked(useDistributor).mockReturnValue({
-      distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: null } as any,
-      hasRelationship: true,
-      relationshipMinSpend: null,
-      bannerScrolledPast: false,
-      setBannerScrolledPast: vi.fn(),
-    });
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE' });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.queryByText(/minimum order value/)).toBeNull();
   });

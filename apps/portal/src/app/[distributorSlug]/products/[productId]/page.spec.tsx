@@ -84,7 +84,7 @@ beforeEach(() => {
     isLoading: false,
   });
   (useCart as ReturnType<typeof vi.fn>).mockReturnValue(mockCart);
-  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: true });
+  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
   (catalogueApi.getProduct as ReturnType<typeof vi.fn>).mockResolvedValue(mockProduct);
 });
 
@@ -253,7 +253,7 @@ describe('ProductDetailPage', () => {
   });
 
   it('hides steppers when no active trade relationship', async () => {
-    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ hasRelationship: false });
+    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'NONE' });
 
     render(<ProductDetailPage />);
 

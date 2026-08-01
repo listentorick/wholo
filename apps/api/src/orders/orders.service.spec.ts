@@ -15,6 +15,20 @@ function makeDistributor() {
   return { id: DISTRIBUTOR_ID };
 }
 
+function makeRelationship(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'ACTIVE',
+    deliveryLine1: null, deliveryLine2: null, deliveryCity: null,
+    deliveryState: null, deliveryPostcode: null, deliveryCountry: null,
+    traderCustomerSettings: null,
+    customer: {
+      billingLine1: null, billingLine2: null, billingCity: null,
+      billingState: null, billingPostcode: null, billingCountry: null,
+    },
+    ...overrides,
+  };
+}
+
 function makeCart(lines: unknown[] = [{ id: 'line-1' }]) {
   return {
     id: 'cart-1',
@@ -42,7 +56,7 @@ describe('OrdersService — delivery date revalidation', () => {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
       distributorSettings: { findUnique: jest.fn() },
-      tradeRelationship: { findUnique: jest.fn() },
+      tradeRelationship: { findFirst: jest.fn() },
       order: { create: jest.fn() },
       orderLine: { createMany: jest.fn() },
       cartOrderLine: { deleteMany: jest.fn() },
@@ -77,7 +91,7 @@ describe('OrdersService — delivery date revalidation', () => {
     (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
       defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
     });
-    (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship());
     (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ nextval: BigInt(1) }]);
     (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
       fn({
@@ -143,6 +157,7 @@ describe('OrdersService — delivery date revalidation', () => {
 
   it('throws ForbiddenException when order-as distributorId does not match cart distributorId', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship());
     (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
 
     await expect(
@@ -154,6 +169,36 @@ describe('OrdersService — delivery date revalidation', () => {
     setupHappyPath();
     await expect(
       service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, DISTRIBUTOR_ID),
+    ).resolves.toBeDefined();
+  });
+
+  it('throws ForbiddenException without loading the cart when there is no trade relationship at all', async () => {
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each(['SUSPENDED', 'PENDING_REQUEST', 'PENDING_INVITE', 'INACTIVE'])(
+    'throws ForbiddenException without loading the cart when the relationship is %s',
+    async (status) => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship({ status }));
+
+      await expect(
+        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
+    },
+  );
+
+  it('succeeds when the relationship is ACTIVE', async () => {
+    setupHappyPath();
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
     ).resolves.toBeDefined();
   });
 
