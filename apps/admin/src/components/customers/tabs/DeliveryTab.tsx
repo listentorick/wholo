@@ -101,7 +101,7 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, on
     });
     return () => onSaveStateChange?.(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, saving, success, apiError]);
+  }, [mode, saving, success, apiError, selectedProfileId]);
 
   if (mode === 'wizard') {
     return (
