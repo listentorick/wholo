@@ -5,11 +5,15 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
+import { useCursorList } from '@/lib/hooks/use-cursor-list';
 import { AdminLayout } from '@/components/AdminLayout';
+import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
+import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
+import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
 import { adminOrdersApi } from '@wholo/admin-api-client';
-import type { Order } from '@wholo/types';
-import { OrderStatus, AcceptedByActorType } from '@wholo/types';
+import type { Order, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
+import { OrderStatus, AcceptedByActorType, ActorType } from '@wholo/types';
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 
@@ -39,6 +43,15 @@ function fmtAmt(amount: string) {
   return `£${parseFloat(amount).toFixed(2)}`;
 }
 
+// Date-only strings (e.g. requestedDeliveryDate = "2026-08-09") parse as UTC midnight,
+// which can render a day early in timezones behind UTC — pad to local midnight instead.
+function fmtDeliveryDate(iso: string | null | undefined) {
+  if (!iso) return '—';
+  return new Date(iso + (iso.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
 // ─── Section label ─────────────────────────────────────────────────────────────
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -66,13 +79,18 @@ function StatusBadge({ status }: { status: string }) {
 
 interface ReasonModalProps {
   title: string;
+  description: string;
   confirmLabel: string;
-  confirmStyle: React.CSSProperties;
   onConfirm: (reason: string) => Promise<void>;
   onCancel: () => void;
 }
 
-function ReasonModal({ title, confirmLabel, confirmStyle, onConfirm, onCancel }: ReasonModalProps) {
+/** Matches DetailActionsPanel's own destructive-confirm button styling, duplicated
+ *  locally since those class strings aren't exported (single consumer here). */
+const DANGER_CONFIRM_CLS =
+  'rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50';
+
+function ReasonModal({ title, description, confirmLabel, onConfirm, onCancel }: ReasonModalProps) {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -92,7 +110,8 @@ function ReasonModal({ title, confirmLabel, confirmStyle, onConfirm, onCancel }:
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.35)' }}>
       <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-lg">
-        <h3 className="mb-4 text-base font-semibold text-text">{title}</h3>
+        <h3 className="text-base font-semibold text-text">{title}</h3>
+        <p className="mb-4 mt-1.5 text-sm text-muted">{description}</p>
         <textarea
           className="w-full rounded-md border border-border px-3 py-2 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none resize-none"
           rows={3}
@@ -115,10 +134,49 @@ function ReasonModal({ title, confirmLabel, confirmStyle, onConfirm, onCancel }:
             type="button"
             onClick={handleConfirm}
             disabled={busy || !reason.trim()}
-            className="rounded-md px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-50"
-            style={confirmStyle}
+            className={DANGER_CONFIRM_CLS}
           >
             {busy ? 'Saving…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Confirm modal (no reason field — used for Accept) ─────────────────────────
+
+interface ConfirmModalProps {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+/** Matches DetailActionsPanel's own primary-confirm button styling, duplicated
+ *  locally since those class strings aren't exported (single consumer here). */
+const PRIMARY_CONFIRM_CLS =
+  'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50';
+
+function ConfirmModal({ title, description, confirmLabel, busy, onConfirm, onCancel }: ConfirmModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.35)' }}>
+      <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-lg">
+        <h3 className="text-base font-semibold text-text">{title}</h3>
+        <p className="mt-1.5 text-sm text-muted">{description}</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={onConfirm} disabled={busy} className={PRIMARY_CONFIRM_CLS}>
+            {busy ? 'Accepting…' : confirmLabel}
           </button>
         </div>
       </div>
@@ -140,8 +198,13 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [accepting, setAccepting] = useState(false);
+  const [showAcceptModal, setShowAcceptModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  // Bumped after every successful accept/reject/cancel to force the audit
+  // log to refetch — otherwise the Timeline would only ever show its
+  // initial-mount snapshot and miss the very event that just happened.
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -151,12 +214,21 @@ export default function OrderDetailPage() {
       .finally(() => setLoading(false));
   }, [accessToken, orderId]);
 
+  const auditLog = useCursorList<AuditLogEntry, AuditLogQueryParams>({
+    token: accessToken,
+    fetchPage: (token, params) => adminOrdersApi.getOrderAuditLog(orderId, params, token),
+    buildParams: (cursor) => ({ limit: 30, cursor }),
+    errorMessage: 'Could not load activity',
+    deps: [auditRefreshKey],
+  });
+
   const handleAccept = async () => {
     if (!accessToken || accepting) return;
     setAccepting(true);
     try {
       const updated = await adminOrdersApi.acceptOrder(orderId, accessToken);
       setOrder(updated);
+      setAuditRefreshKey((k) => k + 1);
     } finally {
       setAccepting(false);
     }
@@ -166,6 +238,7 @@ export default function OrderDetailPage() {
     if (!accessToken) return;
     const updated = await adminOrdersApi.rejectOrder(orderId, { reason }, accessToken);
     setOrder(updated);
+    setAuditRefreshKey((k) => k + 1);
     setShowRejectModal(false);
   };
 
@@ -173,6 +246,7 @@ export default function OrderDetailPage() {
     if (!accessToken) return;
     const updated = await adminOrdersApi.cancelOrder(orderId, { reason }, accessToken);
     setOrder(updated);
+    setAuditRefreshKey((k) => k + 1);
     setShowCancelModal(false);
   };
 
@@ -211,13 +285,44 @@ export default function OrderDetailPage() {
   const canReject = order.status === OrderStatus.SUBMITTED;
   const canCancel = order.status === OrderStatus.SUBMITTED || order.status === OrderStatus.ACCEPTED;
 
+  const actions: ActionItem[] = [
+    ...(canAccept
+      ? ([
+          {
+            key: 'accept',
+            label: 'Accept order',
+            tone: 'primary',
+            loading: accepting,
+            loadingLabel: 'Accepting…',
+            onClick: () => setShowAcceptModal(true),
+          },
+        ] satisfies ActionItem[])
+      : []),
+    ...(canReject
+      ? ([{ key: 'reject', label: 'Reject order', tone: 'danger', onClick: () => setShowRejectModal(true) }] satisfies ActionItem[])
+      : []),
+    ...(canCancel
+      ? ([{ key: 'cancel', label: 'Cancel order', tone: 'danger', onClick: () => setShowCancelModal(true) }] satisfies ActionItem[])
+      : []),
+  ];
+
   return (
     <AdminLayout>
+      {showAcceptModal && canAccept && (
+        <ConfirmModal
+          title="Accept order"
+          description="This marks the order as accepted and notifies the customer — it moves into fulfilment."
+          confirmLabel="Yes, accept"
+          busy={accepting}
+          onConfirm={handleAccept}
+          onCancel={() => setShowAcceptModal(false)}
+        />
+      )}
       {showRejectModal && (
         <ReasonModal
           title="Reject this order?"
-          confirmLabel="Reject Order"
-          confirmStyle={{ background: '#b91c1c' }}
+          description="The order hasn't been accepted yet — rejecting it lets the customer know they'll need to submit a new order if they still want these items."
+          confirmLabel="Reject order"
           onConfirm={handleReject}
           onCancel={() => setShowRejectModal(false)}
         />
@@ -225,80 +330,82 @@ export default function OrderDetailPage() {
       {showCancelModal && (
         <ReasonModal
           title="Cancel this order?"
-          confirmLabel="Cancel Order"
-          confirmStyle={{ background: '#6b7280' }}
+          description="Use this for orders that can no longer be fulfilled, even after acceptance — for example if stock fell through. The customer will be notified."
+          confirmLabel="Cancel order"
           onConfirm={handleCancel}
           onCancel={() => setShowCancelModal(false)}
         />
       )}
 
-      {/* Back nav */}
-      <div className="mb-5 flex items-center justify-between">
-        <Link href="/orders" className="text-sm text-muted hover:text-text transition-colors">
-          ← Back to orders
-        </Link>
-        <StatusBadge status={order.status} />
-      </div>
+      <DetailPageHeader
+        backHref="/orders"
+        backLabel="Orders"
+        heading={
+          <>
+            {order.orderNumber}
+            <span className="block mt-0.5 text-sm font-normal text-muted">
+              Submitted {fmtDate(order.submittedAt ?? order.createdAt)}
+            </span>
+          </>
+        }
+        badge={<StatusBadge status={order.status} />}
+      />
 
-      {/* Page heading */}
-      <div className="mb-6 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-text">{order.orderNumber}</h1>
-          <p className="mt-0.5 text-sm text-muted">
-            Submitted {fmtDate(order.submittedAt ?? order.createdAt)}
-          </p>
-        </div>
+      <DetailPageLayout
+        sidebar={
+          <div className="flex flex-col gap-5">
+            {(hasDelivAddr || order.requestedDeliveryDate) && (
+              <div className="order-1 lg:order-2 rounded-lg border border-border bg-white px-5 py-4">
+                <SectionLabel>Delivery</SectionLabel>
+                {order.requestedDeliveryDate && (
+                  <p className="text-sm text-text">
+                    <span className="font-medium">Requested: </span>
+                    {fmtDeliveryDate(order.requestedDeliveryDate)}
+                  </p>
+                )}
+                {hasDelivAddr && (
+                  <p className={`text-sm text-text leading-relaxed ${order.requestedDeliveryDate ? 'mt-2' : ''}`}>
+                    {[delivAddr!.line1, delivAddr!.line2, delivAddr!.city, delivAddr!.state, delivAddr!.postcode, delivAddr!.country]
+                      .filter(Boolean)
+                      .join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
 
-        {/* Action panel */}
-        {(canAccept || canCancel) && (
-          <div className="flex items-center gap-2 pt-0.5">
-            {canAccept && (
-              <button
-                type="button"
-                onClick={handleAccept}
-                disabled={accepting}
-                className="rounded-md px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-50"
-                style={{ background: '#15803d' }}
-              >
-                {accepting ? 'Accepting…' : 'Accept Order'}
-              </button>
+            {hasBillAddr && (
+              <div className="order-2 lg:order-3 rounded-lg border border-border bg-white px-5 py-4">
+                <SectionLabel>Billing Address</SectionLabel>
+                <p className="text-sm text-text leading-relaxed">
+                  {[billAddr!.line1, billAddr!.line2, billAddr!.city, billAddr!.state, billAddr!.postcode, billAddr!.country]
+                    .filter(Boolean)
+                    .join(', ')}
+                </p>
+              </div>
             )}
-            {canReject && (
-              <button
-                type="button"
-                onClick={() => setShowRejectModal(true)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-                style={{ color: '#b91c1c' }}
-              >
-                Reject
-              </button>
-            )}
-            {canCancel && !canReject && (
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-              >
-                Cancel Order
-              </button>
-            )}
-            {canCancel && canReject && (
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-              >
-                Cancel
-              </button>
+
+            {/* Timeline — driven by the audit log, oldest first (reversed from the API's newest-first cursor order) */}
+            <div className="order-3 lg:order-4 rounded-lg border border-border bg-white px-5 py-4">
+              <SectionLabel>Timeline</SectionLabel>
+              <div className="flex flex-col gap-3">
+                {auditLog.data.length === 0 && !auditLog.isLoading && (
+                  <p className="text-xs text-muted">No activity yet.</p>
+                )}
+                {auditLog.error && <p className="text-xs text-red-600">{auditLog.error}</p>}
+                {[...auditLog.data].reverse().map((entry) => (
+                  <TimelineEntryRow key={entry.id} entry={entry} />
+                ))}
+              </div>
+            </div>
+
+            {actions.length > 0 && (
+              <div className="order-4 lg:order-1">
+                <DetailActionsPanel layout="sidebar" actions={actions} />
+              </div>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-
-        {/* ── Left column (2/3) ── */}
-        <div className="lg:col-span-2 flex flex-col gap-5">
+        }
+      >
 
           {/* Status banner */}
           <div
@@ -322,68 +429,17 @@ export default function OrderDetailPage() {
                 <>Cancelled {fmtDateTime(order.cancelledAt)}{order.cancellationReason ? ` — ${order.cancellationReason}` : ''}</>
               )}
             </p>
+            {canAccept && (
+              <button
+                type="button"
+                onClick={() => setShowAcceptModal(true)}
+                disabled={accepting}
+                className="mt-3 w-full md:hidden rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {accepting ? 'Accepting…' : 'Accept order'}
+              </button>
+            )}
           </div>
-
-          {/* Accounting invoice export state */}
-          {order.invoiceExport && accessToken && (
-            <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} token={accessToken} />
-          )}
-
-          {/* Order lines */}
-          <div className="rounded-lg border border-border bg-white overflow-hidden">
-            <div className="border-b border-border px-5 py-3.5">
-              <SectionLabel>Products</SectionLabel>
-            </div>
-            <table className="w-full text-left">
-              <thead className="border-b border-border bg-[#fafafa]">
-                <tr>
-                  <th className="py-2 pl-5 pr-4 text-xs font-semibold uppercase tracking-wide text-muted">Product</th>
-                  <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted">SKU</th>
-                  <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Qty</th>
-                  <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Unit price</th>
-                  <th className="py-2 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {order.lines.map((line, i) => (
-                  <tr key={line.id} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-[#fafafa]' : ''}`}>
-                    <td className="py-3 pl-5 pr-4">
-                      <p className="text-sm font-medium text-text">{line.productNameSnapshot}</p>
-                      {line.unitOfMeasureSnapshot && (
-                        <p className="text-xs text-muted">{line.unitOfMeasureSnapshot}</p>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-muted">{line.skuSnapshot ?? '—'}</td>
-                    <td className="py-3 px-4 text-sm text-text text-right">{line.quantityOrdered}</td>
-                    <td className="py-3 px-4 text-sm text-text text-right">{fmtAmt(line.unitPriceSnapshot)}</td>
-                    <td className="py-3 pl-4 pr-5 text-sm font-medium text-text text-right">{fmtAmt(line.totalAmount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {/* Totals */}
-            <div className="border-t border-border px-5 py-4">
-              <div className="flex flex-col items-end gap-1.5">
-                <div className="flex w-48 justify-between text-sm text-muted">
-                  <span>Subtotal</span>
-                  <span>{fmtAmt(order.subtotalAmount)}</span>
-                </div>
-                <div className="flex w-48 justify-between text-sm text-muted">
-                  <span>Tax</span>
-                  <span>{fmtAmt(order.taxAmount)}</span>
-                </div>
-                <div className="mt-1 flex w-48 justify-between border-t border-border pt-2">
-                  <span className="text-sm font-semibold text-text">Total</span>
-                  <span className="text-sm font-semibold text-text">{fmtAmt(order.totalAmount)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* ── Right column (1/3) ── */}
-        <div className="flex flex-col gap-5">
 
           {/* Customer */}
           <div className="rounded-lg border border-border bg-white px-5 py-4">
@@ -409,62 +465,98 @@ export default function OrderDetailPage() {
             )}
           </div>
 
-          {/* Timeline */}
-          <div className="rounded-lg border border-border bg-white px-5 py-4">
-            <SectionLabel>Timeline</SectionLabel>
-            <div className="flex flex-col gap-3">
-              <TimelineRow label="Submitted" date={order.submittedAt} />
-              {order.acceptedAt && (
-                <TimelineRow
-                  label={order.acceptedByActorType === AcceptedByActorType.SYSTEM ? 'Auto-accepted' : 'Accepted'}
-                  date={order.acceptedAt}
-                />
-              )}
-              {order.rejectedAt && <TimelineRow label="Rejected" date={order.rejectedAt} />}
-              {order.cancelledAt && <TimelineRow label="Cancelled" date={order.cancelledAt} />}
+          {/* Accounting invoice export state */}
+          {order.invoiceExport && accessToken && (
+            <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} token={accessToken} />
+          )}
+
+          {/* Order lines */}
+          <div className="rounded-lg border border-border bg-white overflow-hidden">
+            <div className="border-b border-border px-5 py-3.5">
+              <SectionLabel>Products</SectionLabel>
+            </div>
+
+            {/* Mobile card list */}
+            <ul className="divide-y divide-border md:hidden">
+              {order.lines.map((line) => (
+                <li key={line.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-text break-words">{line.productNameSnapshot}</p>
+                    {line.unitOfMeasureSnapshot && (
+                      <p className="text-xs text-muted">{line.unitOfMeasureSnapshot}</p>
+                    )}
+                    <p className="mt-0.5 text-xs text-muted">
+                      {line.skuSnapshot ?? '—'} · {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot)}
+                    </p>
+                  </div>
+                  <p className="flex-shrink-0 text-sm font-semibold tabular-nums text-text">{fmtAmt(line.totalAmount)}</p>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[560px] text-left">
+                <thead className="border-b border-border bg-[#fafafa]">
+                  <tr>
+                    <th className="py-2 pl-5 pr-4 text-xs font-semibold uppercase tracking-wide text-muted">Product</th>
+                    <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted">SKU</th>
+                    <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Qty</th>
+                    <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Unit price</th>
+                    <th className="py-2 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.lines.map((line, i) => (
+                    <tr key={line.id} className={`border-b border-border last:border-0 ${i % 2 === 1 ? 'bg-[#fafafa]' : ''}`}>
+                      <td className="py-3 pl-5 pr-4">
+                        <p className="text-sm font-medium text-text">{line.productNameSnapshot}</p>
+                        {line.unitOfMeasureSnapshot && (
+                          <p className="text-xs text-muted">{line.unitOfMeasureSnapshot}</p>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-muted">{line.skuSnapshot ?? '—'}</td>
+                      <td className="py-3 px-4 text-sm text-text text-right">{line.quantityOrdered}</td>
+                      <td className="py-3 px-4 text-sm text-text text-right">{fmtAmt(line.unitPriceSnapshot)}</td>
+                      <td className="py-3 pl-4 pr-5 text-sm font-medium text-text text-right">{fmtAmt(line.totalAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Totals */}
+            <div className="border-t border-border px-5 py-4">
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex w-48 justify-between text-sm text-muted">
+                  <span>Subtotal</span>
+                  <span>{fmtAmt(order.subtotalAmount)}</span>
+                </div>
+                <div className="flex w-48 justify-between text-sm text-muted">
+                  <span>Tax</span>
+                  <span>{fmtAmt(order.taxAmount)}</span>
+                </div>
+                <div className="mt-1 flex w-48 justify-between border-t border-border pt-2">
+                  <span className="text-sm font-semibold text-text">Total</span>
+                  <span className="text-sm font-semibold text-text">{fmtAmt(order.totalAmount)}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Delivery address */}
-          {hasDelivAddr && (
-            <div className="rounded-lg border border-border bg-white px-5 py-4">
-              <SectionLabel>Delivery Address</SectionLabel>
-              <p className="text-sm text-text leading-relaxed">
-                {[delivAddr!.line1, delivAddr!.line2, delivAddr!.city, delivAddr!.state, delivAddr!.postcode, delivAddr!.country]
-                  .filter(Boolean)
-                  .join(', ')}
-              </p>
-            </div>
-          )}
-
-          {/* Billing address */}
-          {hasBillAddr && (
-            <div className="rounded-lg border border-border bg-white px-5 py-4">
-              <SectionLabel>Billing Address</SectionLabel>
-              <p className="text-sm text-text leading-relaxed">
-                {[billAddr!.line1, billAddr!.line2, billAddr!.city, billAddr!.state, billAddr!.postcode, billAddr!.country]
-                  .filter(Boolean)
-                  .join(', ')}
-              </p>
-            </div>
-          )}
-
-        </div>
-      </div>
+      </DetailPageLayout>
     </AdminLayout>
   );
 }
 
-function TimelineRow({ label, date }: { label: string; date: string | null }) {
-  if (!date) return null;
+function TimelineEntryRow({ entry }: { entry: AuditLogEntry }) {
+  const actor = entry.actorName ?? (entry.actorType === ActorType.SYSTEM ? 'System' : null);
   return (
     <div className="flex items-start gap-3">
       <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
       <div>
-        <p className="text-xs font-medium text-text">{label}</p>
-        <p className="text-xs text-muted">{new Date(date).toLocaleString('en-GB', {
-          day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        })}</p>
+        <p className="text-xs font-medium text-text">{entry.summary}</p>
+        <p className="text-xs text-muted">{fmtDateTime(entry.createdAt)}</p>
+        {actor && <p className="text-xs text-muted">{actor}</p>}
       </div>
     </div>
   );

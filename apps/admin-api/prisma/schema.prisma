@@ -79,6 +79,13 @@ enum AcceptedByActorType {
   SYSTEM
 }
 
+// Distinct from AcceptedByActorType, which is specific to order acceptance —
+// this is the generic actor kind for AuditLog, spanning any future entity.
+enum ActorType {
+  USER
+  SYSTEM
+}
+
 enum OutboxEventStatus {
   PENDING
   PUBLISHED
@@ -246,6 +253,7 @@ model Organisation {
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
   accountingInvoiceExports        AccountingInvoiceExport[]
   accountingBulkImportJobs        AccountingBulkImportJob[]
+  auditLogs                       AuditLog[]
 
   @@map("organisations")
 }
@@ -1059,6 +1067,29 @@ model OutboxEvent {
 
   @@index([status, createdAt])
   @@map("outbox_events")
+}
+
+// Human-readable "who did what" trail, read back by the UI — unlike OutboxEvent
+// (fire-and-forget, never queried per-tenant). entityType/entityId is a
+// polymorphic reference (no FK, same pattern as OutboxEvent.aggregateType/Id)
+// so this scales to future entities (products, customers, ...) with no migration.
+model AuditLog {
+  id            String    @id @default(cuid())
+  distributorId String
+  entityType    String
+  entityId      String
+  action        String
+  actorType     ActorType
+  actorUserId   String?
+  actorName     String?
+  summary       String
+  changes       Json?
+  createdAt     DateTime  @default(now())
+
+  distributor Organisation @relation(fields: [distributorId], references: [id])
+
+  @@index([distributorId, entityType, entityId, createdAt])
+  @@map("audit_logs")
 }
 
 // ─── Notifications ────────────────────────────────────────────────────────────

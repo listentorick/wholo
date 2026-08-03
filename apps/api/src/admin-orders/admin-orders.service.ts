@@ -8,11 +8,14 @@ import {
   OrderStatus,
   OrderLineStatus,
   AcceptedByActorType,
+  ActorType,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 
 interface CursorPayload {
   sortBy: 'createdAt' | 'requestedDeliveryDate';
@@ -58,6 +61,7 @@ const orderSelect = {
   totalAmount: true,
   billingAddressSnapshot: true,
   deliveryAddressSnapshot: true,
+  requestedDeliveryDate: true,
   customerReference: true,
   notes: true,
   acceptanceModeSnapshot: true,
@@ -101,6 +105,7 @@ export class AdminOrdersService {
   constructor(
     private prisma: PrismaService,
     private outbox: OutboxService,
+    private audit: AuditService,
   ) {}
 
   async listOrders(distributorId: string, query: OrderQueryDto) {
@@ -237,6 +242,73 @@ export class AdminOrdersService {
     return this.formatOrder(order);
   }
 
+  async getOrderAuditLog(orderId: string, distributorId: string, query: AuditLogQueryDto) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, distributorId },
+      select: { id: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const limit = query.limit ?? 30;
+    const take = limit + 1;
+
+    const baseWhere: Prisma.AuditLogWhereInput = {
+      distributorId,
+      entityType: 'ORDER',
+      entityId: orderId,
+    };
+
+    let cursorWhere: Prisma.AuditLogWhereInput = {};
+    if (query.cursor) {
+      let decoded: { createdAt: string; id: string };
+      try {
+        decoded = JSON.parse(Buffer.from(query.cursor, 'base64url').toString('utf8'));
+      } catch {
+        throw new BadRequestException('Invalid cursor');
+      }
+      cursorWhere = {
+        OR: [
+          { createdAt: { lt: new Date(decoded.createdAt) } },
+          { createdAt: new Date(decoded.createdAt), id: { lt: decoded.id } },
+        ],
+      };
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: { AND: [baseWhere, cursorWhere] },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take,
+      }),
+      this.prisma.auditLog.count({ where: baseWhere }),
+    ]);
+
+    const hasMore = items.length > limit;
+    const data = hasMore ? items.slice(0, limit) : items;
+    const last = data[data.length - 1];
+
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(JSON.stringify({ createdAt: last.createdAt.toISOString(), id: last.id })).toString('base64url')
+        : null;
+
+    return {
+      data: data.map((entry) => ({
+        id: entry.id,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        action: entry.action,
+        actorType: entry.actorType,
+        actorUserId: entry.actorUserId,
+        actorName: entry.actorName,
+        summary: entry.summary,
+        changes: entry.changes,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+      pagination: { nextCursor, hasMore, total },
+    };
+  }
+
   async acceptOrder(orderId: string, distributorId: string, acceptedByUserId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, distributorId },
@@ -272,6 +344,20 @@ export class AdminOrdersService {
         acceptedByActorType: AcceptedByActorType.USER,
         acceptedByUserId,
         occurredAt: now.toISOString(),
+      });
+      const actor = await tx.user.findUnique({
+        where: { id: acceptedByUserId },
+        select: { firstName: true, lastName: true },
+      });
+      await this.audit.record(tx, {
+        distributorId,
+        entityType: 'ORDER',
+        entityId: orderId,
+        action: 'ORDER_ACCEPTED',
+        actorType: ActorType.USER,
+        actorUserId: acceptedByUserId,
+        actorName: actor ? `${actor.firstName} ${actor.lastName}` : undefined,
+        summary: 'Accepted the order',
       });
       return u;
     });
@@ -318,6 +404,21 @@ export class AdminOrdersService {
         status: OrderStatus.REJECTED,
         rejectionReason: reason,
         occurredAt: now.toISOString(),
+      });
+      const actor = await tx.user.findUnique({
+        where: { id: rejectedByUserId },
+        select: { firstName: true, lastName: true },
+      });
+      await this.audit.record(tx, {
+        distributorId,
+        entityType: 'ORDER',
+        entityId: orderId,
+        action: 'ORDER_REJECTED',
+        actorType: ActorType.USER,
+        actorUserId: rejectedByUserId,
+        actorName: actor ? `${actor.firstName} ${actor.lastName}` : undefined,
+        summary: 'Rejected the order',
+        changes: { reason },
       });
       return u;
     });
@@ -366,6 +467,21 @@ export class AdminOrdersService {
         cancellationReason: reason,
         occurredAt: now.toISOString(),
       });
+      const actor = await tx.user.findUnique({
+        where: { id: cancelledByUserId },
+        select: { firstName: true, lastName: true },
+      });
+      await this.audit.record(tx, {
+        distributorId,
+        entityType: 'ORDER',
+        entityId: orderId,
+        action: 'ORDER_CANCELLED',
+        actorType: ActorType.USER,
+        actorUserId: cancelledByUserId,
+        actorName: actor ? `${actor.firstName} ${actor.lastName}` : undefined,
+        summary: 'Cancelled the order',
+        changes: { reason },
+      });
       return u;
     });
 
@@ -391,6 +507,7 @@ export class AdminOrdersService {
       totalAmount: dec(order.totalAmount),
       billingAddressSnapshot: order.billingAddressSnapshot as Record<string, unknown> | null,
       deliveryAddressSnapshot: order.deliveryAddressSnapshot as Record<string, unknown> | null,
+      requestedDeliveryDate: order.requestedDeliveryDate?.toISOString().slice(0, 10) ?? null,
       customerReference: order.customerReference,
       notes: order.notes,
       acceptanceModeSnapshot: order.acceptanceModeSnapshot,

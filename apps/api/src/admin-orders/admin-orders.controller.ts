@@ -20,6 +20,7 @@ import { AdminOrdersService } from './admin-orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string };
@@ -52,6 +53,18 @@ export class AdminOrdersController {
     @Param('id') id: string,
   ) {
     return this.service.getOrder(id, distributorId);
+  }
+
+  @Get('orders/:id/audit-log')
+  @ApiOperation({ summary: "Get an order's audit log (who did what, when)" })
+  @ApiOkResponse({ description: 'Paginated audit log entries' })
+  @ApiNotFoundResponse({ description: 'Order not found or belongs to a different distributor' })
+  getOrderAuditLog(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+    @Query() query: AuditLogQueryDto,
+  ) {
+    return this.service.getOrderAuditLog(id, distributorId, query);
   }
 
   @Post('orders/:id/accept')

@@ -11,6 +11,7 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 import { AccountingInvoiceExportProcessor } from './accounting-invoice-export.processor';
 
 const makeJob = (payload: Record<string, unknown> = { orderId: 'order-1', distributorId: 'dist-1' }) =>
@@ -100,6 +101,7 @@ describe('AccountingInvoiceExportProcessor', () => {
   let connectionService: { getValidTokenSet: jest.Mock };
   let adapter: { hasInvoiceCreationScope: jest.Mock; createInvoice: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
+  let audit: { record: jest.Mock };
 
   const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 's' };
 
@@ -142,11 +144,13 @@ describe('AccountingInvoiceExportProcessor', () => {
       }),
     };
     outbox = { writeEvent: jest.fn() };
+    audit = { record: jest.fn() };
     processor = new AccountingInvoiceExportProcessor(
       prisma as unknown as PrismaService,
       connectionService as unknown as AccountingConnectionService,
       { get: jest.fn().mockReturnValue(adapter) } as unknown as AccountingAdapterRegistry,
       outbox as unknown as OutboxService,
+      audit as unknown as AuditService,
     );
   });
 
@@ -240,6 +244,15 @@ describe('AccountingInvoiceExportProcessor', () => {
         'export-1',
         'AccountingInvoiceExportProcessed',
         expect.objectContaining({ orderId: 'order-1', distributorId: 'dist-1', externalInvoiceId: 'inv-1' }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          distributorId: 'dist-1',
+          entityType: 'ORDER',
+          entityId: 'order-1',
+          action: 'INVOICE_EXPORT_COMPLETED',
+        }),
       );
     });
 
@@ -368,6 +381,16 @@ describe('AccountingInvoiceExportProcessor', () => {
 
       expect(prisma.customerAccountingMapping.findFirst).not.toHaveBeenCalled();
       expect(failedUpdate()![0].data).toEqual(expect.objectContaining({ errorCode: 'CUSTOMER_NOT_MAPPED' }));
+      expect(audit.record).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          distributorId: 'dist-1',
+          entityType: 'ORDER',
+          entityId: 'order-1',
+          action: 'INVOICE_EXPORT_FAILED',
+          changes: expect.objectContaining({ errorCode: 'CUSTOMER_NOT_MAPPED' }),
+        }),
+      );
     });
 
     it('fails with ORDER_NOT_INVOICEABLE when every line is cancelled or rejected', async () => {

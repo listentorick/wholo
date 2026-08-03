@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AdminCustomersModule } from '../admin-customers/admin-customers.module';
 import { AdminProductsModule } from '../admin-products/admin-products.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { AuditModule } from '../audit/audit.module';
 import { AccountingConnectionController } from './accounting-connection.controller';
 import { AccountingContactController } from './accounting-contact.controller';
 import { AccountingInvoiceExportController } from './accounting-invoice-export.controller';
@@ -18,7 +19,7 @@ import { AccountingContactMatcherService } from './matching/accounting-contact-m
 import { AccountingProductMatcherService } from './matching/accounting-product-matcher.service';
 
 @Module({
-  imports: [AdminCustomersModule, AdminProductsModule, OutboxModule],
+  imports: [AdminCustomersModule, AdminProductsModule, OutboxModule, AuditModule],
   controllers: [
     AccountingConnectionController,
     AccountingContactController,

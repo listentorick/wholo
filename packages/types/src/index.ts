@@ -138,6 +138,13 @@ export enum AcceptedByActorType {
   SYSTEM = 'SYSTEM',
 }
 
+// Distinct from AcceptedByActorType (order-acceptance-specific) — the generic
+// actor kind for AuditLog entries, spanning any audited entity.
+export enum ActorType {
+  USER = 'USER',
+  SYSTEM = 'SYSTEM',
+}
+
 export interface AddressSnapshot {
   line1: string | null;
   line2: string | null;
@@ -272,6 +279,26 @@ export interface OrderListParams {
   deliveryDateBefore?: string;
   sortBy?: 'createdAt' | 'requestedDeliveryDate';
   sortOrder?: 'asc' | 'desc';
+}
+
+// Human-readable "who did what" trail entry — entityType/entityId is
+// polymorphic (currently only "ORDER"), ready for future entities.
+export interface AuditLogEntry {
+  id: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  actorType: ActorType;
+  actorUserId: string | null;
+  actorName: string | null;
+  summary: string;
+  changes: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface AuditLogQueryParams {
+  limit?: number;
+  cursor?: string;
 }
 
 // ─── Products ────────────────────────────────────────────────────────────────

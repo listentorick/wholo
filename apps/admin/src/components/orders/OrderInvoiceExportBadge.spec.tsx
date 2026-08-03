@@ -14,12 +14,12 @@ const mockRetry = adminAccountingApi.retryInvoiceExport as ReturnType<typeof vi.
 const makeExport = (overrides: Partial<OrderInvoiceExportSummary> = {}): OrderInvoiceExportSummary => ({
   id: 'export-1',
   provider: 'XERO',
-  status: 'COMPLETED',
-  externalInvoiceId: 'inv-1',
-  externalInvoiceNumber: 'INV-0042',
-  externalInvoiceStatus: 'DRAFT',
-  exportedAt: '2026-07-09T18:45:00.000Z',
-  errorCode: null,
+  status: 'FAILED',
+  externalInvoiceId: null,
+  externalInvoiceNumber: null,
+  externalInvoiceStatus: null,
+  exportedAt: null,
+  errorCode: 'PROVIDER_ERROR',
   errorMessage: null,
   createdAt: '2026-07-09T18:44:00.000Z',
   ...overrides,
@@ -30,24 +30,11 @@ beforeEach(() => {
 });
 
 describe('OrderInvoiceExportBadge', () => {
-  it('shows the raised invoice number and provider when the export completed', () => {
-    render(<OrderInvoiceExportBadge invoiceExport={makeExport()} token="token-1" />);
-
-    expect(screen.getByText('Invoice raised')).toBeInTheDocument();
-    expect(screen.getByText(/INV-0042/)).toBeInTheDocument();
-    expect(screen.getByText(/Xero/)).toBeInTheDocument();
-  });
-
-  it('tolerates a missing invoice number (providers that number on approval)', () => {
-    render(
-      <OrderInvoiceExportBadge
-        invoiceExport={makeExport({ externalInvoiceNumber: null, externalInvoiceStatus: null })}
-        token="token-1"
-      />,
-    );
-
-    expect(screen.getByText('Invoice raised')).toBeInTheDocument();
-    expect(screen.getByText(/An invoice/)).toBeInTheDocument();
+  // Historical state (raised / in-progress) is shown by the order's audit-log
+  // Timeline instead — this component renders nothing for non-FAILED status.
+  it.each(['COMPLETED', 'PENDING', 'PROCESSING'] as const)('renders nothing when status is %s', (status) => {
+    const { container } = render(<OrderInvoiceExportBadge invoiceExport={makeExport({ status })} token="token-1" />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the failure message with a retry action when the export failed', async () => {
@@ -57,7 +44,6 @@ describe('OrderInvoiceExportBadge', () => {
     render(
       <OrderInvoiceExportBadge
         invoiceExport={makeExport({
-          status: 'FAILED',
           errorMessage: 'Cannot create accounting invoice because the customer is not linked to an accounting contact.',
         })}
         token="token-1"
@@ -75,16 +61,10 @@ describe('OrderInvoiceExportBadge', () => {
     mockRetry.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<OrderInvoiceExportBadge invoiceExport={makeExport({ status: 'FAILED' })} token="token-1" />);
+    render(<OrderInvoiceExportBadge invoiceExport={makeExport()} token="token-1" />);
     await user.click(screen.getByRole('button', { name: 'Retry invoice export' }));
 
     await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Retry invoice export' })).toBeInTheDocument();
-  });
-
-  it('shows an in-progress state for pending and processing exports', () => {
-    render(<OrderInvoiceExportBadge invoiceExport={makeExport({ status: 'PROCESSING' })} token="token-1" />);
-
-    expect(screen.getByText('Invoice export in progress')).toBeInTheDocument();
   });
 });

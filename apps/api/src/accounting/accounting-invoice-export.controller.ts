@@ -1,8 +1,12 @@
-import { Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Controller, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
+
+interface RequestWithUser extends Request {
+  user: { sub: string };
+}
 
 @ApiTags('Accounting')
 @ApiBearerAuth()
@@ -15,7 +19,11 @@ export class AccountingInvoiceExportController {
   @Post(':exportId/retry')
   @HttpCode(202)
   @ApiOperation({ summary: 'Queue a retry of a failed accounting invoice export' })
-  retry(@Param('distributorId') distributorId: string, @Param('exportId') exportId: string) {
-    return this.service.retryExport(distributorId, exportId);
+  retry(
+    @Param('distributorId') distributorId: string,
+    @Param('exportId') exportId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.service.retryExport(distributorId, exportId, req.user.sub);
   }
 }

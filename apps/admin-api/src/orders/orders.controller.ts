@@ -5,6 +5,7 @@ import { OrdersService } from './orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -21,6 +22,12 @@ export class OrdersController {
   getOrder(@Param('id') id: string, @Req() req: Request) {
     const { organisationId, token } = req['user'] as { organisationId: string; token: string };
     return this.ordersService.getOrder(id, organisationId, token);
+  }
+
+  @Get(':id/audit-log')
+  getOrderAuditLog(@Param('id') id: string, @Query() query: AuditLogQueryDto, @Req() req: Request) {
+    const { organisationId, token } = req['user'] as { organisationId: string; token: string };
+    return this.ordersService.getOrderAuditLog(id, organisationId, query, token);
   }
 
   @Post(':id/accept')

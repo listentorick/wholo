@@ -60,7 +60,8 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() dto: CancelOrderDto,
     @ActingCustomerId() customerId: string,
+    @Req() req: RequestWithUser,
   ) {
-    return this.ordersService.cancelCustomerOrder(id, customerId, dto.reason);
+    return this.ordersService.cancelCustomerOrder(id, customerId, dto.reason, req.user.sub);
   }
 }

@@ -3,6 +3,7 @@ import { ApiClientService } from '../api-client/api-client.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { AuditLogQueryDto } from './dto/audit-log-query.dto';
 
 @Injectable()
 export class OrdersService {
@@ -25,6 +26,17 @@ export class OrdersService {
 
   getOrder(orderId: string, distributorId: string, token: string) {
     return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}`, token);
+  }
+
+  getOrderAuditLog(orderId: string, distributorId: string, query: AuditLogQueryDto, token: string) {
+    const params = new URLSearchParams();
+    if (query.limit != null) params.set('limit', String(query.limit));
+    if (query.cursor) params.set('cursor', query.cursor);
+    const qs = params.toString();
+    return this.api.get(
+      `/admin/distributors/${distributorId}/orders/${orderId}/audit-log${qs ? `?${qs}` : ''}`,
+      token,
+    );
   }
 
   acceptOrder(orderId: string, distributorId: string, token: string) {

@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, UnprocessableEntityException, BadRequestException } from '@nestjs/common';
-import { OrderStatus, OrderLineStatus, AcceptedByActorType } from '@prisma/client';
+import { OrderStatus, OrderLineStatus, AcceptedByActorType, ActorType } from '@prisma/client';
 import { AdminOrdersService } from './admin-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 
 const mockPrisma = {
   order: {
@@ -13,10 +14,13 @@ const mockPrisma = {
     update: jest.fn(),
   },
   orderLine: { updateMany: jest.fn() },
+  user: { findUnique: jest.fn() },
+  auditLog: { findMany: jest.fn(), count: jest.fn() },
   $transaction: jest.fn(),
 };
 
 const mockOutbox = { writeEvent: jest.fn() };
+const mockAudit = { record: jest.fn() };
 
 const makeOrder = (overrides = {}) => ({
   id: 'order-1',
@@ -31,6 +35,7 @@ const makeOrder = (overrides = {}) => ({
   totalAmount: { toFixed: () => '100.00' },
   billingAddressSnapshot: null,
   deliveryAddressSnapshot: null,
+  requestedDeliveryDate: new Date('2024-06-14'),
   customerReference: null,
   notes: null,
   acceptanceModeSnapshot: null,
@@ -63,6 +68,7 @@ describe('AdminOrdersService', () => {
         AdminOrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: mockOutbox },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
     service = module.get(AdminOrdersService);
@@ -142,6 +148,22 @@ describe('AdminOrdersService', () => {
       await expect(service.getOrder('order-1', 'dist-2')).rejects.toThrow(NotFoundException);
     });
 
+    it('formats requestedDeliveryDate as a date-only string', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder());
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.requestedDeliveryDate).toBe('2024-06-14');
+    });
+
+    it('returns requestedDeliveryDate null when not set', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder({ requestedDeliveryDate: null }));
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.requestedDeliveryDate).toBeNull();
+    });
+
     it('returns invoiceExport null when the order has no accounting export', async () => {
       mockPrisma.order.findFirst.mockResolvedValue(makeOrder());
 
@@ -187,6 +209,72 @@ describe('AdminOrdersService', () => {
     });
   });
 
+  // ── getOrderAuditLog ────────────────────────────────────────────────────────
+
+  describe('getOrderAuditLog', () => {
+    const makeEntry = (overrides = {}) => ({
+      id: 'audit-1',
+      entityType: 'ORDER',
+      entityId: 'order-1',
+      action: 'ORDER_ACCEPTED',
+      actorType: ActorType.USER,
+      actorUserId: 'user-1',
+      actorName: 'Jane Doe',
+      summary: 'Accepted the order',
+      changes: null,
+      createdAt: new Date('2026-01-01T10:00:00.000Z'),
+      ...overrides,
+    });
+
+    it('returns paginated audit entries for an order belonging to the distributor', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({ id: 'order-1' });
+      mockPrisma.auditLog.findMany.mockResolvedValue([makeEntry()]);
+      mockPrisma.auditLog.count.mockResolvedValue(1);
+
+      const result = await service.getOrderAuditLog('order-1', 'dist-1', {});
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toEqual(
+        expect.objectContaining({ id: 'audit-1', action: 'ORDER_ACCEPTED', actorName: 'Jane Doe' }),
+      );
+      expect(result.pagination.hasMore).toBe(false);
+      expect(mockPrisma.auditLog.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ distributorId: 'dist-1', entityType: 'ORDER', entityId: 'order-1' }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('throws NotFoundException when the order belongs to a different distributor', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(null);
+      await expect(service.getOrderAuditLog('order-1', 'dist-2', {})).rejects.toThrow(NotFoundException);
+    });
+
+    it('sets hasMore and nextCursor when more entries exist', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({ id: 'order-1' });
+      const entries = Array.from({ length: 31 }, (_, i) => makeEntry({ id: `audit-${i}` }));
+      mockPrisma.auditLog.findMany.mockResolvedValue(entries);
+      mockPrisma.auditLog.count.mockResolvedValue(31);
+
+      const result = await service.getOrderAuditLog('order-1', 'dist-1', {});
+
+      expect(result.data).toHaveLength(30);
+      expect(result.pagination.hasMore).toBe(true);
+      expect(result.pagination.nextCursor).not.toBeNull();
+    });
+
+    it('throws BadRequestException for an invalid cursor', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({ id: 'order-1' });
+      await expect(
+        service.getOrderAuditLog('order-1', 'dist-1', { cursor: 'not-valid-base64url-json' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   // ── acceptOrder ─────────────────────────────────────────────────────────────
 
   describe('acceptOrder', () => {
@@ -198,6 +286,7 @@ describe('AdminOrdersService', () => {
       mockPrisma.order.update.mockResolvedValue(accepted);
       mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
       mockOutbox.writeEvent.mockResolvedValue(undefined);
+      mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
 
       const result = await service.acceptOrder('order-1', 'dist-1', 'user-1');
 
@@ -213,6 +302,17 @@ describe('AdminOrdersService', () => {
       );
       expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
         expect.anything(), 'Order', 'order-1', 'OrderAccepted', expect.any(Object),
+      );
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          entityType: 'ORDER',
+          entityId: 'order-1',
+          action: 'ORDER_ACCEPTED',
+          actorType: ActorType.USER,
+          actorUserId: 'user-1',
+          actorName: 'Jane Doe',
+        }),
       );
     });
 
@@ -240,11 +340,24 @@ describe('AdminOrdersService', () => {
       mockPrisma.order.update.mockResolvedValue(rejected);
       mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
       mockOutbox.writeEvent.mockResolvedValue(undefined);
+      mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
 
       const result = await service.rejectOrder('order-1', 'dist-1', 'user-1', 'Out of stock');
       expect(result.status).toBe(OrderStatus.REJECTED);
       expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
         expect.anything(), 'Order', 'order-1', 'OrderRejected', expect.any(Object),
+      );
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          entityType: 'ORDER',
+          entityId: 'order-1',
+          action: 'ORDER_REJECTED',
+          actorType: ActorType.USER,
+          actorUserId: 'user-1',
+          actorName: 'Jane Doe',
+          changes: { reason: 'Out of stock' },
+        }),
       );
     });
 
@@ -274,9 +387,22 @@ describe('AdminOrdersService', () => {
       mockPrisma.order.update.mockResolvedValue(cancelled);
       mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
       mockOutbox.writeEvent.mockResolvedValue(undefined);
+      mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
 
       const result = await service.cancelOrder('order-1', 'dist-1', 'user-1', 'Changed mind');
       expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(mockAudit.record).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          entityType: 'ORDER',
+          entityId: 'order-1',
+          action: 'ORDER_CANCELLED',
+          actorType: ActorType.USER,
+          actorUserId: 'user-1',
+          actorName: 'Jane Doe',
+          changes: { reason: 'Changed mind' },
+        }),
+      );
     });
 
     it('cancels an accepted order', async () => {
@@ -287,6 +413,7 @@ describe('AdminOrdersService', () => {
       mockPrisma.order.update.mockResolvedValue(cancelled);
       mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
       mockOutbox.writeEvent.mockResolvedValue(undefined);
+      mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
 
       await expect(
         service.cancelOrder('order-1', 'dist-1', 'user-1', 'Changed mind'),

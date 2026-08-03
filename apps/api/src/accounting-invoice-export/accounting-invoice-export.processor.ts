@@ -5,6 +5,7 @@ import {
   AccountingConnectionStatus,
   AccountingInvoiceExport,
   AccountingInvoiceExportStatus,
+  ActorType,
   Order,
   OrderLine,
   OrderLineStatus,
@@ -21,6 +22,7 @@ import {
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 import { ACCOUNTING_INVOICE_EXPORT_QUEUE } from '../queues/queue.constants';
 
 interface InvoiceExportJobData {
@@ -54,6 +56,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     private readonly accountingConnectionService: AccountingConnectionService,
     private readonly adapters: AccountingAdapterRegistry,
     private readonly outbox: OutboxService,
+    private readonly audit: AuditService,
   ) {
     super();
   }
@@ -300,6 +303,15 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
             occurredAt: new Date().toISOString(),
           },
         );
+        await this.audit.record(tx, {
+          distributorId: order.distributorId,
+          entityType: 'ORDER',
+          entityId: order.id,
+          action: 'INVOICE_EXPORT_COMPLETED',
+          actorType: ActorType.SYSTEM,
+          summary: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${connection.provider}`,
+          changes: { exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
+        });
       });
       this.logger.log(
         `Created ${connection.provider} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
@@ -347,6 +359,15 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
           occurredAt: new Date().toISOString(),
         },
       );
+      await this.audit.record(tx, {
+        distributorId: exportRow.distributorId,
+        entityType: 'ORDER',
+        entityId: exportRow.orderId,
+        action: 'INVOICE_EXPORT_FAILED',
+        actorType: ActorType.SYSTEM,
+        summary: errorMessage,
+        changes: { exportId: exportRow.id, errorCode },
+      });
     });
   }
 }

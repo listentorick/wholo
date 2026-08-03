@@ -12,11 +12,13 @@ import {
   OrderAcceptanceMode,
   AcceptanceModeSource,
   AcceptedByActorType,
+  ActorType,
   TradeRelationshipStatus,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { SubmitOrderDto } from './dto/submit-order.dto';
@@ -102,6 +104,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private outbox: OutboxService,
+    private audit: AuditService,
     private deliveryAvailability: DeliveryAvailabilityService,
     private r2Storage: R2StorageService,
   ) {}
@@ -326,6 +329,31 @@ export class OrdersService {
         });
       }
 
+      const placer = await tx.user.findUnique({
+        where: { id: placedByUserId },
+        select: { firstName: true, lastName: true },
+      });
+      await this.audit.record(tx, {
+        distributorId: distributor.id,
+        entityType: 'ORDER',
+        entityId: newOrder.id,
+        action: 'ORDER_SUBMITTED',
+        actorType: ActorType.USER,
+        actorUserId: placedByUserId,
+        actorName: placer ? `${placer.firstName} ${placer.lastName}` : undefined,
+        summary: 'Submitted the order',
+      });
+      if (isAutoAccept) {
+        await this.audit.record(tx, {
+          distributorId: distributor.id,
+          entityType: 'ORDER',
+          entityId: newOrder.id,
+          action: 'ORDER_ACCEPTED',
+          actorType: ActorType.SYSTEM,
+          summary: 'Auto-accepted the order',
+        });
+      }
+
       return newOrder;
     });
 
@@ -424,7 +452,7 @@ export class OrdersService {
     return this.formatOrder(order);
   }
 
-  async cancelCustomerOrder(orderId: string, traderCustomerId: string, reason: string) {
+  async cancelCustomerOrder(orderId: string, traderCustomerId: string, reason: string, actingUserId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, traderCustomerId },
       select: { id: true, status: true, distributorId: true, traderCustomerId: true, orderNumber: true },
@@ -458,6 +486,25 @@ export class OrdersService {
         status: OrderStatus.CANCELLED,
         cancellationReason: reason,
         occurredAt: now.toISOString(),
+      });
+      // Actor is whoever is actually cancelling right now (actingUserId), not
+      // cancelledByUserId above — that field holds the organisation id, not a
+      // user id, a pre-existing inconsistency left as-is (see cancelledByUserId
+      // assignment above); the audit trail should attribute the action correctly.
+      const actor = await tx.user.findUnique({
+        where: { id: actingUserId },
+        select: { firstName: true, lastName: true },
+      });
+      await this.audit.record(tx, {
+        distributorId: order.distributorId,
+        entityType: 'ORDER',
+        entityId: orderId,
+        action: 'ORDER_CANCELLED',
+        actorType: ActorType.USER,
+        actorUserId: actingUserId,
+        actorName: actor ? `${actor.firstName} ${actor.lastName}` : undefined,
+        summary: 'Cancelled the order',
+        changes: { reason },
       });
       return u;
     });

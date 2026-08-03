@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnprocessableEntityException, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { CartOrderStatus, OrganisationType, OrderStatus, OrderAcceptanceMode, AcceptanceModeSource, Prisma } from '@prisma/client';
+import { CartOrderStatus, OrganisationType, OrderStatus, OrderAcceptanceMode, AcceptanceModeSource, ActorType, Prisma } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 
@@ -67,6 +68,7 @@ describe('OrdersService — delivery date revalidation', () => {
     };
 
     const mockOutbox = { writeEvent: jest.fn() };
+    const mockAudit = { record: jest.fn() };
     const mockDelivery = { getAvailableDates: jest.fn() };
     const mockR2Storage = { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) };
 
@@ -75,6 +77,7 @@ describe('OrdersService — delivery date revalidation', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: mockOutbox },
+        { provide: AuditService, useValue: mockAudit },
         { provide: DeliveryAvailabilityService, useValue: mockDelivery },
         { provide: R2StorageService, useValue: mockR2Storage },
       ],
@@ -102,6 +105,7 @@ describe('OrdersService — delivery date revalidation', () => {
         cartOrder: { delete: jest.fn().mockResolvedValue({}) },
         orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
         outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
       }),
     );
   }
@@ -262,6 +266,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
@@ -287,6 +292,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
         cartOrder: { delete: jest.fn().mockResolvedValue({}) },
         orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
         outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
       }),
     );
   }
@@ -373,6 +379,7 @@ describe('OrdersService — listCustomerOrders', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
@@ -512,6 +519,7 @@ describe('OrdersService — getCustomerOrder', () => {
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
@@ -581,5 +589,114 @@ describe('OrdersService — getCustomerOrder', () => {
     await service.getCustomerOrder('order-1', CUSTOMER_ID);
 
     expect(assetImageFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrdersService — cancelCustomerOrder', () => {
+  let service: OrdersService;
+  let prisma: { order: { findFirst: jest.Mock }; $transaction: jest.Mock };
+  let outbox: { writeEvent: jest.Mock };
+  let audit: { record: jest.Mock };
+  let txUserFindUnique: jest.Mock;
+
+  function makeOrder(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'order-1',
+      status: OrderStatus.SUBMITTED,
+      distributorId: DISTRIBUTOR_ID,
+      traderCustomerId: CUSTOMER_ID,
+      orderNumber: 'ORD-2024-00001',
+      ...overrides,
+    };
+  }
+
+  function makeFullOrder(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID,
+      traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.CANCELLED,
+      currency: 'GBP', subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' },
+      totalAmount: { toFixed: () => '20.00' }, billingAddressSnapshot: null, deliveryAddressSnapshot: null,
+      requestedDeliveryDate: null, customerReference: null, notes: null,
+      acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT,
+      submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null,
+      rejectedAt: null, rejectedByUserId: null, rejectionReason: null,
+      cancelledAt: new Date(), cancelledByUserId: CUSTOMER_ID, cancellationReason: 'Changed mind',
+      createdAt: new Date(), updatedAt: new Date(),
+      customer: { id: CUSTOMER_ID, name: 'Test Customer' },
+      invoiceExports: [],
+      lines: [],
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    prisma = {
+      order: { findFirst: jest.fn() },
+      $transaction: jest.fn(),
+    };
+    outbox = { writeEvent: jest.fn() };
+    audit = { record: jest.fn() };
+    txUserFindUnique = jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
+
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        order: { update: jest.fn().mockResolvedValue(makeFullOrder()) },
+        orderLine: { updateMany: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: txUserFindUnique },
+      }),
+    );
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: OutboxService, useValue: outbox },
+        { provide: AuditService, useValue: audit },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+      ],
+    }).compile();
+
+    service = module.get(OrdersService);
+  });
+
+  it('cancels a submitted order, attributing the audit entry to the acting user (not placedByUserId)', async () => {
+    prisma.order.findFirst.mockResolvedValue(makeOrder());
+
+    const result = await service.cancelCustomerOrder('order-1', CUSTOMER_ID, 'Changed mind', 'acting-user-1');
+
+    expect(result.status).toBe(OrderStatus.CANCELLED);
+    expect(outbox.writeEvent).toHaveBeenCalledWith(
+      expect.anything(), 'Order', 'order-1', 'OrderCancelled', expect.any(Object),
+    );
+    expect(txUserFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'acting-user-1' } }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        entityType: 'ORDER',
+        entityId: 'order-1',
+        action: 'ORDER_CANCELLED',
+        actorType: ActorType.USER,
+        actorUserId: 'acting-user-1',
+        actorName: 'Jane Doe',
+        changes: { reason: 'Changed mind' },
+      }),
+    );
+  });
+
+  it('throws NotFoundException when the order does not belong to the customer', async () => {
+    prisma.order.findFirst.mockResolvedValue(null);
+    await expect(
+      service.cancelCustomerOrder('order-1', CUSTOMER_ID, 'reason', 'acting-user-1'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('throws UnprocessableEntityException when the order is not SUBMITTED', async () => {
+    prisma.order.findFirst.mockResolvedValue(makeOrder({ status: OrderStatus.ACCEPTED }));
+    await expect(
+      service.cancelCustomerOrder('order-1', CUSTOMER_ID, 'reason', 'acting-user-1'),
+    ).rejects.toThrow(UnprocessableEntityException);
   });
 });

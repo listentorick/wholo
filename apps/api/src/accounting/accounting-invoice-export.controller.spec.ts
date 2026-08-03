@@ -23,12 +23,12 @@ describe('AccountingInvoiceExportController', () => {
     expect(guards).toEqual([JwtAuthGuard, DistributorAccessGuard]);
   });
 
-  it('retry forwards the path ids to the service', async () => {
+  it('retry forwards the path ids and requesting user to the service', async () => {
     mockService.retryExport.mockResolvedValue({ status: 'requested' });
 
-    const result = await controller.retry('dist-1', 'export-1');
+    const result = await controller.retry('dist-1', 'export-1', { user: { sub: 'user-1' } } as any);
 
-    expect(mockService.retryExport).toHaveBeenCalledWith('dist-1', 'export-1');
+    expect(mockService.retryExport).toHaveBeenCalledWith('dist-1', 'export-1', 'user-1');
     expect(result).toEqual({ status: 'requested' });
   });
 });

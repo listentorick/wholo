@@ -5,6 +5,8 @@ import type {
   RejectOrderRequest,
   CancelOrderRequest,
   PaginatedResponse,
+  AuditLogEntry,
+  AuditLogQueryParams,
 } from '@wholo/types';
 import { apiFetch } from './base';
 
@@ -25,6 +27,19 @@ export const adminOrdersApi = {
 
   getOrder(orderId: string, token: string): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}`, { token });
+  },
+
+  getOrderAuditLog(
+    orderId: string,
+    params: AuditLogQueryParams,
+    token: string,
+  ): Promise<PaginatedResponse<AuditLogEntry>> {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.cursor) qs.set('cursor', params.cursor);
+    return apiFetch<PaginatedResponse<AuditLogEntry>>(`/api/v1/orders/${orderId}/audit-log?${qs.toString()}`, {
+      token,
+    });
   },
 
   acceptOrder(orderId: string, token: string): Promise<Order> {

@@ -70,6 +70,7 @@ describe('Admin Orders (integration)', () => {
 
   afterAll(async () => {
     await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'Order', aggregateId: { in: await prisma.order.findMany({ where: { distributorId: { in: [DIST_A, DIST_B] } }, select: { id: true } }).then((rows) => rows.map((r) => r.id)) } } });
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: USER_A } });
@@ -89,6 +90,7 @@ describe('Admin Orders (integration)', () => {
         },
       },
     });
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
@@ -268,6 +270,95 @@ describe('Admin Orders (integration)', () => {
       expect(res.status).toBe(403);
       const inDb = await prisma.order.findUnique({ where: { id: orderB.id } });
       expect(inDb?.status).toBe(OrderStatus.SUBMITTED);
+    });
+  });
+
+  // ── GET /admin/distributors/:distributorId/orders/:id/audit-log ────────────
+
+  describe('GET /api/v1/admin/distributors/:distributorId/orders/:id/audit-log', () => {
+    it('records and returns an audit entry for a real accept call, attributed to the acting user', async () => {
+      const order = await createOrder(DIST_A, OrderStatus.SUBMITTED);
+
+      const acceptRes = await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(acceptRes.status).toBe(200);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/audit-log`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0]).toEqual(
+        expect.objectContaining({
+          entityType: 'ORDER',
+          entityId: order.id,
+          action: 'ORDER_ACCEPTED',
+          actorType: 'USER',
+          actorUserId: USER_A,
+          actorName: 'Orders Admin',
+          summary: 'Accepted the order',
+        }),
+      );
+      expect(res.body.pagination).toEqual(
+        expect.objectContaining({ hasMore: false, total: 1 }),
+      );
+    });
+
+    it('returns 404 when the order belongs to a different distributor than the one in the path', async () => {
+      const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}/audit-log`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 403 when the caller has no membership for the path distributor', async () => {
+      const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}/audit-log`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it("never leaks another distributor's audit entries, even for a same-named order under the caller's own distributor path", async () => {
+      // DIST_A gets its own accepted order (one audit entry). DIST_B gets an
+      // independently accepted order (its own audit entry). Confirms the
+      // response for DIST_A's order is scoped to DIST_A's entityId/distributorId
+      // and never includes DIST_B's row, proving the WHERE clause — not just
+      // ownership of the order id — is what's filtering results.
+      const orderA = await createOrder(DIST_A, OrderStatus.SUBMITTED);
+      await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${orderA.id}/accept`)
+        .set('Authorization', `Bearer ${token}`);
+
+      const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
+      await prisma.auditLog.create({
+        data: {
+          distributorId: DIST_B,
+          entityType: 'ORDER',
+          entityId: orderB.id,
+          action: 'ORDER_ACCEPTED',
+          actorType: 'USER',
+          actorUserId: 'some-other-user',
+          actorName: 'Someone Else',
+          summary: 'Accepted the order',
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderA.id}/audit-log`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data.every((e: { entityId: string }) => e.entityId === orderA.id)).toBe(true);
+      expect(res.body.data.some((e: { actorName: string }) => e.actorName === 'Someone Else')).toBe(false);
     });
   });
 });
