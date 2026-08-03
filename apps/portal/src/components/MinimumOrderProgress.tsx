@@ -1,0 +1,48 @@
+export interface MinimumOrderProgressProps {
+  subtotal: number;
+  minimum: number | null;
+  /** compact = shop header treatment; prominent = checkout order-summary treatment. */
+  size?: 'compact' | 'prominent';
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 flex-shrink-0">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l2.5 2.5L16 9.5" />
+    </svg>
+  );
+}
+
+export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: MinimumOrderProgressProps) {
+  if (minimum === null || minimum <= 0) return null;
+
+  const met = subtotal >= minimum;
+
+  if (met) {
+    return (
+      <div className="mt-3 flex items-center gap-2 text-sm text-success">
+        <CheckIcon />
+        <span>
+          {size === 'prominent'
+            ? `You've met the £${minimum.toFixed(2)} minimum order value`
+            : 'Minimum order value met'}
+        </span>
+      </div>
+    );
+  }
+
+  const remaining = minimum - subtotal;
+  const pct = Math.min(100, (subtotal / minimum) * 100);
+
+  return (
+    <div className="mt-3">
+      <div className="h-1 w-full bg-border overflow-hidden">
+        <div className="h-full bg-amber transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1.5 text-sm text-foreground-tertiary">
+        Add £{remaining.toFixed(2)} more to reach the £{minimum.toFixed(2)} minimum order
+      </p>
+    </div>
+  );
+}

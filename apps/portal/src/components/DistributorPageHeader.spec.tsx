@@ -16,6 +16,10 @@ vi.mock('@/lib/auth-context', () => ({
   useAuth: vi.fn(),
 }));
 
+vi.mock('@/lib/cart-context', () => ({
+  useCart: vi.fn(),
+}));
+
 vi.mock('@wholo/api-client', () => ({
   deliveryApi: { getAvailableDates: vi.fn() },
 }));
@@ -24,6 +28,7 @@ vi.mock('@wholo/api-client', () => ({
 
 import { useDistributor } from '@/lib/distributor-context';
 import { useAuth } from '@/lib/auth-context';
+import { useCart } from '@/lib/cart-context';
 import { deliveryApi } from '@wholo/api-client';
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -36,6 +41,7 @@ function mockDistributorReturn(overrides: Record<string, unknown> = {}) {
     distributor: { name: 'Fine Wines Co', logoUrl: 'https://example.com/logo.png', minimumOrderSpend: null } as any,
     relationshipStatus: 'NONE',
     relationshipMinSpend: null,
+    effectiveMinSpend: null,
     bannerScrolledPast: false,
     setBannerScrolledPast: vi.fn(),
     requestAccess,
@@ -49,6 +55,7 @@ beforeEach(() => {
   requestAccess.mockClear().mockResolvedValue(undefined);
   mockDistributorReturn();
   vi.mocked(useAuth).mockReturnValue({ accessToken: 'test-token' } as any);
+  vi.mocked(useCart).mockReturnValue({ subtotal: 0 } as any);
   vi.mocked(deliveryApi.getAvailableDates).mockResolvedValue({ dates: [], profileId: null });
 });
 
@@ -140,25 +147,23 @@ describe('DistributorPageHeader', () => {
     expect(deliveryApi.getAvailableDates).not.toHaveBeenCalled();
   });
 
-  it('shows minimum order spend when active relationship has one set', () => {
-    mockDistributorReturn({ relationshipStatus: 'ACTIVE', relationshipMinSpend: 150 });
+  it('shows minimum order progress when a minimum is set and the cart is below it', () => {
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE', effectiveMinSpend: 150 });
+    vi.mocked(useCart).mockReturnValue({ subtotal: 30 } as any);
     render(<DistributorPageHeader distributorSlug={slug} />);
-    expect(screen.getByText(/minimum order value/)).toBeTruthy();
-    expect(screen.getByText(/150\.00/)).toBeTruthy();
+    expect(screen.getByText('Add £120.00 more to reach the £150.00 minimum order')).toBeTruthy();
   });
 
-  it('shows distributor default minimum spend when no active relationship', () => {
-    mockDistributorReturn({
-      distributor: { name: 'Fine Wines Co', logoUrl: null, minimumOrderSpend: 200 } as any,
-      relationshipStatus: 'NONE',
-    });
+  it('shows the met confirmation once the cart reaches the minimum', () => {
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE', effectiveMinSpend: 150 });
+    vi.mocked(useCart).mockReturnValue({ subtotal: 150 } as any);
     render(<DistributorPageHeader distributorSlug={slug} />);
-    expect(screen.getByText(/200\.00 minimum order value/)).toBeTruthy();
+    expect(screen.getByText('Minimum order value met')).toBeTruthy();
   });
 
-  it('hides minimum order spend when none is set', () => {
-    mockDistributorReturn({ relationshipStatus: 'ACTIVE' });
+  it('hides minimum order progress when none is set', () => {
+    mockDistributorReturn({ relationshipStatus: 'ACTIVE', effectiveMinSpend: null });
     render(<DistributorPageHeader distributorSlug={slug} />);
-    expect(screen.queryByText(/minimum order value/)).toBeNull();
+    expect(screen.queryByText(/minimum order/)).toBeNull();
   });
 });

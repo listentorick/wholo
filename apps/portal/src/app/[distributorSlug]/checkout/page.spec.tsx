@@ -31,10 +31,16 @@ vi.mock('@/lib/cart-context', () => ({
     cartLoading: false,
     items: [{ productId: 'p1', quantity: 1, unitPrice: '10.00', product: { id: 'p1', name: 'Wine' } }],
     quantities: { p1: 1 },
+    subtotal: 10,
     savingItems: new Set(),
     syncItem: vi.fn(),
     refreshCart: mockRefreshCart,
   }),
+}));
+
+let mockEffectiveMinSpend: number | null = null;
+vi.mock('@/lib/distributor-context', () => ({
+  useDistributor: () => ({ effectiveMinSpend: mockEffectiveMinSpend }),
 }));
 
 const mockSubmitOrder = vi.fn();
@@ -60,6 +66,7 @@ describe('CheckoutPage — handlePlaceOrder', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRefreshCart.mockResolvedValue(undefined);
+    mockEffectiveMinSpend = null;
   });
 
   it('calls clearOrderAsSession (not refreshCart) when order-as mode is active', async () => {
@@ -92,6 +99,7 @@ describe('CheckoutPage — delivery address', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockOrderAsMode = false;
+    mockEffectiveMinSpend = null;
   });
 
   it('shows the delivery address when one is on file', async () => {
@@ -126,5 +134,47 @@ describe('CheckoutPage — delivery address', () => {
     expect(
       await screen.findByText('No delivery address on file. Please contact your distributor to add one.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('CheckoutPage — minimum order spend', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrderAsMode = false;
+    mockEffectiveMinSpend = null;
+  });
+
+  it('enables Place Order when there is no minimum set', async () => {
+    render(<CheckoutPage />);
+    expect(await screen.findByText('Place Order')).not.toBeDisabled();
+  });
+
+  it('disables Place Order and shows guidance when subtotal is below the minimum', async () => {
+    mockEffectiveMinSpend = 50; // cart subtotal is 10
+
+    render(<CheckoutPage />);
+
+    const button = await screen.findByText('Place Order');
+    expect(button.closest('button')).toBeDisabled();
+    expect(screen.getByText('Add £40.00 more to reach the £50.00 minimum order')).toBeInTheDocument();
+    expect(screen.getByText('Minimum order value not yet met')).toBeInTheDocument();
+  });
+
+  it('enables Place Order when subtotal meets the minimum exactly', async () => {
+    mockEffectiveMinSpend = 10; // cart subtotal is 10
+
+    render(<CheckoutPage />);
+
+    expect(await screen.findByText('Place Order')).not.toBeDisabled();
+  });
+
+  it('does not submit the order when the button is disabled and clicked', async () => {
+    mockEffectiveMinSpend = 50;
+
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockSubmitOrder).not.toHaveBeenCalled();
   });
 });

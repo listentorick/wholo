@@ -3,6 +3,7 @@ import { TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
+import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
 
 @Injectable()
 export class PortalService {
@@ -106,7 +107,10 @@ export class PortalService {
           }),
         ]);
 
-        const effectiveMinSpend = relationshipMinSpend ?? distributor.distributorSettings?.minimumOrderSpend ?? null;
+        const effectiveMinSpend = resolveEffectiveMinimumOrderSpend(
+          relationshipMinSpend,
+          distributor.distributorSettings?.minimumOrderSpend,
+        );
         return {
           id: distributor.id,
           name: distributor.name,

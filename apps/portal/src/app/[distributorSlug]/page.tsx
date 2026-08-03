@@ -201,7 +201,7 @@ export default function DistributorHomePage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { distributor, relationshipStatus, relationshipMinSpend } = useDistributor();
+  const { distributor, relationshipStatus, effectiveMinSpend } = useDistributor();
 
   if (isLoading) {
     return (
@@ -219,12 +219,6 @@ export default function DistributorHomePage() {
     distributor.addressLine1 || distributor.addressCity
   );
 
-  const effectiveMinSpend =
-    relationshipStatus === TradeRelationshipStatus.ACTIVE
-      ? relationshipMinSpend
-      : relationshipStatus != null
-        ? (distributor?.minimumOrderSpend ?? null)
-        : null;
   const ctaKind = connectCtaKind(relationshipStatus);
   const hasKeyInfo = distributor != null && (
     distributor.customerCount > 0 || effectiveMinSpend !== null || ctaKind !== null

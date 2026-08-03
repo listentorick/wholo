@@ -47,6 +47,7 @@ let mockDistributorValue: {
   distributor: DistributorInfo | null;
   relationshipStatus: string | null;
   relationshipMinSpend: number | null;
+  effectiveMinSpend: number | null;
   requestAccess: (recentContact: boolean) => Promise<void>;
 };
 
@@ -64,6 +65,7 @@ beforeEach(() => {
     distributor: baseDistributor,
     relationshipStatus: 'NONE',
     relationshipMinSpend: null,
+    effectiveMinSpend: null,
     requestAccess: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -83,23 +85,24 @@ describe('DistributorHomePage — Key Info', () => {
   });
 
   it('shows the distributor default minimum order value pre-relationship', () => {
-    mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: 150 };
     mockDistributorValue.relationshipStatus = 'NONE';
+    mockDistributorValue.effectiveMinSpend = 150;
     render(<DistributorHomePage />);
     expect(screen.getByText('£150.00')).toBeInTheDocument();
     expect(screen.getByText('minimum order')).toBeInTheDocument();
   });
 
   it('shows the relationship-specific minimum order value once connected', () => {
-    mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: 150, customerCount: 1 };
+    mockDistributorValue.distributor = { ...baseDistributor, customerCount: 1 };
     mockDistributorValue.relationshipStatus = 'ACTIVE';
-    mockDistributorValue.relationshipMinSpend = 75;
+    mockDistributorValue.effectiveMinSpend = 75;
     render(<DistributorHomePage />);
     expect(screen.getByText('£75.00')).toBeInTheDocument();
   });
 
   it('hides the minimum order tile when not set', () => {
-    mockDistributorValue.distributor = { ...baseDistributor, minimumOrderSpend: null, customerCount: 5 };
+    mockDistributorValue.distributor = { ...baseDistributor, customerCount: 5 };
+    mockDistributorValue.effectiveMinSpend = null;
     render(<DistributorHomePage />);
     expect(screen.queryByText('minimum order')).toBeNull();
   });

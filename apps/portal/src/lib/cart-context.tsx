@@ -9,6 +9,7 @@ import { useDistributor } from './distributor-context';
 interface CartContextValue {
   cartLoading: boolean;
   cartCount: number;
+  subtotal: number;
   items: CartItem[];
   quantities: Record<string, number>;
   inCart: Set<string>;
@@ -101,8 +102,13 @@ export function CartProvider({
 
   const cartCount = [...inCart].reduce((sum, id) => sum + (quantities[id] ?? 1), 0);
 
+  const subtotal = items.reduce(
+    (sum, item) => sum + (quantities[item.productId] ?? item.quantity) * parseFloat(item.unitPrice),
+    0,
+  );
+
   return (
-    <CartContext.Provider value={{ cartLoading, cartCount, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
+    <CartContext.Provider value={{ cartLoading, cartCount, subtotal, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
       {children}
     </CartContext.Provider>
   );

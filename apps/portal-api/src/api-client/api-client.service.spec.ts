@@ -60,6 +60,25 @@ describe('ApiClientService (portal-api)', () => {
     });
   });
 
+  it('prefers the upstream problem+json "detail" field over "message" (apps/api never sends "message")', async () => {
+    fetchMock.mockResolvedValue(
+      makeResponse(
+        422,
+        JSON.stringify({
+          type: 'https://wholo.app/errors/unprocessable-entity',
+          title: 'Unprocessable Entity',
+          status: 422,
+          detail: 'This order does not meet the £150.00 minimum order value for this distributor',
+        }),
+      ),
+    );
+
+    await expect(service.get('/things', 'token')).rejects.toMatchObject({
+      message: 'This order does not meet the £150.00 minimum order value for this distributor',
+      status: 422,
+    });
+  });
+
   it('throws HttpException with a fallback message on a 4xx with an empty body', async () => {
     fetchMock.mockResolvedValue(makeResponse(404, ''));
 

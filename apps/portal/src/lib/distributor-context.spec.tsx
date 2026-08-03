@@ -24,11 +24,12 @@ import { catalogueApi, portalApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { relationshipStatus, relationshipMinSpend, requestAccess } = useDistributor();
+  const { relationshipStatus, relationshipMinSpend, effectiveMinSpend, requestAccess } = useDistributor();
   return (
     <div>
       <span data-testid="status">{relationshipStatus ?? 'loading'}</span>
       <span data-testid="min-spend">{relationshipMinSpend ?? ''}</span>
+      <span data-testid="effective-min-spend">{effectiveMinSpend ?? ''}</span>
       <button onClick={() => requestAccess(true).catch(() => {})}>request-yes</button>
       <button onClick={() => requestAccess(false).catch(() => {})}>request-no</button>
     </div>
@@ -114,6 +115,78 @@ describe('DistributorProvider — relationship fetch', () => {
     await waitFor(() =>
       expect(portalApi.getDistributorRelationship).toHaveBeenCalledWith('test-dist', 'impersonated-cust', 'test-token'),
     );
+  });
+});
+
+describe('DistributorProvider — effectiveMinSpend', () => {
+  it('falls back to the distributor default minimum when the active relationship has no override', async () => {
+    vi.mocked(catalogueApi.getDistributor).mockResolvedValue({
+      id: 'dist-1',
+      name: 'Test Dist',
+      minimumOrderSpend: 200,
+    } as any);
+    vi.mocked(portalApi.getDistributorRelationship).mockResolvedValue({
+      status: 'ACTIVE',
+      minimumOrderSpend: null,
+    } as any);
+
+    renderDistributor();
+
+    await waitFor(() => expect(screen.getByTestId('effective-min-spend').textContent).toBe('200'));
+  });
+
+  it('uses the relationship override over the distributor default when both are set', async () => {
+    vi.mocked(catalogueApi.getDistributor).mockResolvedValue({
+      id: 'dist-1',
+      name: 'Test Dist',
+      minimumOrderSpend: 200,
+    } as any);
+    vi.mocked(portalApi.getDistributorRelationship).mockResolvedValue({
+      status: 'ACTIVE',
+      minimumOrderSpend: '50.00',
+    } as any);
+
+    renderDistributor();
+
+    await waitFor(() => expect(screen.getByTestId('effective-min-spend').textContent).toBe('50'));
+  });
+
+  it('shows the distributor default even when there is no active relationship (e.g. PENDING), for prospective customers', async () => {
+    vi.mocked(catalogueApi.getDistributor).mockResolvedValue({
+      id: 'dist-1',
+      name: 'Test Dist',
+      minimumOrderSpend: 200,
+    } as any);
+    vi.mocked(portalApi.getDistributorRelationship).mockResolvedValue({
+      status: 'PENDING_REQUEST',
+      minimumOrderSpend: '50.00',
+    } as any);
+
+    renderDistributor();
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('PENDING_REQUEST'));
+    expect(screen.getByTestId('effective-min-spend').textContent).toBe('200');
+  });
+
+  it('shows nothing while relationship status is still loading (null)', async () => {
+    vi.mocked(portalApi.getDistributorRelationship).mockImplementation(() => new Promise(() => {}));
+
+    renderDistributor();
+
+    expect(screen.getByTestId('status').textContent).toBe('loading');
+    expect(screen.getByTestId('effective-min-spend').textContent).toBe('');
+  });
+
+  it('is null when neither the relationship nor the distributor has a minimum set', async () => {
+    vi.mocked(portalApi.getDistributorRelationship).mockResolvedValue({
+      status: 'ACTIVE',
+      minimumOrderSpend: null,
+    } as any);
+
+    renderDistributor();
+
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ACTIVE'));
+    expect(screen.getByTestId('effective-min-spend').textContent).toBe('');
   });
 });
 

@@ -5,8 +5,10 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { useCart } from '@/lib/cart-context';
+import { useDistributor } from '@/lib/distributor-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { MinimumOrderProgress } from '@/components/MinimumOrderProgress';
 import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
@@ -19,7 +21,8 @@ export default function CheckoutPage() {
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
   const { orderAsMode, orderAsCustomerId, clearOrderAsSession } = useAuth();
-  const { cartLoading, items, quantities, savingItems, syncItem, refreshCart } = useCart();
+  const { cartLoading, items, quantities, subtotal, savingItems, syncItem, refreshCart } = useCart();
+  const { effectiveMinSpend } = useDistributor();
 
   const [poOpen, setPoOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -112,14 +115,11 @@ export default function CheckoutPage() {
     items.forEach((item) => syncItem(item.productId, 0));
   };
 
-  const subtotal = items.reduce((sum, item) => {
-    const qty = quantities[item.productId] ?? item.quantity;
-    return sum + qty * parseFloat(item.unitPrice);
-  }, 0);
   const freight = 0;
   const gst = 0;
   const total = subtotal + freight + gst;
   const fmt = (n: number) => `£${n.toFixed(2)}`;
+  const belowMinimum = effectiveMinSpend != null && subtotal < effectiveMinSpend;
 
   if (authLoading || cartLoading) {
     return (
@@ -357,6 +357,7 @@ export default function CheckoutPage() {
             <span style={{ fontSize: 15, color: '#1A1A1A', fontWeight: 500 }}>Total</span>
             <span style={{ fontSize: 15, color: '#1A1A1A', fontWeight: 500 }}>{fmt(total)}</span>
           </div>
+          <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
         </div>
 
         {/* PO Number + Comment */}
@@ -477,7 +478,7 @@ export default function CheckoutPage() {
         <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.4s' }}>
           <button
             className="co-place-order"
-            disabled={submitting}
+            disabled={submitting || belowMinimum}
             onClick={handlePlaceOrder}
           >
             {submitting ? (
@@ -485,6 +486,11 @@ export default function CheckoutPage() {
             ) : null}
             {submitting ? 'Placing Order…' : 'Place Order'}
           </button>
+          {belowMinimum && !submitError && (
+            <p style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', padding: '6px 0 2px' }}>
+              Minimum order value not yet met
+            </p>
+          )}
           {submitError && (
             <p style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', padding: '6px 0 2px' }}>
               {submitError}

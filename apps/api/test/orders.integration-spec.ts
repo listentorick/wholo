@@ -85,6 +85,7 @@ describe('Orders submission (integration)', () => {
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
+    await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
     await prisma.membership.deleteMany({ where: { userId: CUSTOMER_USER } });
     await prisma.user.deleteMany({ where: { id: CUSTOMER_USER } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST, CUSTOMER] } } });
@@ -99,6 +100,7 @@ describe('Orders submission (integration)', () => {
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
+    await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
 
     const product = await prisma.product.create({
       data: { distributorId: DIST, name: 'Integration Orders Product', status: ProductStatus.ACTIVE, price: 10 },
@@ -174,6 +176,58 @@ describe('Orders submission (integration)', () => {
         .send({ distributorSlug: DIST_SLUG });
 
       expect(res.status).toBe(403);
+    });
+
+    it('returns 422 and leaves the cart untouched when the order is below the relationship minimum order spend', async () => {
+      const cart = await seedCart(); // 2 × £10 = £20 subtotal
+      await prisma.tradeRelationship.update({
+        where: { id: relationshipId },
+        data: { minimumOrderSpend: 50 },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ distributorSlug: DIST_SLUG });
+
+      expect(res.status).toBe(422);
+      expect(res.body.detail).toMatch(/minimum order value/);
+
+      const untouchedCart = await prisma.cartOrder.findUnique({ where: { id: cart.id } });
+      expect(untouchedCart).not.toBeNull();
+      const orders = await prisma.order.findMany({ where: { distributorId: DIST, traderCustomerId: CUSTOMER } });
+      expect(orders).toHaveLength(0);
+    });
+
+    it('returns 422 when below the distributor default minimum order spend (no relationship override)', async () => {
+      await seedCart(); // £20 subtotal
+      await prisma.distributorSettings.upsert({
+        where: { distributorId: DIST },
+        create: { distributorId: DIST, minimumOrderSpend: 50 },
+        update: { minimumOrderSpend: 50 },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ distributorSlug: DIST_SLUG });
+
+      expect(res.status).toBe(422);
+    });
+
+    it('succeeds when the order meets the minimum order spend', async () => {
+      await seedCart(); // £20 subtotal
+      await prisma.tradeRelationship.update({
+        where: { id: relationshipId },
+        data: { minimumOrderSpend: 20 },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ distributorSlug: DIST_SLUG });
+
+      expect(res.status).toBe(201);
     });
   });
 });

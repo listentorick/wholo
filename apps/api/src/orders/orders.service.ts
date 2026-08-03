@@ -21,6 +21,7 @@ import { DeliveryAvailabilityService } from '../delivery-availability/delivery-a
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
 
 interface CursorPayload {
   createdAt: string;
@@ -115,7 +116,7 @@ export class OrdersService {
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
       where: { slug: dto.distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true },
+      select: { id: true, distributorSettings: { select: { minimumOrderSpend: true } } },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
@@ -128,6 +129,7 @@ export class OrdersService {
       where: { distributorId: distributor.id, customerId: traderCustomerId, deletedAt: null },
       select: {
         status: true,
+        minimumOrderSpend: true,
         deliveryLine1: true, deliveryLine2: true, deliveryCity: true,
         deliveryState: true, deliveryPostcode: true, deliveryCountry: true,
         traderCustomerSettings: { select: { orderAcceptanceModeOverride: true } },
@@ -216,6 +218,16 @@ export class OrdersService {
     );
     const taxAmount = new Prisma.Decimal(0);
     const totalAmount = subtotalAmount.plus(taxAmount);
+
+    const effectiveMinimumOrderSpend = resolveEffectiveMinimumOrderSpend(
+      relationship.minimumOrderSpend,
+      distributor.distributorSettings?.minimumOrderSpend,
+    );
+    if (effectiveMinimumOrderSpend && subtotalAmount.lessThan(effectiveMinimumOrderSpend)) {
+      throw new UnprocessableEntityException(
+        `This order does not meet the £${effectiveMinimumOrderSpend.toFixed(2)} minimum order value for this distributor`,
+      );
+    }
 
     // Generate order number
     const seqResult = await this.prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;

@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useDistributor, connectCtaKind } from '@/lib/distributor-context';
+import { useCart } from '@/lib/cart-context';
 import { useDeliveryParts } from '@/lib/hooks/use-delivery-parts';
 import { RelationshipStatusBadge } from './RelationshipStatusBadge';
 import { ConnectConfirmationModal } from './ConnectConfirmationModal';
-import { TradeRelationshipStatus } from '@wholo/types';
+import { MinimumOrderProgress } from './MinimumOrderProgress';
 
 export function TruckIcon() {
   return (
@@ -20,17 +21,12 @@ export function TruckIcon() {
 }
 
 export function DistributorPageHeader({ distributorSlug }: { distributorSlug: string }) {
-  const { distributor, relationshipStatus, relationshipMinSpend, requestAccess } = useDistributor();
+  const { distributor, relationshipStatus, effectiveMinSpend, requestAccess } = useDistributor();
+  const { subtotal } = useCart();
   const { accessToken, orderAsMode } = useAuth();
   const deliveryParts = useDeliveryParts(distributorSlug, accessToken, { refreshKey: orderAsMode });
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const effectiveMinSpend =
-    relationshipStatus === TradeRelationshipStatus.ACTIVE
-      ? relationshipMinSpend
-      : relationshipStatus != null
-        ? (distributor?.minimumOrderSpend ?? null)
-        : null;
   const ctaKind = connectCtaKind(relationshipStatus);
 
   async function handleConfirm(recentContact: boolean) {
@@ -51,12 +47,7 @@ export function DistributorPageHeader({ distributorSlug }: { distributorSlug: st
         </div>
       )}
 
-      {effectiveMinSpend !== null && (
-        <div className="mt-3 flex items-center gap-2 text-sm text-foreground-tertiary">
-          <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center text-base leading-none">£</span>
-          <span>£{effectiveMinSpend.toFixed(2)} minimum order value</span>
-        </div>
-      )}
+      <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="compact" />
 
       {ctaKind === 'connect' && (
         <div className="mt-3">

@@ -11,13 +11,14 @@ const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';
 const USER_ID = 'user-1';
 
-function makeDistributor() {
-  return { id: DISTRIBUTOR_ID };
+function makeDistributor(overrides: Record<string, unknown> = {}) {
+  return { id: DISTRIBUTOR_ID, distributorSettings: null, ...overrides };
 }
 
 function makeRelationship(overrides: Record<string, unknown> = {}) {
   return {
     status: 'ACTIVE',
+    minimumOrderSpend: null,
     deliveryLine1: null, deliveryLine2: null, deliveryCity: null,
     deliveryState: null, deliveryPostcode: null, deliveryCountry: null,
     traderCustomerSettings: null,
@@ -235,6 +236,117 @@ describe('OrdersService — delivery date revalidation', () => {
       'OrderSubmitted',
       expect.objectContaining({ isOrderedByDelegate: true }),
     );
+  });
+});
+
+describe('OrdersService — minimum order spend enforcement', () => {
+  let service: OrdersService;
+  let prisma: jest.Mocked<PrismaService>;
+
+  beforeEach(async () => {
+    const mockPrisma = {
+      organisation: { findFirst: jest.fn() },
+      cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
+      distributorSettings: { findUnique: jest.fn() },
+      tradeRelationship: { findFirst: jest.fn() },
+      order: { create: jest.fn() },
+      orderLine: { createMany: jest.fn() },
+      cartOrderLine: { deleteMany: jest.fn() },
+      assetImage: { findMany: jest.fn().mockResolvedValue([]) },
+      $queryRaw: jest.fn(),
+      $transaction: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+      ],
+    }).compile();
+
+    service = module.get(OrdersService);
+    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+  });
+
+  function setupHappyPath() {
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
+    (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
+      defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
+    });
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship());
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ nextval: BigInt(1) }]);
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        order: { create: jest.fn().mockResolvedValue({ id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.SUBMITTED, currency: 'GBP', subtotalAmount: { toFixed: () => '24.46' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '24.46' }, billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null, customerReference: null, notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT, submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null, rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null, cancellationReason: null, createdAt: new Date(), updatedAt: new Date(), customer: { id: CUSTOMER_ID, name: 'Test Customer' }, invoiceExports: [], lines: [] }) },
+        orderLine: { createMany: jest.fn().mockResolvedValue({}) },
+        cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
+        cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+        orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
+        outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+      }),
+    );
+  }
+
+  // makeCart()'s default single line is quantity 2 @ unitPrice 12.23 => subtotal 24.46.
+
+  it('throws UnprocessableEntityException and does not open a transaction when subtotal is below the relationship-level minimum', async () => {
+    setupHappyPath();
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(
+      makeRelationship({ minimumOrderSpend: new Prisma.Decimal('30.00') }),
+    );
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).rejects.toThrow(UnprocessableEntityException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('throws when subtotal is below the distributor-level default minimum (no relationship override)', async () => {
+    setupHappyPath();
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(
+      makeDistributor({ distributorSettings: { minimumOrderSpend: new Prisma.Decimal('30.00') } }),
+    );
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).rejects.toThrow(UnprocessableEntityException);
+  });
+
+  it('uses the relationship override over the distributor default when both are set', async () => {
+    setupHappyPath();
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(
+      makeDistributor({ distributorSettings: { minimumOrderSpend: new Prisma.Decimal('30.00') } }), // would fail
+    );
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(
+      makeRelationship({ minimumOrderSpend: new Prisma.Decimal('10.00') }), // would pass
+    );
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).resolves.toBeDefined();
+  });
+
+  it('succeeds when subtotal exactly equals the minimum (met, not below)', async () => {
+    setupHappyPath();
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(
+      makeRelationship({ minimumOrderSpend: new Prisma.Decimal('24.46') }),
+    );
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).resolves.toBeDefined();
+  });
+
+  it('does not enforce a minimum when neither relationship nor distributor has one set', async () => {
+    setupHappyPath();
+
+    await expect(
+      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+    ).resolves.toBeDefined();
   });
 });
 

@@ -32,6 +32,7 @@ interface DistributorContextValue {
   setBannerScrolledPast: (past: boolean) => void;
   relationshipStatus: RelationshipStatus | null;
   relationshipMinSpend: number | null;
+  effectiveMinSpend: number | null;
   refetchRelationship: () => Promise<void>;
   requestAccess: (recentContact: boolean) => Promise<void>;
 }
@@ -42,6 +43,7 @@ const DistributorContext = createContext<DistributorContextValue>({
   setBannerScrolledPast: () => {},
   relationshipStatus: null,
   relationshipMinSpend: null,
+  effectiveMinSpend: null,
   refetchRelationship: async () => {},
   requestAccess: async () => {},
 });
@@ -78,6 +80,9 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
     refetchRelationship().catch(() => {});
   }, [refetchRelationship, orderAsMode]);
 
+  const effectiveMinSpend =
+    relationshipStatus != null ? (relationshipMinSpend ?? distributor?.minimumOrderSpend ?? null) : null;
+
   const setBannerScrolledPast = useCallback((past: boolean) => setBannerScrolledPastState(past), []);
 
   const requestAccess = useCallback(
@@ -97,6 +102,7 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
         setBannerScrolledPast,
         relationshipStatus,
         relationshipMinSpend,
+        effectiveMinSpend,
         refetchRelationship,
         requestAccess,
       }}

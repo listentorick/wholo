@@ -28,13 +28,14 @@ import { cartApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { quantities, inCart, adjustQty } = useCart();
+  const { quantities, inCart, adjustQty, subtotal } = useCart();
   return (
     <div>
       <button onClick={() => adjustQty('prod-1', 1)}>increase</button>
       <button onClick={() => adjustQty('prod-1', -1)}>decrease</button>
       <span data-testid="qty">{quantities['prod-1'] ?? ''}</span>
       <span data-testid="in-cart">{inCart.has('prod-1') ? 'yes' : 'no'}</span>
+      <span data-testid="subtotal">{subtotal}</span>
     </div>
   );
 }
@@ -62,6 +63,40 @@ beforeEach(() => {
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('CartProvider subtotal', () => {
+  it('computes subtotal from quantities and unit price', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [{ productId: 'prod-1', quantity: 3, unitPrice: '2.50', product: { id: 'prod-1', name: 'Egg tarts', sku: null } }],
+    });
+
+    renderCart();
+
+    await waitFor(() => expect(screen.getByTestId('subtotal').textContent).toBe('7.5'));
+  });
+
+  it('reflects an optimistic quantity change before the server confirms it', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [{ productId: 'prod-1', quantity: 1, unitPrice: '2.50', product: { id: 'prod-1', name: 'Egg tarts', sku: null } }],
+    });
+    (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
+
+    renderCart();
+    await waitFor(() => expect(screen.getByTestId('subtotal').textContent).toBe('2.5'));
+
+    fireEvent.click(screen.getByText('increase'));
+
+    await waitFor(() => expect(screen.getByTestId('subtotal').textContent).toBe('5'));
+  });
+
+  it('is 0 for an empty cart', async () => {
+    renderCart();
+    await waitFor(() => expect(cartApi.getCart).toHaveBeenCalled());
+    expect(screen.getByTestId('subtotal').textContent).toBe('0');
+  });
+});
 
 describe('CartProvider adjustQty', () => {
   it('persists the adjusted quantity via cartApi.upsertItem for a product not yet in the cart', async () => {

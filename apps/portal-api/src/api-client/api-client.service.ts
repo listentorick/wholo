@@ -48,7 +48,7 @@ export class ApiClientService {
 
     if (!res.ok) {
       const d = data as Record<string, unknown> | undefined;
-      const message = d?.['message'] ?? `Request failed: ${res.status}`;
+      const message = d?.['detail'] ?? d?.['message'] ?? `Request failed: ${res.status}`;
       throw new HttpException(
         Array.isArray(message) ? message.join(', ') : (message as string),
         res.status >= 400 && res.status < 600 ? res.status : HttpStatus.BAD_GATEWAY,
