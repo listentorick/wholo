@@ -163,7 +163,7 @@ describe('DashboardPage', () => {
     const customerLink = await screen.findByRole('link', { name: 'Blackbird Restaurant' });
     expect(customerLink).toHaveAttribute('href', '/customers/cust-1');
     const productLink = screen.getByRole('link', { name: 'Cabernet Sauvignon' });
-    expect(productLink).toHaveAttribute('href', '/products/prod-1');
+    expect(productLink).toHaveAttribute('href', '/products/prod-1/edit');
   });
 
   it('lists action items, including a never-ordered customer and an order awaiting acceptance', async () => {

@@ -140,15 +140,17 @@ export class AnalyticsService {
     const limit = query.limit ?? 10;
 
     const [rankings, totalRow, earliest] = await Promise.all([
-      this.prisma.$queryRaw<Array<{ customerId: string; customerName: string; value: number; orderCount: number }>>`
-        SELECT s."traderCustomerId" AS "customerId", o.name AS "customerName",
+      this.prisma.$queryRaw<Array<{ customerId: string; organisationId: string; customerName: string; value: number; orderCount: number }>>`
+        SELECT tr.id AS "customerId", s."traderCustomerId" AS "organisationId", o.name AS "customerName",
           COALESCE(SUM(s."subtotalAmount"), 0)::float AS value, COUNT(*)::int AS "orderCount"
         FROM order_analytics_state s
         JOIN organisations o ON o.id = s."traderCustomerId"
+        JOIN trade_relationships tr ON tr."customerId" = s."traderCustomerId"
+          AND tr."distributorId" = s."distributorId" AND tr."deletedAt" IS NULL
         WHERE s."distributorId" = ${distributorId}
           AND s."distributorLocalDate" BETWEEN ${period.current.start} AND ${period.current.end}
           AND s.status IN ${QUALIFYING_STATUSES}
-        GROUP BY s."traderCustomerId", o.name
+        GROUP BY tr.id, s."traderCustomerId", o.name
         ORDER BY value DESC
         LIMIT ${limit}
       `,
@@ -156,19 +158,19 @@ export class AnalyticsService {
       this.earliestDataDate(distributorId),
     ]);
 
-    const customerIds = rankings.map((r) => r.customerId);
-    const comparisonByCustomer = period.comparison && customerIds.length > 0
-      ? await this.prisma.$queryRaw<Array<{ customerId: string; value: number }>>`
-          SELECT "traderCustomerId" AS "customerId", COALESCE(SUM("subtotalAmount"), 0)::float AS value
+    const organisationIds = rankings.map((r) => r.organisationId);
+    const comparisonByCustomer = period.comparison && organisationIds.length > 0
+      ? await this.prisma.$queryRaw<Array<{ organisationId: string; value: number }>>`
+          SELECT "traderCustomerId" AS "organisationId", COALESCE(SUM("subtotalAmount"), 0)::float AS value
           FROM order_analytics_state
           WHERE "distributorId" = ${distributorId}
             AND "distributorLocalDate" BETWEEN ${period.comparison.start} AND ${period.comparison.end}
             AND status IN ${QUALIFYING_STATUSES}
-            AND "traderCustomerId" IN (${Prisma.join(customerIds)})
+            AND "traderCustomerId" IN (${Prisma.join(organisationIds)})
           GROUP BY "traderCustomerId"
         `
       : [];
-    const comparisonMap = new Map(comparisonByCustomer.map((r) => [r.customerId, r.value]));
+    const comparisonMap = new Map(comparisonByCustomer.map((r) => [r.organisationId, r.value]));
     const comparisonEnd = period.comparison?.end ?? period.current.start;
 
     const totalValue = totalRow.orderValue;
@@ -188,7 +190,7 @@ export class AnalyticsService {
         value: r.value,
         orderCount: r.orderCount,
         share: totalValue > 0 ? r.value / totalValue : null,
-        change: classifyComparison(r.value, comparisonMap.get(r.customerId) ?? 0, earliest, comparisonEnd),
+        change: classifyComparison(r.value, comparisonMap.get(r.organisationId) ?? 0, earliest, comparisonEnd),
       })),
     };
   }
@@ -260,7 +262,7 @@ export class AnalyticsService {
         select: { id: true, orderId: true, errorCode: true, errorMessage: true, failedAt: true },
       }),
       this.prisma.$queryRaw<Array<{ customerId: string; customerName: string }>>`
-        SELECT tr."customerId" AS "customerId", o.name AS "customerName"
+        SELECT tr."id" AS "customerId", o.name AS "customerName"
         FROM trade_relationships tr
         JOIN organisations o ON o.id = tr."customerId"
         WHERE tr."distributorId" = ${distributorId}

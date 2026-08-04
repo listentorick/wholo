@@ -190,7 +190,7 @@ export default function DashboardPage() {
                       {data.products.products.map((p) => (
                         <tr key={p.productId} className="border-b border-border last:border-0 hover:bg-canvas">
                           <td className="px-4 py-2.5">
-                            <Link href={`/products/${p.productId}`} className="font-medium text-primary hover:underline">
+                            <Link href={`/products/${p.productId}/edit`} className="font-medium text-primary hover:underline">
                               {p.productName}
                             </Link>
                           </td>
@@ -208,7 +208,7 @@ export default function DashboardPage() {
                     {data.products.nonSellingProducts.map((p, i) => (
                       <span key={p.productId}>
                         {i > 0 && ', '}
-                        <Link href={`/products/${p.productId}`} className="text-primary hover:underline">{p.productName}</Link>
+                        <Link href={`/products/${p.productId}/edit`} className="text-primary hover:underline">{p.productName}</Link>
                       </span>
                     ))}
                   </p>

@@ -12,7 +12,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, Prisma, Role } from '@prisma/client';
+import { OrganisationType, Prisma, Role, TradeRelationshipStatus } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
@@ -20,6 +20,10 @@ import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const DIST_A = 'test-analytics-dist-a';
 const DIST_B = 'test-analytics-dist-b';
+// DIST_C exists only to prove tenant isolation of the trade_relationships join: CUSTOMER_A1
+// has a *separate* TradeRelationship with DIST_C, mirroring the real-world case of a trade
+// customer buying from multiple distributors on the platform.
+const DIST_C = 'test-analytics-dist-c';
 const CUSTOMER_A1 = 'test-analytics-cust-a1';
 const CUSTOMER_A2 = 'test-analytics-cust-a2';
 const PRODUCT_A1 = 'test-analytics-product-a1';
@@ -31,6 +35,9 @@ describe('Analytics (integration)', () => {
   let prisma: PrismaService;
   let jwtServer: JwtTestServer;
   let token: string;
+  let relationshipA1Id: string;
+  let relationshipA2Id: string;
+  let relationshipA1DistCId: string;
 
   beforeAll(async () => {
     jwtServer = await startJwtTestServer();
@@ -69,6 +76,33 @@ describe('Analytics (integration)', () => {
       create: { id: CUSTOMER_A2, name: 'Analytics Test Customer 2', type: OrganisationType.TRADE_CUSTOMER },
       update: {},
     });
+    await prisma.organisation.upsert({
+      where: { id: DIST_C },
+      create: { id: DIST_C, name: 'Analytics Test Distributor C', type: OrganisationType.DISTRIBUTOR },
+      update: {},
+    });
+
+    const relA1 = await prisma.tradeRelationship.upsert({
+      where: { distributorId_customerId: { distributorId: DIST_A, customerId: CUSTOMER_A1 } },
+      create: { distributorId: DIST_A, customerId: CUSTOMER_A1, status: TradeRelationshipStatus.ACTIVE },
+      update: { status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
+    });
+    relationshipA1Id = relA1.id;
+    const relA2 = await prisma.tradeRelationship.upsert({
+      where: { distributorId_customerId: { distributorId: DIST_A, customerId: CUSTOMER_A2 } },
+      create: { distributorId: DIST_A, customerId: CUSTOMER_A2, status: TradeRelationshipStatus.ACTIVE },
+      update: { status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
+    });
+    relationshipA2Id = relA2.id;
+    // Same customer organisation, a *different* distributor's relationship — proves the
+    // customer-rankings join can't leak DIST_C's relationship id into DIST_A's rankings.
+    const relA1DistC = await prisma.tradeRelationship.upsert({
+      where: { distributorId_customerId: { distributorId: DIST_C, customerId: CUSTOMER_A1 } },
+      create: { distributorId: DIST_C, customerId: CUSTOMER_A1, status: TradeRelationshipStatus.ACTIVE },
+      update: { status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
+    });
+    relationshipA1DistCId = relA1DistC.id;
+
     await prisma.product.upsert({
       where: { id: PRODUCT_A1 },
       create: { id: PRODUCT_A1, distributorId: DIST_A, name: 'Analytics Test Product', status: 'ACTIVE' },
@@ -99,10 +133,11 @@ describe('Analytics (integration)', () => {
     await prisma.orderAnalyticsState.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLineFact.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { id: PRODUCT_A1 } });
+    await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_C] } } });
     await prisma.membership.deleteMany({ where: { userId: USER_A } });
     await prisma.user.deleteMany({ where: { id: USER_A } });
     await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST_A } });
-    await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B, CUSTOMER_A1, CUSTOMER_A2] } } });
+    await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B, DIST_C, CUSTOMER_A1, CUSTOMER_A2] } } });
     await app.close();
     await jwtServer.close();
   });
@@ -196,7 +231,59 @@ describe('Analytics (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.customers).toHaveLength(1);
-      expect(res.body.customers[0].customerId).toBe(CUSTOMER_A1);
+      // customerId must be the trade-relationship id — the id the customer detail page
+      // resolves by — never the underlying organisation id.
+      expect(res.body.customers[0].customerId).toBe(relationshipA1Id);
+      expect(res.body.customers[0].customerId).not.toBe(CUSTOMER_A1);
+    });
+
+    it('resolves against the real customer detail endpoint (proves the link the dashboard builds actually works)', async () => {
+      await seedOrderState({ orderId: 'test-analytics-order-a6' });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customer-rankings`)
+        .query({ period: 'custom', start: '2026-03-15', end: '2026-03-15' })
+        .set('Authorization', `Bearer ${token}`);
+
+      const customerId = res.body.customers[0].customerId;
+
+      const detailRes = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${customerId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(detailRes.status).toBe(200);
+    });
+
+    it("returns distributor A's own relationship id for a customer shared with another distributor", async () => {
+      // CUSTOMER_A1 has a TradeRelationship with both DIST_A and DIST_C (see beforeAll).
+      // Only the order placed under DIST_A should surface, and it must carry DIST_A's
+      // relationship id — never DIST_C's — proving the join's distributorId match works.
+      await seedOrderState({ orderId: 'test-analytics-order-a7' });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customer-rankings`)
+        .query({ period: 'custom', start: '2026-03-15', end: '2026-03-15' })
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.customers).toHaveLength(1);
+      expect(res.body.customers[0].customerId).toBe(relationshipA1Id);
+      expect(res.body.customers[0].customerId).not.toBe(relationshipA1DistCId);
+    });
+  });
+
+  describe('GET /api/v1/distributors/:distributorId/action-items', () => {
+    it('lists never-ordered customers keyed by trade-relationship id, not organisation id', async () => {
+      // CUSTOMER_A2 has an ACTIVE relationship with DIST_A (see beforeAll) and no orders
+      // seeded for it in this suite's beforeEach-cleared state.
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/action-items`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const entry = res.body.neverOrdered.find((c: { customerId: string }) => c.customerId === relationshipA2Id);
+      expect(entry).toBeDefined();
+      expect(res.body.neverOrdered.some((c: { customerId: string }) => c.customerId === CUSTOMER_A2)).toBe(false);
     });
   });
 
