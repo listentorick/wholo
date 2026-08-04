@@ -13,6 +13,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { Job } from 'bullmq';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
@@ -57,6 +58,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     private readonly adapters: AccountingAdapterRegistry,
     private readonly outbox: OutboxService,
     private readonly audit: AuditService,
+    private readonly adminNotifications: AdminNotificationsService,
   ) {
     super();
   }
@@ -316,6 +318,16 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       this.logger.log(
         `Created ${connection.provider} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
       );
+      // Direct write, no outbox — same terminal-write reasoning as the bulk
+      // import notification (admin-notifications.module.ts): there's no
+      // further fan-out to trigger from an in-app inbox row.
+      await this.adminNotifications.notifyOrganisationAdmins(order.distributorId, {
+        type: 'INVOICE_EXPORT_COMPLETED',
+        title: 'Invoice created',
+        body: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${connection.provider} for order ${order.orderNumber}`,
+        linkPath: `/orders/${order.id}`,
+        payload: { orderId: order.id, exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Permanent provider rejections (validation, authorisation) wait for
@@ -368,6 +380,13 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
         summary: errorMessage,
         changes: { exportId: exportRow.id, errorCode },
       });
+    });
+    await this.adminNotifications.notifyOrganisationAdmins(exportRow.distributorId, {
+      type: 'INVOICE_EXPORT_FAILED',
+      title: 'Invoice export failed',
+      body: errorMessage,
+      linkPath: `/orders/${exportRow.orderId}`,
+      payload: { orderId: exportRow.orderId, exportId: exportRow.id, errorCode },
     });
   }
 }

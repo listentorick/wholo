@@ -5,6 +5,7 @@ import {
   NotificationChannel,
   OrderAcceptanceMode,
 } from '@prisma/client';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
 import { OrderPlacedNotificationService, OrderSubmittedEventPayload } from './order-placed-notification.service';
@@ -36,6 +37,7 @@ describe('OrderPlacedNotificationService', () => {
     notificationDelivery: { createMany: jest.Mock; findMany: jest.Mock };
   };
   let queue: { add: jest.Mock };
+  let adminNotifications: { notifyOrganisationAdmins: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -61,12 +63,14 @@ describe('OrderPlacedNotificationService', () => {
       },
     };
     queue = { add: jest.fn().mockResolvedValue({}) };
+    adminNotifications = { notifyOrganisationAdmins: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrderPlacedNotificationService,
         { provide: PrismaService, useValue: prisma },
         { provide: getQueueToken(NOTIFICATION_DELIVERY_QUEUE), useValue: queue },
+        { provide: AdminNotificationsService, useValue: adminNotifications },
       ],
     }).compile();
 
@@ -106,6 +110,20 @@ describe('OrderPlacedNotificationService', () => {
       ]),
     );
     expect(created.data).toHaveLength(3);
+  });
+
+  it('notifies distributor admins of the new order via the in-app inbox', async () => {
+    await service.handleOrderSubmitted(makeEvent());
+
+    expect(adminNotifications.notifyOrganisationAdmins).toHaveBeenCalledWith(
+      DISTRIBUTOR_ID,
+      expect.objectContaining({
+        type: 'ORDER_PLACED',
+        body: 'The Wine Bar placed order ORD-2026-00042',
+        linkPath: '/orders/order-1',
+        payload: { orderId: 'order-1', orderNumber: 'ORD-2026-00042' },
+      }),
+    );
   });
 
   it('enqueues one delivery job per pending delivery, keyed by delivery id', async () => {
@@ -183,6 +201,7 @@ describe('OrderPlacedNotificationService', () => {
     expect(prisma.notification.upsert).not.toHaveBeenCalled();
     expect(prisma.notificationDelivery.createMany).not.toHaveBeenCalled();
     expect(queue.add).not.toHaveBeenCalled();
+    expect(adminNotifications.notifyOrganisationAdmins).not.toHaveBeenCalled();
   });
 
   it('creates nothing when the distributor organisation no longer exists', async () => {
@@ -194,6 +213,7 @@ describe('OrderPlacedNotificationService', () => {
 
     expect(prisma.notification.upsert).not.toHaveBeenCalled();
     expect(queue.add).not.toHaveBeenCalled();
+    expect(adminNotifications.notifyOrganisationAdmins).not.toHaveBeenCalled();
   });
 
   it('enqueues nothing on reprocessing when all deliveries are already sent', async () => {

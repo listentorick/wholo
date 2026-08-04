@@ -8,6 +8,7 @@ import {
   OrderAcceptanceMode,
 } from '@prisma/client';
 import { Queue } from 'bullmq';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
 import { OrderPlacedNotificationPayload } from './notification-payload';
@@ -29,6 +30,7 @@ export class OrderPlacedNotificationService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(NOTIFICATION_DELIVERY_QUEUE) private readonly deliveryQueue: Queue,
+    private readonly adminNotifications: AdminNotificationsService,
   ) {}
 
   // Idempotent under at-least-once event delivery: Notification is upserted on
@@ -122,6 +124,18 @@ export class OrderPlacedNotificationService {
     for (const delivery of pendingDeliveries) {
       await this.deliveryQueue.add('deliver', { deliveryId: delivery.id }, { jobId: delivery.id });
     }
+
+    // Placed last (after everything else that could throw has already
+    // committed) so a BullMQ retry of this job — which would otherwise
+    // duplicate these rows, since AdminNotification has no dedupe key — only
+    // replays work that hasn't actually succeeded yet.
+    await this.adminNotifications.notifyOrganisationAdmins(event.distributorId, {
+      type: 'ORDER_PLACED',
+      title: 'New order placed',
+      body: `${customer.name} placed order ${event.orderNumber}`,
+      linkPath: `/orders/${event.orderId}`,
+      payload: { orderId: event.orderId, orderNumber: event.orderNumber },
+    });
   }
 
   private resolveDistributorRecipients(

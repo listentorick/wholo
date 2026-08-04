@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AccountingModule } from '../accounting/accounting.module';
+import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { AuditModule } from '../audit/audit.module';
 import { ACCOUNTING_INVOICE_EXPORT_QUEUE } from '../queues/queue.constants';
@@ -14,6 +15,7 @@ import { AccountingInvoiceExportProcessor } from './accounting-invoice-export.pr
     AccountingModule,
     OutboxModule,
     AuditModule,
+    AdminNotificationsModule,
   ],
   providers: [AccountingInvoiceExportProcessor],
 })

@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { AccountingInvoiceExportProcessor } from './accounting-invoice-export.processor';
@@ -102,6 +103,7 @@ describe('AccountingInvoiceExportProcessor', () => {
   let adapter: { hasInvoiceCreationScope: jest.Mock; createInvoice: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
   let audit: { record: jest.Mock };
+  let adminNotifications: { notifyOrganisationAdmins: jest.Mock };
 
   const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 's' };
 
@@ -145,12 +147,14 @@ describe('AccountingInvoiceExportProcessor', () => {
     };
     outbox = { writeEvent: jest.fn() };
     audit = { record: jest.fn() };
+    adminNotifications = { notifyOrganisationAdmins: jest.fn().mockResolvedValue(undefined) };
     processor = new AccountingInvoiceExportProcessor(
       prisma as unknown as PrismaService,
       connectionService as unknown as AccountingConnectionService,
       { get: jest.fn().mockReturnValue(adapter) } as unknown as AccountingAdapterRegistry,
       outbox as unknown as OutboxService,
       audit as unknown as AuditService,
+      adminNotifications as unknown as AdminNotificationsService,
     );
   });
 
@@ -252,6 +256,13 @@ describe('AccountingInvoiceExportProcessor', () => {
           entityType: 'ORDER',
           entityId: 'order-1',
           action: 'INVOICE_EXPORT_COMPLETED',
+        }),
+      );
+      expect(adminNotifications.notifyOrganisationAdmins).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({
+          type: 'INVOICE_EXPORT_COMPLETED',
+          payload: expect.objectContaining({ orderId: 'order-1', externalInvoiceId: 'inv-1' }),
         }),
       );
     });
@@ -357,6 +368,10 @@ describe('AccountingInvoiceExportProcessor', () => {
         'export-1',
         'AccountingInvoiceExportFailed',
         expect.objectContaining({ orderId: 'order-1', distributorId: 'dist-1', errorCode: 'SCOPE_MISSING' }),
+      );
+      expect(adminNotifications.notifyOrganisationAdmins).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({ type: 'INVOICE_EXPORT_FAILED', payload: expect.objectContaining({ errorCode: 'SCOPE_MISSING' }) }),
       );
     });
 
