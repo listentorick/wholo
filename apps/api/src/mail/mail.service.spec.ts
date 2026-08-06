@@ -218,6 +218,38 @@ describe('MailService — trade-relationship emails', () => {
   });
 });
 
+describe('MailService — accounting connection emails', () => {
+  let service: MailService;
+  let sendMail: jest.Mock;
+
+  beforeEach(() => {
+    sendMail = jest.fn().mockResolvedValue({});
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+    } as unknown as ConfigService;
+
+    service = new MailService(config);
+  });
+
+  it('sendAccountingConnectionNeedsReconnect names the distributor, provider and links to the reconnect page', async () => {
+    await service.sendAccountingConnectionNeedsReconnect('admin@dist.example', {
+      distributorName: 'Vinos Direct',
+      provider: 'Xero',
+      reconnectUrl: 'http://localhost:3020/integrations/accounting',
+    });
+
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe('admin@dist.example');
+    expect(mail.subject).toBe('Xero needs to be reconnected');
+    expect(mail.text).toContain('Vinos Direct');
+    expect(mail.text).toContain('http://localhost:3020/integrations/accounting');
+    expect(mail.html).toContain('http://localhost:3020/integrations/accounting');
+  });
+});
+
 describe('MailService — invite from-address', () => {
   let sendMail: jest.Mock;
 

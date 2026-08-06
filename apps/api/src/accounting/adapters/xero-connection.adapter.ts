@@ -36,6 +36,15 @@ const XERO_SCOPES = [
   'offline_access',
 ];
 
+// xero-node's own tokenRequest() posts here (node_modules/xero-node/dist/XeroClient.js) —
+// called directly for refreshAccessToken so the request can carry a real
+// AbortSignal timeout; see the comment on refreshAccessToken below.
+const XERO_TOKEN_ENDPOINT = 'https://identity.xero.com/connect/token';
+// Xero's token endpoint should respond quickly; bounded generously enough to
+// absorb ordinary latency while still giving up well within the accounting
+// refresh lock's TTL (ACCOUNTING_REFRESH_LOCK_TTL_MS).
+const REFRESH_HTTP_TIMEOUT_MS = 10_000;
+
 const XERO_INVOICE_STATUS: Record<AccountingInvoiceTargetStatusValue, Invoice.StatusEnum> = {
   DRAFT: Invoice.StatusEnum.DRAFT,
   SUBMITTED: Invoice.StatusEnum.SUBMITTED,
@@ -93,10 +102,112 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     }));
   }
 
+  // Deliberately bypasses xero-node's client.refreshWithRefreshToken: it
+  // wraps a raw axios call with no way to inject a timeout/AbortSignal, so a
+  // stalled Xero response can't be genuinely cancelled through it — a
+  // Promise.race around it would let a caller give up while the underlying
+  // request keeps running and could still consume/rotate the (single-use)
+  // refresh token after we've already told ourselves we gave up. Calling the
+  // token endpoint directly with fetch + AbortSignal.timeout gives a real
+  // transport-level cancel. Request shape below is verbatim what xero-node's
+  // own tokenRequest() sends (node_modules/xero-node/dist/XeroClient.js).
   async refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet> {
-    const client = this.buildClient();
-    const refreshed = await client.refreshWithRefreshToken(this.clientId, this.clientSecret, tokenSet.refreshToken);
-    return this.toAccountingTokenSet(refreshed);
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: tokenSet.refreshToken,
+    });
+
+    let response: Response;
+    try {
+      response = await fetch(XERO_TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
+        signal: AbortSignal.timeout(REFRESH_HTTP_TIMEOUT_MS),
+      });
+    } catch (err) {
+      // No HTTP response at all: DNS/connection failure, or our own
+      // AbortSignal.timeout firing — none of these carry a status to
+      // classify, and none indicate anything about the refresh token itself,
+      // so they're always transient.
+      throw new AccountingProviderError(
+        `Xero token refresh request failed: ${err instanceof Error ? err.message : String(err)}`,
+        true,
+        err,
+      );
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = undefined;
+    }
+
+    if (!response.ok) {
+      throw this.toRefreshTokenError(response.status, payload);
+    }
+
+    const raw = payload as { access_token?: string; refresh_token?: string; expires_in?: number; id_token?: string; scope?: string };
+    if (raw.expires_in == null) {
+      throw new AccountingProviderError('Xero token refresh response was missing expires_in', true, payload);
+    }
+    // Bypassing openid-client's TokenSet wrapper (which normally computes
+    // expires_at from expires_in on assignment) means we compute it
+    // ourselves here — everything downstream of this adapter deals in the
+    // absolute expires_at, never expires_in.
+    return this.toAccountingTokenSet({
+      ...raw,
+      expires_at: Math.floor(Date.now() / 1000) + raw.expires_in,
+    });
+  }
+
+  // Refresh-specific classification, deliberately separate from
+  // toProviderError below: that classifier's messages and 400/401/403 ==
+  // "permanent" rule were written for createInvoice's REST-API error shape
+  // ({Message, Elements}). The token endpoint speaks plain OAuth2
+  // ({error, error_description}), and refresh failures need finer-grained
+  // handling than invoice failures — specifically, invalid_grant (dead/
+  // reused refresh token, distributor must reconnect) and invalid_client
+  // (our application's client id/secret is wrong — reconnecting re-uses the
+  // same credentials and won't help; this needs an engineer, not the
+  // distributor) mean different things and should produce different
+  // downstream behaviour, not just an identical "permanent" bucket.
+  private toRefreshTokenError(status: number, body: unknown): AccountingProviderError {
+    const oauthError = (body as { error?: string; error_description?: string } | undefined) ?? {};
+    const description = oauthError.error_description ? `: ${oauthError.error_description}` : '';
+
+    if (oauthError.error === 'invalid_grant') {
+      return new AccountingProviderError(
+        `Xero refresh token is no longer valid (invalid_grant)${description} — reconnecting Xero is required`,
+        false,
+        body,
+        'invalid_grant',
+      );
+    }
+    if (oauthError.error === 'invalid_client') {
+      return new AccountingProviderError(
+        `Xero rejected this application's credentials (invalid_client)${description}`,
+        false,
+        body,
+        'invalid_client',
+      );
+    }
+    // Rate limit / provider-side fault: worth retrying. Anything else 4xx is
+    // a client-side problem that won't change on identical retry, but isn't
+    // confidently "the refresh token is dead" either — kept permanent
+    // (don't burn retries on it) with a generic message rather than
+    // overclaiming what's wrong.
+    const transient = status === 429 || status >= 500;
+    return new AccountingProviderError(
+      `Xero token refresh failed with HTTP ${status}${oauthError.error ? ` (${oauthError.error})` : ''}${description}`,
+      transient,
+      body,
+      oauthError.error,
+    );
   }
 
   async listContacts(

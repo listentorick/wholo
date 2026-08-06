@@ -332,6 +332,32 @@ export class MailService {
     await this.send(to, subject, text, html, 'trade-relationship activated');
   }
 
+  async sendAccountingConnectionNeedsReconnect(
+    to: string,
+    params: { distributorName: string; provider: string; reconnectUrl: string },
+  ): Promise<void> {
+    const { distributorName, provider, reconnectUrl } = params;
+    const subject = `${headerSafe(provider)} needs to be reconnected`;
+    const text = this.wrapText([
+      `Hi,`,
+      ``,
+      `${distributorName}'s ${provider} connection has stopped working and needs to be reconnected before syncing can resume.`,
+      ``,
+      `Reconnect:`,
+      reconnectUrl,
+    ]);
+
+    const html = this.wrapHtml(`
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
+      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
+        <strong>${esc(distributorName)}</strong>'s <strong>${esc(provider)}</strong> connection has stopped working and needs to be reconnected before syncing can resume.
+      </p>
+      ${this.button(reconnectUrl, 'Reconnect')}
+    `);
+
+    await this.send(to, subject, text, html, 'accounting-connection needs-reconnect');
+  }
+
   private async send(to: string, subject: string, text: string, html: string, kind: string): Promise<void> {
     try {
       await this.transporter.sendMail({ from: this.from, to, subject, text, html });

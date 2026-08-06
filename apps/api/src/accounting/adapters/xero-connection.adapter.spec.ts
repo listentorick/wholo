@@ -12,7 +12,6 @@ const mockXeroClientInstance = {
   apiCallback: jest.fn(),
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
-  refreshWithRefreshToken: jest.fn(),
   accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices },
 };
 
@@ -107,27 +106,136 @@ describe('XeroAccountingAdapter', () => {
     expect(mockXeroClientInstance.updateTenants).toHaveBeenCalledWith(false);
   });
 
-  it('refreshAccessToken delegates to refreshWithRefreshToken and maps the result', async () => {
-    mockXeroClientInstance.refreshWithRefreshToken.mockResolvedValue({
-      access_token: 'new-access',
-      refresh_token: 'new-refresh',
-      expires_at: 1893456000,
-      scope: 'openid',
-    });
-
-    const refreshed = await adapter.refreshAccessToken({
+  describe('refreshAccessToken', () => {
+    const tokenSet = {
       accessToken: 'old-access',
       refreshToken: 'old-refresh',
       expiresAt: new Date().toISOString(),
       scope: 'openid',
+    };
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
     });
 
-    expect(mockXeroClientInstance.refreshWithRefreshToken).toHaveBeenCalledWith(
-      'client-id',
-      'client-secret',
-      'old-refresh',
-    );
-    expect(refreshed.accessToken).toBe('new-access');
+    const mockFetchOnce = (impl: (...args: unknown[]) => unknown) => {
+      global.fetch = jest.fn().mockImplementation(impl) as unknown as typeof fetch;
+    };
+
+    it('posts the refresh_token grant directly to the Xero token endpoint (bypassing xero-node) and maps the result', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: jest.fn().mockResolvedValue({
+          access_token: 'new-access',
+          refresh_token: 'new-refresh',
+          expires_in: 1800,
+          scope: 'openid',
+        }),
+      });
+      global.fetch = mockFetch as unknown as typeof fetch;
+
+      const before = Date.now();
+      const refreshed = await adapter.refreshAccessToken(tokenSet);
+      const after = Date.now();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://identity.xero.com/connect/token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: `Basic ${Buffer.from('client-id:client-secret').toString('base64')}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          }),
+          body: 'grant_type=refresh_token&refresh_token=old-refresh',
+        }),
+      );
+      expect(refreshed.accessToken).toBe('new-access');
+      expect(refreshed.refreshToken).toBe('new-refresh');
+      // No client.refreshWithRefreshToken involved at all any more, so
+      // expires_at must be computed locally from the raw expires_in — assert
+      // it lands in the expected window rather than trusting an echoed field.
+      const expiresAtMs = new Date(refreshed.expiresAt).getTime();
+      expect(expiresAtMs).toBeGreaterThanOrEqual(before + 1800 * 1000 - 1000);
+      expect(expiresAtMs).toBeLessThanOrEqual(after + 1800 * 1000);
+    });
+
+    it('classifies invalid_grant (dead/reused refresh token) as permanent, tagged with its OAuth code', async () => {
+      mockFetchOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 400,
+          json: () => Promise.resolve({ error: 'invalid_grant', error_description: 'token expired or revoked' }),
+        }),
+      );
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(false);
+      expect(err.code).toBe('invalid_grant');
+      expect(err.message).toContain('invalid_grant');
+    });
+
+    it('classifies invalid_client (our application credentials, not the distributor) as permanent with a distinct code', async () => {
+      mockFetchOnce(() =>
+        Promise.resolve({
+          ok: false,
+          status: 401,
+          json: () => Promise.resolve({ error: 'invalid_client' }),
+        }),
+      );
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+
+      expect(err.transient).toBe(false);
+      expect(err.code).toBe('invalid_client');
+    });
+
+    it('classifies 429 as transient', async () => {
+      mockFetchOnce(() => Promise.resolve({ ok: false, status: 429, json: () => Promise.resolve({}) }));
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+      expect(err.transient).toBe(true);
+    });
+
+    it('classifies 5xx as transient', async () => {
+      mockFetchOnce(() => Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) }));
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+      expect(err.transient).toBe(true);
+    });
+
+    it('classifies an unknown 4xx as permanent (retrying identically would not succeed) with a generic message', async () => {
+      mockFetchOnce(() => Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({}) }));
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+      expect(err.transient).toBe(false);
+      expect(err.message).toContain('400');
+    });
+
+    it('classifies a network failure (fetch rejects, no HTTP response at all) as transient', async () => {
+      mockFetchOnce(() => Promise.reject(new TypeError('fetch failed')));
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(true);
+      expect(err.message).toContain('fetch failed');
+    });
+
+    it('passes a real AbortSignal (genuine transport-level cancel, not a Promise.race wrapper) and classifies a timeout as transient', async () => {
+      let observedSignal: AbortSignal | undefined;
+      mockFetchOnce((_url: unknown, init: { signal?: AbortSignal }) => {
+        observedSignal = init.signal;
+        return Promise.reject(new DOMException('This operation was aborted', 'TimeoutError'));
+      });
+
+      const err = await adapter.refreshAccessToken(tokenSet).catch((e) => e);
+
+      expect(observedSignal).toBeInstanceOf(AbortSignal);
+      expect(err.transient).toBe(true);
+    });
   });
 
   describe('listContacts', () => {

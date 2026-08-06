@@ -140,6 +140,10 @@ export interface AccountingConnectionAdapter {
   // validate the state themselves from it, in addition to our own check.
   exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>;
   listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>;
+  // Failures should be thrown as AccountingProviderError so callers can
+  // distinguish transient (retryable) from permanent (user-actionable, e.g.
+  // a revoked/already-consumed refresh token) causes — same contract as
+  // createInvoice below.
   refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>;
   // modifiedSince, when provided, asks the provider for an incremental diff
   // rather than a full list — providers that can't support it should ignore
