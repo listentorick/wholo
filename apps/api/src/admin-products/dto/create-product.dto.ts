@@ -28,6 +28,10 @@ export class CreateProductDto {
   @IsString()
   supplierId?: string;
 
+  @IsOptional()
+  @IsString()
+  taxTypeId?: string;
+
   @ApiProperty({ type: String, description: 'Decimal string, e.g. "29.99"', required: false })
   @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })

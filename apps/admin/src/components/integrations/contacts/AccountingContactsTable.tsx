@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingContactStatus, AccountingContactSummary } from '@wholo/types';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
@@ -8,6 +9,7 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { ListPagination } from '@/components/list/ListPagination';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { ChangedIndicator, isRowChanged } from '@/components/integrations/ChangedIndicator';
 import { ContactRowActions } from './ContactRowActions';
 
 interface Props {
@@ -140,41 +142,57 @@ export function AccountingContactsTable({
           </tbody>
         )}
         <tbody>
-          {contacts.map((contact) => (
-            <tr key={contact.id} className="border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors">
-              <td className="py-3 pl-5 pr-2">
-                <input
-                  type="checkbox"
-                  checked={selectAllMatching || selectedIds.has(contact.id)}
-                  onChange={() => onToggleRow(contact.id)}
-                  className="h-3.5 w-3.5 accent-primary"
-                  aria-label={`Select ${contact.displayName}`}
-                />
-              </td>
-              <td className="py-3 px-4 text-sm font-medium text-text">{contact.displayName}</td>
-              <td className="py-3 px-4 text-sm text-muted">{contact.email ?? '—'}</td>
-              <td className="py-3 px-4 text-sm text-muted">
-                {contact.externalContactCode ?? contact.externalAccountNumber ?? '—'}
-              </td>
-              <td className="py-3 px-4 text-sm text-text">
-                {contact.mapping?.customerName ?? contact.suggestion?.customerName ?? '—'}
-              </td>
-              <td className="py-3 px-4 text-xs text-muted max-w-[220px]">
-                {contact.suggestion?.matchReason ?? (contact.mapping ? `Linked (${contact.mapping.matchMethod})` : '—')}
-              </td>
-              <td className="py-3 px-4">
-                <ContactStatusBadge status={contact.status} />
-              </td>
-              <td className="py-3 pl-4 pr-5">
-                <ContactRowActions
-                  contact={contact}
-                  token={token}
-                  providerLabel={providerLabel}
-                  onActionComplete={onActionComplete}
-                />
-              </td>
-            </tr>
-          ))}
+          {contacts.map((contact) => {
+            const changed = isRowChanged(contact.changeDetectedAt, contact.changeAcknowledgedAt);
+            return (
+              <tr
+                key={contact.id}
+                className={[
+                  'border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors',
+                  changed ? 'border-l-2 border-l-amber-400' : '',
+                ].join(' ')}
+              >
+                <td className="py-3 pl-5 pr-2">
+                  <input
+                    type="checkbox"
+                    checked={selectAllMatching || selectedIds.has(contact.id)}
+                    onChange={() => onToggleRow(contact.id)}
+                    className="h-3.5 w-3.5 accent-primary"
+                    aria-label={`Select ${contact.displayName}`}
+                  />
+                </td>
+                <td className="py-3 px-4 text-sm font-medium text-text">
+                  {contact.displayName}
+                  <ChangedIndicator
+                    changeDetectedAt={contact.changeDetectedAt}
+                    changeAcknowledgedAt={contact.changeAcknowledgedAt}
+                    onAcknowledge={() => adminAccountingApi.acknowledgeContactChange(contact.id, token).then(onActionComplete)}
+                  />
+                </td>
+                <td className="py-3 px-4 text-sm text-muted">{contact.email ?? '—'}</td>
+                <td className="py-3 px-4 text-sm text-muted">
+                  {contact.externalContactCode ?? contact.externalAccountNumber ?? '—'}
+                </td>
+                <td className="py-3 px-4 text-sm text-text">
+                  {contact.mapping?.customerName ?? contact.suggestion?.customerName ?? '—'}
+                </td>
+                <td className="py-3 px-4 text-xs text-muted max-w-[220px]">
+                  {contact.suggestion?.matchReason ?? (contact.mapping ? `Linked (${contact.mapping.matchMethod})` : '—')}
+                </td>
+                <td className="py-3 px-4">
+                  <ContactStatusBadge status={contact.status} />
+                </td>
+                <td className="py-3 pl-4 pr-5">
+                  <ContactRowActions
+                    contact={contact}
+                    token={token}
+                    providerLabel={providerLabel}
+                    onActionComplete={onActionComplete}
+                  />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={onLoadMore} />

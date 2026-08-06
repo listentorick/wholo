@@ -8,9 +8,13 @@ import { Prisma, OrganisationType, CartOrderStatus, TradeRelationshipStatus } fr
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { UpsertCartItemDto } from './dto/upsert-cart-item.dto';
+import { calculateLineTax, resolveTaxLabel } from '../common/tax-calculation';
 
 const cartLineInclude = {
   product: { select: { id: true, name: true, sku: true } },
+  // Live current name, not a snapshot — cart lines are pre-purchase/mutable,
+  // unlike OrderLine's frozen taxTypeNameSnapshot.
+  taxType: { select: { name: true } },
 } as const;
 
 @Injectable()
@@ -54,7 +58,7 @@ export class CartService {
 
     const product = await this.prisma.product.findFirst({
       where: { id: dto.productId, distributorId: distributor.id, deletedAt: null },
-      select: { id: true, price: true, distributorId: true },
+      select: { id: true, price: true, distributorId: true, taxTypeId: true },
     });
 
     if (!product) throw new NotFoundException('Product not found');
@@ -76,6 +80,16 @@ export class CartService {
       (product.price as Prisma.Decimal | null) ??
       (() => { throw new UnprocessableEntityException('No price available for this product'); })();
 
+    // Resolved once, here, and frozen on the cart line — never re-resolved,
+    // same as unitPrice above (ADR-036: stability during checkout).
+    if (!product.taxTypeId) {
+      throw new UnprocessableEntityException('This product has no tax type configured');
+    }
+    const taxType = await this.prisma.taxType.findUnique({
+      where: { id: product.taxTypeId },
+      select: { ratePercentage: true },
+    });
+
     await this.prisma.cartOrderLine.upsert({
       where: { orderId_productId: { orderId: order.id, productId: dto.productId } },
       create: {
@@ -86,6 +100,8 @@ export class CartService {
         resolvedPriceListId: resolved?.priceListId ?? null,
         resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
         priceResolvedAt: new Date(),
+        taxTypeId: product.taxTypeId,
+        taxRateSnapshot: taxType?.ratePercentage ?? null,
       },
       update: {
         quantity: dto.quantity,
@@ -93,6 +109,8 @@ export class CartService {
         resolvedPriceListId: resolved?.priceListId ?? null,
         resolvedPriceListRuleId: resolved?.priceListRuleId ?? null,
         priceResolvedAt: new Date(),
+        taxTypeId: product.taxTypeId,
+        taxRateSnapshot: taxType?.ratePercentage ?? null,
       },
     });
 
@@ -134,20 +152,44 @@ export class CartService {
     lines: Array<{
       productId: string;
       quantity: number;
-      unitPrice: { toFixed: (n: number) => string } | string | null;
+      unitPrice: Prisma.Decimal | string | null;
+      taxRateSnapshot: Prisma.Decimal | string | null;
       product: { id: string; name: string; sku: string | null };
+      taxType: { name: string } | null;
     }>;
   }) {
-    return {
-      orderId: order.id,
-      items: order.lines.map((line) => ({
+    const dec = (v: Prisma.Decimal | string | null) =>
+      typeof v === 'object' && v !== null ? v.toFixed(2) : v == null ? '0.00' : String(v);
+    const asDecimal = (v: Prisma.Decimal | string | null) =>
+      v == null ? new Prisma.Decimal(0) : v instanceof Prisma.Decimal ? v : new Prisma.Decimal(v);
+
+    const items = order.lines.map((line) => {
+      const unitPrice = asDecimal(line.unitPrice);
+      const taxRate = line.taxRateSnapshot == null ? null : asDecimal(line.taxRateSnapshot);
+      const { taxAmount } = calculateLineTax(line.quantity, unitPrice, taxRate);
+      return {
         productId: line.productId,
         quantity: line.quantity,
-        unitPrice: typeof line.unitPrice === 'object' && line.unitPrice !== null
-          ? (line.unitPrice as { toFixed: (n: number) => string }).toFixed(2)
-          : String(line.unitPrice),
+        unitPrice: dec(line.unitPrice),
+        taxRatePercentage: dec(line.taxRateSnapshot),
+        taxAmount: taxAmount.toFixed(2),
+        taxTypeName: line.taxType?.name ?? null,
         product: line.product,
-      })),
+      };
+    });
+
+    // Sum already-rounded per-line amounts — never re-round after summing,
+    // same rule as OrdersService building Order.taxAmount from its lines.
+    const subtotal = items.reduce((sum, item) => sum.plus(new Prisma.Decimal(item.unitPrice).mul(item.quantity)), new Prisma.Decimal(0));
+    const taxAmount = items.reduce((sum, item) => sum.plus(new Prisma.Decimal(item.taxAmount)), new Prisma.Decimal(0));
+
+    return {
+      orderId: order.id,
+      items,
+      subtotal: subtotal.toFixed(2),
+      taxAmount: taxAmount.toFixed(2),
+      total: subtotal.plus(taxAmount).toFixed(2),
+      taxLabel: resolveTaxLabel(items),
     };
   }
 }

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingContactMatcherService } from '../accounting/matching/accounting-contact-matcher.service';
+import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { AccountingContactSyncProcessor } from './accounting-contact-sync.processor';
 
 function makeJob(connectionId = 'conn-1'): Job {
@@ -50,7 +51,9 @@ describe('AccountingContactSyncProcessor', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       externalAccountingContact: {
+        findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue(cachedContactRow),
+        update: jest.fn().mockResolvedValue({}),
       },
       tradeRelationship: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -74,11 +77,13 @@ describe('AccountingContactSyncProcessor', () => {
     };
     adapters = { get: jest.fn().mockReturnValue({ listContacts }) };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
+    const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
 
     processor = new AccountingContactSyncProcessor(
       prisma as unknown as PrismaService,
       accountingConnectionService as unknown as AccountingConnectionService,
       adapters as unknown as AccountingAdapterRegistry,
+      changeDetection as unknown as AccountingChangeDetectionService,
       matcher as unknown as AccountingContactMatcherService,
     );
   });

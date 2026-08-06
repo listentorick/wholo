@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductRowActions } from './ProductRowActions';
-import { adminAccountingApi, adminProductsApi } from '@wholo/admin-api-client';
+import { adminAccountingApi, adminProductsApi, ApiError } from '@wholo/admin-api-client';
 import type { AccountingProductSummary } from '@wholo/types';
 
 vi.mock('@wholo/admin-api-client', () => ({
@@ -15,6 +15,14 @@ vi.mock('@wholo/admin-api-client', () => ({
   },
   adminProductsApi: {
     list: vi.fn().mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } }),
+  },
+  ApiError: class extends Error {
+    constructor(
+      public readonly problem: { type: string; title: string; status: number; detail?: string },
+      public readonly status: number,
+    ) {
+      super(problem.detail ?? problem.title);
+    }
   },
 }));
 
@@ -31,6 +39,8 @@ function makeProduct(overrides: Partial<AccountingProductSummary> = {}): Account
     isTracked: false,
     isActive: true,
     ignoredAt: null,
+    changeDetectedAt: null,
+    changeAcknowledgedAt: null,
     status: 'READY_TO_IMPORT',
     mapping: null,
     suggestion: null,
@@ -68,7 +78,47 @@ describe('ProductRowActions', () => {
     render(<ProductRowActions product={product} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
     await user.click(screen.getByText('Confirm match'));
 
-    await waitFor(() => expect(adminAccountingApi.confirmProductSuggestion).toHaveBeenCalledWith('sugg-1', 'token-1'));
+    await waitFor(() =>
+      expect(adminAccountingApi.confirmProductSuggestion).toHaveBeenCalledWith('sugg-1', 'token-1', {
+        confirmTaxTypeOverride: false,
+      }),
+    );
+    await waitFor(() => expect(onActionComplete).toHaveBeenCalled());
+  });
+
+  it('shows a conflict modal on a TAX_TYPE_CONFLICT 409 when confirming a match, then resubmits with confirmTaxTypeOverride on confirm', async () => {
+    const conflictDetail = 'This accounting product\'s tax type (VAT) differs from the existing product\'s tax type (Zero-rated). Confirm to overwrite.';
+    (adminAccountingApi.confirmProductSuggestion as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(
+        new ApiError({ type: 'about:blank', title: 'TAX_TYPE_CONFLICT', status: 409, detail: conflictDetail }, 409),
+      )
+      .mockResolvedValueOnce(undefined);
+    const onActionComplete = vi.fn();
+    const product = makeProduct({
+      status: 'SUGGESTED',
+      suggestion: {
+        id: 'sugg-1',
+        productId: 'prod-1',
+        productName: 'Cab Sauv',
+        confidence: 95,
+        matchMethod: 'SKU_EXACT',
+        matchReason: 'Item code matches the product SKU exactly',
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<ProductRowActions product={product} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
+    await user.click(screen.getByText('Confirm match'));
+
+    await waitFor(() => expect(screen.getByText(conflictDetail)).toBeInTheDocument());
+
+    await user.click(screen.getByText('Confirm & overwrite'));
+
+    await waitFor(() =>
+      expect(adminAccountingApi.confirmProductSuggestion).toHaveBeenLastCalledWith('sugg-1', 'token-1', {
+        confirmTaxTypeOverride: true,
+      }),
+    );
     await waitFor(() => expect(onActionComplete).toHaveBeenCalled());
   });
 

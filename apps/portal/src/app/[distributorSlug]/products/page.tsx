@@ -15,7 +15,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 function formatPrice(price: string | null): string {
   if (price === null) return 'Price on request';
-  return `$${parseFloat(price).toFixed(2)} per item`;
+  return `$${parseFloat(price).toFixed(2)} per item · excl. VAT`;
 }
 
 export default function CataloguePage() {

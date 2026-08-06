@@ -61,6 +61,10 @@ export class AccountingConnectionService {
         distributorId,
         status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
       },
+      // Without this, a stale ERROR row and a freshly-reconnected CONNECTED
+      // row can both match and findFirst's pick is otherwise unordered —
+      // always surface the most recent one.
+      orderBy: { connectedAt: 'desc' },
     });
   }
 
@@ -153,7 +157,13 @@ export class AccountingConnectionService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.accountingConnection.updateMany({
-        where: { distributorId: stateRow.distributorId, status: AccountingConnectionStatus.CONNECTED },
+        // ERROR included, not just CONNECTED — a broken connection must be
+        // retired by a successful reconnect too, or it lingers as an
+        // orphaned row that findCurrentConnection could still surface.
+        where: {
+          distributorId: stateRow.distributorId,
+          status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
+        },
         data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: now },
       });
       await tx.accountingConnection.create({
@@ -177,13 +187,17 @@ export class AccountingConnectionService {
   // refreshAccessToken directly. Provider-neutral: refresh mechanics are
   // entirely delegated to whichever adapter the registry resolves.
   async getValidTokenSet(distributorId: string, provider: AccountingProvider): Promise<AccountingTokenSet> {
-    return this.prisma.$transaction(async (tx) => {
+    let connectionId: string | null = null;
+    let refreshError: Error | null = null;
+
+    const tokenSet = await this.prisma.$transaction(async (tx) => {
       const connection = await tx.accountingConnection.findFirst({
         where: { distributorId, provider, status: AccountingConnectionStatus.CONNECTED },
       });
       if (!connection) {
         throw new NotFoundException('No active accounting connection for this distributor');
       }
+      connectionId = connection.id;
 
       // Serializes concurrent refresh attempts for this connection so two
       // racing callers can't both submit the same (about-to-be-invalidated)
@@ -219,17 +233,28 @@ export class AccountingConnectionService {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.error(`Accounting token refresh failed for distributor ${distributorId}: ${message}`);
-        await tx.accountingConnection.update({
-          where: { id: current.id },
+        // Recorded outside this transaction (see below) — throwing here rolls
+        // this transaction back, which would silently discard an in-tx write
+        // of the same ERROR status/message, leaving the connection looking
+        // falsely healthy after every failed refresh.
+        refreshError = new Error(`Failed to refresh accounting connection for distributor ${distributorId}: ${message}`);
+        throw refreshError;
+      }
+    }).catch(async (err) => {
+      if (refreshError && connectionId) {
+        await this.prisma.accountingConnection.update({
+          where: { id: connectionId },
           data: {
             status: AccountingConnectionStatus.ERROR,
             lastErrorAt: new Date(),
-            lastErrorMessage: message,
+            lastErrorMessage: refreshError.message,
           },
         });
-        throw new Error(`Failed to refresh accounting connection for distributor ${distributorId}: ${message}`);
       }
+      throw err;
     });
+
+    return tokenSet;
   }
 
   async disconnect(distributorId: string): Promise<void> {

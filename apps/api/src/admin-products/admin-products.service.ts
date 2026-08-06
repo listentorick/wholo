@@ -14,6 +14,7 @@ interface CursorPayload {
 const productInclude = {
   productType: { select: { id: true, name: true, code: true } },
   supplier: { select: { id: true, name: true } },
+  taxType: { select: { id: true, name: true, classification: true, ratePercentage: true, active: true, isDefault: true } },
 } satisfies Prisma.ProductInclude;
 
 @Injectable()
@@ -83,6 +84,10 @@ export class AdminProductsService {
   }
 
   async create(distributorId: string, dto: CreateProductDto) {
+    const status = dto.status ?? ProductStatus.DRAFT;
+    const taxTypeId = dto.taxTypeId || null;
+    this.assertPublishable(status, taxTypeId);
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.create({
         data: {
@@ -90,9 +95,10 @@ export class AdminProductsService {
           name: dto.name,
           description: dto.description,
           sku: dto.sku || null,
-          status: dto.status ?? ProductStatus.DRAFT,
+          status,
           productTypeId: dto.productTypeId || null,
           supplierId: dto.supplierId || null,
+          taxTypeId,
           price: dto.price != null ? new Prisma.Decimal(dto.price) : null,
         },
         include: productInclude,
@@ -103,7 +109,11 @@ export class AdminProductsService {
   }
 
   async update(id: string, distributorId: string, dto: UpdateProductDto) {
-    await this.assertOwnership(id, distributorId);
+    const existing = await this.assertOwnership(id, distributorId);
+    const status = dto.status !== undefined ? dto.status : existing.status;
+    const taxTypeId = dto.taxTypeId !== undefined ? dto.taxTypeId || null : existing.taxTypeId;
+    this.assertPublishable(status, taxTypeId);
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.update({
         where: { id },
@@ -114,6 +124,7 @@ export class AdminProductsService {
           ...(dto.status !== undefined && { status: dto.status }),
           ...(dto.productTypeId !== undefined && { productTypeId: dto.productTypeId || null }),
           ...(dto.supplierId !== undefined && { supplierId: dto.supplierId || null }),
+          ...(dto.taxTypeId !== undefined && { taxTypeId: dto.taxTypeId || null }),
           ...(dto.price !== undefined && { price: dto.price != null ? new Prisma.Decimal(dto.price) : null }),
         },
         include: productInclude,
@@ -137,9 +148,19 @@ export class AdminProductsService {
   private async assertOwnership(id: string, distributorId: string) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      select: { distributorId: true, deletedAt: true },
+      select: { distributorId: true, deletedAt: true, status: true, taxTypeId: true },
     });
     if (!product || product.deletedAt) throw new NotFoundException('Product not found');
     if (product.distributorId !== distributorId) throw new ForbiddenException();
+    return product;
+  }
+
+  // A product cannot be published for ordering without a Stocdup tax type
+  // (Xero tax types PBI, AC4) — enforced here, the one place status
+  // transitions happen (create and update both funnel through this).
+  private assertPublishable(status: ProductStatus, taxTypeId: string | null) {
+    if (status === ProductStatus.ACTIVE && !taxTypeId) {
+      throw new BadRequestException('A product must have a tax type assigned before it can be set to ACTIVE');
+    }
   }
 }

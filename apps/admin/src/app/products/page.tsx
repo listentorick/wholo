@@ -120,8 +120,21 @@ function ProductRow({ product }: { product: Product }) {
       <td className="py-3 px-4 text-sm text-muted">
         <ListCellLink href={href}>{product.productType?.name ?? '—'}</ListCellLink>
       </td>
-      <td className="py-3 pl-4 pr-5 text-sm text-muted">
+      <td className="py-3 px-4 text-sm text-muted">
         <ListCellLink href={href}>{product.supplier?.name ?? '—'}</ListCellLink>
+      </td>
+      <td className="py-3 pl-4 pr-5">
+        <ListCellLink href={href}>
+          {product.taxType ? (
+            product.taxType.isDefault ? (
+              <StatusBadge label="Needs review" tone="yellow" />
+            ) : (
+              <span className="text-sm text-muted">{product.taxType.name}</span>
+            )
+          ) : (
+            <StatusBadge label="No tax type" tone="yellow" />
+          )}
+        </ListCellLink>
       </td>
     </ListRow>
   );
@@ -248,6 +261,7 @@ export default function ProductsPage() {
                 <ListTh>Status</ListTh>
                 <ListTh>Type</ListTh>
                 <ListTh>Supplier</ListTh>
+                <ListTh>Tax</ListTh>
               </tr>
             </thead>
             <tbody>

@@ -57,13 +57,19 @@ describe('AccountingProductController', () => {
   });
 
   it('confirmSuggestion passes the caller sub as the confirming user', async () => {
-    await controller.confirmSuggestion('dist-1', 'sugg-1', req);
-    expect(mockService.confirmSuggestion).toHaveBeenCalledWith('dist-1', 'user-1', 'sugg-1');
+    const dto = { confirmTaxTypeOverride: true } as never;
+    await controller.confirmSuggestion('dist-1', 'sugg-1', dto, req);
+    expect(mockService.confirmSuggestion).toHaveBeenCalledWith('dist-1', 'user-1', 'sugg-1', true);
   });
 
-  it('matchToExistingProduct unpacks productId from the body', async () => {
-    await controller.matchToExistingProduct('dist-1', 'ext-1', { productId: 'prod-1' }, req);
-    expect(mockService.matchToExistingProduct).toHaveBeenCalledWith('dist-1', 'user-1', 'ext-1', 'prod-1');
+  it('matchToExistingProduct unpacks productId and confirmTaxTypeOverride from the body', async () => {
+    await controller.matchToExistingProduct(
+      'dist-1',
+      'ext-1',
+      { productId: 'prod-1', confirmTaxTypeOverride: true },
+      req,
+    );
+    expect(mockService.matchToExistingProduct).toHaveBeenCalledWith('dist-1', 'user-1', 'ext-1', 'prod-1', true);
   });
 
   it('ignore passes the caller sub', async () => {

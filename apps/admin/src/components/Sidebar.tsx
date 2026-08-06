@@ -71,6 +71,17 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: 'Tax types',
+    href: '/tax-types',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+        <line x1="19" y1="5" x2="5" y2="19" />
+        <circle cx="6.5" cy="6.5" r="2.5" />
+        <circle cx="17.5" cy="17.5" r="2.5" />
+      </svg>
+    ),
+  },
+  {
     label: 'Customers',
     href: '/customers',
     icon: (

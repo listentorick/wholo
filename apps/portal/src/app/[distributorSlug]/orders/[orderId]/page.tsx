@@ -240,7 +240,7 @@ export default function OrderDetailPage() {
         <div className="od-section px-4 py-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.2s' }}>
           {[
             { label: 'Subtotal', value: fmtAmt(order.subtotalAmount) },
-            { label: 'Tax (GST)',  value: fmtAmt(order.taxAmount) },
+            { label: order.taxLabel, value: fmtAmt(order.taxAmount) },
           ].map((row) => (
             <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8 }}>
               <span style={{ fontSize: 13, color: '#6B7280' }}>{row.label}</span>

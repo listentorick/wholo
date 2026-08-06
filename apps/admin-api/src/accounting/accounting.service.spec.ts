@@ -242,9 +242,14 @@ describe('AccountingService (BFF)', () => {
   });
 
   describe('confirmProductSuggestion', () => {
-    it('posts to the suggestion-scoped confirm route', async () => {
-      await service.confirmProductSuggestion('dist-1', 'sugg-1', 'token-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/suggestions/sugg-1/confirm', 'token-1');
+    it('posts the confirm DTO to the suggestion-scoped confirm route', async () => {
+      const dto = { confirmTaxTypeOverride: true };
+      await service.confirmProductSuggestion('dist-1', 'sugg-1', dto, 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/distributors/dist-1/accounting/products/suggestions/sugg-1/confirm',
+        'token-1',
+        dto,
+      );
     });
   });
 

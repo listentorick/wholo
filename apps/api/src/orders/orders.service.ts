@@ -24,6 +24,7 @@ import { R2StorageService } from '../asset-images/r2-storage.service';
 import { SubmitOrderDto } from './dto/submit-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
+import { calculateLineTax, resolveTaxLabel } from '../common/tax-calculation';
 
 interface CursorPayload {
   createdAt: string;
@@ -49,10 +50,13 @@ const orderLineSelect = {
   unitOfMeasureSnapshot: true,
   quantityOrdered: true,
   unitPriceSnapshot: true,
-  taxRateSnapshot: true,
   subtotalAmount: true,
   taxAmount: true,
   totalAmount: true,
+  taxTypeId: true,
+  taxTypeNameSnapshot: true,
+  taxClassificationSnapshot: true,
+  taxRatePercentageSnapshot: true,
   priceListIdSnapshot: true,
   priceListRuleIdSnapshot: true,
   status: true,
@@ -197,19 +201,41 @@ export class OrdersService {
       postcode: relationship.deliveryPostcode, country: relationship.deliveryCountry,
     };
 
-    // Compute totals (tax = 0 for Phase 1)
+    // Tax rate was resolved and frozen on the cart line at add-time
+    // (CartService.upsertItem) — never re-resolved here, same as unitPrice.
+    // Name/classification weren't frozen there, so join them once, now, from
+    // whatever the referenced TaxType currently says — then they too are
+    // frozen forever onto the order line below (AC7).
+    const taxTypeIds = [...new Set(cart.lines.map((l) => l.taxTypeId).filter((id): id is string => !!id))];
+    const taxTypes = taxTypeIds.length
+      ? await this.prisma.taxType.findMany({
+          where: { id: { in: taxTypeIds } },
+          select: { id: true, name: true, classification: true },
+        })
+      : [];
+    const taxTypesById = new Map(taxTypes.map((t) => [t.id, t]));
+
     const lines = cart.lines.map((line) => {
       const unitPrice = line.unitPrice as Prisma.Decimal;
-      const subtotalAmount = unitPrice.mul(line.quantity);
+      const { netAmount, taxAmount, grossAmount } = calculateLineTax(
+        line.quantity,
+        unitPrice,
+        line.taxRateSnapshot as Prisma.Decimal | null,
+      );
+      const taxType = line.taxTypeId ? taxTypesById.get(line.taxTypeId) : undefined;
       return {
         productId: line.productId,
         skuSnapshot: line.product.sku,
         productNameSnapshot: line.product.name,
         unitPriceSnapshot: unitPrice,
         quantityOrdered: line.quantity,
-        subtotalAmount,
-        taxAmount: new Prisma.Decimal(0),
-        totalAmount: subtotalAmount,
+        subtotalAmount: netAmount,
+        taxAmount,
+        totalAmount: grossAmount,
+        taxTypeId: line.taxTypeId ?? null,
+        taxTypeNameSnapshot: taxType?.name ?? null,
+        taxClassificationSnapshot: taxType?.classification ?? null,
+        taxRatePercentageSnapshot: line.taxRateSnapshot ?? null,
         priceListIdSnapshot: line.resolvedPriceListId ?? null,
         priceListRuleIdSnapshot: line.resolvedPriceListRuleId ?? null,
       };
@@ -219,7 +245,10 @@ export class OrdersService {
       (sum, l) => sum.plus(l.subtotalAmount),
       new Prisma.Decimal(0),
     );
-    const taxAmount = new Prisma.Decimal(0);
+    const taxAmount = lines.reduce(
+      (sum, l) => sum.plus(l.taxAmount),
+      new Prisma.Decimal(0),
+    );
     const totalAmount = subtotalAmount.plus(taxAmount);
 
     const effectiveMinimumOrderSpend = resolveEffectiveMinimumOrderSpend(
@@ -288,6 +317,10 @@ export class OrdersService {
           subtotalAmount: l.subtotalAmount,
           taxAmount: l.taxAmount,
           totalAmount: l.totalAmount,
+          taxTypeId: l.taxTypeId,
+          taxTypeNameSnapshot: l.taxTypeNameSnapshot,
+          taxClassificationSnapshot: l.taxClassificationSnapshot,
+          taxRatePercentageSnapshot: l.taxRatePercentageSnapshot,
           status: isAutoAccept ? OrderLineStatus.ACCEPTED : OrderLineStatus.SUBMITTED,
         })),
       });
@@ -569,6 +602,7 @@ export class OrdersService {
       currency: order.currency,
       subtotalAmount: dec(order.subtotalAmount),
       taxAmount: dec(order.taxAmount),
+      taxLabel: resolveTaxLabel(order.lines.map((l) => ({ taxTypeName: l.taxTypeNameSnapshot }))),
       totalAmount: dec(order.totalAmount),
       billingAddressSnapshot: order.billingAddressSnapshot as Record<string, unknown> | null,
       deliveryAddressSnapshot: order.deliveryAddressSnapshot as Record<string, unknown> | null,
@@ -606,10 +640,13 @@ export class OrdersService {
         unitOfMeasureSnapshot: l.unitOfMeasureSnapshot,
         quantityOrdered: l.quantityOrdered,
         unitPriceSnapshot: dec(l.unitPriceSnapshot),
-        taxRateSnapshot: l.taxRateSnapshot,
         subtotalAmount: dec(l.subtotalAmount),
         taxAmount: dec(l.taxAmount),
         totalAmount: dec(l.totalAmount),
+        taxTypeId: l.taxTypeId,
+        taxTypeNameSnapshot: l.taxTypeNameSnapshot,
+        taxClassificationSnapshot: l.taxClassificationSnapshot,
+        taxRatePercentageSnapshot: l.taxRatePercentageSnapshot != null ? dec(l.taxRatePercentageSnapshot) : null,
         priceListIdSnapshot: l.priceListIdSnapshot,
         priceListRuleIdSnapshot: l.priceListRuleIdSnapshot,
         status: l.status,

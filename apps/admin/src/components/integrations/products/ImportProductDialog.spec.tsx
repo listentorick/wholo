@@ -22,6 +22,8 @@ const product: AccountingProductSummary = {
   isTracked: false,
   isActive: true,
   ignoredAt: null,
+  changeDetectedAt: null,
+  changeAcknowledgedAt: null,
   status: 'READY_TO_IMPORT',
   mapping: null,
   suggestion: null,

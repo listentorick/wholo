@@ -36,11 +36,13 @@ const baseProduct = {
   price: null,
   productTypeId: null,
   supplierId: null,
+  taxTypeId: 'tax-1',
   deletedAt: null,
   createdAt: NOW,
   updatedAt: NOW,
   productType: null,
   supplier: null,
+  taxType: null,
 };
 
 describe('AdminProductsService', () => {
@@ -227,6 +229,29 @@ describe('AdminProductsService', () => {
 
       expect(mockProductSearch.indexProduct).toHaveBeenCalledWith(baseProduct, mockPrisma);
     });
+
+    it('throws BadRequestException when status is ACTIVE and no taxTypeId is given', async () => {
+      await expect(
+        service.create(DISTRIBUTOR_ID, { name: 'No Tax', status: 'ACTIVE' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.create).not.toHaveBeenCalled();
+    });
+
+    it('creates product with status ACTIVE when taxTypeId is provided', async () => {
+      mockPrisma.product.create.mockResolvedValue({ ...baseProduct, status: 'ACTIVE' });
+
+      await service.create(DISTRIBUTOR_ID, { name: 'Taxed', status: 'ACTIVE', taxTypeId: 'tax-1' } as any);
+
+      const call = mockPrisma.product.create.mock.calls[0][0];
+      expect(call.data.status).toBe('ACTIVE');
+      expect(call.data.taxTypeId).toBe('tax-1');
+    });
+
+    it('allows creating a DRAFT product with no taxTypeId', async () => {
+      mockPrisma.product.create.mockResolvedValue(baseProduct);
+
+      await expect(service.create(DISTRIBUTOR_ID, { name: 'Draft' } as any)).resolves.toBeDefined();
+    });
   });
 
   describe('update', () => {
@@ -273,6 +298,62 @@ describe('AdminProductsService', () => {
       await expect(service.update(PRODUCT_ID, DISTRIBUTOR_ID, { name: 'X' })).rejects.toThrow(
         ForbiddenException,
       );
+    });
+
+    it('throws BadRequestException when setting status ACTIVE on a product with no taxTypeId', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({
+        distributorId: DISTRIBUTOR_ID,
+        deletedAt: null,
+        status: 'DRAFT',
+        taxTypeId: null,
+      });
+
+      await expect(
+        service.update(PRODUCT_ID, DISTRIBUTOR_ID, { status: 'ACTIVE' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.product.update).not.toHaveBeenCalled();
+    });
+
+    it('allows setting status ACTIVE when the product already has a taxTypeId', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({
+        distributorId: DISTRIBUTOR_ID,
+        deletedAt: null,
+        status: 'DRAFT',
+        taxTypeId: 'tax-1',
+      });
+      mockPrisma.product.update.mockResolvedValue({ ...baseProduct, status: 'ACTIVE' });
+
+      await expect(
+        service.update(PRODUCT_ID, DISTRIBUTOR_ID, { status: 'ACTIVE' } as any),
+      ).resolves.toBeDefined();
+    });
+
+    it('allows setting status ACTIVE when taxTypeId is provided in the same update', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({
+        distributorId: DISTRIBUTOR_ID,
+        deletedAt: null,
+        status: 'DRAFT',
+        taxTypeId: null,
+      });
+      mockPrisma.product.update.mockResolvedValue({ ...baseProduct, status: 'ACTIVE' });
+
+      await expect(
+        service.update(PRODUCT_ID, DISTRIBUTOR_ID, { status: 'ACTIVE', taxTypeId: 'tax-1' } as any),
+      ).resolves.toBeDefined();
+    });
+
+    it('allows clearing taxTypeId on a non-ACTIVE product', async () => {
+      mockPrisma.product.findUnique.mockResolvedValue({
+        distributorId: DISTRIBUTOR_ID,
+        deletedAt: null,
+        status: 'DRAFT',
+        taxTypeId: 'tax-1',
+      });
+      mockPrisma.product.update.mockResolvedValue({ ...baseProduct, taxTypeId: null });
+
+      await expect(
+        service.update(PRODUCT_ID, DISTRIBUTOR_ID, { taxTypeId: '' } as any),
+      ).resolves.toBeDefined();
     });
   });
 

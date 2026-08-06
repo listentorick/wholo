@@ -10,14 +10,22 @@ import type {
   AccountingProductListResponse,
   AccountingProductNeedsAttentionCountResponse,
   AccountingProductSyncRequestedResponse,
+  AccountingTaxTypeListParams,
+  AccountingTaxTypeListResponse,
+  AccountingTaxTypeNeedsAttentionCountResponse,
+  AccountingTaxTypeSyncRequestedResponse,
+  AccountingTaxTypeSummary,
   BulkImportContactSelectionRequest,
   BulkImportJobResponse,
   BulkImportProductSelectionRequest,
+  ConfirmAccountingProductSuggestionRequest,
   Customer,
   ImportAccountingContactRequest,
   ImportAccountingProductRequest,
+  ImportAccountingTaxTypeRequest,
   MatchAccountingContactRequest,
   MatchAccountingProductRequest,
+  MatchAccountingTaxTypeRequest,
   Product,
   UpdateAccountingConnectionSettingsRequest,
 } from '@wholo/types';
@@ -30,6 +38,14 @@ function buildListQuery(params: AccountingContactListParams | AccountingProductL
   if (params.search) qs.set('search', params.search);
   if (params.status?.length) qs.set('status', params.status.join(','));
   if (params.type?.length) qs.set('type', params.type.join(','));
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
+function buildTaxTypeListQuery(params: AccountingTaxTypeListParams): string {
+  const qs = new URLSearchParams();
+  if (params.limit != null) qs.set('limit', String(params.limit));
+  if (params.cursor) qs.set('cursor', params.cursor);
   const s = qs.toString();
   return s ? `?${s}` : '';
 }
@@ -171,10 +187,15 @@ export const adminAccountingApi = {
     });
   },
 
-  confirmProductSuggestion(suggestionId: string, token: string): Promise<void> {
+  confirmProductSuggestion(
+    suggestionId: string,
+    token: string,
+    dto?: ConfirmAccountingProductSuggestionRequest,
+  ): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/suggestions/${suggestionId}/confirm`, {
       method: 'POST',
       token,
+      body: JSON.stringify(dto ?? {}),
     });
   },
 
@@ -214,5 +235,90 @@ export const adminAccountingApi = {
 
   getProductBulkImportJob(jobId: string, token: string): Promise<AccountingBulkImportJob> {
     return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/products/bulk-import-jobs/${jobId}`, { token });
+  },
+
+  acknowledgeProductChange(externalProductId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/acknowledge-change`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  acknowledgeContactChange(externalContactId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/contacts/${externalContactId}/acknowledge-change`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  listTaxTypes(params: AccountingTaxTypeListParams, token: string): Promise<AccountingTaxTypeListResponse> {
+    return apiFetch<AccountingTaxTypeListResponse>(`/api/v1/accounting/tax-types${buildTaxTypeListQuery(params)}`, {
+      token,
+    });
+  },
+
+  countTaxTypesNeedingAttention(token: string): Promise<AccountingTaxTypeNeedsAttentionCountResponse> {
+    return apiFetch<AccountingTaxTypeNeedsAttentionCountResponse>('/api/v1/accounting/tax-types/needs-attention-count', {
+      token,
+    });
+  },
+
+  syncTaxTypes(token: string): Promise<AccountingTaxTypeSyncRequestedResponse> {
+    return apiFetch<AccountingTaxTypeSyncRequestedResponse>('/api/v1/accounting/tax-types/sync', {
+      method: 'POST',
+      token,
+    });
+  },
+
+  importTaxType(
+    externalTaxTypeId: string,
+    dto: ImportAccountingTaxTypeRequest,
+    token: string,
+  ): Promise<AccountingTaxTypeSummary> {
+    return apiFetch<AccountingTaxTypeSummary>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/import`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  confirmTaxTypeSuggestion(suggestionId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/tax-types/suggestions/${suggestionId}/confirm`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  matchTaxType(
+    externalTaxTypeId: string,
+    dto: MatchAccountingTaxTypeRequest,
+    token: string,
+  ): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/match`, {
+      method: 'POST',
+      token,
+      body: JSON.stringify(dto),
+    });
+  },
+
+  ignoreTaxType(externalTaxTypeId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/ignore`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  unlinkTaxTypeMapping(mappingId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/tax-types/mappings/${mappingId}/unlink`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  acknowledgeTaxTypeChange(externalTaxTypeId: string, token: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/acknowledge-change`, {
+      method: 'POST',
+      token,
+    });
   },
 };

@@ -6,10 +6,12 @@ import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
 import { AccountingProductSyncScheduler } from './accounting/accounting-product-sync.scheduler';
+import { AccountingTaxTypeSyncScheduler } from './accounting/accounting-tax-type-sync.scheduler';
 import { AccountingBulkImportModule } from './accounting-bulk-import/accounting-bulk-import.module';
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
 import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
+import { AccountingTaxTypeSyncModule } from './accounting-tax-type-sync/accounting-tax-type-sync.module';
 import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
@@ -22,6 +24,7 @@ import {
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
+  ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queues/queue.constants';
@@ -58,6 +61,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
       },
       { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
       { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
+      { name: ACCOUNTING_TAX_TYPE_SYNC_QUEUE },
       {
         name: ACCOUNTING_BULK_IMPORT_QUEUE,
         // Local DB operations per item, not external API calls — same
@@ -91,6 +95,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingModule,
     AccountingContactSyncModule,
     AccountingProductSyncModule,
+    AccountingTaxTypeSyncModule,
     AnalyticsFactsModule,
     OutboxModule,
     HealthModule,
@@ -100,6 +105,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingTokenRefreshScheduler,
     AccountingContactSyncScheduler,
     AccountingProductSyncScheduler,
+    AccountingTaxTypeSyncScheduler,
   ],
 })
 export class WorkerModule {}

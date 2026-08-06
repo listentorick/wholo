@@ -28,7 +28,7 @@ import { cartApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { quantities, inCart, adjustQty, subtotal } = useCart();
+  const { quantities, inCart, adjustQty, subtotal, taxAmount, taxLabel, total } = useCart();
   return (
     <div>
       <button onClick={() => adjustQty('prod-1', 1)}>increase</button>
@@ -36,6 +36,9 @@ function TestHarness() {
       <span data-testid="qty">{quantities['prod-1'] ?? ''}</span>
       <span data-testid="in-cart">{inCart.has('prod-1') ? 'yes' : 'no'}</span>
       <span data-testid="subtotal">{subtotal}</span>
+      <span data-testid="tax">{taxAmount}</span>
+      <span data-testid="tax-label">{taxLabel}</span>
+      <span data-testid="total">{total}</span>
     </div>
   );
 }
@@ -58,9 +61,22 @@ beforeEach(() => {
     accessToken: 'test-token',
   });
   (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
-  (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [] });
-  (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [] });
+  (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [], subtotal: '0.00', taxAmount: '0.00', total: '0.00', taxLabel: 'Tax' });
+  (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockResolvedValue({ orderId: null, items: [], subtotal: '0.00', taxAmount: '0.00', total: '0.00', taxLabel: 'Tax' });
 });
+
+function cartItem(overrides: Record<string, unknown> = {}) {
+  return {
+    productId: 'prod-1',
+    quantity: 1,
+    unitPrice: '2.50',
+    taxRatePercentage: '20.00',
+    taxAmount: '0.50',
+    taxTypeName: 'VAT',
+    product: { id: 'prod-1', name: 'Egg tarts', sku: null },
+    ...overrides,
+  };
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -68,7 +84,8 @@ describe('CartProvider subtotal', () => {
   it('computes subtotal from quantities and unit price', async () => {
     (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
       orderId: 'order-1',
-      items: [{ productId: 'prod-1', quantity: 3, unitPrice: '2.50', product: { id: 'prod-1', name: 'Egg tarts', sku: null } }],
+      items: [cartItem({ quantity: 3, unitPrice: '2.50' })],
+      subtotal: '7.50', taxAmount: '1.50', total: '9.00', taxLabel: 'VAT',
     });
 
     renderCart();
@@ -79,7 +96,8 @@ describe('CartProvider subtotal', () => {
   it('reflects an optimistic quantity change before the server confirms it', async () => {
     (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
       orderId: 'order-1',
-      items: [{ productId: 'prod-1', quantity: 1, unitPrice: '2.50', product: { id: 'prod-1', name: 'Egg tarts', sku: null } }],
+      items: [cartItem({ quantity: 1, unitPrice: '2.50' })],
+      subtotal: '2.50', taxAmount: '0.50', total: '3.00', taxLabel: 'VAT',
     });
     (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockImplementation(() => new Promise(() => {}));
 
@@ -95,6 +113,56 @@ describe('CartProvider subtotal', () => {
     renderCart();
     await waitFor(() => expect(cartApi.getCart).toHaveBeenCalled());
     expect(screen.getByTestId('subtotal').textContent).toBe('0');
+  });
+});
+
+describe('CartProvider taxAmount/total/taxLabel', () => {
+  it('reads tax amount, total, and tax label directly from the API response — no client-side recomputation', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [cartItem({ quantity: 2, unitPrice: '10.00' })],
+      subtotal: '20.00', taxAmount: '4.00', total: '24.00', taxLabel: 'VAT',
+    });
+
+    renderCart();
+
+    await waitFor(() => expect(screen.getByTestId('subtotal').textContent).toBe('20'));
+    expect(screen.getByTestId('tax').textContent).toBe('4');
+    expect(screen.getByTestId('total').textContent).toBe('24');
+    expect(screen.getByTestId('tax-label').textContent).toBe('VAT');
+  });
+
+  it('falls back to the generic "Tax" label when the API reports mixed tax types', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [cartItem()],
+      subtotal: '2.50', taxAmount: '0.50', total: '3.00', taxLabel: 'Tax',
+    });
+
+    renderCart();
+
+    await waitFor(() => expect(screen.getByTestId('tax-label').textContent).toBe('Tax'));
+  });
+
+  it('updates tax/total from the fresh response after a quantity change resolves', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [cartItem({ quantity: 1, unitPrice: '10.00' })],
+      subtotal: '10.00', taxAmount: '2.00', total: '12.00', taxLabel: 'VAT',
+    });
+    (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockResolvedValue({
+      orderId: 'order-1',
+      items: [cartItem({ quantity: 2, unitPrice: '10.00' })],
+      subtotal: '20.00', taxAmount: '4.00', total: '24.00', taxLabel: 'VAT',
+    });
+
+    renderCart();
+    await waitFor(() => expect(screen.getByTestId('tax').textContent).toBe('2'));
+
+    fireEvent.click(screen.getByText('increase'));
+
+    await waitFor(() => expect(screen.getByTestId('tax').textContent).toBe('4'));
+    expect(screen.getByTestId('total').textContent).toBe('24');
   });
 });
 
@@ -116,7 +184,8 @@ describe('CartProvider adjustQty', () => {
   it('persists the adjusted quantity via cartApi.upsertItem for a product already in the cart', async () => {
     (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue({
       orderId: 'order-1',
-      items: [{ productId: 'prod-1', quantity: 3, unitPrice: '1.00', product: { id: 'prod-1', name: 'Egg tarts', sku: null } }],
+      items: [cartItem({ quantity: 3, unitPrice: '1.00' })],
+      subtotal: '3.00', taxAmount: '0.60', total: '3.60', taxLabel: 'VAT',
     });
 
     renderCart();

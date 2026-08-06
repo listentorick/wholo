@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { adminAccountingApi } from '@wholo/admin-api-client';
+import { adminAccountingApi, ApiError } from '@wholo/admin-api-client';
 import type { AccountingProductSummary } from '@wholo/types';
 import { ImportProductDialog } from './ImportProductDialog';
 import { MatchExistingProductDialog } from './MatchExistingProductDialog';
+import { TaxTypeConflictModal } from './TaxTypeConflictModal';
 
 interface Props {
   product: AccountingProductSummary;
@@ -18,6 +19,7 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
+  const [taxConflictDetail, setTaxConflictDetail] = useState<string | null>(null);
 
   async function run(action: string, fn: () => Promise<unknown>) {
     setBusy(action);
@@ -32,9 +34,22 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
     }
   }
 
-  function handleConfirmMatch() {
+  async function handleConfirmMatch(confirmTaxTypeOverride = false) {
     if (!product.suggestion) return;
-    run('confirm', () => adminAccountingApi.confirmProductSuggestion(product.suggestion!.id, token));
+    setBusy('confirm');
+    setError(null);
+    try {
+      await adminAccountingApi.confirmProductSuggestion(product.suggestion.id, token, { confirmTaxTypeOverride });
+      onActionComplete();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_CONFLICT') {
+        setTaxConflictDetail(err.problem.detail ?? 'This match would change the product’s tax type.');
+      } else {
+        setError('That action failed. Please try again.');
+      }
+    } finally {
+      setBusy(null);
+    }
   }
 
   function handleIgnore() {
@@ -56,7 +71,7 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
           <>
             <button
               type="button"
-              onClick={handleConfirmMatch}
+              onClick={() => handleConfirmMatch()}
               disabled={anyBusy}
               className="rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50"
               style={{ background: '#dcfce7', color: '#15803d' }}
@@ -175,6 +190,17 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
           onMatched={() => {
             setDialog(null);
             onActionComplete();
+          }}
+        />
+      )}
+      {taxConflictDetail && (
+        <TaxTypeConflictModal
+          detail={taxConflictDetail}
+          submitting={busy === 'confirm'}
+          onCancel={() => setTaxConflictDetail(null)}
+          onConfirm={() => {
+            setTaxConflictDetail(null);
+            handleConfirmMatch(true);
           }}
         />
       )}

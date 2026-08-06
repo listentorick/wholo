@@ -23,6 +23,7 @@ describe('OutboxPublisherService', () => {
   let accountingInvoiceExportQueue: { add: jest.Mock };
   let accountingContactSyncQueue: { add: jest.Mock };
   let accountingProductSyncQueue: { add: jest.Mock };
+  let accountingTaxTypeSyncQueue: { add: jest.Mock };
   let analyticsFactsQueue: { add: jest.Mock };
   let accountingBulkImportQueue: { add: jest.Mock };
 
@@ -37,6 +38,7 @@ describe('OutboxPublisherService', () => {
     accountingInvoiceExportQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingContactSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingProductSyncQueue = { add: jest.fn().mockResolvedValue({}) };
+    accountingTaxTypeSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     analyticsFactsQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingBulkImportQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
@@ -45,6 +47,7 @@ describe('OutboxPublisherService', () => {
       accountingInvoiceExportQueue as unknown as Queue,
       accountingContactSyncQueue as unknown as Queue,
       accountingProductSyncQueue as unknown as Queue,
+      accountingTaxTypeSyncQueue as unknown as Queue,
       analyticsFactsQueue as unknown as Queue,
       accountingBulkImportQueue as unknown as Queue,
     );
@@ -145,6 +148,23 @@ describe('OutboxPublisherService', () => {
     expect(accountingContactSyncQueue.add).not.toHaveBeenCalled();
     expect(notificationsQueue.add).not.toHaveBeenCalled();
     expect(accountingInvoiceExportQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes AccountingTaxTypeSyncRequested to the accounting-tax-type-sync queue, whether scheduled or manually triggered', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-10', eventType: 'AccountingTaxTypeSyncRequested', aggregateType: 'AccountingConnection', aggregateId: 'conn-1' }),
+    ]);
+
+    await service.publishPending();
+
+    expect(accountingTaxTypeSyncQueue.add).toHaveBeenCalledWith(
+      'AccountingTaxTypeSyncRequested',
+      expect.anything(),
+      { jobId: 'evt-10' },
+    );
+    expect(accountingProductSyncQueue.add).not.toHaveBeenCalled();
+    expect(accountingContactSyncQueue.add).not.toHaveBeenCalled();
+    expect(notificationsQueue.add).not.toHaveBeenCalled();
   });
 
   it('routes AccountingBulkImportRequested to the accounting-bulk-import queue', async () => {

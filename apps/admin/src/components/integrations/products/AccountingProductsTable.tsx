@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingProductStatus, AccountingProductSummary } from '@wholo/types';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
@@ -8,6 +9,7 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { ListPagination } from '@/components/list/ListPagination';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { ChangedIndicator, isRowChanged } from '@/components/integrations/ChangedIndicator';
 import { ProductRowActions } from './ProductRowActions';
 
 interface Props {
@@ -140,39 +142,55 @@ export function AccountingProductsTable({
           </tbody>
         )}
         <tbody>
-          {products.map((product) => (
-            <tr key={product.id} className="border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors">
-              <td className="py-3 pl-5 pr-2">
-                <input
-                  type="checkbox"
-                  checked={selectAllMatching || selectedIds.has(product.id)}
-                  onChange={() => onToggleRow(product.id)}
-                  className="h-3.5 w-3.5 accent-primary"
-                  aria-label={`Select ${product.displayName}`}
-                />
-              </td>
-              <td className="py-3 px-4 text-sm text-muted">{product.externalProductCode ?? '—'}</td>
-              <td className="py-3 px-4 text-sm font-medium text-text">{product.displayName}</td>
-              <td className="py-3 px-4 text-sm text-muted">{product.salesUnitPrice ?? '—'}</td>
-              <td className="py-3 px-4 text-sm text-muted">
-                {product.isTracked ? product.quantityOnHand ?? '0' : '—'}
-              </td>
-              <td className="py-3 px-4 text-sm text-text">
-                {product.mapping?.productName ?? product.suggestion?.productName ?? '—'}
-              </td>
-              <td className="py-3 px-4">
-                <ProductStatusBadge status={product.status} />
-              </td>
-              <td className="py-3 pl-4 pr-5">
-                <ProductRowActions
-                  product={product}
-                  token={token}
-                  providerLabel={providerLabel}
-                  onActionComplete={onActionComplete}
-                />
-              </td>
-            </tr>
-          ))}
+          {products.map((product) => {
+            const changed = isRowChanged(product.changeDetectedAt, product.changeAcknowledgedAt);
+            return (
+              <tr
+                key={product.id}
+                className={[
+                  'border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors',
+                  changed ? 'border-l-2 border-l-amber-400' : '',
+                ].join(' ')}
+              >
+                <td className="py-3 pl-5 pr-2">
+                  <input
+                    type="checkbox"
+                    checked={selectAllMatching || selectedIds.has(product.id)}
+                    onChange={() => onToggleRow(product.id)}
+                    className="h-3.5 w-3.5 accent-primary"
+                    aria-label={`Select ${product.displayName}`}
+                  />
+                </td>
+                <td className="py-3 px-4 text-sm text-muted">{product.externalProductCode ?? '—'}</td>
+                <td className="py-3 px-4 text-sm font-medium text-text">
+                  {product.displayName}
+                  <ChangedIndicator
+                    changeDetectedAt={product.changeDetectedAt}
+                    changeAcknowledgedAt={product.changeAcknowledgedAt}
+                    onAcknowledge={() => adminAccountingApi.acknowledgeProductChange(product.id, token).then(onActionComplete)}
+                  />
+                </td>
+                <td className="py-3 px-4 text-sm text-muted">{product.salesUnitPrice ?? '—'}</td>
+                <td className="py-3 px-4 text-sm text-muted">
+                  {product.isTracked ? product.quantityOnHand ?? '0' : '—'}
+                </td>
+                <td className="py-3 px-4 text-sm text-text">
+                  {product.mapping?.productName ?? product.suggestion?.productName ?? '—'}
+                </td>
+                <td className="py-3 px-4">
+                  <ProductStatusBadge status={product.status} />
+                </td>
+                <td className="py-3 pl-4 pr-5">
+                  <ProductRowActions
+                    product={product}
+                    token={token}
+                    providerLabel={providerLabel}
+                    onActionComplete={onActionComplete}
+                  />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={onLoadMore} />

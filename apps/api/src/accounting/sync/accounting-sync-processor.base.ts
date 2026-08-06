@@ -13,6 +13,7 @@ import {
   AccountingMatchResult,
   AccountingRecordMatcher,
 } from '../matching/accounting-record-matcher.interface';
+import { AccountingChangeDetectionService } from '../accounting-change-detection.service';
 
 export interface OutboxEventJobData {
   eventId: string;
@@ -53,6 +54,7 @@ export abstract class AccountingSyncProcessorBase<
     protected readonly prisma: PrismaService,
     protected readonly accountingConnectionService: AccountingConnectionService,
     protected readonly adapters: AccountingAdapterRegistry,
+    protected readonly changeDetection: AccountingChangeDetectionService,
   ) {
     super();
   }

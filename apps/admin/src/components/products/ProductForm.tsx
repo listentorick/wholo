@@ -5,8 +5,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType } from '@wholo/types';
-import type { ProductType, Supplier, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
-import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi } from '@wholo/admin-api-client';
+import type { ProductType, Supplier, TaxType, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
+import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi, adminTaxTypesApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput, SelectInput } from '@/components/form';
 import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
@@ -23,15 +23,26 @@ const priceField = z
     'Enter a valid price (e.g. 12.99)',
   );
 
-const schema = z.object({
-  name: z.string().min(1, 'Title is required'),
-  description: z.string().optional(),
-  sku: z.string().optional(),
-  status: z.nativeEnum(ProductStatus),
-  productTypeId: z.string().optional(),
-  supplierId: z.string().optional(),
-  price: priceField,
-});
+const schema = z
+  .object({
+    name: z.string().min(1, 'Title is required'),
+    description: z.string().optional(),
+    sku: z.string().optional(),
+    status: z.nativeEnum(ProductStatus),
+    productTypeId: z.string().optional(),
+    supplierId: z.string().optional(),
+    taxTypeId: z.string().optional(),
+    price: priceField,
+  })
+  .superRefine((data, ctx) => {
+    if (data.status === ProductStatus.ACTIVE && !data.taxTypeId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['taxTypeId'],
+        message: 'Assign a tax type before setting this product to Active.',
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -440,6 +451,7 @@ interface ProductFormProps {
 export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: ProductFormProps) {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
   const [metaLoading, setMetaLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -447,6 +459,7 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -457,15 +470,20 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
       status: initialValues?.status ?? ProductStatus.DRAFT,
       productTypeId: initialValues?.productType?.id ?? '',
       supplierId: initialValues?.supplier?.id ?? '',
+      taxTypeId: initialValues?.taxType?.id ?? '',
       price: initialValues?.price ?? '',
     },
   });
 
+  const selectedTaxTypeId = watch('taxTypeId');
+  const selectedTaxType = taxTypes.find((t) => t.id === selectedTaxTypeId);
+
   useEffect(() => {
-    Promise.all([adminProductTypesApi.list(token), adminSuppliersApi.list(token)])
-      .then(([types, sups]) => {
+    Promise.all([adminProductTypesApi.list(token), adminSuppliersApi.list(token), adminTaxTypesApi.list(token, { limit: 100 })])
+      .then(([types, sups, taxes]) => {
         setProductTypes(types);
         setSuppliers(sups);
+        setTaxTypes(taxes.data);
       })
       .catch(() => {})
       .finally(() => setMetaLoading(false));
@@ -481,6 +499,7 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
         status: data.status,
         productTypeId: data.productTypeId || undefined,
         supplierId: data.supplierId || undefined,
+        taxTypeId: data.taxTypeId || undefined,
         price: data.price || undefined,
       });
     } catch (err: unknown) {
@@ -619,6 +638,32 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
                 </div>
                 <p className="mt-1 text-xs text-muted">The price customers pay by default.</p>
                 <FieldError message={errors.price?.message} />
+              </div>
+
+              {/* Tax */}
+              <div className="mt-4">
+                <FieldLabel htmlFor="taxTypeId">Tax type</FieldLabel>
+                {metaLoading ? (
+                  <div className="h-9 animate-pulse rounded-md bg-border/30" />
+                ) : (
+                  <SelectInput id="taxTypeId" disabled={disabled} {...register('taxTypeId')}>
+                    <option value="">— None —</option>
+                    {taxTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.ratePercentage}%){t.active ? '' : ' — inactive'}
+                      </option>
+                    ))}
+                  </SelectInput>
+                )}
+                <p className="mt-1 text-xs text-muted">
+                  Tax is calculated on top of the price above. Required before this product can be set to Active.
+                </p>
+                {selectedTaxType?.isDefault && (
+                  <p className="mt-1.5 text-xs text-amber-700">
+                    This is the automatic default tax type — pick the correct one for this product when you know it.
+                  </p>
+                )}
+                <FieldError message={errors.taxTypeId?.message} />
               </div>
 
               {/* Price list rules — edit mode only */}

@@ -9,6 +9,7 @@ import { CustomersModule } from './customers/customers.module';
 import { CataloguesModule } from './catalogues/catalogues.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
+import { TaxTypesModule } from './tax-types/tax-types.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
@@ -31,6 +32,7 @@ import { HealthController } from './health.controller';
     CataloguesModule,
     OrdersModule,
     PriceListsModule,
+    TaxTypesModule,
     AssetImagesModule,
     SettingsModule,
     DeliveryProfilesModule,

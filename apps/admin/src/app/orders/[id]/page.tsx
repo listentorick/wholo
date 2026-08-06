@@ -12,8 +12,20 @@ import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
 import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
 import { adminOrdersApi } from '@wholo/admin-api-client';
-import type { Order, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
+import type { Order, OrderLine, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
 import { OrderStatus, AcceptedByActorType, ActorType } from '@wholo/types';
+import { CLASSIFICATION_LABELS } from '@/lib/tax-classification-labels';
+
+// ─── Tax label ──────────────────────────────────────────────────────────────
+
+function taxLabel(line: OrderLine): string {
+  if (!line.taxTypeNameSnapshot) return '—';
+  const classification = line.taxClassificationSnapshot
+    ? CLASSIFICATION_LABELS[line.taxClassificationSnapshot]
+    : null;
+  const rate = line.taxRatePercentageSnapshot != null ? `${parseFloat(line.taxRatePercentageSnapshot)}%` : classification;
+  return rate ? `${line.taxTypeNameSnapshot} (${rate})` : line.taxTypeNameSnapshot;
+}
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 
@@ -488,6 +500,7 @@ export default function OrderDetailPage() {
                     <p className="mt-0.5 text-xs text-muted">
                       {line.skuSnapshot ?? '—'} · {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot)}
                     </p>
+                    <p className="mt-0.5 text-xs text-muted">Tax: {taxLabel(line)}</p>
                   </div>
                   <p className="flex-shrink-0 text-sm font-semibold tabular-nums text-text">{fmtAmt(line.totalAmount)}</p>
                 </li>
@@ -496,13 +509,14 @@ export default function OrderDetailPage() {
 
             {/* Desktop table */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[560px] text-left">
+              <table className="w-full min-w-[680px] text-left">
                 <thead className="border-b border-border bg-[#fafafa]">
                   <tr>
                     <th className="py-2 pl-5 pr-4 text-xs font-semibold uppercase tracking-wide text-muted">Product</th>
                     <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted">SKU</th>
                     <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Qty</th>
                     <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted text-right">Unit price</th>
+                    <th className="py-2 px-4 text-xs font-semibold uppercase tracking-wide text-muted">Tax</th>
                     <th className="py-2 pl-4 pr-5 text-xs font-semibold uppercase tracking-wide text-muted text-right">Total</th>
                   </tr>
                 </thead>
@@ -518,6 +532,7 @@ export default function OrderDetailPage() {
                       <td className="py-3 px-4 text-sm text-muted">{line.skuSnapshot ?? '—'}</td>
                       <td className="py-3 px-4 text-sm text-text text-right">{line.quantityOrdered}</td>
                       <td className="py-3 px-4 text-sm text-text text-right">{fmtAmt(line.unitPriceSnapshot)}</td>
+                      <td className="py-3 px-4 text-sm text-muted">{taxLabel(line)}</td>
                       <td className="py-3 pl-4 pr-5 text-sm font-medium text-text text-right">{fmtAmt(line.totalAmount)}</td>
                     </tr>
                   ))}

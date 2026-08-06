@@ -69,6 +69,22 @@ export interface AccountingExternalProduct {
   raw: unknown;
 }
 
+// One tax rate record as cached from the provider's accounting system. Same
+// provider-neutral contract as AccountingExternalContact/Product, with one
+// deviation: Xero's TaxRate has no GUID, only `taxType` (a code string, e.g.
+// "OUTPUT2") as its natural key — and no per-record modified timestamp, so
+// (unlike contacts/products) there is no updatedAt field here at all.
+export interface AccountingExternalTaxRate {
+  taxType: string;
+  displayName: string;
+  // Decimal string, same convention as AccountingExternalProduct prices —
+  // crosses the adapter boundary as a string so it lands in a Prisma Decimal
+  // column without picking up float drift.
+  ratePercentage: string;
+  isActive: boolean;
+  raw: unknown;
+}
+
 // Provider-neutral name for the status an invoice is created with in the
 // accounting system. Mirrors the AccountingInvoiceTargetStatus Prisma enum
 // (this file stays Prisma-free); each adapter maps it onto its provider's
@@ -115,8 +131,8 @@ export interface AccountingInvoiceResult {
 }
 
 // Phase 1 (connection lifecycle) + Phase 2 (listContacts) + Phase 3
-// (listProducts) + Phase 4 (createInvoice). Still has room to grow
-// (getInvoicePdf) — not built now, deliberately.
+// (listProducts) + Phase 4 (createInvoice) + tax-type sync (listTaxRates).
+// Still has room to grow (getInvoicePdf) — not built now, deliberately.
 export interface AccountingConnectionAdapter {
   buildAuthorizationUrl(state: string): Promise<string>;
   // callbackUrl is the full request URL (incl. querystring) the provider
@@ -138,6 +154,13 @@ export interface AccountingConnectionAdapter {
     externalOrganisationId: string,
     modifiedSince?: Date,
   ): Promise<AccountingExternalProduct[]>;
+  // No modifiedSince — Xero's tax rates have no per-record modified
+  // timestamp to filter on (unlike contacts/products), so every sync is a
+  // full fetch.
+  listTaxRates(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+  ): Promise<AccountingExternalTaxRate[]>;
   // Whether the scopes granted at consent time (AccountingConnection.scopes,
   // space-separated) permit invoice creation. Scope vocabulary is
   // provider-specific, so the judgement lives here — callers use this to fail

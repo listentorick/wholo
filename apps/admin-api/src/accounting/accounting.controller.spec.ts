@@ -156,9 +156,10 @@ describe('AccountingController (BFF)', () => {
     expect(mockService.importProduct).toHaveBeenCalledWith('dist-1', 'ext-1', dto, 'token-1');
   });
 
-  it('confirmProductSuggestion forwards the suggestion id with the resolved organisationId', async () => {
-    await controller.confirmProductSuggestion('sugg-1', mockRequest());
-    expect(mockService.confirmProductSuggestion).toHaveBeenCalledWith('dist-1', 'sugg-1', 'token-1');
+  it('confirmProductSuggestion forwards the suggestion id, DTO, and the resolved organisationId', async () => {
+    const dto = { confirmTaxTypeOverride: true } as never;
+    await controller.confirmProductSuggestion('sugg-1', dto, mockRequest());
+    expect(mockService.confirmProductSuggestion).toHaveBeenCalledWith('dist-1', 'sugg-1', dto, 'token-1');
   });
 
   it('matchProduct forwards the external product id and DTO with the resolved organisationId', async () => {

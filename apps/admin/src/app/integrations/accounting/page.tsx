@@ -10,15 +10,18 @@ import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
 import { SyncNowButton as ContactsSyncNowButton } from '@/components/integrations/contacts/SyncNowButton';
 import { ProductsTab } from '@/components/integrations/products/ProductsTab';
 import { SyncNowButton as ProductsSyncNowButton } from '@/components/integrations/products/SyncNowButton';
+import { TaxTypesTab } from '@/components/integrations/tax-types/TaxTypesTab';
+import { SyncNowButton as TaxTypesSyncNowButton } from '@/components/integrations/tax-types/SyncNowButton';
 import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
-type TabKey = 'contacts' | 'products' | 'invoices' | 'settings';
+type TabKey = 'contacts' | 'products' | 'taxTypes' | 'invoices' | 'settings';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'contacts', label: 'Contacts' },
   { key: 'products', label: 'Products' },
+  { key: 'taxTypes', label: 'Tax types' },
   { key: 'invoices', label: 'Invoice exports' },
   { key: 'settings', label: 'Settings' },
 ];
@@ -44,6 +47,7 @@ function AccountingPageInner() {
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null | undefined>(undefined);
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
   const [productsNeedsAttentionCount, setProductsNeedsAttentionCount] = useState(0);
+  const [taxTypesNeedsAttentionCount, setTaxTypesNeedsAttentionCount] = useState(0);
 
   const activeTab = (searchParams.get('tab') as TabKey) ?? 'contacts';
 
@@ -75,10 +79,21 @@ function AccountingPageInner() {
       });
   }, [accessToken, connection?.status]);
 
+  const fetchTaxTypesNeedsAttentionCount = useCallback(() => {
+    if (!accessToken || connection?.status !== 'CONNECTED') return;
+    adminAccountingApi
+      .countTaxTypesNeedingAttention(accessToken)
+      .then((res) => setTaxTypesNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't update if this fails.
+      });
+  }, [accessToken, connection?.status]);
+
   useEffect(() => {
     fetchNeedsAttentionCount();
     fetchProductsNeedsAttentionCount();
-  }, [fetchNeedsAttentionCount, fetchProductsNeedsAttentionCount]);
+    fetchTaxTypesNeedsAttentionCount();
+  }, [fetchNeedsAttentionCount, fetchProductsNeedsAttentionCount, fetchTaxTypesNeedsAttentionCount]);
 
   function setTab(key: TabKey) {
     router.push(`/integrations/accounting?tab=${key}`);
@@ -130,6 +145,9 @@ function AccountingPageInner() {
           {activeTab === 'products' && accessToken && (
             <ProductsSyncNowButton token={accessToken} onQueued={fetchProductsNeedsAttentionCount} />
           )}
+          {activeTab === 'taxTypes' && accessToken && (
+            <TaxTypesSyncNowButton token={accessToken} onQueued={fetchTaxTypesNeedsAttentionCount} />
+          )}
         </div>
       </div>
 
@@ -158,6 +176,11 @@ function AccountingPageInner() {
                   {productsNeedsAttentionCount}
                 </span>
               )}
+              {tab.key === 'taxTypes' && taxTypesNeedsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {taxTypesNeedsAttentionCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -168,6 +191,9 @@ function AccountingPageInner() {
       )}
       {activeTab === 'products' && accessToken && (
         <ProductsTab token={accessToken} providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
+      )}
+      {activeTab === 'taxTypes' && accessToken && (
+        <TaxTypesTab token={accessToken} providerLabel={providerLabel} onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount} />
       )}
       {activeTab === 'settings' && accessToken && (
         <AccountingSettingsTab token={accessToken} connection={connection} onConnectionUpdated={setConnection} />

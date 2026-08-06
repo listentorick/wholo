@@ -37,12 +37,18 @@ function makeCart(lines: unknown[] = [{ id: 'line-1' }]) {
     distributorId: DISTRIBUTOR_ID,
     lines: lines.map((l: any) => ({
       id: l.id ?? 'line-1',
-      productId: 'prod-1',
-      quantity: 2,
-      unitPrice: new Prisma.Decimal('12.23'),
+      productId: l.productId ?? 'prod-1',
+      quantity: l.quantity ?? 2,
+      unitPrice: l.unitPrice ?? new Prisma.Decimal('12.23'),
       resolvedPriceListId: null,
       resolvedPriceListRuleId: null,
-      product: { id: 'prod-1', name: 'Wine', sku: 'SKU-1', price: new Prisma.Decimal('12.23') },
+      // Frozen at cart-add time (see CartService.upsertItem) — null by
+      // default so tests unrelated to tax don't need to mock TaxType at all
+      // (submitOrder skips the taxType.findMany lookup entirely when no
+      // line has a taxTypeId).
+      taxTypeId: l.taxTypeId ?? null,
+      taxRateSnapshot: l.taxRateSnapshot ?? null,
+      product: { id: l.productId ?? 'prod-1', name: 'Wine', sku: 'SKU-1', price: new Prisma.Decimal('12.23') },
     })),
   };
 }
@@ -356,6 +362,162 @@ describe('OrdersService — minimum order spend enforcement', () => {
   });
 });
 
+describe('OrdersService — tax calculation', () => {
+  let service: OrdersService;
+  let prisma: jest.Mocked<PrismaService>;
+  let orderCreateData: any;
+  let orderLineCreateManyData: any;
+
+  beforeEach(async () => {
+    orderCreateData = undefined;
+    orderLineCreateManyData = undefined;
+
+    const mockPrisma = {
+      organisation: { findFirst: jest.fn() },
+      cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
+      distributorSettings: { findUnique: jest.fn() },
+      tradeRelationship: { findFirst: jest.fn() },
+      taxType: { findMany: jest.fn().mockResolvedValue([]) },
+      order: { create: jest.fn() },
+      orderLine: { createMany: jest.fn() },
+      cartOrderLine: { deleteMany: jest.fn() },
+      assetImage: { findMany: jest.fn().mockResolvedValue([]) },
+      $queryRaw: jest.fn(),
+      $transaction: jest.fn(),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrdersService,
+        { provide: PrismaService, useValue: mockPrisma },
+        { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
+        { provide: AuditService, useValue: { record: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+      ],
+    }).compile();
+
+    service = module.get(OrdersService);
+    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
+
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+    (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
+      defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
+    });
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship());
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ nextval: BigInt(1) }]);
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        order: {
+          create: jest.fn().mockImplementation(({ data }: any) => {
+            orderCreateData = data;
+            return {
+              id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID,
+              traderCustomerId: CUSTOMER_ID, placedByUserId: USER_ID, status: OrderStatus.SUBMITTED,
+              currency: 'GBP', subtotalAmount: data.subtotalAmount, taxAmount: data.taxAmount, totalAmount: data.totalAmount,
+              billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null,
+              customerReference: null, notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL,
+              acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT, submittedAt: new Date(),
+              acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null,
+              rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null,
+              cancellationReason: null, createdAt: new Date(), updatedAt: new Date(),
+              customer: { id: CUSTOMER_ID, name: 'Test Customer' }, invoiceExports: [], lines: [],
+            };
+          }),
+        },
+        orderLine: {
+          createMany: jest.fn().mockImplementation(({ data }: any) => {
+            orderLineCreateManyData = data;
+            return {};
+          }),
+        },
+        cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
+        cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+        orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
+        outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
+      }),
+    );
+  });
+
+  it('computes net/tax/gross from the cart line\'s frozen rate (AC5: £10 x 2 @ 20%)', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
+      makeCart([{ quantity: 2, unitPrice: new Prisma.Decimal('10.00'), taxTypeId: 'tax-1', taxRateSnapshot: new Prisma.Decimal('20.00') }]),
+    );
+    (prisma.taxType.findMany as jest.Mock).mockResolvedValue([
+      { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD' },
+    ]);
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(orderLineCreateManyData[0].subtotalAmount.toFixed(2)).toBe('20.00');
+    expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('4.00');
+    expect(orderLineCreateManyData[0].totalAmount.toFixed(2)).toBe('24.00');
+    expect(orderLineCreateManyData[0].taxTypeId).toBe('tax-1');
+    expect(orderLineCreateManyData[0].taxTypeNameSnapshot).toBe('Standard rate');
+    expect(orderLineCreateManyData[0].taxClassificationSnapshot).toBe('STANDARD');
+    expect(orderLineCreateManyData[0].taxRatePercentageSnapshot.toFixed(2)).toBe('20.00');
+    expect(orderCreateData.taxAmount.toFixed(2)).toBe('4.00');
+  });
+
+  it('uses the frozen cart-line rate rather than re-resolving from the current TaxType row', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
+      makeCart([{ quantity: 1, unitPrice: new Prisma.Decimal('10.00'), taxTypeId: 'tax-1', taxRateSnapshot: new Prisma.Decimal('20.00') }]),
+    );
+    // TaxType now says 5% — if the rate were re-resolved here this would leak in.
+    (prisma.taxType.findMany as jest.Mock).mockResolvedValue([
+      { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD', ratePercentage: new Prisma.Decimal('5.00') },
+    ]);
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('2.00'); // 20% of £10, not 5%
+  });
+
+  it('produces £0 tax for a zero-rated line while the classification is still snapshotted (AC6)', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
+      makeCart([{ quantity: 1, unitPrice: new Prisma.Decimal('10.00'), taxTypeId: 'tax-zero', taxRateSnapshot: new Prisma.Decimal('0.00') }]),
+    );
+    (prisma.taxType.findMany as jest.Mock).mockResolvedValue([
+      { id: 'tax-zero', name: 'Zero-rated', classification: 'ZERO_RATED' },
+    ]);
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('0.00');
+    expect(orderLineCreateManyData[0].taxClassificationSnapshot).toBe('ZERO_RATED');
+    expect(orderLineCreateManyData[0].taxTypeNameSnapshot).toBe('Zero-rated');
+  });
+
+  it('sums per-line tax amounts into the order-level taxAmount across multiple lines', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
+      makeCart([
+        { id: 'line-1', productId: 'prod-1', quantity: 2, unitPrice: new Prisma.Decimal('10.00'), taxTypeId: 'tax-1', taxRateSnapshot: new Prisma.Decimal('20.00') },
+        { id: 'line-2', productId: 'prod-2', quantity: 1, unitPrice: new Prisma.Decimal('5.00'), taxTypeId: 'tax-1', taxRateSnapshot: new Prisma.Decimal('20.00') },
+      ]),
+    );
+    (prisma.taxType.findMany as jest.Mock).mockResolvedValue([
+      { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD' },
+    ]);
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    // line-1: £20 net @ 20% = £4 tax; line-2: £5 net @ 20% = £1 tax -> order total £5
+    expect(orderCreateData.taxAmount.toFixed(2)).toBe('5.00');
+    expect(orderCreateData.subtotalAmount.toFixed(2)).toBe('25.00');
+    expect(orderCreateData.totalAmount.toFixed(2)).toBe('30.00');
+  });
+
+  it('does not query TaxType at all when no cart line has a taxTypeId', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(prisma.taxType.findMany).not.toHaveBeenCalled();
+    expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('0.00');
+  });
+});
+
 describe('OrdersService — listCustomerOrders', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
@@ -493,11 +655,12 @@ describe('OrdersService — getCustomerOrder', () => {
     };
   }
 
-  function makeLine(overrides: Partial<{ id: string; productId: string }> = {}) {
+  function makeLine(overrides: Partial<{ id: string; productId: string; taxTypeNameSnapshot: string | null }> = {}) {
     return {
       id: 'line-1', orderId: 'order-1', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID,
       productId: 'prod-1', productVariantId: null, skuSnapshot: 'SKU-1', productNameSnapshot: 'Wine',
       unitOfMeasureSnapshot: null, quantityOrdered: 2, unitPriceSnapshot: { toFixed: () => '12.23' },
+      taxTypeId: 'tax-1', taxTypeNameSnapshot: 'VAT', taxClassificationSnapshot: 'STANDARD',
       taxRateSnapshot: '0', subtotalAmount: { toFixed: () => '24.46' }, taxAmount: { toFixed: () => '0.00' },
       totalAmount: { toFixed: () => '24.46' }, priceListIdSnapshot: null, priceListRuleIdSnapshot: null,
       status: 'ACCEPTED', createdAt: new Date(), updatedAt: new Date(),
@@ -589,6 +752,34 @@ describe('OrdersService — getCustomerOrder', () => {
     await service.getCustomerOrder('order-1', CUSTOMER_ID);
 
     expect(assetImageFindMany).not.toHaveBeenCalled();
+  });
+
+  it('sets taxLabel to the real tax type name when every line shares one', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(
+      makeOrderPayload([], [makeLine({ id: 'line-1', taxTypeNameSnapshot: 'VAT' }), makeLine({ id: 'line-2', taxTypeNameSnapshot: 'VAT' })]),
+    );
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.taxLabel).toBe('VAT');
+  });
+
+  it('falls back to the generic "Tax" label when lines have different tax type names', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(
+      makeOrderPayload([], [makeLine({ id: 'line-1', taxTypeNameSnapshot: 'VAT' }), makeLine({ id: 'line-2', taxTypeNameSnapshot: 'Zero-rated' })]),
+    );
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.taxLabel).toBe('Tax');
+  });
+
+  it('falls back to the generic "Tax" label for an order with no lines', async () => {
+    (prisma.order.findFirst as jest.Mock).mockResolvedValue(makeOrderPayload([], []));
+
+    const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
+
+    expect(result.taxLabel).toBe('Tax');
   });
 });
 

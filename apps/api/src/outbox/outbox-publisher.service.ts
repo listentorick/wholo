@@ -9,6 +9,7 @@ import {
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
+  ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   EVENT_ROUTES,
   NOTIFICATIONS_QUEUE,
@@ -34,6 +35,7 @@ export class OutboxPublisherService {
     @InjectQueue(ACCOUNTING_INVOICE_EXPORT_QUEUE) accountingInvoiceExportQueue: Queue,
     @InjectQueue(ACCOUNTING_CONTACT_SYNC_QUEUE) accountingContactSyncQueue: Queue,
     @InjectQueue(ACCOUNTING_PRODUCT_SYNC_QUEUE) accountingProductSyncQueue: Queue,
+    @InjectQueue(ACCOUNTING_TAX_TYPE_SYNC_QUEUE) accountingTaxTypeSyncQueue: Queue,
     @InjectQueue(ANALYTICS_FACTS_QUEUE) analyticsFactsQueue: Queue,
     @InjectQueue(ACCOUNTING_BULK_IMPORT_QUEUE) accountingBulkImportQueue: Queue,
   ) {
@@ -42,6 +44,7 @@ export class OutboxPublisherService {
       [ACCOUNTING_INVOICE_EXPORT_QUEUE, accountingInvoiceExportQueue],
       [ACCOUNTING_CONTACT_SYNC_QUEUE, accountingContactSyncQueue],
       [ACCOUNTING_PRODUCT_SYNC_QUEUE, accountingProductSyncQueue],
+      [ACCOUNTING_TAX_TYPE_SYNC_QUEUE, accountingTaxTypeSyncQueue],
       [ANALYTICS_FACTS_QUEUE, analyticsFactsQueue],
       [ACCOUNTING_BULK_IMPORT_QUEUE, accountingBulkImportQueue],
     ]);

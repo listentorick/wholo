@@ -25,6 +25,7 @@ import {
   AccountingSyncProcessorBase,
   AccountingSyncSuggestionRef,
 } from '../accounting/sync/accounting-sync-processor.base';
+import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 
 // Consumes AccountingProductSyncRequested — written to the outbox by both
 // AccountingProductSyncScheduler (periodic) and the "Sync now" HTTP endpoint
@@ -51,9 +52,10 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     prisma: PrismaService,
     accountingConnectionService: AccountingConnectionService,
     adapters: AccountingAdapterRegistry,
+    changeDetection: AccountingChangeDetectionService,
     protected readonly matcher: AccountingProductMatcherService,
   ) {
-    super(prisma, accountingConnectionService, adapters);
+    super(prisma, accountingConnectionService, adapters, changeDetection);
   }
 
   protected fetchExternalRecords(
@@ -64,7 +66,7 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     return adapter.listProducts(tokenSet, externalOrganisationId);
   }
 
-  protected upsertCacheRecord(
+  protected async upsertCacheRecord(
     connection: AccountingConnection,
     product: AccountingExternalProduct,
   ): Promise<ExternalAccountingProduct> {
@@ -90,13 +92,17 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
       rawProviderData: product.raw as Prisma.InputJsonValue,
     };
 
-    return this.prisma.externalAccountingProduct.upsert({
-      where: {
-        accountingConnectionId_externalProductId: {
-          accountingConnectionId: connection.id,
-          externalProductId: product.externalId,
-        },
+    const where = {
+      accountingConnectionId_externalProductId: {
+        accountingConnectionId: connection.id,
+        externalProductId: product.externalId,
       },
+    };
+
+    const previous = await this.prisma.externalAccountingProduct.findUnique({ where });
+
+    const updated = await this.prisma.externalAccountingProduct.upsert({
+      where,
       // ignoredAt is intentionally left untouched on update — a re-sync must
       // not silently un-ignore a product the distributor deliberately dismissed.
       create: {
@@ -108,6 +114,29 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
       },
       update: shared,
     });
+
+    await this.changeDetection.detectAndFlag({
+      distributorId: connection.distributorId,
+      hasActiveMapping: await this.hasActiveMapping(updated.id),
+      previous,
+      current: updated,
+      fields: ['salesUnitPrice', 'taxCode'],
+      markChanged: async () => {
+        await this.prisma.externalAccountingProduct.update({
+          where: { id: updated.id },
+          data: { changeDetectedAt: new Date() },
+        });
+      },
+      notification: {
+        type: 'ACCOUNTING_PRODUCT_CHANGED',
+        title: 'Linked product changed in Xero',
+        body: `"${updated.displayName}" changed in Xero (price or tax code) since it was linked — review before your next invoice export.`,
+        linkPath: '/integrations/accounting?tab=products',
+        payload: { externalProductId: updated.id, distributorId: connection.distributorId },
+      },
+    });
+
+    return updated;
   }
 
   // Xero Items carry no archived/deleted flag — a deleted item simply stops

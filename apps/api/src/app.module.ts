@@ -9,6 +9,7 @@ import { AdminCataloguesModule } from './admin-catalogues/admin-catalogues.modul
 import { OutboxModule } from './outbox/outbox.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
+import { TaxTypesModule } from './tax-types/tax-types.module';
 import { AdminProductsModule } from './admin-products/admin-products.module';
 import { AdminOrdersModule } from './admin-orders/admin-orders.module';
 import { AdminCustomersModule } from './admin-customers/admin-customers.module';
@@ -43,6 +44,7 @@ import './asset-images/branding-asset-types';
     OutboxModule,
     OrdersModule,
     PriceListsModule,
+    TaxTypesModule,
     AdminProductsModule,
     AdminOrdersModule,
     AdminCustomersModule,

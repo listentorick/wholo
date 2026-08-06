@@ -21,7 +21,7 @@ export default function CheckoutPage() {
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
   const { orderAsMode, orderAsCustomerId, clearOrderAsSession } = useAuth();
-  const { cartLoading, items, quantities, subtotal, savingItems, syncItem, refreshCart } = useCart();
+  const { cartLoading, items, quantities, subtotal, taxAmount, taxLabel, total, savingItems, syncItem, refreshCart } = useCart();
   const { effectiveMinSpend } = useDistributor();
 
   const [poOpen, setPoOpen] = useState(false);
@@ -116,8 +116,6 @@ export default function CheckoutPage() {
   };
 
   const freight = 0;
-  const gst = 0;
-  const total = subtotal + freight + gst;
   const fmt = (n: number) => `£${n.toFixed(2)}`;
   const belowMinimum = effectiveMinSpend != null && subtotal < effectiveMinSpend;
 
@@ -346,7 +344,7 @@ export default function CheckoutPage() {
           {[
             { label: 'Subtotal', value: fmt(subtotal) },
             { label: 'Freight',  value: fmt(freight)  },
-            { label: 'GST',      value: fmt(gst)       },
+            { label: taxLabel,  value: fmt(taxAmount) },
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between py-1.5">
               <span style={{ fontSize: 14, color: '#1A1A1A' }}>{row.label}</span>

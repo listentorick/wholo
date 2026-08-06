@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AdminProductsService } from '../admin-products/admin-products.service';
+import { AccountingTaxTypeService } from './accounting-tax-type.service';
 import { ProductQueryDto, AccountingProductStatusFilter, AccountingProductTypeFilter } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
@@ -43,6 +44,7 @@ export class AccountingProductService {
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
     private readonly adminProducts: AdminProductsService,
+    private readonly taxTypes: AccountingTaxTypeService,
   ) {}
 
   async listProducts(distributorId: string, query: ProductQueryDto) {
@@ -324,10 +326,14 @@ export class AccountingProductService {
     }
 
     // Imported products are seeds, not finished storefront products: DRAFT is
-    // the "needs catalogue setup" state. Tax/account codes, purchase price
-    // and quantity-on-hand stay on the cache row only — Wholo owns the
-    // catalogue fields from here on.
-    //
+    // the "needs catalogue setup" state. Account code and quantity-on-hand
+    // stay on the cache row only — Wholo owns the catalogue fields from here
+    // on. Tax is the one exception: if the tax code already has a confirmed
+    // mapping (Phase 3), resolve it now so the product isn't needlessly left
+    // without a tax type — otherwise it's left unset, same as before, and
+    // surfaces via the Products page's existing "No tax type" flag.
+    const resolvedTaxType = await this.taxTypes.resolveTaxTypeForCode(connection.id, external.taxCode);
+
     // Not wrapped in a transaction with the mapping write below:
     // AdminProductsService.create manages its own transaction internally
     // (product + search index), and reusing it as-is is the right trade-off —
@@ -343,6 +349,7 @@ export class AccountingProductService {
       // The cache holds 4-dp provider prices; Product.price is 2-dp, so the
       // default rounds at import — the one place precision is dropped.
       price: dto.price ?? (external.salesUnitPrice ? external.salesUnitPrice.toFixed(2) : undefined),
+      taxTypeId: resolvedTaxType?.taxTypeId,
     });
 
     await this.createMapping(
@@ -357,7 +364,12 @@ export class AccountingProductService {
     return product;
   }
 
-  async confirmSuggestion(distributorId: string, userId: string, suggestionId: string) {
+  async confirmSuggestion(
+    distributorId: string,
+    userId: string,
+    suggestionId: string,
+    confirmTaxTypeOverride = false,
+  ) {
     const connection = await this.getActiveConnection(distributorId);
     const suggestion = await this.prisma.accountingProductMatchSuggestion.findFirst({
       where: { id: suggestionId, accountingConnectionId: connection.id, status: AccountingProductMatchStatus.SUGGESTED },
@@ -366,7 +378,21 @@ export class AccountingProductService {
       throw new NotFoundException('Suggestion not found or already resolved');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const external = await this.getProductOrThrow(connection.id, suggestion.externalProductId);
+    const product = await this.prisma.product.findFirst({
+      where: { id: suggestion.suggestedProductId, distributorId, deletedAt: null },
+      include: { taxType: { select: { id: true, name: true } } },
+    });
+    // Resolved (and, if conflicting, thrown) before any write — a rejected
+    // suggestion must leave nothing half-applied.
+    const taxTypeIdToApply = await this.resolveTaxTypeForMatch(
+      connection.id,
+      external.taxCode,
+      product?.taxType ?? null,
+      confirmTaxTypeOverride,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
         connection.id,
@@ -381,6 +407,10 @@ export class AccountingProductService {
         data: { status: AccountingProductMatchStatus.ACCEPTED, reviewedByUserId: userId, reviewedAt: new Date() },
       });
     });
+
+    if (taxTypeIdToApply) {
+      await this.adminProducts.update(suggestion.suggestedProductId, distributorId, { taxTypeId: taxTypeIdToApply });
+    }
   }
 
   async matchToExistingProduct(
@@ -388,6 +418,7 @@ export class AccountingProductService {
     userId: string,
     externalProductId: string,
     productId: string,
+    confirmTaxTypeOverride = false,
   ) {
     const connection = await this.getActiveConnection(distributorId);
     const external = await this.getProductOrThrow(connection.id, externalProductId);
@@ -395,11 +426,21 @@ export class AccountingProductService {
 
     const product = await this.prisma.product.findFirst({
       where: { id: productId, distributorId, deletedAt: null },
+      include: { taxType: { select: { id: true, name: true } } },
     });
     if (!product) {
       throw new NotFoundException('Product not found');
     }
     await this.assertProductNotMapped(connection.id, productId);
+
+    // Resolved (and, if conflicting, thrown) before any write — same
+    // rationale as confirmSuggestion above.
+    const taxTypeIdToApply = await this.resolveTaxTypeForMatch(
+      connection.id,
+      external.taxCode,
+      product.taxType,
+      confirmTaxTypeOverride,
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
@@ -418,6 +459,37 @@ export class AccountingProductService {
         data: { status: AccountingProductMatchStatus.SUPERSEDED },
       });
     });
+
+    if (taxTypeIdToApply) {
+      await this.adminProducts.update(productId, distributorId, { taxTypeId: taxTypeIdToApply });
+    }
+  }
+
+  // Shared by matchToExistingProduct and confirmSuggestion — both are "link
+  // an external product to an existing Wholo product" under the hood.
+  // Returns the taxTypeId to apply (undefined = leave the product as-is: no
+  // resolvable code, or it already matches). Throws ConflictException with a
+  // discriminator ProblemDetailsFilter surfaces as problem.title, letting the
+  // frontend show a confirm-and-resubmit step, when the resolved tax type
+  // would silently overwrite a different one already set on the product.
+  private async resolveTaxTypeForMatch(
+    accountingConnectionId: string,
+    externalTaxCode: string | null,
+    currentTaxType: { id: string; name: string } | null,
+    confirmTaxTypeOverride: boolean,
+  ): Promise<string | undefined> {
+    const resolved = await this.taxTypes.resolveTaxTypeForCode(accountingConnectionId, externalTaxCode);
+    if (!resolved) return undefined;
+    if (!currentTaxType) return resolved.taxTypeId;
+    if (currentTaxType.id === resolved.taxTypeId) return undefined;
+
+    if (!confirmTaxTypeOverride) {
+      throw new ConflictException({
+        message: `This accounting product's tax type (${resolved.taxTypeName}) differs from the existing product's tax type (${currentTaxType.name}). Confirm to overwrite.`,
+        error: 'TAX_TYPE_CONFLICT',
+      });
+    }
+    return resolved.taxTypeId;
   }
 
   async ignore(distributorId: string, userId: string, externalProductId: string): Promise<void> {
@@ -447,6 +519,18 @@ export class AccountingProductService {
     await this.prisma.productAccountingMapping.update({
       where: { id: mapping.id },
       data: { unlinkedAt: new Date() },
+    });
+  }
+
+  // Clears the "changed since sync" highlight on a cache row — an explicit
+  // admin action, never done automatically by a later sync (see
+  // AccountingChangeDetectionService).
+  async acknowledgeChange(distributorId: string, externalProductId: string): Promise<void> {
+    const connection = await this.getActiveConnection(distributorId);
+    const external = await this.getProductOrThrow(connection.id, externalProductId);
+    await this.prisma.externalAccountingProduct.update({
+      where: { id: external.id },
+      data: { changeAcknowledgedAt: new Date() },
     });
   }
 
@@ -550,6 +634,8 @@ export class AccountingProductService {
       isTracked: row.isTracked,
       isActive: row.isActive,
       ignoredAt: row.ignoredAt,
+      changeDetectedAt: row.changeDetectedAt,
+      changeAcknowledgedAt: row.changeAcknowledgedAt,
       status,
       mapping: mapping
         ? {

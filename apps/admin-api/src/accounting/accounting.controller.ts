@@ -9,8 +9,12 @@ import { MatchContactDto } from './dto/match-contact.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
+import { ConfirmProductSuggestionDto } from './dto/confirm-product-suggestion.dto';
 import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
 import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
+import { TaxTypeQueryDto } from './dto/tax-type-query.dto';
+import { ImportTaxTypeDto } from './dto/import-tax-type.dto';
+import { MatchTaxTypeDto } from './dto/match-tax-type.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('accounting')
@@ -149,9 +153,13 @@ export class AccountingController {
   }
 
   @Post('products/suggestions/:suggestionId/confirm')
-  confirmProductSuggestion(@Param('suggestionId') suggestionId: string, @Req() req: Request) {
+  confirmProductSuggestion(
+    @Param('suggestionId') suggestionId: string,
+    @Body() dto: ConfirmProductSuggestionDto,
+    @Req() req: Request,
+  ) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
-    return this.service.confirmProductSuggestion(organisationId, suggestionId, token);
+    return this.service.confirmProductSuggestion(organisationId, suggestionId, dto, token);
   }
 
   @Post('products/:externalProductId/match')
@@ -174,6 +182,80 @@ export class AccountingController {
   unlinkProductMapping(@Param('mappingId') mappingId: string, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.unlinkProductMapping(organisationId, mappingId, token);
+  }
+
+  @Post('products/:externalProductId/acknowledge-change')
+  acknowledgeProductChange(@Param('externalProductId') externalProductId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.acknowledgeProductChange(organisationId, externalProductId, token);
+  }
+
+  @Post('contacts/:externalContactId/acknowledge-change')
+  acknowledgeContactChange(@Param('externalContactId') externalContactId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.acknowledgeContactChange(organisationId, externalContactId, token);
+  }
+
+  @Get('tax-types')
+  listTaxTypes(@Query() query: TaxTypeQueryDto, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.listTaxTypes(organisationId, query, token);
+  }
+
+  @Get('tax-types/needs-attention-count')
+  countTaxTypesNeedingAttention(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.countTaxTypesNeedingAttention(organisationId, token);
+  }
+
+  @Post('tax-types/sync')
+  syncTaxTypes(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.syncTaxTypes(organisationId, token);
+  }
+
+  @Post('tax-types/:externalTaxTypeId/import')
+  importTaxType(
+    @Param('externalTaxTypeId') externalTaxTypeId: string,
+    @Body() dto: ImportTaxTypeDto,
+    @Req() req: Request,
+  ) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.importTaxType(organisationId, externalTaxTypeId, dto, token);
+  }
+
+  @Post('tax-types/suggestions/:suggestionId/confirm')
+  confirmTaxTypeSuggestion(@Param('suggestionId') suggestionId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.confirmTaxTypeSuggestion(organisationId, suggestionId, token);
+  }
+
+  @Post('tax-types/:externalTaxTypeId/match')
+  matchTaxType(
+    @Param('externalTaxTypeId') externalTaxTypeId: string,
+    @Body() dto: MatchTaxTypeDto,
+    @Req() req: Request,
+  ) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.matchTaxType(organisationId, externalTaxTypeId, dto, token);
+  }
+
+  @Post('tax-types/:externalTaxTypeId/ignore')
+  ignoreTaxType(@Param('externalTaxTypeId') externalTaxTypeId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.ignoreTaxType(organisationId, externalTaxTypeId, token);
+  }
+
+  @Post('tax-types/mappings/:mappingId/unlink')
+  unlinkTaxTypeMapping(@Param('mappingId') mappingId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.unlinkTaxTypeMapping(organisationId, mappingId, token);
+  }
+
+  @Post('tax-types/:externalTaxTypeId/acknowledge-change')
+  acknowledgeTaxTypeChange(@Param('externalTaxTypeId') externalTaxTypeId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.acknowledgeTaxTypeChange(organisationId, externalTaxTypeId, token);
   }
 
   @Post('products/bulk-import')

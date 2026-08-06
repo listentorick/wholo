@@ -15,7 +15,7 @@ function formatPrice(price: string | null, resolvedPrice: string | null, product
   if (!raw) return 'Price on request';
   const unit = productTypeName ?? 'item';
   const prefix = resolvedPrice ? '$' : '~$';
-  return `${prefix}${parseFloat(raw).toFixed(2)} per ${unit}`;
+  return `${prefix}${parseFloat(raw).toFixed(2)} per ${unit} · excl. VAT`;
 }
 
 export default function ProductDetailPage() {

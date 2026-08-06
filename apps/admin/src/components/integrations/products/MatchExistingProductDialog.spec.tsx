@@ -2,12 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MatchExistingProductDialog } from './MatchExistingProductDialog';
-import { adminAccountingApi, adminProductsApi } from '@wholo/admin-api-client';
+import { adminAccountingApi, adminProductsApi, ApiError } from '@wholo/admin-api-client';
 import type { AccountingProductSummary } from '@wholo/types';
 
 vi.mock('@wholo/admin-api-client', () => ({
   adminAccountingApi: { matchProduct: vi.fn() },
   adminProductsApi: { list: vi.fn() },
+  ApiError: class extends Error {
+    constructor(
+      public readonly problem: { type: string; title: string; status: number; detail?: string },
+      public readonly status: number,
+    ) {
+      super(problem.detail ?? problem.title);
+    }
+  },
 }));
 
 const external: AccountingProductSummary = {
@@ -22,6 +30,8 @@ const external: AccountingProductSummary = {
   isTracked: false,
   isActive: true,
   ignoredAt: null,
+  changeDetectedAt: null,
+  changeAcknowledgedAt: null,
   status: 'READY_TO_IMPORT',
   mapping: null,
   suggestion: null,
@@ -73,7 +83,11 @@ describe('MatchExistingProductDialog', () => {
     await user.click(screen.getByText('Link product'));
 
     await waitFor(() =>
-      expect(adminAccountingApi.matchProduct).toHaveBeenCalledWith('ext-1', { productId: 'prod-2' }, 'token-1'),
+      expect(adminAccountingApi.matchProduct).toHaveBeenCalledWith(
+        'ext-1',
+        { productId: 'prod-2', confirmTaxTypeOverride: false },
+        'token-1',
+      ),
     );
     await waitFor(() => expect(onMatched).toHaveBeenCalled());
   });
@@ -96,5 +110,35 @@ describe('MatchExistingProductDialog', () => {
     await user.click(screen.getByText('Link product'));
 
     await waitFor(() => expect(screen.getByText(/Failed to link this product/)).toBeInTheDocument());
+  });
+
+  it('shows a conflict modal on a TAX_TYPE_CONFLICT 409, then resubmits with confirmTaxTypeOverride on confirm', async () => {
+    const conflictDetail = 'This accounting product\'s tax type (VAT) differs from the existing product\'s tax type (Zero-rated). Confirm to overwrite.';
+    (adminAccountingApi.matchProduct as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(
+        new ApiError({ type: 'about:blank', title: 'TAX_TYPE_CONFLICT', status: 409, detail: conflictDetail }, 409),
+      )
+      .mockResolvedValueOnce(undefined);
+    const onMatched = vi.fn();
+    const user = userEvent.setup();
+
+    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={onMatched} />);
+    await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
+
+    await user.click(screen.getByText('Merlot Case'));
+    await user.click(screen.getByText('Link product'));
+
+    await waitFor(() => expect(screen.getByText(conflictDetail)).toBeInTheDocument());
+
+    await user.click(screen.getByText('Confirm & overwrite'));
+
+    await waitFor(() =>
+      expect(adminAccountingApi.matchProduct).toHaveBeenLastCalledWith(
+        'ext-1',
+        { productId: 'prod-2', confirmTaxTypeOverride: true },
+        'token-1',
+      ),
+    );
+    await waitFor(() => expect(onMatched).toHaveBeenCalled());
   });
 });

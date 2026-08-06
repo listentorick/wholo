@@ -121,7 +121,7 @@ describe('CataloguePage', () => {
       expect(screen.getByText('Egg tarts')).toBeTruthy();
       expect(screen.getByText('Custard buns')).toBeTruthy();
       expect(screen.getByText('SKU-prod-1')).toBeTruthy();
-      expect(screen.getAllByText('$10.00 per item')).toHaveLength(2);
+      expect(screen.getAllByText('$10.00 per item · excl. VAT')).toHaveLength(2);
     });
   });
 

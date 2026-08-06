@@ -92,12 +92,20 @@ export interface CartItem {
   productId: string;
   quantity: number;
   unitPrice: string;
+  taxRatePercentage: string;
+  taxAmount: string;
+  taxTypeName: string | null;
   product: { id: string; name: string; sku: string | null };
 }
 
 export interface CartResponse {
   orderId: string | null;
   items: CartItem[];
+  subtotal: string;
+  taxAmount: string;
+  total: string;
+  // The real tax type name when every item shares one; 'Tax' otherwise.
+  taxLabel: string;
 }
 
 export interface UpsertCartItemRequest {
@@ -167,10 +175,13 @@ export interface OrderLine {
   unitOfMeasureSnapshot: string | null;
   quantityOrdered: number;
   unitPriceSnapshot: string;
-  taxRateSnapshot: string;
   subtotalAmount: string;
   taxAmount: string;
   totalAmount: string;
+  taxTypeId: string | null;
+  taxTypeNameSnapshot: string | null;
+  taxClassificationSnapshot: TaxClassification | null;
+  taxRatePercentageSnapshot: string | null;
   status: OrderLineStatus;
   createdAt: string;
   updatedAt: string;
@@ -186,6 +197,8 @@ export interface Order {
   currency: string;
   subtotalAmount: string;
   taxAmount: string;
+  // The real tax type name when every line shares one; 'Tax' otherwise.
+  taxLabel: string;
   totalAmount: string;
   billingAddressSnapshot: AddressSnapshot | null;
   deliveryAddressSnapshot: AddressSnapshot | null;
@@ -331,6 +344,7 @@ export interface Product {
   price: string | null;
   productType: ProductType | null;
   supplier: Supplier | null;
+  taxType: TaxType | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -431,10 +445,47 @@ export interface CreateProductRequest {
   status?: ProductStatus;
   productTypeId?: string;
   supplierId?: string;
+  taxTypeId?: string;
   price?: string;
 }
 
 export type UpdateProductRequest = Partial<CreateProductRequest>;
+
+// ─── Tax Types ───────────────────────────────────────────────────────────────
+
+export enum TaxClassification {
+  STANDARD = 'STANDARD',
+  REDUCED = 'REDUCED',
+  ZERO_RATED = 'ZERO_RATED',
+  EXEMPT = 'EXEMPT',
+  OUTSIDE_SCOPE = 'OUTSIDE_SCOPE',
+}
+
+export interface TaxType {
+  id: string;
+  distributorId: string;
+  name: string;
+  classification: TaxClassification;
+  ratePercentage: string;
+  active: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaxTypeRequest {
+  name: string;
+  classification: TaxClassification;
+  ratePercentage: string;
+  active?: boolean;
+}
+
+export type UpdateTaxTypeRequest = Partial<CreateTaxTypeRequest>;
+
+export interface TaxTypeListParams {
+  limit?: number;
+  cursor?: string;
+}
 
 // ─── Customers ───────────────────────────────────────────────────────────────
 
@@ -883,6 +934,11 @@ export interface AccountingContactSummary {
   isSupplier: boolean;
   isArchived: boolean;
   ignoredAt: string | null;
+  // Set when a linked contact's watched fields (name/email) changed on a
+  // later sync — cleared only by an explicit "Acknowledge" action, never by
+  // a subsequent sync (the value itself is never auto-applied).
+  changeDetectedAt: string | null;
+  changeAcknowledgedAt: string | null;
   status: AccountingContactStatus;
   mapping: AccountingContactMappingSummary | null;
   suggestion: AccountingContactSuggestionSummary | null;
@@ -989,6 +1045,11 @@ export interface AccountingProductSummary {
   isTracked: boolean;
   isActive: boolean;
   ignoredAt: string | null;
+  // Set when a linked product's watched fields (price/tax code) changed on a
+  // later sync — cleared only by an explicit "Acknowledge" action, never by
+  // a subsequent sync (the value itself is never auto-applied).
+  changeDetectedAt: string | null;
+  changeAcknowledgedAt: string | null;
   status: AccountingProductStatus;
   mapping: AccountingProductMappingSummary | null;
   suggestion: AccountingProductSuggestionSummary | null;
@@ -1032,6 +1093,103 @@ export interface ImportAccountingProductRequest {
 
 export interface MatchAccountingProductRequest {
   productId: string;
+  // Resubmit-with-confirmation after a TAX_TYPE_CONFLICT 409 (the matched
+  // accounting product's resolved tax type would overwrite a different one
+  // already set on the target Wholo product).
+  confirmTaxTypeOverride?: boolean;
+}
+
+export interface ConfirmAccountingProductSuggestionRequest {
+  confirmTaxTypeOverride?: boolean;
+}
+
+// ─── Accounting Tax Types (Phase 3: sync/import/manage) ───────────────────────
+// A tax type's status is computed at read time (see apps/api's
+// AccountingTaxTypeService), never stored — same pattern as
+// AccountingProductStatus. Deliberately no "type"/bulk-import support —
+// tax rates are a small, near-static set (no FilterBar in the admin UI).
+
+export type AccountingTaxTypeStatus =
+  | 'LINKED'
+  | 'SUGGESTED'
+  | 'CONFLICT'
+  | 'IGNORED'
+  | 'INACTIVE'
+  | 'READY_TO_IMPORT';
+
+export type AccountingTaxTypeMatchMethod = 'NAME_EXACT' | 'NAME_NORMALISED' | 'NAME_FUZZY' | 'MANUAL';
+
+export interface AccountingTaxTypeMappingSummary {
+  id: string;
+  taxTypeId: string;
+  taxTypeName: string;
+  matchMethod: AccountingTaxTypeMatchMethod;
+  linkedAt: string;
+}
+
+export interface AccountingTaxTypeSuggestionSummary {
+  id: string;
+  taxTypeId: string;
+  taxTypeName: string;
+  confidence: number;
+  matchMethod: AccountingTaxTypeMatchMethod;
+  matchReason: string;
+}
+
+export interface AccountingTaxTypeSummary {
+  id: string;
+  // Xero's natural key for a tax rate (e.g. "OUTPUT2") — there is no GUID.
+  taxType: string;
+  displayName: string;
+  // Decimal string at the provider's precision (up to 4 dp for Xero).
+  ratePercentage: string;
+  isActive: boolean;
+  ignoredAt: string | null;
+  // Set when a linked tax rate's watched fields (rate/status/name) changed
+  // on a later sync — cleared only by an explicit "Acknowledge" action,
+  // never by a subsequent sync. The Stocdup TaxType's rate is never
+  // auto-updated from a sync.
+  changeDetectedAt: string | null;
+  changeAcknowledgedAt: string | null;
+  status: AccountingTaxTypeStatus;
+  mapping: AccountingTaxTypeMappingSummary | null;
+  suggestion: AccountingTaxTypeSuggestionSummary | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AccountingTaxTypeListParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface AccountingTaxTypeListResponse {
+  data: AccountingTaxTypeSummary[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+    total: number;
+  };
+}
+
+export interface AccountingTaxTypeSyncRequestedResponse {
+  queued: true;
+}
+
+export interface AccountingTaxTypeNeedsAttentionCountResponse {
+  count: number;
+}
+
+// classification has no Xero equivalent, so it's always required here, never
+// defaulted or guessed from the imported rate.
+export interface ImportAccountingTaxTypeRequest {
+  name?: string;
+  classification: TaxClassification;
+  ratePercentage?: string;
+}
+
+export interface MatchAccountingTaxTypeRequest {
+  taxTypeId: string;
 }
 
 // ─── Accounting bulk import ────────────────────────────────────────────────────

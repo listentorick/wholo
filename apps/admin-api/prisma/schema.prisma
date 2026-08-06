@@ -28,6 +28,14 @@ enum ProductStatus {
   ARCHIVED
 }
 
+enum TaxClassification {
+  STANDARD
+  REDUCED
+  ZERO_RATED
+  EXEMPT
+  OUTSIDE_SCOPE
+}
+
 enum TradeRelationshipStatus {
   PENDING_INVITE
   PENDING_REQUEST
@@ -176,6 +184,20 @@ enum AccountingProductMatchMethod {
   MANUAL
 }
 
+enum AccountingTaxTypeMatchStatus {
+  SUGGESTED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum AccountingTaxTypeMatchMethod {
+  NAME_EXACT
+  NAME_NORMALISED
+  NAME_FUZZY
+  MANUAL
+}
+
 enum AccountingInvoiceExportStatus {
   PENDING
   PROCESSING
@@ -241,6 +263,7 @@ model Organisation {
   ordersAsCustomer                Order[]             @relation("CustomerOrders")
   distributorSettings             DistributorSettings?
   priceLists                      PriceList[]         @relation("DistributorPriceLists")
+  taxTypes                        TaxType[]           @relation("DistributorTaxTypes")
   deliveryProfiles                DeliveryProfile[]   @relation("DistributorDeliveryProfiles")
   orderAsSessionsAsDistributor    OrderAsSession[]    @relation("OrderAsDistributor")
   orderAsSessionsAsCustomer       OrderAsSession[]    @relation("OrderAsCustomer")
@@ -251,6 +274,9 @@ model Organisation {
   externalAccountingProducts      ExternalAccountingProduct[]
   productAccountingMappings       ProductAccountingMapping[]
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
+  externalAccountingTaxTypes      ExternalAccountingTaxType[]
+  taxTypeAccountingMappings       TaxTypeAccountingMapping[]
+  accountingTaxTypeMatchSuggestions AccountingTaxTypeMatchSuggestion[]
   accountingInvoiceExports        AccountingInvoiceExport[]
   accountingBulkImportJobs        AccountingBulkImportJob[]
   auditLogs                       AuditLog[]
@@ -343,12 +369,14 @@ model Product {
   sku                String?
   status             ProductStatus              @default(DRAFT)
   price              Decimal?                   @db.Decimal(10, 2)
+  taxTypeId          String?
   deletedAt          DateTime?
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   distributor        Organisation               @relation("DistributorProducts", fields: [distributorId], references: [id])
   productType        ProductType?               @relation(fields: [productTypeId], references: [id])
   supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
+  taxType            TaxType?                   @relation(fields: [taxTypeId], references: [id])
   externalReferences ProductExternalReference[]
   cartOrderLines     CartOrderLine[]
   orderLines         OrderLine[]
@@ -496,10 +524,17 @@ model CartOrderLine {
   resolvedPriceListId     String?
   resolvedPriceListRuleId String?
   priceResolvedAt         DateTime?
+  // Resolved once, at cart-add time, frozen like unitPrice above (never
+  // re-resolved) — same rationale as ADR-036's price stability during
+  // checkout, since tax rates do change and a cart's total shouldn't drift
+  // silently while a customer is still shopping.
+  taxTypeId               String?
+  taxRateSnapshot         Decimal?  @db.Decimal(5, 2)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
   order                   CartOrder @relation(fields: [orderId], references: [id])
   product                 Product   @relation(fields: [productId], references: [id])
+  taxType                 TaxType?  @relation(fields: [taxTypeId], references: [id])
 
   @@unique([orderId, productId])
   @@map("cart_order_lines")
@@ -577,12 +612,19 @@ model OrderLine {
 
   quantityOrdered         Int
   unitPriceSnapshot       Decimal @db.Decimal(10, 2)
-  taxRateSnapshot         String  @default("0")
   subtotalAmount          Decimal @db.Decimal(10, 2)
   taxAmount               Decimal @db.Decimal(10, 2)
   totalAmount             Decimal @db.Decimal(10, 2)
   priceListIdSnapshot     String?
   priceListRuleIdSnapshot String?
+  // Frozen at order placement (never touched again — AC7): rate is carried
+  // from the cart's own frozen taxRateSnapshot; name/classification are
+  // joined from TaxType at that one moment. taxTypeId is a bare pointer for
+  // reporting, same un-related style as priceListIdSnapshot above.
+  taxTypeId                 String?
+  taxTypeNameSnapshot        String?
+  taxClassificationSnapshot  TaxClassification?
+  taxRatePercentageSnapshot  Decimal?           @db.Decimal(5, 2)
 
   status    OrderLineStatus
   createdAt DateTime        @default(now())
@@ -727,6 +769,9 @@ model AccountingConnection {
   externalProducts         ExternalAccountingProduct[]
   productMappings          ProductAccountingMapping[]
   productMatchSuggestions  AccountingProductMatchSuggestion[]
+  externalTaxTypes         ExternalAccountingTaxType[]
+  taxTypeMappings          TaxTypeAccountingMapping[]
+  taxTypeMatchSuggestions  AccountingTaxTypeMatchSuggestion[]
   invoiceExports           AccountingInvoiceExport[]
   bulkImportJobs           AccountingBulkImportJob[]
 
@@ -783,6 +828,11 @@ model ExternalAccountingContact {
   lastExternalUpdatedAt  DateTime?
   lastSyncedAt           DateTime
   rawProviderData        Json
+  // Set by AccountingChangeDetectionService when a mapped row's watched
+  // fields (displayName, email) differ from the previous sync; cleared only
+  // by an explicit admin "Acknowledge" action, never by a later sync.
+  changeDetectedAt       DateTime?
+  changeAcknowledgedAt   DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -893,6 +943,11 @@ model ExternalAccountingProduct {
   lastExternalUpdatedAt  DateTime?
   lastSyncedAt           DateTime
   rawProviderData        Json
+  // Set by AccountingChangeDetectionService when a mapped row's watched
+  // fields (salesUnitPrice, taxCode) differ from the previous sync; cleared
+  // only by an explicit admin "Acknowledge" action, never by a later sync.
+  changeDetectedAt       DateTime?
+  changeAcknowledgedAt   DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
 
@@ -967,6 +1022,107 @@ model AccountingProductMatchSuggestion {
   @@index([distributorId, status])
   @@index([externalProductId, status])
   @@map("accounting_product_match_suggestions")
+}
+
+// Locally cached tax rates pulled from the connected accounting system (Xero
+// initially). Populated only through AccountingConnectionAdapter.listTaxRates
+// — same provider-neutral cache pattern as ExternalAccountingContact/Product,
+// with one deviation: Xero's TaxRate has no GUID, only a `taxType` code
+// string (e.g. "OUTPUT2") as its natural key, so that's the unique key here
+// instead of a separate external-id column.
+model ExternalAccountingTaxType {
+  id                     String             @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  provider               AccountingProvider
+  taxType                String
+  displayName            String
+  ratePercentage         Decimal            @db.Decimal(6, 4)
+  isActive               Boolean            @default(true)
+  ignoredAt              DateTime?
+  lastSyncedAt           DateTime
+  rawProviderData        Json
+  // Set by AccountingChangeDetectionService when a mapped row's watched
+  // fields (ratePercentage, isActive, displayName) differ from the previous
+  // sync; cleared only by an explicit admin "Acknowledge" action, never by a
+  // later sync — the rate itself is never auto-applied to the mapped TaxType.
+  changeDetectedAt       DateTime?
+  changeAcknowledgedAt   DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  distributor Organisation                       @relation(fields: [distributorId], references: [id])
+  connection  AccountingConnection               @relation(fields: [accountingConnectionId], references: [id])
+  mappings    TaxTypeAccountingMapping[]
+  suggestions AccountingTaxTypeMatchSuggestion[]
+
+  @@unique([accountingConnectionId, taxType])
+  @@index([distributorId, isActive])
+  @@map("external_accounting_tax_types")
+}
+
+// Confirmed link between a Wholo TaxType and one cached external tax rate.
+// Written only by an explicit user action (create/confirm/match) — never by
+// the sync/matcher, regardless of match confidence.
+model TaxTypeAccountingMapping {
+  id                     String                       @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  taxTypeId              String
+  externalTaxTypeId      String
+  matchMethod            AccountingTaxTypeMatchMethod
+  linkedByUserId         String
+  linkedAt               DateTime                     @default(now())
+  unlinkedAt             DateTime?
+  // See ADR-052: true while linked (unlinkedAt is null), null once unlinked —
+  // same pattern as ProductAccountingMapping.linkedMarker. Maintained
+  // automatically by the tax_type_accounting_mappings_set_marker trigger (see
+  // the add_accounting_tax_types migration) — not application code.
+  linkedMarker           Boolean?
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+
+  distributor     Organisation              @relation(fields: [distributorId], references: [id])
+  connection      AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  taxType         TaxType                   @relation(fields: [taxTypeId], references: [id])
+  externalTaxType ExternalAccountingTaxType @relation(fields: [externalTaxTypeId], references: [id])
+
+  // Each Stocdup TaxType has at most one active mapping per connection (PBI
+  // §2: "one unambiguous Xero mapping"), and symmetrically each external tax
+  // type maps to at most one Stocdup TaxType — same symmetric pattern as
+  // ProductAccountingMapping's two uniques above.
+  @@unique([accountingConnectionId, taxTypeId, linkedMarker])
+  @@unique([accountingConnectionId, externalTaxTypeId, linkedMarker])
+  @@index([distributorId])
+  @@map("tax_type_accounting_mappings")
+}
+
+// System-suggested tax type match awaiting human review. The matcher only
+// ever writes here; TaxTypeAccountingMapping rows are created exclusively by
+// an explicit confirm/match action, regardless of confidence.
+model AccountingTaxTypeMatchSuggestion {
+  id                     String                        @id @default(cuid())
+  distributorId          String
+  accountingConnectionId String
+  externalTaxTypeId      String
+  suggestedTaxTypeId     String
+  confidence             Int
+  matchMethod            AccountingTaxTypeMatchMethod
+  matchReason            String
+  status                 AccountingTaxTypeMatchStatus @default(SUGGESTED)
+  reviewedByUserId       String?
+  reviewedAt             DateTime?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  distributor      Organisation              @relation(fields: [distributorId], references: [id])
+  connection        AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  externalTaxType  ExternalAccountingTaxType @relation(fields: [externalTaxTypeId], references: [id])
+  suggestedTaxType TaxType                   @relation(fields: [suggestedTaxTypeId], references: [id])
+
+  @@index([distributorId, status])
+  @@index([externalTaxTypeId, status])
+  @@map("accounting_tax_type_match_suggestions")
 }
 
 // One row per (connection, order) invoice export attempt-set — the business
@@ -1249,6 +1405,35 @@ model PriceListRule {
   @@index([priceListId, selectorType, productId])
   @@index([distributorId])
   @@map("price_list_rules")
+}
+
+// ─── Tax Types ────────────────────────────────────────────────────────────────
+// Wholesaler-owned tax types (PBI: import/map/apply Xero tax types, Phase 1).
+// Isolated per distributor, assigned to products, applied at order-line
+// calculation (Phase 2). Not yet linked to Xero — that's Phase 3/4.
+
+model TaxType {
+  id             String             @id @default(cuid())
+  distributorId  String
+  name           String
+  classification TaxClassification
+  ratePercentage Decimal            @db.Decimal(5, 2)
+  active         Boolean            @default(true)
+  // System-seeded 0% fallback, one per distributor, created by the one-off
+  // backfill script (apps/api/src/scripts/backfill-default-tax-types.ts) so
+  // pre-existing products stay orderable once taxTypeId exists. Never
+  // created by user action; admin UI should flag products still on it.
+  isDefault      Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  distributor    Organisation       @relation("DistributorTaxTypes", fields: [distributorId], references: [id])
+  products       Product[]
+  cartOrderLines CartOrderLine[]
+  accountingMappings         TaxTypeAccountingMapping[]
+  accountingMatchSuggestions AccountingTaxTypeMatchSuggestion[]
+
+  @@index([distributorId, active])
+  @@map("tax_types")
 }
 
 // ─── Delivery Profiles ───────────────────────────────────────────────────────

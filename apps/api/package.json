@@ -19,6 +19,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:search:reindex": "tsx scripts/reindex-product-search.ts",
     "db:analytics:rebuild": "tsx scripts/rebuild-analytics-state.ts",
+    "db:tax-types:backfill": "tsx scripts/backfill-default-tax-types.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

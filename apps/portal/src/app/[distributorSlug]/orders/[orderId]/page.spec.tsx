@@ -42,10 +42,13 @@ function makeLine(overrides: Partial<OrderLine> = {}): OrderLine {
     unitOfMeasureSnapshot: null,
     quantityOrdered: 2,
     unitPriceSnapshot: '12.23',
-    taxRateSnapshot: '0',
     subtotalAmount: '24.46',
     taxAmount: '0.00',
     totalAmount: '24.46',
+    taxTypeId: null,
+    taxTypeNameSnapshot: null,
+    taxClassificationSnapshot: null,
+    taxRatePercentageSnapshot: null,
     status: OrderLineStatus.ACCEPTED,
     createdAt: '2026-07-01T10:00:00.000Z',
     updatedAt: '2026-07-01T10:00:00.000Z',
@@ -64,6 +67,7 @@ function makeOrder(overrides: Partial<Order> = {}): Order {
     currency: 'GBP',
     subtotalAmount: '24.46',
     taxAmount: '0.00',
+    taxLabel: 'VAT',
     totalAmount: '24.46',
     billingAddressSnapshot: null,
     deliveryAddressSnapshot: null,
@@ -146,5 +150,19 @@ describe('OrderDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Wine')).toBeTruthy());
     expect(container.querySelector('.od-img-placeholder')).toBeTruthy();
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('labels the tax row with the real tax type name from the API response', async () => {
+    mockGetOrder.mockResolvedValue(makeOrder({ taxLabel: 'VAT', taxAmount: '4.89' }));
+    render(<OrderDetailPage />);
+    await waitFor(() => expect(screen.getByText('VAT')).toBeTruthy());
+    expect(screen.queryByText('GST')).toBeNull();
+    expect(screen.queryByText('Tax (GST)')).toBeNull();
+  });
+
+  it('falls back to the generic "Tax" label when the API reports mixed tax types', async () => {
+    mockGetOrder.mockResolvedValue(makeOrder({ taxLabel: 'Tax' }));
+    render(<OrderDetailPage />);
+    await waitFor(() => expect(screen.getByText('Tax')).toBeTruthy());
   });
 });

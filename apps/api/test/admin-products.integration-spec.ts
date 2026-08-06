@@ -78,6 +78,7 @@ describe('Admin Products (integration)', () => {
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.productType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.supplier.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_A } });
     await prisma.user.deleteMany({ where: { id: ADMIN_A } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -89,6 +90,7 @@ describe('Admin Products (integration)', () => {
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.productType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.supplier.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   // ── GET /admin/distributors/:distributorId/products ────────────────────────
@@ -231,6 +233,52 @@ describe('Admin Products (integration)', () => {
 
       const softDeleted = await prisma.product.findUnique({ where: { id: productA.id } });
       expect(softDeleted?.deletedAt).not.toBeNull();
+    });
+  });
+
+  // ── Tax type publish gating (cross-entity: Product + TaxType) ──────────────
+
+  describe('ACTIVE status requires a tax type', () => {
+    it('returns 400 and does not create the product when status ACTIVE has no taxTypeId', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_A}/products`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Untaxed', status: 'ACTIVE' });
+
+      expect(res.status).toBe(400);
+
+      const count = await prisma.product.count({ where: { distributorId: DIST_A, name: 'Untaxed' } });
+      expect(count).toBe(0);
+    });
+
+    it('creates the product when status ACTIVE has a valid taxTypeId', async () => {
+      const taxType = await prisma.taxType.create({
+        data: { distributorId: DIST_A, name: 'Standard', classification: 'STANDARD', ratePercentage: '20.00' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/admin/distributors/${DIST_A}/products`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Taxed', status: 'ACTIVE', taxTypeId: taxType.id });
+
+      expect(res.status).toBe(201);
+      expect(res.body.taxType.id).toBe(taxType.id);
+    });
+
+    it('returns 400 and leaves status unchanged when updating a DRAFT product to ACTIVE without a taxTypeId', async () => {
+      const product = await prisma.product.create({
+        data: { distributorId: DIST_A, name: 'Draft product', status: ProductStatus.DRAFT },
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/admin/distributors/${DIST_A}/products/${product.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'ACTIVE' });
+
+      expect(res.status).toBe(400);
+
+      const unchanged = await prisma.product.findUnique({ where: { id: product.id } });
+      expect(unchanged?.status).toBe(ProductStatus.DRAFT);
     });
   });
 

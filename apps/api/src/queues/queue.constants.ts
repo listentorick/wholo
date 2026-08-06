@@ -5,6 +5,7 @@ export const NOTIFICATION_DELIVERY_QUEUE = 'notification-delivery';
 export const ACCOUNTING_INVOICE_EXPORT_QUEUE = 'accounting-invoice-export';
 export const ACCOUNTING_CONTACT_SYNC_QUEUE = 'accounting-contact-sync';
 export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
+export const ACCOUNTING_TAX_TYPE_SYNC_QUEUE = 'accounting-tax-type-sync';
 export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
 export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
 
@@ -38,5 +39,6 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   AccountingInvoiceExportRequested: [ACCOUNTING_INVOICE_EXPORT_QUEUE],
   AccountingContactSyncRequested: [ACCOUNTING_CONTACT_SYNC_QUEUE],
   AccountingProductSyncRequested: [ACCOUNTING_PRODUCT_SYNC_QUEUE],
+  AccountingTaxTypeSyncRequested: [ACCOUNTING_TAX_TYPE_SYNC_QUEUE],
   AccountingBulkImportRequested: [ACCOUNTING_BULK_IMPORT_QUEUE],
 };

@@ -436,6 +436,18 @@ export class AccountingContactService {
     });
   }
 
+  // Clears the "changed since sync" highlight on a cache row — an explicit
+  // admin action, never done automatically by a later sync (see
+  // AccountingChangeDetectionService).
+  async acknowledgeChange(distributorId: string, externalContactId: string): Promise<void> {
+    const connection = await this.getActiveConnection(distributorId);
+    const contact = await this.getContactOrThrow(connection.id, externalContactId);
+    await this.prisma.externalAccountingContact.update({
+      where: { id: contact.id },
+      data: { changeAcknowledgedAt: new Date() },
+    });
+  }
+
   private async createMapping(
     distributorId: string,
     accountingConnectionId: string,
@@ -533,6 +545,8 @@ export class AccountingContactService {
       isSupplier: row.isSupplier,
       isArchived: row.isArchived,
       ignoredAt: row.ignoredAt,
+      changeDetectedAt: row.changeDetectedAt,
+      changeAcknowledgedAt: row.changeAcknowledgedAt,
       status,
       mapping: mapping
         ? {

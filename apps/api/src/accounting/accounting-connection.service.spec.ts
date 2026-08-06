@@ -96,7 +96,29 @@ describe('AccountingConnectionService', () => {
           distributorId: 'dist-1',
           status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
         },
+        orderBy: { connectedAt: 'desc' },
       });
+    });
+
+    it('orders by connectedAt desc, so a fresh CONNECTED row wins over a stale orphaned ERROR row', async () => {
+      // Regression test: without the orderBy, findFirst's pick between two
+      // matching rows (an old ERROR one and a new CONNECTED one from a
+      // successful reconnect) was unordered, and the admin UI kept showing
+      // the stale error even after a genuinely successful reconnect.
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue({
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationName: 'Acme Wines',
+        connectedAt: new Date('2026-02-01'),
+        lastSyncedAt: null,
+        invoiceExportTargetStatus: 'DRAFT',
+      });
+
+      const result = await service.getConnectionStatus('dist-1');
+
+      expect(result?.status).toBe(AccountingConnectionStatus.CONNECTED);
+      const call = mockPrisma.accountingConnection.findFirst.mock.calls[0][0];
+      expect(call.orderBy).toEqual({ connectedAt: 'desc' });
     });
   });
 
@@ -212,7 +234,10 @@ describe('AccountingConnectionService', () => {
       await service.handleCallback(callbackUrl, 'abc', 'xyz');
 
       expect(mockPrisma.accountingConnection.updateMany).toHaveBeenCalledWith({
-        where: { distributorId: 'dist-1', status: AccountingConnectionStatus.CONNECTED },
+        where: {
+          distributorId: 'dist-1',
+          status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
+        },
         data: expect.objectContaining({ status: AccountingConnectionStatus.DISCONNECTED }),
       });
       expect(mockPrisma.accountingConnection.create).toHaveBeenCalledWith({
@@ -227,6 +252,26 @@ describe('AccountingConnectionService', () => {
           connectedByUserId: 'user-1',
         }),
       });
+    });
+
+    it('also supersedes a prior ERROR row (a broken connection must be retired by a successful reconnect, not orphaned)', async () => {
+      mockPrisma.accountingOAuthState.findUnique.mockResolvedValue({
+        id: 'state-1',
+        state: 'xyz',
+        provider: AccountingProvider.XERO,
+        distributorId: 'dist-1',
+        connectedByUserId: 'user-1',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      mockAdapter.exchangeCodeForToken.mockResolvedValue(makeTokenSet());
+      mockAdapter.listAvailableOrganisations.mockResolvedValue([{ externalId: 'tenant-1', name: 'Acme Wines' }]);
+      mockTokenEncryption.encrypt.mockReturnValue('encrypted-blob');
+
+      await service.handleCallback(callbackUrl, 'abc', 'xyz');
+
+      const updateManyWhere = mockPrisma.accountingConnection.updateMany.mock.calls[0][0].where;
+      expect(updateManyWhere.status.in).toContain(AccountingConnectionStatus.ERROR);
+      expect(updateManyWhere.status.in).toContain(AccountingConnectionStatus.CONNECTED);
     });
 
     it('takes the first organisation and logs a warning when more than one is returned', async () => {

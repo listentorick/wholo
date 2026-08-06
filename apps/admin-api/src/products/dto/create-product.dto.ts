@@ -27,6 +27,10 @@ export class CreateProductDto {
   supplierId?: string;
 
   @IsOptional()
+  @IsString()
+  taxTypeId?: string;
+
+  @IsOptional()
   @IsDecimal({ decimal_digits: '0,2' })
   price?: string;
 }

@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Address, Contact, CurrencyCode, Invoice, Item, LineAmountTypes, LineItem, XeroClient } from 'xero-node';
+import { Address, Contact, CurrencyCode, Invoice, Item, LineAmountTypes, LineItem, TaxRate, XeroClient } from 'xero-node';
 import {
   AccountingConnectionAdapter,
   AccountingExternalContact,
   AccountingExternalOrganisation,
   AccountingExternalProduct,
+  AccountingExternalTaxRate,
   AccountingInvoiceRequest,
   AccountingInvoiceResult,
   AccountingInvoiceTargetStatusValue,
@@ -147,6 +148,18 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     return (body.items ?? []).map((item) => this.toAccountingExternalProduct(item));
   }
 
+  async listTaxRates(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+  ): Promise<AccountingExternalTaxRate[]> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    // Unlike getContacts, Xero's TaxRates endpoint has no pagination — one
+    // call returns every tax rate (org tax-rate counts are small).
+    const { body } = await client.accountingApi.getTaxRates(externalOrganisationId);
+    return (body.taxRates ?? []).map((taxRate) => this.toAccountingExternalTaxRate(taxRate));
+  }
+
   hasInvoiceCreationScope(grantedScopes: string): boolean {
     // The legacy broad accounting.transactions scope also grants invoice
     // creation — connections on apps grandfathered before Xero's granular
@@ -273,6 +286,17 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       quantityOnHand: item.quantityOnHand != null ? String(item.quantityOnHand) : undefined,
       updatedAt: item.updatedDateUTC ? new Date(item.updatedDateUTC).toISOString() : undefined,
       raw: item,
+    };
+  }
+
+  private toAccountingExternalTaxRate(taxRate: TaxRate): AccountingExternalTaxRate {
+    return {
+      // taxType is Xero's natural key for a tax rate — there is no GUID.
+      taxType: taxRate.taxType ?? '',
+      displayName: taxRate.name || taxRate.taxType || '',
+      ratePercentage: taxRate.displayTaxRate != null ? String(taxRate.displayTaxRate) : '0',
+      isActive: taxRate.status === TaxRate.StatusEnum.ACTIVE,
+      raw: taxRate,
     };
   }
 

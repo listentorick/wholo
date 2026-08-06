@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { cartApi } from '@wholo/api-client';
-import { TradeRelationshipStatus, type CartItem } from '@wholo/types';
+import { TradeRelationshipStatus, type CartItem, type CartResponse } from '@wholo/types';
 import { useAuth } from './auth-context';
 import { useDistributor } from './distributor-context';
 
@@ -10,6 +10,9 @@ interface CartContextValue {
   cartLoading: boolean;
   cartCount: number;
   subtotal: number;
+  taxAmount: number;
+  taxLabel: string;
+  total: number;
   items: CartItem[];
   quantities: Record<string, number>;
   inCart: Set<string>;
@@ -35,17 +38,22 @@ export function CartProvider({
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [inCart, setInCart] = useState<Set<string>>(new Set());
   const [savingItems, setSavingItems] = useState<Set<string>>(new Set());
+  // Tax/total come straight from the API's own calculateLineTax-derived
+  // figures (CartService.formatCart) — never recomputed here. There must be
+  // exactly one implementation of the tax calculation, and it lives server-side.
+  const [serverTotals, setServerTotals] = useState({ taxAmount: 0, total: 0, taxLabel: 'Tax' });
 
-  const reconcile = useCallback((cartItems: CartItem[]) => {
+  const reconcile = useCallback((cart: CartResponse) => {
     const qtys: Record<string, number> = {};
     const ids = new Set<string>();
-    for (const item of cartItems) {
+    for (const item of cart.items) {
       qtys[item.productId] = item.quantity;
       ids.add(item.productId);
     }
-    setItems(cartItems);
+    setItems(cart.items);
     setQuantities(qtys);
     setInCart(ids);
+    setServerTotals({ taxAmount: parseFloat(cart.taxAmount), total: parseFloat(cart.total), taxLabel: cart.taxLabel });
   }, []);
 
   useEffect(() => {
@@ -56,7 +64,7 @@ export function CartProvider({
     setCartLoading(true);
     cartApi
       .getCart(distributorSlug, accessToken)
-      .then((cart) => reconcile(cart.items))
+      .then(reconcile)
       .catch(() => {})
       .finally(() => setCartLoading(false));
   }, [distributorSlug, user, accessToken, reconcile]);
@@ -71,7 +79,7 @@ export function CartProvider({
 
       try {
         const cart = await cartApi.upsertItem({ distributorSlug, productId, quantity }, accessToken);
-        reconcile(cart.items);
+        reconcile(cart);
       } catch {
         setInCart((prev) => {
           const next = new Set(prev);
@@ -97,18 +105,24 @@ export function CartProvider({
   const refreshCart = useCallback(async () => {
     if (!accessToken) return;
     const cart = await cartApi.getCart(distributorSlug, accessToken);
-    reconcile(cart.items);
+    reconcile(cart);
   }, [accessToken, distributorSlug, reconcile]);
 
   const cartCount = [...inCart].reduce((sum, id) => sum + (quantities[id] ?? 1), 0);
 
+  // Optimistic — recomputed from local quantities so quantity +/- feels
+  // instant. Simple qty x frozen unit price, not tax business logic, so
+  // duplicating it here carries none of the "two implementations" risk that
+  // taxAmount/total did.
   const subtotal = items.reduce(
     (sum, item) => sum + (quantities[item.productId] ?? item.quantity) * parseFloat(item.unitPrice),
     0,
   );
 
+  const { taxAmount, total, taxLabel } = serverTotals;
+
   return (
-    <CartContext.Provider value={{ cartLoading, cartCount, subtotal, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
+    <CartContext.Provider value={{ cartLoading, cartCount, subtotal, taxAmount, taxLabel, total, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
       {children}
     </CartContext.Provider>
   );

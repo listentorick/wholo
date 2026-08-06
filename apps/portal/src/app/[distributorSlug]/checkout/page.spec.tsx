@@ -26,12 +26,16 @@ vi.mock('@/lib/auth-context', () => ({
 }));
 
 const mockRefreshCart = vi.fn();
+let mockTaxLabel = 'VAT';
 vi.mock('@/lib/cart-context', () => ({
   useCart: () => ({
     cartLoading: false,
-    items: [{ productId: 'p1', quantity: 1, unitPrice: '10.00', product: { id: 'p1', name: 'Wine' } }],
+    items: [{ productId: 'p1', quantity: 1, unitPrice: '10.00', taxRatePercentage: '20.00', taxAmount: '2.00', taxTypeName: 'VAT', product: { id: 'p1', name: 'Wine' } }],
     quantities: { p1: 1 },
     subtotal: 10,
+    taxAmount: 2,
+    taxLabel: mockTaxLabel,
+    total: 12,
     savingItems: new Set(),
     syncItem: vi.fn(),
     refreshCart: mockRefreshCart,
@@ -61,6 +65,27 @@ vi.mock('@wholo/api-client', () => ({
 }));
 
 vi.mock('@/components/PageSubHeader', () => ({ PageSubHeader: () => null }));
+
+describe('CheckoutPage — tax row label', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRefreshCart.mockResolvedValue(undefined);
+    mockEffectiveMinSpend = null;
+    mockTaxLabel = 'VAT';
+  });
+
+  it('shows the real tax type name from the cart context when every item shares one', () => {
+    mockTaxLabel = 'VAT';
+    render(<CheckoutPage />);
+    expect(screen.getByText('VAT')).toBeInTheDocument();
+  });
+
+  it('falls back to the generic "Tax" label when the cart context reports mixed tax types', () => {
+    mockTaxLabel = 'Tax';
+    render(<CheckoutPage />);
+    expect(screen.getByText('Tax')).toBeInTheDocument();
+  });
+});
 
 describe('CheckoutPage — handlePlaceOrder', () => {
   beforeEach(() => {

@@ -87,6 +87,15 @@ export class AccountingContactController {
     return this.service.unlink(distributorId, mappingId);
   }
 
+  @Post(':externalContactId/acknowledge-change')
+  @ApiOperation({ summary: 'Acknowledge a detected change on a linked contact, clearing its highlight' })
+  acknowledgeChange(
+    @Param('distributorId') distributorId: string,
+    @Param('externalContactId') externalContactId: string,
+  ) {
+    return this.service.acknowledgeChange(distributorId, externalContactId);
+  }
+
   @Post('bulk-import')
   @ApiOperation({ summary: 'Queue a bulk import of accounting contacts, by explicit ids or a server-side filter' })
   requestBulkImport(

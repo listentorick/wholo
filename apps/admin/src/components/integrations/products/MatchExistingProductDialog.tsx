@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { Drawer } from '@/components/Drawer';
-import { adminAccountingApi, adminProductsApi } from '@wholo/admin-api-client';
+import { adminAccountingApi, adminProductsApi, ApiError } from '@wholo/admin-api-client';
 import type { AccountingProductSummary, Product } from '@wholo/types';
+import { TaxTypeConflictModal } from './TaxTypeConflictModal';
 
 interface Props {
   product: AccountingProductSummary;
@@ -23,6 +24,7 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
   const [selected, setSelected] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [taxConflictDetail, setTaxConflictDetail] = useState<string | null>(null);
 
   useEffect(() => {
     adminProductsApi
@@ -37,14 +39,19 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
       (p.sku ?? '').toLowerCase().includes(query.toLowerCase()),
   );
 
-  async function handleMatch() {
+  async function handleMatch(confirmTaxTypeOverride = false) {
     if (!selected) return;
     setSubmitting(true);
     setActionError(null);
     try {
-      await adminAccountingApi.matchProduct(product.id, { productId: selected.id }, token);
+      await adminAccountingApi.matchProduct(product.id, { productId: selected.id, confirmTaxTypeOverride }, token);
       onMatched();
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_CONFLICT') {
+        setTaxConflictDetail(err.problem.detail ?? 'This match would change the product’s tax type.');
+        setSubmitting(false);
+        return;
+      }
       setActionError('Failed to link this product. It may already be linked to a different accounting product.');
       setSubmitting(false);
     }
@@ -117,7 +124,7 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
           </button>
           <button
             type="button"
-            onClick={handleMatch}
+            onClick={() => handleMatch()}
             disabled={submitting || !selected}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -125,6 +132,17 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
           </button>
         </div>
       </div>
+      {taxConflictDetail && (
+        <TaxTypeConflictModal
+          detail={taxConflictDetail}
+          submitting={submitting}
+          onCancel={() => setTaxConflictDetail(null)}
+          onConfirm={() => {
+            setTaxConflictDetail(null);
+            handleMatch(true);
+          }}
+        />
+      )}
     </Drawer>
   );
 }

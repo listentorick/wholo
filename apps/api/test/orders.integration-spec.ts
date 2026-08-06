@@ -13,7 +13,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, ProductStatus, TradeRelationshipStatus, Role, CartOrderStatus } from '@prisma/client';
+import { OrganisationType, ProductStatus, TradeRelationshipStatus, Role, CartOrderStatus, TaxClassification } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
@@ -79,12 +79,14 @@ describe('Orders submission (integration)', () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({ where: { distributorId: DIST } });
     await prisma.orderLine.deleteMany({ where: { distributorId: DIST } });
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
     await prisma.cartOrderLine.deleteMany({ where: { order: { distributorId: DIST } } });
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
+    await prisma.taxType.deleteMany({ where: { distributorId: DIST } });
     await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
     await prisma.membership.deleteMany({ where: { userId: CUSTOMER_USER } });
     await prisma.user.deleteMany({ where: { id: CUSTOMER_USER } });
@@ -94,12 +96,14 @@ describe('Orders submission (integration)', () => {
   });
 
   beforeEach(async () => {
+    await prisma.auditLog.deleteMany({ where: { distributorId: DIST } });
     await prisma.orderLine.deleteMany({ where: { distributorId: DIST } });
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
     await prisma.cartOrderLine.deleteMany({ where: { order: { distributorId: DIST } } });
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
+    await prisma.taxType.deleteMany({ where: { distributorId: DIST } });
     await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
 
     const product = await prisma.product.create({
@@ -228,6 +232,74 @@ describe('Orders submission (integration)', () => {
         .send({ distributorSlug: DIST_SLUG });
 
       expect(res.status).toBe(201);
+    });
+  });
+
+  // ── Tax snapshot immutability (AC7) ─────────────────────────────────────────
+  // Unit tests with mocked Prisma can't prove this — only a real DB round-trip
+  // (place order, mutate the underlying TaxType, re-fetch) shows the snapshot
+  // genuinely doesn't move.
+
+  describe('order tax snapshot survives later TaxType changes', () => {
+    it('keeps a placed order\'s tax type, rate and amounts unchanged after the product\'s tax type is reassigned and the original rate is edited', async () => {
+      const taxType = await prisma.taxType.create({
+        data: { distributorId: DIST, name: 'Standard rate', classification: TaxClassification.STANDARD, ratePercentage: '20.00' },
+      });
+      await prisma.product.update({ where: { id: productId }, data: { taxTypeId: taxType.id } });
+
+      const cart = await prisma.cartOrder.create({
+        data: { distributorId: DIST, customerId: CUSTOMER, userId: CUSTOMER_USER, status: CartOrderStatus.DRAFT },
+      });
+      await prisma.cartOrderLine.create({
+        data: { orderId: cart.id, productId, quantity: 2, unitPrice: 10, taxTypeId: taxType.id, taxRateSnapshot: '20.00' },
+      });
+
+      const submitRes = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ distributorSlug: DIST_SLUG });
+      expect(submitRes.status).toBe(201);
+      const orderId = submitRes.body.id;
+      expect(submitRes.body.taxAmount).toBe('4.00');
+
+      // The submit response's own `lines` come from the same query that
+      // created the Order row, before orderLine.createMany runs later in the
+      // same transaction — a pre-existing quirk unrelated to tax — so fetch
+      // fresh to see the actual placed-order line snapshot.
+      const placedRes = await request(app.getHttpServer())
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(placedRes.status).toBe(200);
+      expect(placedRes.body.lines[0].taxTypeNameSnapshot).toBe('Standard rate');
+      expect(placedRes.body.lines[0].taxClassificationSnapshot).toBe(TaxClassification.STANDARD);
+      expect(placedRes.body.lines[0].taxRatePercentageSnapshot).toBe('20.00');
+      expect(placedRes.body.lines[0].taxAmount).toBe('4.00');
+
+      // Mutate the tax type after the order exists: rename/reclassify/re-rate
+      // it, and reassign the product to a different tax type entirely.
+      const otherTaxType = await prisma.taxType.create({
+        data: { distributorId: DIST, name: 'Reduced rate', classification: TaxClassification.REDUCED, ratePercentage: '5.00' },
+      });
+      await prisma.taxType.update({
+        where: { id: taxType.id },
+        data: { name: 'Renamed rate', classification: TaxClassification.EXEMPT, ratePercentage: '99.00' },
+      });
+      await prisma.product.update({ where: { id: productId }, data: { taxTypeId: otherTaxType.id } });
+
+      const refetchRes = await request(app.getHttpServer())
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(refetchRes.status).toBe(200);
+      expect(refetchRes.body.lines[0].taxTypeId).toBe(taxType.id);
+      expect(refetchRes.body.lines[0].taxTypeNameSnapshot).toBe('Standard rate');
+      expect(refetchRes.body.lines[0].taxClassificationSnapshot).toBe(TaxClassification.STANDARD);
+      expect(refetchRes.body.lines[0].taxRatePercentageSnapshot).toBe('20.00');
+      expect(refetchRes.body.lines[0].subtotalAmount).toBe('20.00');
+      expect(refetchRes.body.lines[0].taxAmount).toBe('4.00');
+      expect(refetchRes.body.lines[0].totalAmount).toBe('24.00');
+      expect(refetchRes.body.taxAmount).toBe('4.00');
+      expect(refetchRes.body.totalAmount).toBe('24.00');
     });
   });
 });

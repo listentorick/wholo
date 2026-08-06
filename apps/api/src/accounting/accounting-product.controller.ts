@@ -7,6 +7,7 @@ import { AccountingProductService } from './accounting-product.service';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { MatchProductDto } from './dto/match-product.dto';
+import { ConfirmProductSuggestionDto } from './dto/confirm-product-suggestion.dto';
 import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
 
 interface RequestWithUser extends Request {
@@ -55,9 +56,10 @@ export class AccountingProductController {
   confirmSuggestion(
     @Param('distributorId') distributorId: string,
     @Param('suggestionId') suggestionId: string,
+    @Body() dto: ConfirmProductSuggestionDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.service.confirmSuggestion(distributorId, req.user.sub, suggestionId);
+    return this.service.confirmSuggestion(distributorId, req.user.sub, suggestionId, dto.confirmTaxTypeOverride);
   }
 
   @Post(':externalProductId/match')
@@ -68,7 +70,13 @@ export class AccountingProductController {
     @Body() dto: MatchProductDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.service.matchToExistingProduct(distributorId, req.user.sub, externalProductId, dto.productId);
+    return this.service.matchToExistingProduct(
+      distributorId,
+      req.user.sub,
+      externalProductId,
+      dto.productId,
+      dto.confirmTaxTypeOverride,
+    );
   }
 
   @Post(':externalProductId/ignore')
@@ -85,6 +93,15 @@ export class AccountingProductController {
   @ApiOperation({ summary: 'Unlink a confirmed product-to-accounting-product mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
+  }
+
+  @Post(':externalProductId/acknowledge-change')
+  @ApiOperation({ summary: 'Acknowledge a detected change on a linked product, clearing its highlight' })
+  acknowledgeChange(
+    @Param('distributorId') distributorId: string,
+    @Param('externalProductId') externalProductId: string,
+  ) {
+    return this.service.acknowledgeChange(distributorId, externalProductId);
   }
 
   @Post('bulk-import')

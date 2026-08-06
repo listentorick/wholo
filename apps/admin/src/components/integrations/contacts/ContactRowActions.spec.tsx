@@ -29,6 +29,8 @@ function makeContact(overrides: Partial<AccountingContactSummary> = {}): Account
     isSupplier: false,
     isArchived: false,
     ignoredAt: null,
+    changeDetectedAt: null,
+    changeAcknowledgedAt: null,
     status: 'READY_TO_IMPORT',
     mapping: null,
     suggestion: null,

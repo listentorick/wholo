@@ -3,6 +3,7 @@ import { AccountingProductMatchMethod, Prisma, ProductStatus } from '@prisma/cli
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AdminProductsService } from '../admin-products/admin-products.service';
+import { AccountingTaxTypeService } from './accounting-tax-type.service';
 import { AccountingProductService } from './accounting-product.service';
 
 function makePrismaMock() {
@@ -39,17 +40,23 @@ describe('AccountingProductService', () => {
   let service: AccountingProductService;
   let prisma: ReturnType<typeof makePrismaMock>;
   let outbox: { writeEvent: jest.Mock };
-  let adminProducts: { create: jest.Mock };
+  let adminProducts: { create: jest.Mock; update: jest.Mock };
+  let taxTypes: { resolveTaxTypeForCode: jest.Mock };
 
   beforeEach(() => {
     prisma = makePrismaMock();
     prisma.accountingConnection.findFirst.mockResolvedValue(activeConnection);
     outbox = { writeEvent: jest.fn().mockResolvedValue({}) };
-    adminProducts = { create: jest.fn().mockResolvedValue({ id: 'prod-new', name: 'Imported' }) };
+    adminProducts = {
+      create: jest.fn().mockResolvedValue({ id: 'prod-new', name: 'Imported' }),
+      update: jest.fn().mockResolvedValue({}),
+    };
+    taxTypes = { resolveTaxTypeForCode: jest.fn().mockResolvedValue(null) };
     service = new AccountingProductService(
       prisma as unknown as PrismaService,
       outbox as unknown as OutboxService,
       adminProducts as unknown as AdminProductsService,
+      taxTypes as unknown as AccountingTaxTypeService,
     );
   });
 
@@ -61,6 +68,7 @@ describe('AccountingProductService', () => {
       externalProductCode: 'CAB-SAUV-001',
       salesUnitPrice: new Prisma.Decimal('12.3456'),
       quantityOnHand: null,
+      taxCode: null,
       isSold: true,
       isPurchased: true,
       isTracked: false,
@@ -301,6 +309,7 @@ describe('AccountingProductService', () => {
         supplierId: undefined,
         // 4-dp cache price rounded to the 2-dp Product.price at import
         price: '12.35',
+        taxTypeId: undefined,
       });
       expect(prisma.productAccountingMapping.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -361,9 +370,32 @@ describe('AccountingProductService', () => {
 
       await expect(service.importAsNewProduct('dist-1', 'user-1', 'missing', {})).rejects.toThrow(NotFoundException);
     });
+
+    it('sets taxTypeId when the cache row\'s tax code resolves to a confirmed mapping', async () => {
+      prisma.externalAccountingProduct.findFirst.mockResolvedValue(row({ taxCode: 'OUTPUT2' }));
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.importAsNewProduct('dist-1', 'user-1', 'ext-1', {});
+
+      expect(taxTypes.resolveTaxTypeForCode).toHaveBeenCalledWith('conn-1', 'OUTPUT2');
+      expect(adminProducts.create).toHaveBeenCalledWith('dist-1', expect.objectContaining({ taxTypeId: 'tt-1' }));
+    });
+
+    it('leaves taxTypeId unset when the tax code has no confirmed mapping', async () => {
+      prisma.externalAccountingProduct.findFirst.mockResolvedValue(row({ taxCode: 'OUTPUT2' }));
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue(null);
+
+      await service.importAsNewProduct('dist-1', 'user-1', 'ext-1', {});
+
+      expect(adminProducts.create).toHaveBeenCalledWith('dist-1', expect.objectContaining({ taxTypeId: undefined }));
+    });
   });
 
   describe('confirmSuggestion', () => {
+    beforeEach(() => {
+      prisma.externalAccountingProduct.findFirst.mockResolvedValue(row());
+    });
+
     it('creates the mapping with the suggestion match method and marks the suggestion ACCEPTED', async () => {
       prisma.accountingProductMatchSuggestion.findFirst.mockResolvedValue({
         id: 'sugg-1',
@@ -392,12 +424,57 @@ describe('AccountingProductService', () => {
       prisma.accountingProductMatchSuggestion.findFirst.mockResolvedValue(null);
       await expect(service.confirmSuggestion('dist-1', 'user-1', 'sugg-x')).rejects.toThrow(NotFoundException);
     });
+
+    it('applies the resolved tax type when the target product has none set', async () => {
+      prisma.accountingProductMatchSuggestion.findFirst.mockResolvedValue({
+        id: 'sugg-1',
+        suggestedProductId: 'prod-1',
+        externalProductId: 'ext-1',
+        matchMethod: AccountingProductMatchMethod.SKU_EXACT,
+      });
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', taxType: null });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.confirmSuggestion('dist-1', 'user-1', 'sugg-1');
+
+      expect(adminProducts.update).toHaveBeenCalledWith('prod-1', 'dist-1', { taxTypeId: 'tt-1' });
+    });
+
+    it('throws a TAX_TYPE_CONFLICT 409 when the target product already has a different tax type, without confirmTaxTypeOverride', async () => {
+      prisma.accountingProductMatchSuggestion.findFirst.mockResolvedValue({
+        id: 'sugg-1',
+        suggestedProductId: 'prod-1',
+        externalProductId: 'ext-1',
+        matchMethod: AccountingProductMatchMethod.SKU_EXACT,
+      });
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', taxType: { id: 'tt-existing', name: 'Zero-rated' } });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await expect(service.confirmSuggestion('dist-1', 'user-1', 'sugg-1')).rejects.toThrow(ConflictException);
+      expect(prisma.productAccountingMapping.create).not.toHaveBeenCalled();
+      expect(adminProducts.update).not.toHaveBeenCalled();
+    });
+
+    it('overwrites the conflicting tax type when confirmTaxTypeOverride is true', async () => {
+      prisma.accountingProductMatchSuggestion.findFirst.mockResolvedValue({
+        id: 'sugg-1',
+        suggestedProductId: 'prod-1',
+        externalProductId: 'ext-1',
+        matchMethod: AccountingProductMatchMethod.SKU_EXACT,
+      });
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', taxType: { id: 'tt-existing', name: 'Zero-rated' } });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.confirmSuggestion('dist-1', 'user-1', 'sugg-1', true);
+
+      expect(adminProducts.update).toHaveBeenCalledWith('prod-1', 'dist-1', { taxTypeId: 'tt-1' });
+    });
   });
 
   describe('matchToExistingProduct', () => {
     beforeEach(() => {
       prisma.externalAccountingProduct.findFirst.mockResolvedValue(row());
-      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', distributorId: 'dist-1' });
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', distributorId: 'dist-1', taxType: null });
     });
 
     it('creates a MANUAL mapping and supersedes any open suggestions for the contact', async () => {
@@ -433,6 +510,41 @@ describe('AccountingProductService', () => {
       await expect(service.matchToExistingProduct('dist-1', 'user-1', 'ext-1', 'prod-1')).rejects.toThrow(
         ConflictException,
       );
+    });
+
+    it('applies the resolved tax type when the target product has none set', async () => {
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.matchToExistingProduct('dist-1', 'user-1', 'ext-1', 'prod-1');
+
+      expect(adminProducts.update).toHaveBeenCalledWith('prod-1', 'dist-1', { taxTypeId: 'tt-1' });
+    });
+
+    it('does not touch the tax type when the resolved code already matches the product\'s current tax type', async () => {
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', distributorId: 'dist-1', taxType: { id: 'tt-1', name: 'VAT' } });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.matchToExistingProduct('dist-1', 'user-1', 'ext-1', 'prod-1');
+
+      expect(adminProducts.update).not.toHaveBeenCalled();
+    });
+
+    it('throws a TAX_TYPE_CONFLICT 409 when the target product already has a different tax type, without confirmTaxTypeOverride', async () => {
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', distributorId: 'dist-1', taxType: { id: 'tt-existing', name: 'Zero-rated' } });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await expect(service.matchToExistingProduct('dist-1', 'user-1', 'ext-1', 'prod-1')).rejects.toThrow(ConflictException);
+      expect(prisma.productAccountingMapping.create).not.toHaveBeenCalled();
+      expect(adminProducts.update).not.toHaveBeenCalled();
+    });
+
+    it('overwrites the conflicting tax type when confirmTaxTypeOverride is true', async () => {
+      prisma.product.findFirst.mockResolvedValue({ id: 'prod-1', distributorId: 'dist-1', taxType: { id: 'tt-existing', name: 'Zero-rated' } });
+      taxTypes.resolveTaxTypeForCode.mockResolvedValue({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
+
+      await service.matchToExistingProduct('dist-1', 'user-1', 'ext-1', 'prod-1', true);
+
+      expect(adminProducts.update).toHaveBeenCalledWith('prod-1', 'dist-1', { taxTypeId: 'tt-1' });
     });
   });
 
