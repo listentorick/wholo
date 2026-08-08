@@ -94,14 +94,14 @@ pnpm --filter @wholo/portal test
 kubectl port-forward svc/wholo-postgresql 5432:5432
 
 # Terminal 2 — run integration tests
-DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo pnpm --filter @wholo/api test:integration
+DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo?connection_limit=10 pnpm --filter @wholo/api test:integration
 ```
 
 **Everything (unit + integration) in one shot:**
 ```bash
 # Start port-forward first, then:
 turbo test
-DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo pnpm --filter @wholo/api test:integration
+DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo?connection_limit=10 pnpm --filter @wholo/api test:integration
 ```
 
 ### NestJS unit test conventions
