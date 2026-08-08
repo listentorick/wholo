@@ -290,6 +290,27 @@ export class AccountingTaxTypeService {
     return { taxTypeId: mapping.taxType.id, taxTypeName: mapping.taxType.name };
   }
 
+  // Provider-neutral "confirmed Stocdup TaxType -> external tax code" lookup —
+  // the reverse of resolveTaxTypeForCode above (Phase 5 of the tax types PBI:
+  // resolving the tax code to send when exporting an invoice). Takes a
+  // connection id and a Stocdup taxTypeId, not anything provider-shaped —
+  // works identically for any AccountingProvider. Null whenever there's
+  // nothing confirmed to resolve to: no taxTypeId, or it hasn't been linked
+  // to an external tax rate on this connection.
+  async resolveExternalCodeForTaxType(
+    accountingConnectionId: string,
+    taxTypeId: string | null,
+  ): Promise<string | null> {
+    if (!taxTypeId) return null;
+
+    const mapping = await this.prisma.taxTypeAccountingMapping.findFirst({
+      where: { accountingConnectionId, taxTypeId, unlinkedAt: null },
+      include: { externalTaxType: { select: { taxType: true } } },
+    });
+
+    return mapping?.externalTaxType.taxType ?? null;
+  }
+
   private async createMapping(
     distributorId: string,
     accountingConnectionId: string,

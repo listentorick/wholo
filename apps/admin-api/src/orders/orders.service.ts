@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ApiClientService } from '../api-client/api-client.service';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AcceptOrderDto } from './dto/accept-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
@@ -39,8 +40,8 @@ export class OrdersService {
     );
   }
 
-  acceptOrder(orderId: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/accept`, token);
+  acceptOrder(orderId: string, distributorId: string, dto: AcceptOrderDto, token: string) {
+    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/accept`, token, dto);
   }
 
   rejectOrder(orderId: string, distributorId: string, dto: RejectOrderDto, token: string) {

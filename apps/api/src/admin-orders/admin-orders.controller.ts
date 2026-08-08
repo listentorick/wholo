@@ -18,6 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AdminOrdersService } from './admin-orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AcceptOrderDto } from './dto/accept-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
@@ -76,9 +77,10 @@ export class AdminOrdersController {
   acceptOrder(
     @Param('distributorId') distributorId: string,
     @Param('id') id: string,
+    @Body() dto: AcceptOrderDto,
     @Req() req: RequestWithUser,
   ) {
-    return this.service.acceptOrder(id, distributorId, req.user.sub);
+    return this.service.acceptOrder(id, distributorId, req.user.sub, dto.confirmUnmappedTaxTypes);
   }
 
   @Post('orders/:id/reject')

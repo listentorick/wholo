@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, UnprocessableEntityException, BadRequestException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnprocessableEntityException, BadRequestException } from '@nestjs/common';
 import { OrderStatus, OrderLineStatus, AcceptedByActorType, ActorType } from '@prisma/client';
 import { AdminOrdersService } from './admin-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -13,7 +13,10 @@ const mockPrisma = {
     count: jest.fn(),
     update: jest.fn(),
   },
-  orderLine: { updateMany: jest.fn() },
+  orderLine: { updateMany: jest.fn(), findMany: jest.fn() },
+  accountingConnection: { findFirst: jest.fn() },
+  taxTypeAccountingMapping: { findMany: jest.fn() },
+  taxType: { findMany: jest.fn() },
   user: { findUnique: jest.fn() },
   auditLog: { findMany: jest.fn(), count: jest.fn() },
   $transaction: jest.fn(),
@@ -282,6 +285,7 @@ describe('AdminOrdersService', () => {
       const order = makeOrder({ status: OrderStatus.SUBMITTED });
       const accepted = makeOrder({ status: OrderStatus.ACCEPTED, acceptedByUserId: 'user-1' });
       mockPrisma.order.findFirst.mockResolvedValue(order);
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue(null);
       mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
       mockPrisma.order.update.mockResolvedValue(accepted);
       mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
@@ -326,6 +330,63 @@ describe('AdminOrdersService', () => {
       await expect(service.acceptOrder('order-1', 'dist-1', 'user-1')).rejects.toThrow(
         UnprocessableEntityException,
       );
+    });
+
+    describe('tax type mapping gate', () => {
+      const setUpAcceptableOrder = () => {
+        const order = makeOrder({ status: OrderStatus.SUBMITTED });
+        mockPrisma.order.findFirst.mockResolvedValue(order);
+        mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+        mockPrisma.order.update.mockResolvedValue(makeOrder({ status: OrderStatus.ACCEPTED }));
+        mockPrisma.orderLine.updateMany.mockResolvedValue({ count: 0 });
+        mockOutbox.writeEvent.mockResolvedValue(undefined);
+        mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' });
+      };
+
+      it('skips the mapping check and accepts when the distributor has no active accounting connection', async () => {
+        setUpAcceptableOrder();
+        mockPrisma.accountingConnection.findFirst.mockResolvedValue(null);
+
+        const result = await service.acceptOrder('order-1', 'dist-1', 'user-1');
+
+        expect(result.status).toBe(OrderStatus.ACCEPTED);
+        expect(mockPrisma.orderLine.findMany).not.toHaveBeenCalled();
+      });
+
+      it('accepts when all the order tax types have confirmed mappings', async () => {
+        setUpAcceptableOrder();
+        mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
+        mockPrisma.orderLine.findMany.mockResolvedValue([{ taxTypeId: 'tt-1' }]);
+        mockPrisma.taxTypeAccountingMapping.findMany.mockResolvedValue([{ taxTypeId: 'tt-1' }]);
+
+        const result = await service.acceptOrder('order-1', 'dist-1', 'user-1');
+
+        expect(result.status).toBe(OrderStatus.ACCEPTED);
+        expect(mockPrisma.order.update).toHaveBeenCalled();
+      });
+
+      it('throws a TAX_TYPE_UNMAPPED 409 when a tax type has no confirmed mapping, without confirmUnmappedTaxTypes', async () => {
+        setUpAcceptableOrder();
+        mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
+        mockPrisma.orderLine.findMany.mockResolvedValue([{ taxTypeId: 'tt-1' }]);
+        mockPrisma.taxTypeAccountingMapping.findMany.mockResolvedValue([]);
+        mockPrisma.taxType.findMany.mockResolvedValue([{ name: 'Zero-rated' }]);
+
+        await expect(service.acceptOrder('order-1', 'dist-1', 'user-1')).rejects.toThrow(ConflictException);
+        expect(mockPrisma.order.update).not.toHaveBeenCalled();
+      });
+
+      it('accepts anyway when confirmUnmappedTaxTypes is true', async () => {
+        setUpAcceptableOrder();
+        mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
+        mockPrisma.orderLine.findMany.mockResolvedValue([{ taxTypeId: 'tt-1' }]);
+        mockPrisma.taxTypeAccountingMapping.findMany.mockResolvedValue([]);
+
+        const result = await service.acceptOrder('order-1', 'dist-1', 'user-1', true);
+
+        expect(result.status).toBe(OrderStatus.ACCEPTED);
+        expect(mockPrisma.taxType.findMany).not.toHaveBeenCalled();
+      });
     });
   });
 

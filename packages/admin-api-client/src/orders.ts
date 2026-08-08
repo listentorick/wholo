@@ -2,6 +2,7 @@ import type {
   Order,
   OrderSummary,
   OrderListParams,
+  AcceptOrderRequest,
   RejectOrderRequest,
   CancelOrderRequest,
   PaginatedResponse,
@@ -42,10 +43,10 @@ export const adminOrdersApi = {
     });
   },
 
-  acceptOrder(orderId: string, token: string): Promise<Order> {
+  acceptOrder(orderId: string, token: string, body?: AcceptOrderRequest): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}/accept`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(body ?? {}),
       token,
     });
   },

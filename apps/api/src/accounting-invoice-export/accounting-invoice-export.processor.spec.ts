@@ -8,6 +8,7 @@ import {
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
+import { AccountingTaxTypeService } from '../accounting/accounting-tax-type.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
@@ -40,6 +41,7 @@ const makeOrder = (overrides: Record<string, unknown> = {}) => ({
       quantityOrdered: 6,
       unitPriceSnapshot: new Prisma.Decimal('12.34'),
       status: OrderLineStatus.ACCEPTED as OrderLineStatus,
+      taxTypeId: 'tt-1',
     },
     {
       id: 'line-2',
@@ -49,6 +51,7 @@ const makeOrder = (overrides: Record<string, unknown> = {}) => ({
       quantityOrdered: 2,
       unitPriceSnapshot: new Prisma.Decimal('9.9'),
       status: OrderLineStatus.ACCEPTED as OrderLineStatus,
+      taxTypeId: 'tt-2',
     },
   ],
   ...overrides,
@@ -100,6 +103,7 @@ describe('AccountingInvoiceExportProcessor', () => {
     $transaction: jest.Mock;
   };
   let connectionService: { getValidTokenSet: jest.Mock };
+  let accountingTaxTypes: { resolveExternalCodeForTaxType: jest.Mock };
   let adapter: { hasInvoiceCreationScope: jest.Mock; createInvoice: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
   let audit: { record: jest.Mock };
@@ -128,7 +132,7 @@ describe('AccountingInvoiceExportProcessor', () => {
         findMany: jest.fn().mockResolvedValue([
           {
             productId: 'prod-1',
-            externalProduct: { externalProductCode: 'CAB-SAUV-001', taxCode: 'OUTPUT2', accountCode: '200' },
+            externalProduct: { externalProductCode: 'CAB-SAUV-001', accountCode: '200' },
           },
         ]),
       },
@@ -136,6 +140,13 @@ describe('AccountingInvoiceExportProcessor', () => {
     };
     prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
     connectionService = { getValidTokenSet: jest.fn().mockResolvedValue(tokenSet) };
+    accountingTaxTypes = {
+      resolveExternalCodeForTaxType: jest
+        .fn()
+        .mockImplementation((_connectionId: string, taxTypeId: string) =>
+          Promise.resolve(taxTypeId === 'tt-1' ? 'OUTPUT2' : null),
+        ),
+    };
     adapter = {
       hasInvoiceCreationScope: jest.fn().mockReturnValue(true),
       createInvoice: jest.fn().mockResolvedValue({
@@ -151,6 +162,7 @@ describe('AccountingInvoiceExportProcessor', () => {
     processor = new AccountingInvoiceExportProcessor(
       prisma as unknown as PrismaService,
       connectionService as unknown as AccountingConnectionService,
+      accountingTaxTypes as unknown as AccountingTaxTypeService,
       { get: jest.fn().mockReturnValue(adapter) } as unknown as AccountingAdapterRegistry,
       outbox as unknown as OutboxService,
       audit as unknown as AuditService,
@@ -288,6 +300,49 @@ describe('AccountingInvoiceExportProcessor', () => {
       await processor.process(makeJob());
 
       expect(adapter.createInvoice.mock.calls[0][2].lines).toHaveLength(1);
+    });
+  });
+
+  describe('tax code resolution', () => {
+    it('omits taxCode for a line whose tax type has no confirmed mapping, without failing the export', async () => {
+      accountingTaxTypes.resolveExternalCodeForTaxType.mockResolvedValue(null);
+
+      await processor.process(makeJob());
+
+      expect(adapter.createInvoice.mock.calls[0][2].lines[0]).not.toHaveProperty('taxCode');
+      expect(failedUpdate()).toBeUndefined();
+      expect(completedUpdate()).toBeDefined();
+    });
+
+    it('resolves the tax code from the order line taxTypeId, not the product cached tax code', async () => {
+      await processor.process(makeJob());
+
+      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('conn-1', 'tt-1');
+      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('conn-1', 'tt-2');
+      expect(adapter.createInvoice.mock.calls[0][2].lines[0].taxCode).toBe('OUTPUT2');
+    });
+
+    it('caches the resolver call per distinct taxTypeId within one export', async () => {
+      const order = makeOrder();
+      order.lines[1] = { ...order.lines[1], taxTypeId: 'tt-1' };
+      prisma.order.findUnique.mockResolvedValue(order);
+
+      await processor.process(makeJob());
+
+      const callsForTt1 = accountingTaxTypes.resolveExternalCodeForTaxType.mock.calls.filter(
+        (c) => c[1] === 'tt-1',
+      );
+      expect(callsForTt1).toHaveLength(1);
+    });
+
+    it('resolves independently per distinct taxTypeId', async () => {
+      await processor.process(makeJob());
+
+      const distinctIds = new Set(
+        accountingTaxTypes.resolveExternalCodeForTaxType.mock.calls.map((c) => c[1]),
+      );
+      expect(distinctIds).toEqual(new Set(['tt-1', 'tt-2']));
+      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledTimes(2);
     });
   });
 

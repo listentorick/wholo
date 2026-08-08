@@ -1,10 +1,12 @@
 import {
+  ConflictException,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
   BadRequestException,
 } from '@nestjs/common';
 import {
+  AccountingConnectionStatus,
   OrderStatus,
   OrderLineStatus,
   AcceptedByActorType,
@@ -312,7 +314,12 @@ export class AdminOrdersService {
     };
   }
 
-  async acceptOrder(orderId: string, distributorId: string, acceptedByUserId: string) {
+  async acceptOrder(
+    orderId: string,
+    distributorId: string,
+    acceptedByUserId: string,
+    confirmUnmappedTaxTypes = false,
+  ) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, distributorId },
       select: { id: true, status: true, traderCustomerId: true, orderNumber: true },
@@ -321,6 +328,8 @@ export class AdminOrdersService {
     if (order.status !== OrderStatus.SUBMITTED) {
       throw new UnprocessableEntityException('Only submitted orders can be accepted');
     }
+
+    await this.assertTaxTypesMappedOrConfirmed(orderId, distributorId, confirmUnmappedTaxTypes);
 
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -366,6 +375,52 @@ export class AdminOrdersService {
     });
 
     return this.formatOrder(updated);
+  }
+
+  // Synchronous, order-accept-time gate: if the distributor has an active
+  // accounting connection and any of the order's tax types has no confirmed
+  // mapping to it, ask the accepting admin to confirm before proceeding —
+  // otherwise the invoice export processor will silently omit taxCode on
+  // that line (AccountingInvoiceExportProcessor), applying the connected
+  // account's default tax rate. Same one-time-gate shape as
+  // AccountingProductService.resolveTaxTypeForMatch's confirmTaxTypeOverride:
+  // nothing is persisted, this is not stored state.
+  private async assertTaxTypesMappedOrConfirmed(
+    orderId: string,
+    distributorId: string,
+    confirmUnmappedTaxTypes: boolean,
+  ): Promise<void> {
+    const connection = await this.prisma.accountingConnection.findFirst({
+      where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+    });
+    if (!connection) return; // not opted into accounting export — nothing to map against
+
+    const lines = await this.prisma.orderLine.findMany({
+      where: { orderId, taxTypeId: { not: null } },
+      select: { taxTypeId: true },
+      distinct: ['taxTypeId'],
+    });
+    const taxTypeIds = lines.map((l) => l.taxTypeId as string);
+    if (taxTypeIds.length === 0) return;
+
+    const mapped = await this.prisma.taxTypeAccountingMapping.findMany({
+      where: { accountingConnectionId: connection.id, taxTypeId: { in: taxTypeIds }, unlinkedAt: null },
+      select: { taxTypeId: true },
+    });
+    const mappedIds = new Set(mapped.map((m) => m.taxTypeId));
+    const unmappedIds = taxTypeIds.filter((id) => !mappedIds.has(id));
+    if (unmappedIds.length === 0 || confirmUnmappedTaxTypes) return;
+
+    const unmapped = await this.prisma.taxType.findMany({
+      where: { id: { in: unmappedIds } },
+      select: { name: true },
+    });
+    throw new ConflictException({
+      message: `The following tax types used on this order are not linked to an accounting tax code (${unmapped
+        .map((t) => t.name)
+        .join(', ')}). If you accept, the invoice will use the accounting system's default tax rate for those lines. Confirm to proceed anyway.`,
+      error: 'TAX_TYPE_UNMAPPED',
+    });
   }
 
   async rejectOrder(

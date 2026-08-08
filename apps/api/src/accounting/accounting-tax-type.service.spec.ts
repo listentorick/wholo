@@ -382,4 +382,30 @@ describe('AccountingTaxTypeService', () => {
       expect(result).toEqual({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
     });
   });
+
+  describe('resolveExternalCodeForTaxType', () => {
+    it('returns null without querying when taxTypeId is null', async () => {
+      const result = await service.resolveExternalCodeForTaxType('conn-1', null);
+      expect(result).toBeNull();
+      expect(prisma.taxTypeAccountingMapping.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('returns null when the tax type has no confirmed mapping on this connection', async () => {
+      prisma.taxTypeAccountingMapping.findFirst.mockResolvedValue(null);
+      const result = await service.resolveExternalCodeForTaxType('conn-1', 'tt-1');
+      expect(result).toBeNull();
+      expect(prisma.taxTypeAccountingMapping.findFirst).toHaveBeenCalledWith({
+        where: { accountingConnectionId: 'conn-1', taxTypeId: 'tt-1', unlinkedAt: null },
+        include: { externalTaxType: { select: { taxType: true } } },
+      });
+    });
+
+    it('returns the external code when a confirmed mapping exists', async () => {
+      prisma.taxTypeAccountingMapping.findFirst.mockResolvedValue({
+        externalTaxType: { taxType: 'OUTPUT2' },
+      });
+      const result = await service.resolveExternalCodeForTaxType('conn-1', 'tt-1');
+      expect(result).toBe('OUTPUT2');
+    });
+  });
 });

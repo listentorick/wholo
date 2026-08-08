@@ -53,6 +53,29 @@ describe('ApiClientService (admin-api)', () => {
     });
   });
 
+  it('preserves the upstream problem title as the HttpException error discriminator', async () => {
+    // Regression: title was silently dropped, so downstream ProblemDetailsFilter
+    // fell back to using the message as the title — callers checking
+    // problem.title === 'TAX_TYPE_CONFLICT' (etc.) never matched through the
+    // real admin-api hop.
+    fetchMock.mockResolvedValue(
+      makeResponse(409, '{"title":"TAX_TYPE_UNMAPPED","detail":"Some tax types are unmapped."}'),
+    );
+
+    try {
+      await service.post('/things', 'token', {});
+      throw new Error('expected post to reject');
+    } catch (err) {
+      expect(err).toBeInstanceOf(HttpException);
+      const httpErr = err as HttpException;
+      expect(httpErr.getStatus()).toBe(409);
+      expect(httpErr.getResponse()).toEqual({
+        message: 'Some tax types are unmapped.',
+        error: 'TAX_TYPE_UNMAPPED',
+      });
+    }
+  });
+
   it('throws HttpException with a fallback message on a 4xx with an empty body, not a parse crash', async () => {
     fetchMock.mockResolvedValue(makeResponse(404, ''));
 

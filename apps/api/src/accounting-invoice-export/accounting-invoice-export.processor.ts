@@ -15,6 +15,7 @@ import {
 import { Job } from 'bullmq';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
+import { AccountingTaxTypeService } from '../accounting/accounting-tax-type.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
   AccountingInvoiceLineRequest,
@@ -55,6 +56,7 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accountingConnectionService: AccountingConnectionService,
+    private readonly accountingTaxTypes: AccountingTaxTypeService,
     private readonly adapters: AccountingAdapterRegistry,
     private readonly outbox: OutboxService,
     private readonly audit: AuditService,
@@ -221,9 +223,16 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     }
 
     // Product mappings are best-effort: mapped lines carry the external item
-    // code and its tax/account treatment; unmapped lines still invoice from
-    // the Wholo description alone. Wholo always sends quantity + unit price —
-    // the provider's item defaults never determine the price.
+    // code and account treatment; unmapped lines still invoice from the
+    // Wholo description alone. Wholo always sends quantity + unit price —
+    // the provider's item defaults never determine the price. Tax code is
+    // resolved separately below, from the order line's own Stocdup TaxType
+    // (not the product's cached external tax code) — see
+    // AccountingTaxTypeService.resolveExternalCodeForTaxType. The tax-type
+    // mapping gate at order-accept time (AdminOrdersService) is what makes
+    // an unresolved tax type here a safe, silent best-effort fallback rather
+    // than a surprise: the accepting admin either confirmed it up front, or
+    // there was never an accounting connection to map against.
     const productMappings = await this.prisma.productAccountingMapping.findMany({
       where: {
         accountingConnectionId: connection.id,
@@ -234,21 +243,42 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
     });
     const mappingByProductId = new Map(productMappings.map((m) => [m.productId, m]));
 
-    const lines: AccountingInvoiceLineRequest[] = invoiceableLines.map((line) => {
-      const mapping = mappingByProductId.get(line.productId);
-      const external = mapping?.externalProduct;
-      const description = external?.externalProductCode
-        ? line.productNameSnapshot
-        : [line.productNameSnapshot, line.skuSnapshot].filter(Boolean).join(' — ');
-      return {
-        description,
-        quantity: line.quantityOrdered,
-        unitPrice: line.unitPriceSnapshot.toFixed(2),
-        ...(external?.externalProductCode ? { externalItemCode: external.externalProductCode } : {}),
-        ...(external?.taxCode ? { taxCode: external.taxCode } : {}),
-        ...(external?.accountCode ? { accountCode: external.accountCode } : {}),
-      };
-    });
+    // Cache the in-flight promise, not the resolved value: invoiceableLines
+    // are mapped through Promise.all, so two lines sharing a taxTypeId call
+    // resolveTaxCode in the same tick, before either has awaited anything.
+    // Caching the promise (set synchronously, before any await) is what
+    // actually dedupes that — caching the awaited value would only write the
+    // cache after the first call's await already let the second call race
+    // past the "already cached" check.
+    const taxCodeCache = new Map<string, Promise<string | null>>();
+    const resolveTaxCode = (taxTypeId: string | null): Promise<string | null> => {
+      if (!taxTypeId) return Promise.resolve(null);
+      let pending = taxCodeCache.get(taxTypeId);
+      if (!pending) {
+        pending = this.accountingTaxTypes.resolveExternalCodeForTaxType(connection.id, taxTypeId);
+        taxCodeCache.set(taxTypeId, pending);
+      }
+      return pending;
+    };
+
+    const lines: AccountingInvoiceLineRequest[] = await Promise.all(
+      invoiceableLines.map(async (line) => {
+        const mapping = mappingByProductId.get(line.productId);
+        const external = mapping?.externalProduct;
+        const description = external?.externalProductCode
+          ? line.productNameSnapshot
+          : [line.productNameSnapshot, line.skuSnapshot].filter(Boolean).join(' — ');
+        const taxCode = await resolveTaxCode(line.taxTypeId);
+        return {
+          description,
+          quantity: line.quantityOrdered,
+          unitPrice: line.unitPriceSnapshot.toFixed(2),
+          ...(external?.externalProductCode ? { externalItemCode: external.externalProductCode } : {}),
+          ...(taxCode ? { taxCode } : {}),
+          ...(external?.accountCode ? { accountCode: external.accountCode } : {}),
+        };
+      }),
+    );
 
     const request: AccountingInvoiceRequest = {
       externalContactId: customerMapping.externalContact.externalContactId,

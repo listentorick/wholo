@@ -45,9 +45,11 @@ export class ApiClientService {
     }
 
     if (!res.ok) {
-      const d = data as { detail?: unknown; message?: unknown } | undefined;
+      const d = data as { title?: unknown; detail?: unknown; message?: unknown } | undefined;
       const raw = d?.detail ?? d?.message ?? `Request failed: ${res.status}`;
-      throw new HttpException(Array.isArray(raw) ? raw.join(', ') : (raw as string), res.status);
+      const message = Array.isArray(raw) ? raw.join(', ') : (raw as string);
+      const title = typeof d?.title === 'string' ? d.title : undefined;
+      throw new HttpException(title ? { message, error: title } : message, res.status);
     }
     return data as T;
   }

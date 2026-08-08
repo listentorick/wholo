@@ -9,7 +9,17 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrganisationType, OrderStatus, OrderLineStatus, Prisma, Role } from '@prisma/client';
+import {
+  AccountingConnectionStatus,
+  AccountingProvider,
+  AccountingTaxTypeMatchMethod,
+  OrganisationType,
+  OrderStatus,
+  OrderLineStatus,
+  Prisma,
+  Role,
+  TaxClassification,
+} from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
@@ -73,6 +83,11 @@ describe('Admin Orders (integration)', () => {
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxTypeAccountingMapping.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.externalAccountingTaxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: USER_A } });
     await prisma.user.deleteMany({ where: { id: USER_A } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -93,6 +108,11 @@ describe('Admin Orders (integration)', () => {
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxTypeAccountingMapping.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.externalAccountingTaxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   const createOrder = async (distributorId: string, status: OrderStatus = OrderStatus.SUBMITTED) => {
@@ -115,6 +135,45 @@ describe('Admin Orders (integration)', () => {
         submittedAt: new Date(),
       },
     });
+  };
+
+  const createConnection = (distributorId: string) =>
+    prisma.accountingConnection.create({
+      data: {
+        distributorId,
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationId: `tenant-${distributorId}`,
+        externalOrganisationName: 'Acme Wines',
+        scopes: 'openid accounting.invoices',
+        encryptedCredentialData: 'irrelevant-for-this-test',
+        connectedByUserId: USER_A,
+        connectedAt: new Date(),
+      },
+    });
+
+  const createOrderWithTaxLine = async (distributorId: string, taxTypeId: string | null) => {
+    const order = await createOrder(distributorId, OrderStatus.SUBMITTED);
+    const product = await prisma.product.create({
+      data: { distributorId, name: 'Test Wine', sku: `TEST-ORD-SKU-${order.id}` },
+    });
+    await prisma.orderLine.create({
+      data: {
+        orderId: order.id,
+        distributorId,
+        traderCustomerId: distributorId,
+        productId: product.id,
+        productNameSnapshot: product.name,
+        quantityOrdered: 1,
+        unitPriceSnapshot: new Prisma.Decimal('10.00'),
+        subtotalAmount: new Prisma.Decimal('10.00'),
+        taxAmount: new Prisma.Decimal('2.00'),
+        totalAmount: new Prisma.Decimal('12.00'),
+        taxTypeId,
+        status: OrderLineStatus.SUBMITTED,
+      },
+    });
+    return order;
   };
 
   // ── GET /admin/distributors/:distributorId/orders ──────────────────────────
@@ -196,6 +255,79 @@ describe('Admin Orders (integration)', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(422);
+    });
+
+    describe('tax type mapping gate', () => {
+      it('returns 409 TAX_TYPE_UNMAPPED when the distributor has a connected accounting integration and the order tax type is not mapped', async () => {
+        await createConnection(DIST_A);
+        const taxType = await prisma.taxType.create({
+          data: { distributorId: DIST_A, name: 'Zero-rated', classification: TaxClassification.ZERO_RATED, ratePercentage: '0.00', active: true },
+        });
+        const order = await createOrderWithTaxLine(DIST_A, taxType.id);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.title).toBe('TAX_TYPE_UNMAPPED');
+
+        const inDb = await prisma.order.findUnique({ where: { id: order.id } });
+        expect(inDb?.status).toBe(OrderStatus.SUBMITTED);
+      });
+
+      it('accepts when confirmUnmappedTaxTypes is true', async () => {
+        await createConnection(DIST_A);
+        const taxType = await prisma.taxType.create({
+          data: { distributorId: DIST_A, name: 'Zero-rated', classification: TaxClassification.ZERO_RATED, ratePercentage: '0.00', active: true },
+        });
+        const order = await createOrderWithTaxLine(DIST_A, taxType.id);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .set('Authorization', `Bearer ${token}`)
+          .send({ confirmUnmappedTaxTypes: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe(OrderStatus.ACCEPTED);
+      });
+
+      it('accepts without a warning when the tax type has a confirmed mapping', async () => {
+        const connection = await createConnection(DIST_A);
+        const taxType = await prisma.taxType.create({
+          data: { distributorId: DIST_A, name: 'Standard rate', classification: TaxClassification.STANDARD, ratePercentage: '20.00', active: true },
+        });
+        const external = await prisma.externalAccountingTaxType.create({
+          data: {
+            distributorId: DIST_A,
+            accountingConnectionId: connection.id,
+            provider: AccountingProvider.XERO,
+            taxType: 'OUTPUT2',
+            displayName: 'Standard rate',
+            ratePercentage: '20.0000',
+            lastSyncedAt: new Date(),
+            rawProviderData: {},
+          },
+        });
+        await prisma.taxTypeAccountingMapping.create({
+          data: {
+            distributorId: DIST_A,
+            accountingConnectionId: connection.id,
+            taxTypeId: taxType.id,
+            externalTaxTypeId: external.id,
+            matchMethod: AccountingTaxTypeMatchMethod.MANUAL,
+            linkedByUserId: USER_A,
+          },
+        });
+        const order = await createOrderWithTaxLine(DIST_A, taxType.id);
+
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .set('Authorization', `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe(OrderStatus.ACCEPTED);
+      });
     });
   });
 

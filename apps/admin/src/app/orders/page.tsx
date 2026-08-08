@@ -15,7 +15,8 @@ import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
-import { adminOrdersApi } from '@wholo/admin-api-client';
+import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
+import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { OrderSummary, OrderListParams } from '@wholo/types';
 import { OrderStatus } from '@wholo/types';
 
@@ -145,15 +146,23 @@ interface QuickActionsProps {
 function QuickActions({ order, token, onUpdate }: QuickActionsProps) {
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [unmappedTaxDetail, setUnmappedTaxDetail] = useState<string | null>(null);
 
-  const handleAccept = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleAccept = async (e?: React.MouseEvent, confirmUnmappedTaxTypes = false) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (accepting) return;
     setAccepting(true);
     try {
-      const updated = await adminOrdersApi.acceptOrder(order.id, token);
+      const updated = await adminOrdersApi.acceptOrder(order.id, token, { confirmUnmappedTaxTypes });
       onUpdate({ ...order, status: updated.status, acceptedAt: updated.acceptedAt });
+      setUnmappedTaxDetail(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_UNMAPPED') {
+        setUnmappedTaxDetail(err.problem.detail ?? 'One or more tax types are unmapped.');
+        return;
+      }
+      throw err;
     } finally {
       setAccepting(false);
     }
@@ -192,6 +201,14 @@ function QuickActions({ order, token, onUpdate }: QuickActionsProps) {
       >
         {rejecting ? '…' : 'Reject'}
       </button>
+      {unmappedTaxDetail && (
+        <TaxTypeUnmappedWarningModal
+          detail={unmappedTaxDetail}
+          submitting={accepting}
+          onCancel={() => setUnmappedTaxDetail(null)}
+          onConfirm={() => handleAccept(undefined, true)}
+        />
+      )}
     </div>
   );
 }

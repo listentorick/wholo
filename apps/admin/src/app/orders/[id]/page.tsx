@@ -11,7 +11,8 @@ import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
 import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
-import { adminOrdersApi } from '@wholo/admin-api-client';
+import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
+import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { Order, OrderLine, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
 import { OrderStatus, AcceptedByActorType, ActorType } from '@wholo/types';
 import { CLASSIFICATION_LABELS } from '@/lib/tax-classification-labels';
@@ -211,6 +212,7 @@ export default function OrderDetailPage() {
 
   const [accepting, setAccepting] = useState(false);
   const [showAcceptModal, setShowAcceptModal] = useState(false);
+  const [unmappedTaxDetail, setUnmappedTaxDetail] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   // Bumped after every successful accept/reject/cancel to force the audit
@@ -234,13 +236,21 @@ export default function OrderDetailPage() {
     deps: [auditRefreshKey],
   });
 
-  const handleAccept = async () => {
+  const handleAccept = async (confirmUnmappedTaxTypes = false) => {
     if (!accessToken || accepting) return;
     setAccepting(true);
     try {
-      const updated = await adminOrdersApi.acceptOrder(orderId, accessToken);
+      const updated = await adminOrdersApi.acceptOrder(orderId, accessToken, { confirmUnmappedTaxTypes });
       setOrder(updated);
       setAuditRefreshKey((k) => k + 1);
+      setShowAcceptModal(false);
+      setUnmappedTaxDetail(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_UNMAPPED') {
+        setUnmappedTaxDetail(err.problem.detail ?? 'One or more tax types are unmapped.');
+        return;
+      }
+      throw err;
     } finally {
       setAccepting(false);
     }
@@ -326,8 +336,16 @@ export default function OrderDetailPage() {
           description="This marks the order as accepted and notifies the customer — it moves into fulfilment."
           confirmLabel="Yes, accept"
           busy={accepting}
-          onConfirm={handleAccept}
+          onConfirm={() => handleAccept()}
           onCancel={() => setShowAcceptModal(false)}
+        />
+      )}
+      {unmappedTaxDetail && (
+        <TaxTypeUnmappedWarningModal
+          detail={unmappedTaxDetail}
+          submitting={accepting}
+          onCancel={() => setUnmappedTaxDetail(null)}
+          onConfirm={() => handleAccept(true)}
         />
       )}
       {showRejectModal && (

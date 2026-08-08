@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrdersService } from './orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
+import { AcceptOrderDto } from './dto/accept-order.dto';
 import { RejectOrderDto } from './dto/reject-order.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
@@ -31,9 +32,9 @@ export class OrdersController {
   }
 
   @Post(':id/accept')
-  acceptOrder(@Param('id') id: string, @Req() req: Request) {
+  acceptOrder(@Param('id') id: string, @Body() dto: AcceptOrderDto, @Req() req: Request) {
     const { organisationId, token } = req['user'] as { organisationId: string; token: string };
-    return this.ordersService.acceptOrder(id, organisationId, token);
+    return this.ordersService.acceptOrder(id, organisationId, dto, token);
   }
 
   @Post(':id/reject')

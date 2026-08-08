@@ -273,6 +273,10 @@ export interface SubmitOrderRequest {
   requestedDeliveryDate?: string;
 }
 
+export interface AcceptOrderRequest {
+  confirmUnmappedTaxTypes?: boolean;
+}
+
 export interface RejectOrderRequest {
   reason: string;
 }
