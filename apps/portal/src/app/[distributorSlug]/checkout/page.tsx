@@ -9,6 +9,7 @@ import { useDistributor } from '@/lib/distributor-context';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { MinimumOrderProgress } from '@/components/MinimumOrderProgress';
+import { ClearCartConfirmationModal } from '@/components/ClearCartConfirmationModal';
 import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
@@ -30,6 +31,7 @@ export default function CheckoutPage() {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [clearCartConfirmOpen, setClearCartConfirmOpen] = useState(false);
 
   const [availableDates, setAvailableDates] = useState<AvailableDeliveryDate[]>([]);
   const [loadingDates, setLoadingDates] = useState(true);
@@ -111,8 +113,9 @@ export default function CheckoutPage() {
     syncItem(productId, 0);
   };
 
-  const handleClearCart = () => {
-    items.forEach((item) => syncItem(item.productId, 0));
+  const handleClearCart = async () => {
+    await Promise.all(items.map((item) => syncItem(item.productId, 0)));
+    setClearCartConfirmOpen(false);
   };
 
   const freight = 0;
@@ -140,9 +143,9 @@ export default function CheckoutPage() {
         <PageShell center className="co-empty px-8 text-center gap-6">
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            border: '1.5px solid #E5E7EB',
+            border: '1.5px solid hsl(var(--color-border))',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#D5D9E0',
+            color: 'hsl(var(--color-border))',
           }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.25} style={{ width: 26, height: 26 }}>
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
@@ -151,8 +154,8 @@ export default function CheckoutPage() {
             </svg>
           </div>
           <div className="flex flex-col gap-1.5">
-            <p style={{ fontSize: 15, color: '#1A1A1A', fontWeight: 400 }}>Your cart is empty</p>
-            <p style={{ fontSize: 13, color: '#9CA3AF' }}>Add products to get started</p>
+            <p style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 400 }}>Your cart is empty</p>
+            <p style={{ fontSize: 13, color: 'hsl(var(--color-muted))' }}>Add products to get started</p>
           </div>
           <button
             onClick={() => router.push(`/${distributorSlug}/products`)}
@@ -185,24 +188,31 @@ export default function CheckoutPage() {
 
         .co-stepper-btn {
           width: 28px; height: 28px; border-radius: 50%;
-          border: 1.5px solid #D5D9E0; background: transparent;
+          border: 1.5px solid hsl(var(--color-border)); background: transparent;
           cursor: pointer; display: flex; align-items: center; justify-content: center;
-          color: #6B7280; transition: border-color 0.15s, color 0.15s;
+          color: hsl(var(--color-muted)); transition: border-color 0.15s, color 0.15s;
           flex-shrink: 0; padding: 0; font-family: inherit;
         }
         .co-stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
         .co-stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
         .co-stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+        .co-stepper-btn:focus-visible {
+          outline: none; border-color: hsl(var(--color-primary));
+          box-shadow: 0 0 0 2px hsl(var(--color-primary));
+        }
 
         .co-trash-btn {
-          width: 30px; height: 30px; border-radius: 4px;
+          width: 30px; height: 30px; border-radius: 0;
           border: none; background: transparent; cursor: pointer;
           display: flex; align-items: center; justify-content: center;
-          color: #D5D9E0; transition: color 0.15s;
+          color: hsl(var(--color-border)); transition: color 0.15s;
           flex-shrink: 0; padding: 0; font-family: inherit;
         }
-        .co-trash-btn:hover { color: #EF4444; }
+        .co-trash-btn:hover { color: #DC2626; }
         .co-trash-btn:disabled { cursor: not-allowed; opacity: 0.35; }
+        .co-trash-btn:focus-visible {
+          outline: none; box-shadow: 0 0 0 2px hsl(var(--color-primary));
+        }
 
         .co-expand-btn {
           display: flex; align-items: center; gap: 6px;
@@ -213,39 +223,47 @@ export default function CheckoutPage() {
         }
 
         .co-expand-content {
+          display: grid;
+          grid-template-rows: 0fr;
           overflow: hidden;
-          transition: max-height 0.25s ease, opacity 0.2s ease;
+          opacity: 0;
+          transition: grid-template-rows 0.25s ease, opacity 0.2s ease;
         }
-        .co-expand-content.open   { max-height: 80px; opacity: 1; }
-        .co-expand-content.closed { max-height: 0;    opacity: 0; }
+        .co-expand-content > div { min-height: 0; overflow: hidden; }
+        .co-expand-content.open   { grid-template-rows: 1fr; opacity: 1; }
+        .co-expand-content.closed { grid-template-rows: 0fr; opacity: 0; }
 
         .co-field {
           width: 100%; border: none;
-          border-bottom: 1.5px solid #E5E7EB;
+          border-bottom: 1.5px solid hsl(var(--color-border));
           background: transparent; padding: 8px 0 10px;
-          font-size: 14px; color: #1A1A1A; outline: none;
+          font-size: 14px; color: hsl(var(--color-text)); outline: none;
           font-family: inherit; caret-color: hsl(var(--color-primary));
         }
-        .co-field::placeholder { color: #C4B5A8; }
-        .co-field:focus { border-bottom-color: hsl(var(--color-primary)); }
+        .co-field::placeholder { color: hsl(var(--color-muted) / 0.55); }
+        .co-field:focus {
+          border-bottom-color: hsl(var(--color-primary));
+          box-shadow: 0 2px 0 0 hsl(var(--color-primary));
+        }
+        .co-field:focus-visible { outline: 2px solid hsl(var(--color-primary)); outline-offset: 2px; }
 
         .co-place-order {
-          width: 100%; border: 1.5px solid hsl(var(--color-primary)); background: transparent;
-          color: hsl(var(--color-primary)); padding: 15px 20px; font-size: 13px; font-weight: 600;
+          width: 100%; border: none; background: hsl(var(--color-primary));
+          color: hsl(var(--color-primary-fg)); padding: 15px 20px; font-size: 14px; font-weight: 600;
           letter-spacing: 0.08em; cursor: pointer;
           font-family: inherit; text-align: center;
           display: flex; align-items: center; justify-content: center; gap: 8px;
-          transition: background 0.15s, color 0.15s;
+          transition: background 0.15s;
         }
-        .co-place-order:hover:not(:disabled) { background: hsl(var(--color-primary-subtle)); }
+        .co-place-order:hover:not(:disabled) { background: hsl(var(--color-primary-hover)); }
         .co-place-order:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .co-ghost-btn {
           width: 100%; border: none; background: transparent;
-          color: #9CA3AF; padding: 12px 20px; font-size: 13px; font-weight: 400;
+          color: hsl(var(--color-muted)); padding: 12px 20px; font-size: 14px; font-weight: 400;
           cursor: pointer; font-family: inherit; transition: color 0.15s;
         }
-        .co-ghost-btn:hover    { color: #1A1A1A; }
+        .co-ghost-btn:hover    { color: hsl(var(--color-text)); }
         .co-ghost-btn:disabled { cursor: not-allowed; opacity: 0.45; }
       `}</style>
 
@@ -257,7 +275,7 @@ export default function CheckoutPage() {
         <div className="co-section" style={{ animationDelay: '0.05s' }}>
           <p style={{
             fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
-            textTransform: 'uppercase', color: '#9CA3AF',
+            textTransform: 'uppercase', color: 'hsl(var(--color-muted))',
             padding: '10px 16px 4px',
           }}>
             Products
@@ -272,13 +290,13 @@ export default function CheckoutPage() {
             return (
               <div
                 key={item.productId}
-                className="co-section border-b border-[#E5E7EB] px-4 pt-3 pb-3"
+                className="co-section border-b border-border px-4 pt-3 pb-3"
                 style={{ animationDelay: `${delay}s`, opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s' }}
               >
                 {/* Row 1: product name + stepper + trash */}
                 <div className="flex items-center justify-between gap-3">
                   <span style={{
-                    fontSize: 14, fontWeight: 500, color: '#1A1A1A',
+                    fontSize: 14, fontWeight: 500, color: 'hsl(var(--color-text))',
                     flex: 1, minWidth: 0, overflow: 'hidden',
                     textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -295,7 +313,7 @@ export default function CheckoutPage() {
                         <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                     </button>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', minWidth: 16, textAlign: 'center' }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--color-text))', minWidth: 16, textAlign: 'center' }}>
                       {qty}
                     </span>
                     <button
@@ -327,10 +345,10 @@ export default function CheckoutPage() {
 
                 {/* Row 2: unit price + line total */}
                 <div className="flex items-center justify-between mt-1.5">
-                  <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
                     {fmt(parseFloat(item.unitPrice))} ea
                   </span>
-                  <span style={{ fontSize: 12, color: '#6B7280' }}>
+                  <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
                     Total&nbsp;&nbsp;{fmt(lineTotal)}
                   </span>
                 </div>
@@ -340,26 +358,26 @@ export default function CheckoutPage() {
         </div>
 
         {/* Order summary */}
-        <div className="co-section px-4 py-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.2s' }}>
+        <div className="co-section px-4 py-4 border-b border-border" style={{ animationDelay: '0.2s' }}>
           {[
             { label: 'Subtotal', value: fmt(subtotal) },
             { label: 'Freight',  value: fmt(freight)  },
             { label: taxLabel,  value: fmt(taxAmount) },
           ].map((row) => (
             <div key={row.label} className="flex items-center justify-between py-1.5">
-              <span style={{ fontSize: 14, color: '#1A1A1A' }}>{row.label}</span>
-              <span style={{ fontSize: 14, color: '#1A1A1A' }}>{row.value}</span>
+              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.label}</span>
+              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.value}</span>
             </div>
           ))}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-[#E5E7EB]">
-            <span style={{ fontSize: 15, color: '#1A1A1A', fontWeight: 500 }}>Total</span>
-            <span style={{ fontSize: 15, color: '#1A1A1A', fontWeight: 500 }}>{fmt(total)}</span>
+          <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>Total</span>
+            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>{fmt(total)}</span>
           </div>
           <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
         </div>
 
         {/* PO Number + Comment */}
-        <div className="co-section px-4 py-4 border-b border-[#E5E7EB] flex flex-col gap-4" style={{ animationDelay: '0.25s' }}>
+        <div className="co-section px-4 py-4 border-b border-border flex flex-col gap-4" style={{ animationDelay: '0.25s' }}>
           <div>
             <button className="co-expand-btn" onClick={() => setPoOpen((o) => !o)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} style={{ width: 11, height: 11 }}>
@@ -407,16 +425,16 @@ export default function CheckoutPage() {
 
         {/* Delivery Address */}
         {!loadingAddress && (
-          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.3s' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
+          <div className="co-section px-4 py-5 border-b border-border" style={{ animationDelay: '0.3s' }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--color-muted))', textAlign: 'center', marginBottom: 12 }}>
               Delivery Address
             </p>
             {formatAddress(deliveryAddress) ? (
-              <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7, textAlign: 'center' }}>
+              <p style={{ fontSize: 13, color: 'hsl(var(--color-text))', lineHeight: 1.7, textAlign: 'center' }}>
                 {formatAddress(deliveryAddress)}
               </p>
             ) : (
-              <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+              <p style={{ fontSize: 12, color: 'hsl(var(--color-muted))', textAlign: 'center' }}>
                 No delivery address on file. Please contact your distributor to add one.
               </p>
             )}
@@ -424,53 +442,55 @@ export default function CheckoutPage() {
         )}
 
         {/* Delivery Day */}
-        {(loadingDates || availableDates.length > 0) && (
-          <div className="co-section px-4 py-5 border-b border-[#E5E7EB]" style={{ animationDelay: '0.35s' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF', textAlign: 'center', marginBottom: 12 }}>
-              Delivery Day
+        <div className="co-section px-4 py-5 border-b border-border" style={{ animationDelay: '0.35s' }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--color-muted))', textAlign: 'center', marginBottom: 12 }}>
+            Delivery Day
+          </p>
+          {loadingDates ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
+            </div>
+          ) : availableDates.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'hsl(var(--color-muted))', textAlign: 'center' }}>
+              No delivery dates available right now. Please contact your distributor.
             </p>
-            {loadingDates ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#E5E7EB] border-t-primary" />
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {availableDates.map((d) => {
-                  const isSelected = selectedDeliveryDate === d.date;
-                  const deliveryDate = new Date(d.date + 'T00:00:00');
-                  const cutoff = new Date(d.cutoffDeadline);
-                  const cutoffLabel = cutoff.toLocaleString('en-GB', {
-                    weekday: 'long', day: 'numeric', month: 'long',
-                    hour: 'numeric', minute: '2-digit', hour12: true,
-                  });
-                  return (
-                    <button
-                      key={d.date}
-                      type="button"
-                      onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
-                      style={{
-                        border: `1.5px solid ${isSelected ? 'hsl(var(--color-primary))' : '#E5E7EB'}`,
-                        background: isSelected ? 'hsl(var(--color-primary-subtle))' : 'transparent',
-                        padding: '12px 14px',
-                        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                        gap: 3, cursor: 'pointer', fontFamily: 'inherit',
-                        transition: 'border-color 0.15s, background 0.15s',
-                        textAlign: 'left', width: '100%',
-                      }}
-                    >
-                      <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? 'hsl(var(--color-primary))' : '#1A1A1A' }}>
-                        {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      </span>
-                      <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-                        Order by {cutoffLabel}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {availableDates.map((d) => {
+                const isSelected = selectedDeliveryDate === d.date;
+                const deliveryDate = new Date(d.date + 'T00:00:00');
+                const cutoff = new Date(d.cutoffDeadline);
+                const cutoffLabel = cutoff.toLocaleString('en-GB', {
+                  weekday: 'long', day: 'numeric', month: 'long',
+                  hour: 'numeric', minute: '2-digit', hour12: true,
+                });
+                return (
+                  <button
+                    key={d.date}
+                    type="button"
+                    onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
+                    style={{
+                      border: `1.5px solid ${isSelected ? 'hsl(var(--color-primary))' : 'hsl(var(--color-border))'}`,
+                      background: isSelected ? 'hsl(var(--color-primary-subtle))' : 'transparent',
+                      padding: '12px 14px',
+                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                      gap: 3, cursor: 'pointer', fontFamily: 'inherit',
+                      transition: 'border-color 0.15s, background 0.15s',
+                      textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? 'hsl(var(--color-primary))' : 'hsl(var(--color-text))' }}>
+                      {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                    </span>
+                    <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
+                      Order by {cutoffLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Action buttons */}
         <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.4s' }}>
@@ -480,7 +500,7 @@ export default function CheckoutPage() {
             onClick={handlePlaceOrder}
           >
             {submitting ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             ) : null}
             {submitting ? 'Placing Order…' : 'Place Order'}
           </button>
@@ -497,12 +517,20 @@ export default function CheckoutPage() {
           <button className="co-ghost-btn" disabled>
             Add to Favorites
           </button>
-          <button className="co-ghost-btn" disabled={submitting} onClick={handleClearCart}>
+          <button className="co-ghost-btn" disabled={submitting} onClick={() => setClearCartConfirmOpen(true)}>
             Clear Cart
           </button>
         </div>
 
       </PageShell>
+
+      {clearCartConfirmOpen && (
+        <ClearCartConfirmationModal
+          itemCount={items.length}
+          onConfirm={handleClearCart}
+          onClose={() => setClearCartConfirmOpen(false)}
+        />
+      )}
     </>
   );
 }

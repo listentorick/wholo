@@ -49,9 +49,10 @@ vi.mock('@/lib/distributor-context', () => ({
 
 const mockSubmitOrder = vi.fn();
 const mockGetMyDeliveryAddress = vi.fn().mockResolvedValue({ deliveryAddress: null });
+const mockGetAvailableDates = vi.fn().mockResolvedValue({ dates: [] });
 vi.mock('@wholo/api-client', () => ({
   ordersApi: { submitOrder: (...args: unknown[]) => mockSubmitOrder(...args) },
-  deliveryApi: { getAvailableDates: vi.fn().mockResolvedValue({ dates: [] }) },
+  deliveryApi: { getAvailableDates: (...args: unknown[]) => mockGetAvailableDates(...args) },
   portalApi: { getMyDeliveryAddress: (...args: unknown[]) => mockGetMyDeliveryAddress(...args) },
   ApiError: class ApiError extends Error {
     problem: { status: number; detail?: string };
@@ -125,6 +126,7 @@ describe('CheckoutPage — delivery address', () => {
     vi.clearAllMocks();
     mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
+    mockGetAvailableDates.mockResolvedValue({ dates: [] });
   });
 
   it('shows the delivery address when one is on file', async () => {
@@ -159,6 +161,49 @@ describe('CheckoutPage — delivery address', () => {
     expect(
       await screen.findByText('No delivery address on file. Please contact your distributor to add one.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('CheckoutPage — delivery day', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrderAsMode = false;
+    mockEffectiveMinSpend = null;
+    mockGetMyDeliveryAddress.mockResolvedValue({ deliveryAddress: null });
+  });
+
+  it('shows the empty state, not a vanished section, when no delivery dates are available', async () => {
+    mockGetAvailableDates.mockResolvedValue({ dates: [] });
+
+    render(<CheckoutPage />);
+
+    expect(await screen.findByText('Delivery Day')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No delivery dates available right now. Please contact your distributor.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the empty state when the delivery dates lookup fails', async () => {
+    mockGetAvailableDates.mockRejectedValue(new Error('500'));
+
+    render(<CheckoutPage />);
+
+    expect(
+      await screen.findByText('No delivery dates available right now. Please contact your distributor.'),
+    ).toBeInTheDocument();
+  });
+
+  it('lists available delivery dates as selectable options when present', async () => {
+    mockGetAvailableDates.mockResolvedValue({
+      dates: [{ date: '2026-08-15', cutoffDeadline: '2026-08-14T17:00:00Z' }],
+    });
+
+    render(<CheckoutPage />);
+
+    expect(await screen.findByText('Saturday 15 August')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No delivery dates available right now. Please contact your distributor.'),
+    ).not.toBeInTheDocument();
   });
 });
 
