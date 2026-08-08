@@ -45,6 +45,28 @@ function formatTickDate(isoDate: string): string {
   return tickDateFormatter.format(new Date(`${isoDate}T00:00:00`));
 }
 
+const END_LABEL_FONT = '600 11px sans-serif';
+let measureCanvas: HTMLCanvasElement | null = null;
+
+// grid.right has no `containLabel`-style auto-fit for series endLabels (that
+// option only measures axis labels), so the end-of-line currency label needs
+// its gutter sized by hand — measured from the actual text instead of a
+// fixed guess, so mobile cards don't carry more right-hand padding than the
+// label needs.
+function measureEndLabelWidth(text: string): number {
+  if (!text) return 0;
+  try {
+    measureCanvas ??= document.createElement('canvas');
+    const ctx = measureCanvas.getContext('2d');
+    if (!ctx) return 0;
+    ctx.font = END_LABEL_FONT;
+    return ctx.measureText(text).width;
+  } catch {
+    // jsdom (unit tests) has no canvas backend — fall back to no gutter.
+    return 0;
+  }
+}
+
 export function OrderTrendChart({ current, comparison, comparisonLabel }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
@@ -75,9 +97,12 @@ export function OrderTrendChart({ current, comparison, comparisonLabel }: Props)
   useEffect(() => {
     if (!chartRef.current) return;
 
+    const lastCurrentLabel = current.length > 0 ? formatCurrency(current[current.length - 1].value) : '';
+    const endLabelGutter = current.length > 0 ? measureEndLabelWidth(lastCurrentLabel) + 8 : 0;
+
     chartRef.current.setOption({
       color: [CURRENT_COLOR, COMPARISON_COLOR],
-      grid: { top: 16, right: 64, bottom: 28, left: 56, containLabel: true },
+      grid: { top: 16, right: endLabelGutter, bottom: 28, left: 0, containLabel: true },
       xAxis: {
         type: 'category',
         data: current.map((p) => p.date),
