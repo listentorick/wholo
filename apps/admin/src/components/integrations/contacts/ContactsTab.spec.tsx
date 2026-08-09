@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactsTab } from './ContactsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
@@ -47,7 +47,9 @@ beforeEach(() => {
 });
 
 describe('ContactsTab', () => {
-  it('loads and renders contacts on mount', async () => {
+  const DEFAULT_STATUS = ['SUGGESTED', 'READY_TO_IMPORT', 'LINKED', 'CONFLICT', 'IGNORED'];
+
+  it('loads and renders contacts on mount, defaulting to customers only (excluding archived)', async () => {
     mockListContacts.mockResolvedValue({
       data: [makeContact('c1')],
       pagination: { nextCursor: null, hasMore: false, total: 1 },
@@ -55,8 +57,24 @@ describe('ContactsTab', () => {
 
     render(<ContactsTab token="token-1" providerLabel="Xero" />);
 
-    await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
-    expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined }, 'token-1');
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
+    expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1');
+    // Renders as a normal, editable chip — not a hidden/baked-in constraint.
+    expect(screen.getByRole('button', { name: /Status.*is.*Suggested match/ })).toBeInTheDocument();
+  });
+
+  it('lets the user clear the default filter and see every contact, including archived', async () => {
+    mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
+    const user = userEvent.setup();
+
+    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    await waitFor(() =>
+      expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1'),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => expect(mockListContacts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }, 'token-1'));
   });
 
   it('shows an error banner when the initial load fails', async () => {
@@ -115,13 +133,14 @@ describe('ContactsTab', () => {
     const user = userEvent.setup();
 
     render(<ContactsTab token="token-1" providerLabel="Xero" />);
-    await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
     expect(screen.getByText('Load more')).toBeInTheDocument();
 
     await user.click(screen.getByText('Load more'));
 
-    await waitFor(() => expect(screen.getByText('Contact c2')).toBeInTheDocument());
-    expect(screen.getByText('Contact c1')).toBeInTheDocument();
+    const table = within(screen.getByRole('table'));
+    await waitFor(() => expect(table.getByText('Contact c2')).toBeInTheDocument());
+    expect(table.getByText('Contact c1')).toBeInTheDocument();
     expect(screen.queryByText('Load more')).not.toBeInTheDocument();
   });
 
@@ -134,11 +153,11 @@ describe('ContactsTab', () => {
     const user = userEvent.setup();
 
     render(<ContactsTab token="token-1" providerLabel="Xero" />);
-    await waitFor(() => expect(screen.getByText('Contact c1')).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: 'Bulk import' })).toBeDisabled();
 
-    await user.click(screen.getByLabelText('Select Contact c1'));
+    await user.click(within(screen.getByRole('table')).getByLabelText('Select Contact c1'));
     await user.click(screen.getByRole('button', { name: 'Bulk import (1)' }));
     await user.click(screen.getByRole('button', { name: 'Import' }));
 

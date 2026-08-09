@@ -65,7 +65,12 @@ export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) 
     [],
   );
 
-  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+  // Default to the two statuses that need attention — a normal, editable
+  // FilterBar chip, not a hidden constraint (same pattern as ContactsTab's
+  // default).
+  const [filters, setFilters] = useState<ActiveFilter[]>([
+    { id: 'default-status', field: 'status', operator: 'is', value: ['SUGGESTED', 'READY_TO_IMPORT'] },
+  ]);
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductsTab } from './ProductsTab';
 import { adminAccountingApi } from '@wholo/admin-api-client';
@@ -48,8 +48,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+// The desktop <table> and mobile <ul> card list render simultaneously in
+// JSDOM (Tailwind's `hidden md:block` / `md:hidden` are just CSS classes —
+// there's no real viewport to evaluate the media query against), so any
+// query that would otherwise match text present in both is scoped to the
+// desktop table to avoid "found multiple elements" false failures.
 describe('ProductsTab', () => {
-  it('loads and renders products on mount', async () => {
+  const DEFAULT_STATUS = ['SUGGESTED', 'READY_TO_IMPORT'];
+
+  it('loads and renders products on mount, defaulting to suggested/ready-to-import statuses', async () => {
     mockListProducts.mockResolvedValue({
       data: [makeProduct('p1')],
       pagination: { nextCursor: null, hasMore: false, total: 1 },
@@ -57,8 +64,22 @@ describe('ProductsTab', () => {
 
     render(<ProductsTab token="token-1" providerLabel="Xero" />);
 
-    await waitFor(() => expect(screen.getByText('Product p1')).toBeInTheDocument());
-    expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined }, 'token-1');
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
+    expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1');
+  });
+
+  it('lets the user clear the default filter and see every product', async () => {
+    mockListProducts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
+    const user = userEvent.setup();
+
+    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    await waitFor(() =>
+      expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1'),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+
+    await waitFor(() => expect(mockListProducts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }, 'token-1'));
   });
 
   it('shows an error banner when the initial load fails', async () => {
@@ -117,13 +138,14 @@ describe('ProductsTab', () => {
     const user = userEvent.setup();
 
     render(<ProductsTab token="token-1" providerLabel="Xero" />);
-    await waitFor(() => expect(screen.getByText('Product p1')).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
     expect(screen.getByText('Load more')).toBeInTheDocument();
 
     await user.click(screen.getByText('Load more'));
 
-    await waitFor(() => expect(screen.getByText('Product p2')).toBeInTheDocument());
-    expect(screen.getByText('Product p1')).toBeInTheDocument();
+    const table = within(screen.getByRole('table'));
+    await waitFor(() => expect(table.getByText('Product p2')).toBeInTheDocument());
+    expect(table.getByText('Product p1')).toBeInTheDocument();
     expect(screen.queryByText('Load more')).not.toBeInTheDocument();
   });
 
@@ -136,11 +158,11 @@ describe('ProductsTab', () => {
     const user = userEvent.setup();
 
     render(<ProductsTab token="token-1" providerLabel="Xero" />);
-    await waitFor(() => expect(screen.getByText('Product p1')).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: 'Bulk import' })).toBeDisabled();
 
-    await user.click(screen.getByLabelText('Select Product p1'));
+    await user.click(within(screen.getByRole('table')).getByLabelText('Select Product p1'));
     await user.click(screen.getByRole('button', { name: 'Bulk import (1)' }));
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
@@ -159,9 +181,9 @@ describe('ProductsTab', () => {
     const user = userEvent.setup();
 
     render(<ProductsTab token="token-1" providerLabel="Xero" />);
-    await waitFor(() => expect(screen.getByText('Product p1')).toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
 
-    await user.click(screen.getByLabelText('Select Product p1'));
+    await user.click(within(screen.getByRole('table')).getByLabelText('Select Product p1'));
     await user.click(screen.getByRole('button', { name: 'Bulk import (1)' }));
     await user.click(screen.getByLabelText(/Honour suggested matches/));
     await user.click(screen.getByRole('button', { name: 'Import' }));

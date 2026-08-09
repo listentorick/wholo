@@ -65,7 +65,21 @@ export function ContactsTab({ token, providerLabel, onContactsChanged }: Props) 
     [],
   );
 
-  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+  // Default to customers only, excluding archived: ARCHIVED and
+  // NOT_A_CUSTOMER are computed ahead of the mapping-state statuses
+  // (AccountingContactService.formatContact), so an archived contact always
+  // reports ARCHIVED regardless of isCustomer — excluding both statuses is
+  // equivalent to "isCustomer && !isArchived" without needing a backend
+  // change to the OR-only `type` filter. Still just a normal, editable
+  // FilterBar chip — the user can change or remove it.
+  const [filters, setFilters] = useState<ActiveFilter[]>([
+    {
+      id: 'default-status',
+      field: 'status',
+      operator: 'is',
+      value: STATUS_OPTIONS.filter((o) => o.value !== 'ARCHIVED' && o.value !== 'NOT_A_CUSTOMER').map((o) => o.value),
+    },
+  ]);
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAllMatching, setSelectAllMatching] = useState(false);
