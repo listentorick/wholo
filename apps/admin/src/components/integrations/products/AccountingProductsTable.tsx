@@ -10,6 +10,7 @@ import { ListPagination } from '@/components/list/ListPagination';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 import { HeaderCheckbox } from '@/components/list/HeaderCheckbox';
 import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { ChangedIndicator, isRowChanged } from '@/components/integrations/ChangedIndicator';
 import { ProductRowActions } from './ProductRowActions';
 
@@ -112,20 +113,12 @@ export function AccountingProductsTable({
         )}
         renderExpanded={(product) => (
           <>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Sales price</p>
-              <p className="mt-0.5 text-sm text-text">{product.salesUnitPrice ?? '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Stock</p>
-              <p className="mt-0.5 text-sm text-text">{product.isTracked ? product.quantityOnHand ?? '0' : '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Suggested product</p>
-              <p className="mt-0.5 text-sm text-text">
-                {product.mapping?.productName ?? product.suggestion?.productName ?? '—'}
-              </p>
-            </div>
+            <MobileCardField label="Sales price" value={product.salesUnitPrice ?? '—'} />
+            <MobileCardField label="Stock" value={product.isTracked ? product.quantityOnHand ?? '0' : '—'} />
+            <MobileCardField
+              label="Suggested product"
+              value={product.mapping?.productName ?? product.suggestion?.productName ?? '—'}
+            />
             <ProductRowActions
               product={product}
               token={token}

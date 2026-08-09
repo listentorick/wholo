@@ -10,6 +10,7 @@ import { ListPagination } from '@/components/list/ListPagination';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 import { HeaderCheckbox } from '@/components/list/HeaderCheckbox';
 import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { ChangedIndicator, isRowChanged } from '@/components/integrations/ChangedIndicator';
 import { ContactRowActions } from './ContactRowActions';
 
@@ -112,24 +113,20 @@ export function AccountingContactsTable({
         )}
         renderExpanded={(contact) => (
           <>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Account number</p>
-              <p className="mt-0.5 text-sm text-text">
-                {contact.externalContactCode ?? contact.externalAccountNumber ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Suggested customer</p>
-              <p className="mt-0.5 text-sm text-text">
-                {contact.mapping?.customerName ?? contact.suggestion?.customerName ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Match reason</p>
-              <p className="mt-0.5 text-xs text-muted">
-                {contact.suggestion?.matchReason ?? (contact.mapping ? `Linked (${contact.mapping.matchMethod})` : '—')}
-              </p>
-            </div>
+            <MobileCardField
+              label="Account number"
+              value={contact.externalContactCode ?? contact.externalAccountNumber ?? '—'}
+              mono
+            />
+            <MobileCardField
+              label="Suggested customer"
+              value={contact.mapping?.customerName ?? contact.suggestion?.customerName ?? '—'}
+            />
+            <MobileCardField
+              label="Match reason"
+              tone="muted"
+              value={contact.suggestion?.matchReason ?? (contact.mapping ? `Linked (${contact.mapping.matchMethod})` : '—')}
+            />
             <ContactRowActions
               contact={contact}
               token={token}

@@ -138,7 +138,7 @@ export function MobileCardList<T>({
               className={`grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
             >
               <div className="overflow-hidden">
-                <div id={panelId} className="space-y-2 border-t border-border bg-canvas/60 px-4 py-3">
+                <div id={panelId} className="space-y-3 border-t border-border bg-canvas/60 px-4 py-3.5">
                   {renderExpanded(item)}
                 </div>
               </div>

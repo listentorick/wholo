@@ -9,6 +9,7 @@ import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { ListPagination } from '@/components/list/ListPagination';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { ChangedIndicator, isRowChanged } from '@/components/integrations/ChangedIndicator';
 import { TaxTypeRowActions } from './TaxTypeRowActions';
 
@@ -92,22 +93,16 @@ export function AccountingTaxTypesTable({
         )}
         renderExpanded={(taxType) => (
           <>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Provider code</p>
-              <p className="mt-0.5 text-sm text-text">{taxType.taxType}</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Suggested tax type</p>
-              <p className="mt-0.5 text-sm text-text">
-                {taxType.mapping?.taxTypeName ?? taxType.suggestion?.taxTypeName ?? '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Match reason</p>
-              <p className="mt-0.5 text-xs text-muted">
-                {taxType.suggestion?.matchReason ?? (taxType.mapping ? `Linked (${taxType.mapping.matchMethod})` : '—')}
-              </p>
-            </div>
+            <MobileCardField label="Provider code" value={taxType.taxType} mono />
+            <MobileCardField
+              label="Suggested tax type"
+              value={taxType.mapping?.taxTypeName ?? taxType.suggestion?.taxTypeName ?? '—'}
+            />
+            <MobileCardField
+              label="Match reason"
+              tone="muted"
+              value={taxType.suggestion?.matchReason ?? (taxType.mapping ? `Linked (${taxType.mapping.matchMethod})` : '—')}
+            />
             <TaxTypeRowActions
               taxType={taxType}
               token={token}
