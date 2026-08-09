@@ -12,7 +12,9 @@ interface AuthContextValue {
   isLoading: boolean;
   /** Authenticated with Keycloak but no Wholo user yet — route to /onboarding. */
   onboardingRequired: boolean;
-  /** Token identity claims, for prefilling the onboarding wizard. */
+  /** Has a Wholo user, but not on a distributor org — route to /access-denied. */
+  accessDenied: boolean;
+  /** Identity claims for prefilling the onboarding wizard, or for display on /access-denied. */
   identity: SessionIdentity | null;
   /** Re-fetch the session (e.g. right after onboarding completes). */
   refreshSession: () => Promise<void>;
@@ -68,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingRequired, setOnboardingRequired] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
   const router = useRouter();
   const routerRef = useRef(router);
@@ -79,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session.status === 'ACTIVE' && session.user) {
         setUser(session.user);
         setOnboardingRequired(false);
+        setAccessDenied(false);
         setIdentity(null);
         if (session.user.organisationId) {
           fetchLogoUrl(token, session.user.organisationId, setLogoUrl);
@@ -86,7 +90,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (session.status === 'ONBOARDING_REQUIRED') {
         setUser(null);
         setOnboardingRequired(true);
+        setAccessDenied(false);
         setIdentity(session.identity ?? null);
+      } else if (session.status === 'ACCESS_DENIED') {
+        // Deliberately not setUser here: `user` means "may use the admin app,"
+        // and everything gated on it (sidebar, guards) must stay locked out.
+        // The denied identity is exposed via `identity` instead, purely for
+        // display on the /access-denied page.
+        setUser(null);
+        setOnboardingRequired(false);
+        setAccessDenied(true);
+        setIdentity(
+          session.user
+            ? { email: session.user.email, firstName: session.user.firstName, lastName: session.user.lastName }
+            : null,
+        );
       }
     } catch {
       // Network / upstream failure: leave user null WITHOUT flagging
@@ -152,13 +170,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAccessToken(null);
     setLogoUrl(null);
     setOnboardingRequired(false);
+    setAccessDenied(false);
     setIdentity(null);
     (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ user, accessToken, logoUrl, isLoading, onboardingRequired, identity, refreshSession, login, logout }}
+      value={{
+        user,
+        accessToken,
+        logoUrl,
+        isLoading,
+        onboardingRequired,
+        accessDenied,
+        identity,
+        refreshSession,
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

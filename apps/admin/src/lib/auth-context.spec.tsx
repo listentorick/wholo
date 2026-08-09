@@ -100,4 +100,39 @@ describe('AuthProvider', () => {
       expect(screen.getByTestId('status').textContent).toBe('onboarding');
     });
   });
+
+  it('flags access-denied without setting user when the session check resolves ACCESS_DENIED', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACCESS_DENIED',
+      user: {
+        id: 'u1',
+        email: 'buyer@b.com',
+        firstName: 'Buyer',
+        lastName: 'B',
+        organisationId: 'org1',
+        organisationType: 'TRADE_CUSTOMER',
+      },
+    });
+
+    const { AuthProvider, useAuth } = await import('./auth-context');
+
+    function StatusProbe() {
+      const { user, accessDenied, identity, isLoading } = useAuth();
+      return (
+        <div data-testid="status">
+          {isLoading ? 'loading' : accessDenied ? `denied:${identity?.email}:${user ? 'has-user' : 'no-user'}` : 'other'}
+        </div>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <StatusProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('denied:buyer@b.com:no-user');
+    });
+  });
 });

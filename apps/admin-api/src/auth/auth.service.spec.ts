@@ -25,12 +25,26 @@ describe('AuthService', () => {
   });
 
   describe('session', () => {
-    it('returns ACTIVE with the profile when upstream /auth/me succeeds', async () => {
-      const user = { id: 'u1', email: 'ada@acme.com', role: 'DISTRIBUTOR_ADMIN' };
+    it('returns ACTIVE with the profile when upstream /auth/me succeeds for a distributor', async () => {
+      const user = { id: 'u1', email: 'ada@acme.com', role: 'DISTRIBUTOR_ADMIN', organisationType: 'DISTRIBUTOR' };
       api.get.mockResolvedValue(user);
 
       await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACTIVE', user });
       expect(api.get).toHaveBeenCalledWith('/auth/me', 'token-1');
+    });
+
+    it('returns ACCESS_DENIED when the resolved profile is a trade customer', async () => {
+      const user = { id: 'u1', email: 'ada@acme.com', role: 'TRADE_CUSTOMER', organisationType: 'TRADE_CUSTOMER' };
+      api.get.mockResolvedValue(user);
+
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACCESS_DENIED', user });
+    });
+
+    it('returns ACCESS_DENIED when the resolved profile has no membership at all', async () => {
+      const user = { id: 'u1', email: 'ada@acme.com', role: undefined, organisationType: undefined };
+      api.get.mockResolvedValue(user);
+
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACCESS_DENIED', user });
     });
 
     it('returns ONBOARDING_REQUIRED with token identity when upstream replies 401', async () => {

@@ -34,6 +34,18 @@ describe('useRequireAuth', () => {
     expect(replace).toHaveBeenCalledWith('/onboarding');
   });
 
+  it('redirects non-distributor visitors to /access-denied even though they have a Wholo user', () => {
+    setAuth({ accessDenied: true });
+    renderHook(() => useRequireAuth());
+    expect(replace).toHaveBeenCalledWith('/access-denied');
+  });
+
+  it('prefers /access-denied over /onboarding when both are somehow set', () => {
+    setAuth({ accessDenied: true, onboardingRequired: true });
+    renderHook(() => useRequireAuth());
+    expect(replace).toHaveBeenCalledWith('/access-denied');
+  });
+
   it('does nothing while loading', () => {
     setAuth({ isLoading: true });
     renderHook(() => useRequireAuth());

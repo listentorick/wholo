@@ -14,6 +14,7 @@ export interface AuthUser {
   role: Role;
   organisationId: string;
   organisationName: string;
+  organisationType?: 'DISTRIBUTOR' | 'TRADE_CUSTOMER';
 }
 
 export interface LoginRequest {
@@ -28,7 +29,7 @@ export interface LoginResponse {
 
 // ─── Session / onboarding ─────────────────────────────────────────────────────
 
-export type SessionStatus = 'ACTIVE' | 'ONBOARDING_REQUIRED';
+export type SessionStatus = 'ACTIVE' | 'ONBOARDING_REQUIRED' | 'ACCESS_DENIED';
 
 /** Identity claims from Keycloak for a person who has no Wholo user yet. */
 export interface SessionIdentity {
@@ -39,7 +40,7 @@ export interface SessionIdentity {
 
 export interface AuthSession {
   status: SessionStatus;
-  /** Present when status is ACTIVE. */
+  /** Present when status is ACTIVE or ACCESS_DENIED. */
   user?: AuthUser;
   /** Present when status is ONBOARDING_REQUIRED — prefill for the wizard. */
   identity?: SessionIdentity;
