@@ -43,7 +43,7 @@ export function CreateTaxTypeFromExternalDialog({ taxType, token, onClose, onImp
       );
       onImported();
     } catch {
-      setError('Failed to create this tax type. Please try again.');
+      setError('Failed to import this tax type. Please try again.');
       setSubmitting(false);
     }
   }
@@ -51,7 +51,7 @@ export function CreateTaxTypeFromExternalDialog({ taxType, token, onClose, onImp
   return (
     <Drawer onClose={onClose} width={480}>
       <div className="border-b border-border px-5 py-3.5">
-        <h2 className="text-sm font-semibold text-text">Create tax type</h2>
+        <h2 className="text-sm font-semibold text-text">Import as new tax type</h2>
       </div>
       <div className="p-5 space-y-4">
         <p className="text-xs text-muted">
@@ -128,7 +128,7 @@ export function CreateTaxTypeFromExternalDialog({ taxType, token, onClose, onImp
             disabled={submitting || !name.trim() || !classification}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? 'Creating…' : 'Create tax type'}
+            {submitting ? 'Importing…' : 'Import tax type'}
           </button>
         </div>
       </div>

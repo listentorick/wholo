@@ -42,7 +42,7 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
 
   function handleUnlink() {
     if (!taxType.mapping) return;
-    if (!window.confirm('Unlink this tax type from the accounting tax rate?')) return;
+    if (!window.confirm('Unlink this tax type from the accounting tax type?')) return;
     run('unlink', () => adminAccountingApi.unlinkTaxTypeMapping(taxType.mapping!.id, token));
   }
 
@@ -82,7 +82,7 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
               className="rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50"
               style={{ background: '#dbeafe', color: '#1d4ed8' }}
             >
-              Create tax type
+              Import as new
             </button>
             <button
               type="button"
@@ -103,7 +103,7 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
               disabled={anyBusy}
               className="rounded border border-border px-2.5 py-1 text-xs font-medium text-text transition-colors hover:bg-surface disabled:opacity-50"
             >
-              Create tax type
+              Import as new
             </button>
             <button
               type="button"

@@ -43,7 +43,7 @@ export function SyncNowButton({ token, onQueued }: Props) {
       >
         {syncing ? 'Queuing…' : 'Sync now'}
       </button>
-      {queued && <span className="text-xs text-muted">Sync queued — new tax rates will appear shortly.</span>}
+      {queued && <span className="text-xs text-muted">Sync queued — new tax types will appear shortly.</span>}
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );
