@@ -344,15 +344,41 @@ describe('AccountingContactService', () => {
       adminCustomers.create.mockResolvedValue({ id: 'tr-1', organisationId: 'org-1' });
     });
 
-    it('creates the customer via AdminCustomersService without ever passing an email', async () => {
+    it('creates the customer via AdminCustomersService', async () => {
       await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', {});
 
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ name: 'Blackbird Vine & Co', accountNumber: 'XC-1' }),
       );
-      const dtoArg = adminCustomers.create.mock.calls[0][1];
-      expect(dtoArg.email).toBeUndefined();
+    });
+
+    it('passes through the cached contact email when importing', async () => {
+      prisma.externalAccountingContact.findFirst.mockResolvedValue({
+        ...cachedContact,
+        email: 'billing@blackbird.example',
+      });
+
+      await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', {});
+
+      expect(adminCustomers.create).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({ email: 'billing@blackbird.example' }),
+      );
+    });
+
+    it('prefers an explicit dto.email override over the cached contact email', async () => {
+      prisma.externalAccountingContact.findFirst.mockResolvedValue({
+        ...cachedContact,
+        email: 'billing@blackbird.example',
+      });
+
+      await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', { email: 'override@example.com' });
+
+      expect(adminCustomers.create).toHaveBeenCalledWith(
+        'dist-1',
+        expect.objectContaining({ email: 'override@example.com' }),
+      );
     });
 
     it('writes a CustomerAccountingMapping for the new relationship with MANUAL matchMethod', async () => {

@@ -167,10 +167,6 @@ export class AdminCustomersService {
   }
 
   async create(distributorId: string, dto: CreateCustomerDto) {
-    const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
-    const token = randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
     const distributor = await this.prisma.organisation.findUniqueOrThrow({
       where: { id: distributorId },
       select: { name: true },
@@ -247,31 +243,17 @@ export class AdminCustomersService {
         },
       });
 
-      if (dto.email) {
-        await tx.customerInvitation.create({
-          data: {
-            tradeRelationshipId: relationship.id,
-            distributorId,
-            email: dto.email,
-            token,
-            expiresAt,
-          },
-        });
-      }
-
       return tx.tradeRelationship.findUniqueOrThrow({
         where: { id: relationship.id },
         include: relationshipInclude,
       });
     });
 
-    const formatted = this.formatCustomer(rel);
-    const inviteUrl = dto.email ? `${portalUrl}/accept-invite?token=${token}` : null;
-
-    // Email is sent only when the distributor explicitly triggers the invite endpoint.
-    // Sending automatically on create would confuse trade customers before pricing/catalogues are set up.
-
-    return { ...formatted, inviteUrl };
+    // Email is persisted here but never triggers an invitation — that only
+    // happens when the distributor explicitly calls the invite endpoint,
+    // which keeps trade customers from being invited before pricing/catalogues
+    // are set up (and lets contact-import populate email without inviting anyone).
+    return this.formatCustomer(rel);
   }
 
   async update(id: string, distributorId: string, dto: UpdateCustomerDto) {

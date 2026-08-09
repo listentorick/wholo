@@ -31,8 +31,8 @@ export const adminCustomersApi = {
     return apiFetch<Customer>(`/api/v1/customers/${id}`, { token });
   },
 
-  create(token: string, req: CreateCustomerRequest): Promise<Customer & { inviteUrl: string | null }> {
-    return apiFetch<Customer & { inviteUrl: string | null }>('/api/v1/customers', {
+  create(token: string, req: CreateCustomerRequest): Promise<Customer> {
+    return apiFetch<Customer>('/api/v1/customers', {
       method: 'POST',
       body: JSON.stringify(req),
       token,

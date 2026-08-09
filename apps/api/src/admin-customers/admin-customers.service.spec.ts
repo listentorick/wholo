@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException, ConflictException, UnprocessableEntityException } from '@nestjs/common';
-import { OrganisationType, TradeRelationshipStatus, InvitationStatus } from '@prisma/client';
+import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { AdminCustomersService } from './admin-customers.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -258,14 +258,11 @@ describe('AdminCustomersService', () => {
   // ── create ──────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('creates org + relationship and returns invite URL when email present', async () => {
-      const rel = makeRel({
-        invitations: [{ id: 'inv-1', email: 'acme@example.com', status: InvitationStatus.PENDING, expiresAt: new Date(), token: 'tok' }],
-      });
+    it('persists email onto the organisation without creating an invitation', async () => {
+      const rel = makeRel({ customer: makeOrg({ email: 'acme@example.com' }) });
       mockPrisma.$transaction.mockImplementation(async (fn: any) => {
         mockPrisma.organisation.create.mockResolvedValue({ id: 'org-1' });
         mockPrisma.tradeRelationship.create.mockResolvedValue({ id: 'rel-1' });
-        mockPrisma.customerInvitation.create.mockResolvedValue({});
         mockPrisma.tradeRelationship.findUniqueOrThrow.mockResolvedValue(rel);
         return fn({
           organisation: { create: mockPrisma.organisation.create },
@@ -277,8 +274,11 @@ describe('AdminCustomersService', () => {
       const result = await service.create('dist-1', { name: 'Acme', email: 'acme@example.com' });
 
       expect(result.id).toBe('rel-1');
-      expect(result.inviteUrl).toContain('/accept-invite?token=');
-      expect(mockPrisma.customerInvitation.create).toHaveBeenCalled();
+      expect(mockPrisma.organisation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ email: 'acme@example.com' }) }),
+      );
+      expect(mockPrisma.customerInvitation.create).not.toHaveBeenCalled();
+      expect((result as any).inviteUrl).toBeUndefined();
     });
 
     it('does not create invitation when email is absent', async () => {
@@ -296,7 +296,7 @@ describe('AdminCustomersService', () => {
 
       const result = await service.create('dist-1', { name: 'No Email' });
 
-      expect(result.inviteUrl).toBeNull();
+      expect((result as any).inviteUrl).toBeUndefined();
       expect(mockPrisma.customerInvitation.create).not.toHaveBeenCalled();
     });
 

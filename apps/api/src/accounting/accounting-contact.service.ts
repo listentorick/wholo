@@ -313,6 +313,7 @@ export class AccountingContactService {
     const relationship = await this.adminCustomers.create(distributorId, {
       name: dto.name ?? contact.displayName,
       legalName: dto.legalName,
+      email: dto.email ?? contact.email ?? undefined,
       phone: dto.phone,
       accountNumber: dto.accountNumber ?? contact.externalContactCode ?? contact.externalAccountNumber ?? undefined,
       billingLine1: dto.billingLine1 ?? contact.billingLine1 ?? undefined,
@@ -327,8 +328,6 @@ export class AccountingContactService {
       deliveryState: dto.deliveryState ?? contact.deliveryState ?? undefined,
       deliveryPostcode: dto.deliveryPostcode ?? contact.deliveryPostcode ?? undefined,
       deliveryCountry: dto.deliveryCountry ?? contact.deliveryCountry ?? undefined,
-      // Deliberately no email — importing an accounting contact must never
-      // create a login user or an implicit invitation.
     });
 
     await this.createMapping(

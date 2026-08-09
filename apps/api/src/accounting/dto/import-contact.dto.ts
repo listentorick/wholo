@@ -1,9 +1,8 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsOptional, IsString, IsEmail, MinLength } from 'class-validator';
 
-// Deliberately no `email` field: importing an accounting contact must never
-// be assumed to be the ordering user's email (it may be an accounts
-// department, a person, or dirty data) — ordering users are added
-// separately, after customer setup. See requirements doc, Phase 2.
+// Importing an accounting contact never creates a login invitation — that's
+// a property of AdminCustomersService.create() itself (it never invites
+// anyone), not something this DTO needs to enforce by omitting fields.
 export class ImportContactDto {
   @IsOptional()
   @IsString()
@@ -13,6 +12,10 @@ export class ImportContactDto {
   @IsOptional()
   @IsString()
   legalName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsOptional()
   @IsString()
