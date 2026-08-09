@@ -47,9 +47,9 @@ beforeEach(() => {
 });
 
 describe('ContactsTab', () => {
-  const DEFAULT_STATUS = ['SUGGESTED', 'READY_TO_IMPORT', 'LINKED', 'CONFLICT', 'IGNORED'];
+  const DEFAULT_STATUS = ['SUGGESTED', 'READY_TO_IMPORT'];
 
-  it('loads and renders contacts on mount, defaulting to customers only (excluding archived)', async () => {
+  it('loads and renders contacts on mount, defaulting to statuses needing attention', async () => {
     mockListContacts.mockResolvedValue({
       data: [makeContact('c1')],
       pagination: { nextCursor: null, hasMore: false, total: 1 },
