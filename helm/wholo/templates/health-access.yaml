@@ -1,0 +1,85 @@
+{{- if .Values.healthAccess.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "wholo.fullname" . }}-health-allowlist
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  ipAllowList:
+    sourceRange:
+      {{- toYaml .Values.healthAccess.allowedIPs | nindent 6 }}
+{{- if .Values.ingress.hosts.health }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "wholo.fullname" . }}-health-strip-central
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  stripPrefix:
+    prefixes:
+      - /central
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "wholo.fullname" . }}-health-strip-admin
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  stripPrefix:
+    prefixes:
+      - /admin
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "wholo.fullname" . }}-health-strip-portal
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  stripPrefix:
+    prefixes:
+      - /portal
+---
+# Internal-only host — never Cloudflare-proxied. DNS for
+# .Values.ingress.hosts.health must resolve directly to the k3s node on the
+# LAN/VPN, bypassing Cloudflare/the WAF, so this sees real source IPs.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-health
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.health }}`) && PathPrefix(`/central`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-strip-central
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-api
+          port: {{ .Values.api.service.port }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.health }}`) && PathPrefix(`/admin`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-strip-admin
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-admin-api
+          port: {{ .Values.adminApi.service.port }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.health }}`) && PathPrefix(`/portal`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-strip-portal
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-portal-api
+          port: {{ .Values.portalApi.service.port }}
+{{- end }}
+{{- end }}

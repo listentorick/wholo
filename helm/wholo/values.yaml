@@ -230,3 +230,17 @@ ingress:
     admin: ""
     api: ""
     auth: ""
+    # Internal-only host for health checks (admin-api/portal-api/apps-api),
+    # never Cloudflare-proxied — resolved only on the operator's LAN/VPN.
+    # See `healthAccess:` below, which gates the IP allowlist on it.
+    health: ""
+
+# Restricts /api/v1/health* to an IP allowlist: on the admin/portal hosts
+# (where it's otherwise public) and on the dedicated `ingress.hosts.health`
+# host. Off by default — no allowlist mechanism exists without this enabled.
+healthAccess:
+  enabled: false
+  # CIDR list, e.g. ["192.168.1.15/32", "10.0.0.5/32"]. Only meaningful when
+  # traffic reaches Traefik with the real client IP intact (i.e. bypasses
+  # any upstream proxy/WAF that would mask it) — see values.live.example.yaml.
+  allowedIPs: []

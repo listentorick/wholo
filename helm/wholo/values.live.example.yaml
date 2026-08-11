@@ -115,3 +115,18 @@ ingress:
     # cluster DNS. Only add an api host (plus its DNS A record) if external
     # webhooks ever need it:
     # api: api.<domain>
+    # Internal-only — an internal DNS record (NOT Cloudflare-proxied,
+    # resolvable only on the operator's LAN/VPN) must point this at the k3s
+    # node directly, bypassing Cloudflare/the WAF. This is what lets
+    # healthAccess.allowedIPs below see real source IPs instead of the WAF's.
+    health: health.<domain>
+
+# Restricts apps/api, admin-api, and portal-api's /api/v1/health* to these
+# IPs only — on the admin/portal public hosts (otherwise public there) and
+# on the health.<domain> host above. Put the real CIDRs in the gitignored
+# values.live.yaml, not here.
+healthAccess:
+  enabled: true
+  allowedIPs:
+    - "CHANGE_ME/32" # e.g. monitoring server
+    - "CHANGE_ME/32" # e.g. VPN peer

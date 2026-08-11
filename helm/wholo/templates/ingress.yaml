@@ -1,4 +1,4 @@
-{{- if .Values.ingress.enabled }}
+{{- if and .Values.ingress.enabled (or .Values.ingress.hosts.api .Values.ingress.hosts.auth) }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,12 +14,6 @@ spec:
   {{- if .Values.ingress.tls }}
   tls:
     - hosts:
-        {{- if .Values.ingress.hosts.portal }}
-        - {{ .Values.ingress.hosts.portal | quote }}
-        {{- end }}
-        {{- if .Values.ingress.hosts.admin }}
-        - {{ .Values.ingress.hosts.admin | quote }}
-        {{- end }}
         {{- if .Values.ingress.hosts.api }}
         - {{ .Values.ingress.hosts.api | quote }}
         {{- end }}
@@ -29,30 +23,6 @@ spec:
       secretName: {{ include "wholo.fullname" . }}-tls
   {{- end }}
   rules:
-    {{- if .Values.ingress.hosts.portal }}
-    - host: {{ .Values.ingress.hosts.portal | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "wholo.fullname" . }}-portal-api
-                port:
-                  number: {{ .Values.portalApi.service.port }}
-    {{- end }}
-    {{- if .Values.ingress.hosts.admin }}
-    - host: {{ .Values.ingress.hosts.admin | quote }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "wholo.fullname" . }}-admin-api
-                port:
-                  number: {{ .Values.adminApi.service.port }}
-    {{- end }}
     {{- if .Values.ingress.hosts.api }}
     - host: {{ .Values.ingress.hosts.api | quote }}
       http:

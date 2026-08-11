@@ -1,0 +1,63 @@
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.hosts.portal }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-portal
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.tls | ternary "websecure" "web" }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
+  routes:
+    {{- if .Values.healthAccess.enabled }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.portal }}`) && PathPrefix(`/api/v1/health`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-portal-api
+          port: {{ .Values.portalApi.service.port }}
+    {{- end }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.portal }}`) && PathPrefix(`/`)
+      services:
+        - name: {{ include "wholo.fullname" . }}-portal-api
+          port: {{ .Values.portalApi.service.port }}
+{{- end }}
+{{- if .Values.ingress.hosts.admin }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-admin
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.tls | ternary "websecure" "web" }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
+  routes:
+    {{- if .Values.healthAccess.enabled }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.admin }}`) && PathPrefix(`/api/v1/health`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-admin-api
+          port: {{ .Values.adminApi.service.port }}
+    {{- end }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.admin }}`) && PathPrefix(`/`)
+      services:
+        - name: {{ include "wholo.fullname" . }}-admin-api
+          port: {{ .Values.adminApi.service.port }}
+{{- end }}
+{{- end }}
