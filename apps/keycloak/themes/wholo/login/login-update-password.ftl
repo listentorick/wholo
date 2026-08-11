@@ -41,6 +41,17 @@
           placeholder="••••••••"
           autofocus
         />
+        <#if passwordPolicies??>
+          <ul class="wh-field-hint" id="kc-password-policy-list">
+            <#if (passwordPolicies.length!-1) != -1><li>At least ${passwordPolicies.length} characters</li></#if>
+            <#if (passwordPolicies.upperCase!-1) != -1><li>At least ${passwordPolicies.upperCase} upper case letter<#if (passwordPolicies.upperCase!1) != 1>s</#if></li></#if>
+            <#if (passwordPolicies.lowerCase!-1) != -1><li>At least ${passwordPolicies.lowerCase} lower case letter<#if (passwordPolicies.lowerCase!1) != 1>s</#if></li></#if>
+            <#if (passwordPolicies.digits!-1) != -1><li>At least ${passwordPolicies.digits} number<#if (passwordPolicies.digits!1) != 1>s</#if></li></#if>
+            <#if (passwordPolicies.specialChars!-1) != -1><li>At least ${passwordPolicies.specialChars} special character<#if (passwordPolicies.specialChars!1) != 1>s</#if></li></#if>
+            <#if passwordPolicies.notUsername!false><li>Must not be your username</li></#if>
+            <#if passwordPolicies.notEmail!false><li>Must not be your email address</li></#if>
+          </ul>
+        </#if>
       </div>
 
       <div class="wh-field wh-field--last">

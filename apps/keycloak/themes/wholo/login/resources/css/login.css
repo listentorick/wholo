@@ -209,6 +209,14 @@ input[type="password"]:focus {
   line-height: 1.4;
 }
 
+.wh-field-hint {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #9BA3AE;
+  line-height: 1.5;
+}
+
 /* ─── Body copy (verify-email, info pages) ──────────────── */
 
 .wh-body {

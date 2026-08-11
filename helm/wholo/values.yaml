@@ -173,6 +173,11 @@ keycloak:
   # existing install requires a realm delete/re-import (or namespace wipe).
   realm: wholo
   realmDisplayName: Wholo
+  # Shared across local and live — realm import only happens on first boot,
+  # so changes here don't propagate to an existing realm; apply the same
+  # string via the Keycloak Admin Console (Authentication → Policies) on any
+  # already-running realm.
+  passwordPolicy: "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and notEmail"
   service:
     type: LoadBalancer
   # "start-dev" for local; "start" (production mode) in live.
