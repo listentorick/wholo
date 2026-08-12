@@ -1,0 +1,32 @@
+<!-- Shared footer partial: the closing card section (divider, optional
+     distributor contact line, Stocdup support line, card-closing border)
+     plus the "Stocdup provides..." attribution line outside the card.
+     Extracted from invite.mjml v4. Needs {{distributorContactLine}} (empty
+     string omits the line via {{#if}}), {{distributorName}},
+     {{stocdupSupportEmail}}. This section's own background is always white
+     regardless of what came before it (a tinted status band, say) — it just
+     continues the card's E6ECF2 left/right hairline border down before
+     closing it with a bottom border; the calling template's preceding
+     section only needs to leave its own bottom edge unbordered. -->
+<mj-section background-color="#FFFFFF" padding="24px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2" border-bottom="1px solid #E6ECF2">
+  <mj-column>
+    <mj-divider border-width="1px" border-color="#E6ECF2" padding-top="0" padding-bottom="16px" />
+    {{#if distributorContactLine}}
+    <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="8px">
+      Questions about your account, products or pricing? Contact {{distributorName}} at {{distributorContactLine}}.
+    </mj-text>
+    {{/if}}
+    <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="0">
+      Need help using Stocdup? Contact {{stocdupSupportEmail}}.
+    </mj-text>
+  </mj-column>
+</mj-section>
+
+<!-- Footer, outside the card -->
+<mj-section padding="24px 32px 0">
+  <mj-column>
+    <mj-text align="center" font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F">
+      Stocdup provides the online ordering service used by {{distributorName}}.
+    </mj-text>
+  </mj-column>
+</mj-section>

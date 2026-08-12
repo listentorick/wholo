@@ -1,0 +1,96 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: structurally identical to trade-relationship-request-accepted.mjml
+  (first-touch moment, same cobalt-light band, same benefits checklist,
+  same CTA) but the copy must not claim the customer requested anything —
+  this trigger is the distributor directly vouching for and activating a
+  customer, bypassing invite acceptance entirely (admin-customers.service.ts
+  activate(), PENDING_INVITE→ACTIVE — "e.g. a known contact onboarded by
+  phone", per that method's own comment). Saying "accepted your request"
+  here would be a factual error, not just a tone mismatch.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited from invite.mjml — same
+  header/footer chrome, same cobalt-light band, same floated-identity
+  technique, same benefits-checklist markup (verbatim, see invite.mjml's v4
+  note on the checkmark's table-based rows).
+  STORY: a customer who's never used Stocdup before finds out their account
+  with this distributor is ready, knows what they can do with it, and goes
+  to look.
+  FIRST VIEWPORT: header, one blue band — headline, distributor identity +
+  the activation sentence, CTA — then the benefits checklist, then the
+  footer.
+  FORM: extends the established world; direction was already set.
+  FINISH: verified via a real MJML render/screenshot + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>{{distributorName}} activated your account</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+  <mj-style>
+    @media only screen and (max-width:480px) {
+      .distributor-byline-logo {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 23px !important;
+      }
+    }
+  </mj-style>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#E6EEFF" padding="32px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Account activated
+      </mj-text>
+      {{> identity-row}}
+      {{#if portalUrl}}
+      <mj-button href="{{portalUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0" inner-padding="14px 32px" align="center">
+        View catalogue
+      </mj-button>
+      {{/if}}
+    </mj-column>
+  </mj-section>
+
+  <!-- Benefits checklist: verbatim from invite.mjml/request-accepted.mjml. -->
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text padding-bottom="16px" font-weight="600" font-size="14px">
+        Through Stocdup, you can:
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Browse {{distributorName}}'s catalogue</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">See your agreed products and prices</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Choose an available delivery date</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="0">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Place and review orders online</td>
+        </tr></table>
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  {{> footer}}
+
+</mj-body>
+</mjml>

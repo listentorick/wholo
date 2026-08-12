@@ -4,6 +4,10 @@ export interface OrderPlacedNotificationPayload {
   orderId: string;
   orderNumber: string;
   distributorName: string;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+  distributorSlug: string | null;
+  distributorLogoUrl: string | null;
   customerName: string;
   autoAccepted: boolean;
   placedByUserId: string;
@@ -25,11 +29,16 @@ export interface CustomerInviteNotificationPayload {
   expiresAt: string;
 }
 
-// Snapshot stored on Notification.payload for the four trade-relationship
-// status-transition events (request accepted/declined, suspended, unsuspended).
-// portalUrl is null for SUSPENDED — there's nothing to browse while suspended.
+// Snapshot stored on Notification.payload for the five trade-relationship
+// status-transition events (request accepted/declined, suspended, unsuspended,
+// activated). portalUrl is null for SUSPENDED — there's nothing to browse
+// while suspended. distributorLogoUrl is resolved at handling time, not
+// carried on the outbox event — see notification-payload comment above.
 export interface TradeRelationshipNotificationPayload {
   relationshipId: string;
   distributorName: string;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+  distributorLogoUrl: string | null;
   portalUrl: string | null;
 }

@@ -38,6 +38,30 @@ export interface SendInviteParams {
   distributorPhone: string | null;
 }
 
+// Shared by sendOrderReceivedToCustomer/sendOrderConfirmedToCustomer.
+// orderUrl is null when the distributor has no slug set — the template
+// omits the "View order" CTA gracefully rather than linking somewhere broken.
+export interface OrderStatusEmailParams {
+  distributorName: string;
+  orderNumber: string;
+  orderUrl: string | null;
+  distributorLogoUrl: string | null;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+}
+
+// Shared by all five trade-relationship status-transition emails. portalUrl
+// is null for Suspended (nothing to browse while suspended) and Declined
+// (the relationship isn't active) — each template decides whether to render
+// a CTA at all, not just whether the link is present.
+export interface TradeRelationshipEmailParams {
+  distributorName: string;
+  distributorLogoUrl: string | null;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+  portalUrl: string | null;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
@@ -206,175 +230,288 @@ export class MailService {
 
   // Wording must not imply acceptance: the order is submitted, not yet
   // accepted/confirmed/approved, unless the distributor auto-accepts (see
-  // sendOrderConfirmedToCustomer).
+  // sendOrderConfirmedToCustomer). Built from a real MJML template matching
+  // the portal's design system — see apps/api/src/mail/templates/order-received.mjml
+  // and the invite.mjml precedent this whole redesigned set follows.
   async sendOrderReceivedToCustomer(
     to: string,
-    params: { distributorName: string; orderNumber: string },
+    params: OrderStatusEmailParams,
   ): Promise<void> {
-    const { distributorName, orderNumber } = params;
+    const { distributorName, orderNumber, orderUrl, distributorLogoUrl, distributorEmail, distributorPhone } = params;
     const subject = `Your order with ${headerSafe(distributorName)} has been received`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+
+    const text = [
       `Thanks — your order has been sent to ${distributorName}.`,
       ``,
       `Order number: ${orderNumber}`,
       ``,
-      `You'll receive another notification when the order has been accepted.`,
-    ]);
+      `You'll get another email as soon as ${distributorName} accepts it.`,
+      ...(orderUrl ? ['', `View your order:`, orderUrl] : []),
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Thanks — your order has been sent to <strong>${esc(distributorName)}</strong>.
-      </p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Order number: <strong>${esc(orderNumber)}</strong></p>
-      <p style="font-size:13px; color:${BRAND.muted}; text-align:center; margin:0;">You'll receive another notification when the order has been accepted.</p>
-    `);
+    const html = await compileMjmlTemplate('order-received', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      orderNumber: esc(orderNumber),
+      orderUrl: orderUrl ? esc(orderUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `Thanks — your order has been sent to <strong>${esc(distributorName)}</strong>.`,
+      identityRowGap: '8',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'order-received customer');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-confirmed.mjml.
   async sendOrderConfirmedToCustomer(
     to: string,
-    params: { distributorName: string; orderNumber: string },
+    params: OrderStatusEmailParams,
   ): Promise<void> {
-    const { distributorName, orderNumber } = params;
+    const { distributorName, orderNumber, orderUrl, distributorLogoUrl, distributorEmail, distributorPhone } = params;
     const subject = `Your order with ${headerSafe(distributorName)} has been confirmed`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `Good news — your order with ${distributorName} has been confirmed.`,
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+
+    const text = [
+      `Good news — ${distributorName} has confirmed your order.`,
       ``,
       `Order number: ${orderNumber}`,
-    ]);
+      ...(orderUrl ? ['', `View your order:`, orderUrl] : []),
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Good news — your order with <strong>${esc(distributorName)}</strong> has been confirmed.
-      </p>
-      <p style="font-size:15px; line-height:1.6; margin:0;">Order number: <strong>${esc(orderNumber)}</strong></p>
-    `);
+    const html = await compileMjmlTemplate('order-confirmed', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      orderNumber: esc(orderNumber),
+      orderUrl: orderUrl ? esc(orderUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `Good news — <strong>${esc(distributorName)}</strong> has confirmed your order.`,
+      identityRowGap: '8',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'order-confirmed customer');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/trade-relationship-request-accepted.mjml.
   async sendTradeRelationshipRequestAccepted(
     to: string,
-    params: { distributorName: string; portalUrl: string | null },
+    params: TradeRelationshipEmailParams,
   ): Promise<void> {
-    const { distributorName, portalUrl } = params;
+    const { distributorName, distributorLogoUrl, distributorEmail, distributorPhone, portalUrl } = params;
     const subject = `${headerSafe(distributorName)} accepted your connection request`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `Good news — ${distributorName} has accepted your request to connect.`,
-      ...(portalUrl ? ['', `Browse their catalogue and place an order:`, portalUrl] : []),
-    ]);
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Good news — <strong>${esc(distributorName)}</strong> has accepted your request to connect.
-      </p>
-      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
-    `);
+    const text = [
+      `${distributorName} has accepted your request to connect. You can now browse their catalogue and place orders through Stocdup.`,
+      ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
+      ``,
+      `Through Stocdup, you can:`,
+      `- Browse ${distributorName}'s catalogue`,
+      `- See your agreed products and prices`,
+      `- Choose an available delivery date`,
+      `- Place and review orders online`,
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('trade-relationship-request-accepted', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      portalUrl: portalUrl ? esc(portalUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `<strong>${esc(distributorName)}</strong> has accepted your request to connect. You can now browse their catalogue and place orders through Stocdup.`,
+      identityRowGap: '24',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'trade-relationship request-accepted');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/trade-relationship-request-declined.mjml.
+  // No CTA: the relationship isn't active, there's nothing to click through to.
   async sendTradeRelationshipRequestDeclined(
     to: string,
-    params: { distributorName: string; portalUrl: string | null },
+    params: TradeRelationshipEmailParams,
   ): Promise<void> {
-    const { distributorName } = params;
+    const { distributorName, distributorLogoUrl, distributorEmail, distributorPhone } = params;
     const subject = `Your request to connect with ${headerSafe(distributorName)}`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `${distributorName} has declined your request to connect. You're welcome to send another request in future.`,
-    ]);
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0;">
-        <strong>${esc(distributorName)}</strong> has declined your request to connect. You're welcome to send another request in future.
-      </p>
-    `);
+    const text = [
+      `${distributorName} has declined your request to connect. You're welcome to send another request in future.`,
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('trade-relationship-request-declined', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `<strong>${esc(distributorName)}</strong> has declined your request to connect.`,
+      identityRowGap: '8',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'trade-relationship request-declined');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/trade-relationship-suspended.mjml.
+  // Deliberately neutral (Light Blue Grey), not error-red — see that file's
+  // direction contract for why. No CTA — nothing to click while suspended.
   async sendTradeRelationshipSuspended(
     to: string,
-    params: { distributorName: string; portalUrl: string | null },
+    params: TradeRelationshipEmailParams,
   ): Promise<void> {
-    const { distributorName } = params;
+    const { distributorName, distributorLogoUrl, distributorEmail, distributorPhone } = params;
     const subject = `Your account with ${headerSafe(distributorName)} has been suspended`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `${distributorName} has suspended your account. You won't be able to place orders with them until they unsuspend it.`,
-      ``,
-      `If you have questions, contact ${distributorName} directly.`,
-    ]);
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        <strong>${esc(distributorName)}</strong> has suspended your account. You won't be able to place orders with them until they unsuspend it.
-      </p>
-      <p style="font-size:13px; color:${BRAND.muted}; text-align:center; margin:0;">If you have questions, contact ${esc(distributorName)} directly.</p>
-    `);
+    const text = [
+      `${distributorName} has suspended your account. You won't be able to place orders with them until they lift the suspension.`,
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('trade-relationship-suspended', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `<strong>${esc(distributorName)}</strong> has suspended your account.`,
+      identityRowGap: '8',
+      // White, not the usual E6ECF2 — this band's own fill IS E6ECF2, so the
+      // default border would be invisible against it (see _identity-row.mjml).
+      identityBorderColor: '#FFFFFF',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'trade-relationship suspended');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/trade-relationship-unsuspended.mjml.
+  // No benefits checklist (unlike request-accepted/activated) — this
+  // customer already knows the platform, they just got access back.
   async sendTradeRelationshipUnsuspended(
     to: string,
-    params: { distributorName: string; portalUrl: string | null },
+    params: TradeRelationshipEmailParams,
   ): Promise<void> {
-    const { distributorName, portalUrl } = params;
+    const { distributorName, distributorLogoUrl, distributorEmail, distributorPhone, portalUrl } = params;
     const subject = `${headerSafe(distributorName)} reactivated your account`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+
+    const text = [
       `Good news — ${distributorName} has reactivated your account. You can order with them again.`,
       ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
-    ]);
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Good news — <strong>${esc(distributorName)}</strong> has reactivated your account. You can order with them again.
-      </p>
-      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
-    `);
+    const html = await compileMjmlTemplate('trade-relationship-unsuspended', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      portalUrl: portalUrl ? esc(portalUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `Good news — <strong>${esc(distributorName)}</strong> has reactivated your account. You can order with them again.`,
+      identityRowGap: '24',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'trade-relationship unsuspended');
   }
 
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/trade-relationship-activated.mjml. Copy
+  // must not say "accepted your request" — this trigger bypasses invite/
+  // request flows entirely (the distributor vouching for the customer
+  // directly, see admin-customers.service.ts activate()).
   async sendTradeRelationshipActivated(
     to: string,
-    params: { distributorName: string; portalUrl: string | null },
+    params: TradeRelationshipEmailParams,
   ): Promise<void> {
-    const { distributorName, portalUrl } = params;
+    const { distributorName, distributorLogoUrl, distributorEmail, distributorPhone, portalUrl } = params;
     const subject = `${headerSafe(distributorName)} activated your account`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `Good news — ${distributorName} has activated your account. You can now browse their catalogue and place orders.`,
-      ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
-    ]);
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        Good news — <strong>${esc(distributorName)}</strong> has activated your account. You can now browse their catalogue and place orders.
-      </p>
-      ${portalUrl ? this.button(portalUrl, 'View catalogue') : ''}
-    `);
+    const text = [
+      `${distributorName} has set up your account on Stocdup. You can now browse their catalogue and place orders.`,
+      ...(portalUrl ? ['', `Browse their catalogue:`, portalUrl] : []),
+      ``,
+      `Through Stocdup, you can:`,
+      `- Browse ${distributorName}'s catalogue`,
+      `- See your agreed products and prices`,
+      `- Choose an available delivery date`,
+      `- Place and review orders online`,
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('trade-relationship-activated', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      portalUrl: portalUrl ? esc(portalUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `<strong>${esc(distributorName)}</strong> has set up your account on Stocdup. You can now browse their catalogue and place orders.`,
+      identityRowGap: '24',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'trade-relationship activated');
   }

@@ -6,6 +6,7 @@ import {
   OrderAcceptanceMode,
 } from '@prisma/client';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
 import { OrderPlacedNotificationService, OrderSubmittedEventPayload } from './order-placed-notification.service';
@@ -35,7 +36,9 @@ describe('OrderPlacedNotificationService', () => {
     user: { findUnique: jest.Mock };
     notification: { upsert: jest.Mock };
     notificationDelivery: { createMany: jest.Mock; findMany: jest.Mock };
+    assetImage: { findFirst: jest.Mock };
   };
+  let r2Storage: { getPublicUrl: jest.Mock };
   let queue: { add: jest.Mock };
   let adminNotifications: { notifyOrganisationAdmins: jest.Mock };
 
@@ -44,7 +47,12 @@ describe('OrderPlacedNotificationService', () => {
       organisation: {
         findUnique: jest.fn(({ where }: { where: { id: string } }) => {
           if (where.id === DISTRIBUTOR_ID) {
-            return Promise.resolve({ name: 'Vinos Direct', email: 'office@vinos.example' });
+            return Promise.resolve({
+              name: 'Vinos Direct',
+              email: 'office@vinos.example',
+              phone: '(03) 9123 4567',
+              slug: 'vinos-direct',
+            });
           }
           if (where.id === CUSTOMER_ID) {
             return Promise.resolve({ name: 'The Wine Bar', email: 'org@winebar.example' });
@@ -61,7 +69,9 @@ describe('OrderPlacedNotificationService', () => {
         createMany: jest.fn().mockResolvedValue({ count: 3 }),
         findMany: jest.fn().mockResolvedValue([{ id: 'del-1' }, { id: 'del-2' }, { id: 'del-3' }]),
       },
+      assetImage: { findFirst: jest.fn().mockResolvedValue(null) },
     };
+    r2Storage = { getPublicUrl: jest.fn((key: string) => `https://cdn.stocdup.com/${key}`) };
     queue = { add: jest.fn().mockResolvedValue({}) };
     adminNotifications = { notifyOrganisationAdmins: jest.fn().mockResolvedValue(undefined) };
 
@@ -71,6 +81,7 @@ describe('OrderPlacedNotificationService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: getQueueToken(NOTIFICATION_DELIVERY_QUEUE), useValue: queue },
         { provide: AdminNotificationsService, useValue: adminNotifications },
+        { provide: R2StorageService, useValue: r2Storage },
       ],
     }).compile();
 
@@ -89,6 +100,10 @@ describe('OrderPlacedNotificationService', () => {
           payload: expect.objectContaining({
             orderNumber: 'ORD-2026-00042',
             distributorName: 'Vinos Direct',
+            distributorEmail: 'office@vinos.example',
+            distributorPhone: '(03) 9123 4567',
+            distributorSlug: 'vinos-direct',
+            distributorLogoUrl: null,
             customerName: 'The Wine Bar',
             autoAccepted: false,
           }),
@@ -223,5 +238,27 @@ describe('OrderPlacedNotificationService', () => {
     await service.handleOrderSubmitted(makeEvent());
 
     expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('resolves the distributor logo URL via AssetImage when one is uploaded', async () => {
+    prisma.assetImage.findFirst.mockResolvedValue({
+      variants: { full: 'distributors/dist-1/branding/logo/img-1/full.webp', thumb: 'distributors/dist-1/branding/logo/img-1/thumb.webp' },
+    });
+
+    await service.handleOrderSubmitted(makeEvent());
+
+    expect(prisma.assetImage.findFirst).toHaveBeenCalledWith({
+      where: { assetType: 'distributor-logo', entityId: DISTRIBUTOR_ID },
+    });
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.distributorLogoUrl).toBe('https://cdn.stocdup.com/distributors/dist-1/branding/logo/img-1/full.webp');
+  });
+
+  it('leaves distributorLogoUrl null when the distributor has no uploaded logo', async () => {
+    await service.handleOrderSubmitted(makeEvent());
+
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.distributorLogoUrl).toBeNull();
+    expect(r2Storage.getPublicUrl).not.toHaveBeenCalled();
   });
 });

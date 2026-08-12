@@ -10,12 +10,14 @@ export class EmailChannelSender implements ChannelSender {
   readonly channel = NotificationChannel.EMAIL;
 
   private readonly adminUrl: string;
+  private readonly portalUrl: string;
 
   constructor(
     private readonly mail: MailService,
     config: ConfigService,
   ) {
     this.adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3020');
+    this.portalUrl = config.get<string>('PORTAL_URL', 'http://localhost:3010');
   }
 
   async send(delivery: NotificationDelivery, notification: Notification): Promise<void> {
@@ -42,7 +44,13 @@ export class EmailChannelSender implements ChannelSender {
       notification.type === NotificationType.TRADE_RELATIONSHIP_ACTIVATED
     ) {
       const relPayload = notification.payload as unknown as TradeRelationshipNotificationPayload;
-      const params = { distributorName: relPayload.distributorName, portalUrl: relPayload.portalUrl };
+      const params = {
+        distributorName: relPayload.distributorName,
+        distributorEmail: relPayload.distributorEmail,
+        distributorPhone: relPayload.distributorPhone,
+        distributorLogoUrl: relPayload.distributorLogoUrl,
+        portalUrl: relPayload.portalUrl,
+      };
       switch (notification.type) {
         case NotificationType.TRADE_RELATIONSHIP_REQUEST_ACCEPTED:
           await this.mail.sendTradeRelationshipRequestAccepted(delivery.recipient, params);
@@ -73,16 +81,24 @@ export class EmailChannelSender implements ChannelSender {
       return;
     }
 
+    // Only the distributor's copy got an order link before this — the
+    // customer's didn't link anywhere at all. Needs a slug to build a real
+    // portal route (distributors/:slug/orders/:id); omit rather than link
+    // somewhere broken if one isn't set.
+    const orderUrl = payload.distributorSlug ? `${this.portalUrl}/${payload.distributorSlug}/orders/${payload.orderId}` : null;
+    const customerParams = {
+      distributorName: payload.distributorName,
+      distributorEmail: payload.distributorEmail,
+      distributorPhone: payload.distributorPhone,
+      distributorLogoUrl: payload.distributorLogoUrl,
+      orderNumber: payload.orderNumber,
+      orderUrl,
+    };
+
     if (payload.autoAccepted) {
-      await this.mail.sendOrderConfirmedToCustomer(delivery.recipient, {
-        distributorName: payload.distributorName,
-        orderNumber: payload.orderNumber,
-      });
+      await this.mail.sendOrderConfirmedToCustomer(delivery.recipient, customerParams);
     } else {
-      await this.mail.sendOrderReceivedToCustomer(delivery.recipient, {
-        distributorName: payload.distributorName,
-        orderNumber: payload.orderNumber,
-      });
+      await this.mail.sendOrderReceivedToCustomer(delivery.recipient, customerParams);
     }
   }
 }

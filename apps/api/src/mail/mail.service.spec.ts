@@ -1,6 +1,29 @@
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { MailService, SendInviteParams } from './mail.service';
+import { MailService, OrderStatusEmailParams, SendInviteParams, TradeRelationshipEmailParams } from './mail.service';
+
+function orderStatusParams(overrides: Partial<OrderStatusEmailParams> = {}): OrderStatusEmailParams {
+  return {
+    distributorName: 'Vinos Direct',
+    orderNumber: 'ORD-2026-00042',
+    orderUrl: 'http://localhost:3010/vinos-direct/orders/order-1',
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    ...overrides,
+  };
+}
+
+function tradeRelationshipParams(overrides: Partial<TradeRelationshipEmailParams> = {}): TradeRelationshipEmailParams {
+  return {
+    distributorName: 'Vinos Direct',
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    portalUrl: 'http://localhost:3010/vinos-direct',
+    ...overrides,
+  };
+}
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn(),
@@ -43,10 +66,7 @@ describe('MailService — order emails', () => {
 
   describe('sendOrderReceivedToCustomer', () => {
     it('sends a received email identifying the distributor and order number', async () => {
-      await service.sendOrderReceivedToCustomer('buyer@customer.example', {
-        distributorName: 'Vinos Direct',
-        orderNumber: 'ORD-2026-00042',
-      });
+      await service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams());
 
       const mail = sendMail.mock.calls[0][0];
       expect(mail.to).toBe('buyer@customer.example');
@@ -56,10 +76,7 @@ describe('MailService — order emails', () => {
     });
 
     it('never implies the order has been accepted', async () => {
-      await service.sendOrderReceivedToCustomer('buyer@customer.example', {
-        distributorName: 'Vinos Direct',
-        orderNumber: 'ORD-2026-00042',
-      });
+      await service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams());
 
       const mail = sendMail.mock.calls[0][0];
       // "when the order has been accepted" (future tense) is allowed; what must
@@ -70,25 +87,77 @@ describe('MailService — order emails', () => {
       const claimLines = [
         ...String(mail.text).split('\n'),
         ...String(mail.html).split('\n'),
-      ].filter((line) => !/you'll receive another notification/i.test(line));
+      ].filter((line) => !/you'll get another email/i.test(line));
       for (const word of FORBIDDEN_RECEIVED_WORDS) {
         for (const line of claimLines) {
           expect(line.toLowerCase()).not.toContain(word);
         }
       }
     });
+
+    it('includes a "View order" link to the portal when orderUrl is set', async () => {
+      await service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).toContain('http://localhost:3010/vinos-direct/orders/order-1');
+      expect(mail.text).toContain('http://localhost:3010/vinos-direct/orders/order-1');
+    });
+
+    it('omits the "View order" button when the distributor has no portal slug', async () => {
+      await service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams({ orderUrl: null }));
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).not.toContain('View order');
+    });
+
+    it('shows the distributor logo when provided, and omits it gracefully when not', async () => {
+      const withLogo = await (async () => {
+        await service.sendOrderReceivedToCustomer(
+          'buyer@customer.example',
+          orderStatusParams({ distributorLogoUrl: 'https://cdn.stocdup.com/logo.png' }),
+        );
+        return sendMail.mock.calls[sendMail.mock.calls.length - 1][0];
+      })();
+      expect(withLogo.html).toContain('https://cdn.stocdup.com/logo.png');
+
+      await service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams({ distributorLogoUrl: null }));
+      const withoutLogo = sendMail.mock.calls[sendMail.mock.calls.length - 1][0];
+      expect(withoutLogo.html.match(/<img\b/g)).toHaveLength(1); // only the Stocdup mark
+    });
+
+    it('includes a distributor contact line built from whichever of email/phone are set', async () => {
+      await service.sendOrderReceivedToCustomer(
+        'buyer@customer.example',
+        orderStatusParams({ distributorEmail: 'orders@vinos.example', distributorPhone: null }),
+      );
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).toContain('orders@vinos.example');
+      expect(mail.text).toContain('orders@vinos.example');
+    });
   });
 
   describe('sendOrderConfirmedToCustomer', () => {
     it('sends a confirmed email identifying the distributor and order number', async () => {
-      await service.sendOrderConfirmedToCustomer('buyer@customer.example', {
-        distributorName: 'Vinos Direct',
-        orderNumber: 'ORD-2026-00042',
-      });
+      await service.sendOrderConfirmedToCustomer('buyer@customer.example', orderStatusParams());
 
       const mail = sendMail.mock.calls[0][0];
       expect(mail.subject).toBe('Your order with Vinos Direct has been confirmed');
       expect(mail.text).toContain('ORD-2026-00042');
+    });
+
+    it('includes a "View order" link to the portal when orderUrl is set', async () => {
+      await service.sendOrderConfirmedToCustomer('buyer@customer.example', orderStatusParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).toContain('http://localhost:3010/vinos-direct/orders/order-1');
+    });
+
+    it('omits the "View order" button when the distributor has no portal slug', async () => {
+      await service.sendOrderConfirmedToCustomer('buyer@customer.example', orderStatusParams({ orderUrl: null }));
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).not.toContain('View order');
     });
   });
 
@@ -109,10 +178,7 @@ describe('MailService — order emails', () => {
     sendMail.mockRejectedValue(new Error('SMTP connection refused'));
 
     await expect(
-      service.sendOrderReceivedToCustomer('buyer@customer.example', {
-        distributorName: 'Vinos Direct',
-        orderNumber: 'ORD-2026-00042',
-      }),
+      service.sendOrderReceivedToCustomer('buyer@customer.example', orderStatusParams()),
     ).rejects.toThrow('SMTP connection refused');
   });
 
@@ -148,10 +214,7 @@ describe('MailService — trade-relationship emails', () => {
   });
 
   it('sendTradeRelationshipRequestAccepted includes a catalogue link when a portal URL is given', async () => {
-    await service.sendTradeRelationshipRequestAccepted('buyer@winebar.example', {
-      distributorName: 'Vinos Direct',
-      portalUrl: 'http://localhost:3010/vinos-direct',
-    });
+    await service.sendTradeRelationshipRequestAccepted('buyer@winebar.example', tradeRelationshipParams());
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.subject).toBe('Vinos Direct accepted your connection request');
@@ -160,10 +223,7 @@ describe('MailService — trade-relationship emails', () => {
   });
 
   it('sendTradeRelationshipRequestDeclined omits a link and does not blame the customer', async () => {
-    await service.sendTradeRelationshipRequestDeclined('buyer@winebar.example', {
-      distributorName: 'Vinos Direct',
-      portalUrl: null,
-    });
+    await service.sendTradeRelationshipRequestDeclined('buyer@winebar.example', tradeRelationshipParams({ portalUrl: null }));
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.subject).toBe('Your request to connect with Vinos Direct');
@@ -171,10 +231,7 @@ describe('MailService — trade-relationship emails', () => {
   });
 
   it('sendTradeRelationshipSuspended never includes a portal link, even if one were passed', async () => {
-    await service.sendTradeRelationshipSuspended('buyer@winebar.example', {
-      distributorName: 'Vinos Direct',
-      portalUrl: 'http://localhost:3010/vinos-direct',
-    });
+    await service.sendTradeRelationshipSuspended('buyer@winebar.example', tradeRelationshipParams());
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.subject).toBe('Your account with Vinos Direct has been suspended');
@@ -186,10 +243,7 @@ describe('MailService — trade-relationship emails', () => {
   });
 
   it('sendTradeRelationshipUnsuspended includes a catalogue link when a portal URL is given', async () => {
-    await service.sendTradeRelationshipUnsuspended('buyer@winebar.example', {
-      distributorName: 'Vinos Direct',
-      portalUrl: 'http://localhost:3010/vinos-direct',
-    });
+    await service.sendTradeRelationshipUnsuspended('buyer@winebar.example', tradeRelationshipParams());
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.subject).toBe('Vinos Direct reactivated your account');
@@ -197,23 +251,51 @@ describe('MailService — trade-relationship emails', () => {
   });
 
   it('sendTradeRelationshipActivated includes a catalogue link when a portal URL is given', async () => {
-    await service.sendTradeRelationshipActivated('buyer@winebar.example', {
-      distributorName: 'Vinos Direct',
-      portalUrl: 'http://localhost:3010/vinos-direct',
-    });
+    await service.sendTradeRelationshipActivated('buyer@winebar.example', tradeRelationshipParams());
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.subject).toBe('Vinos Direct activated your account');
     expect(mail.html).toContain('http://localhost:3010/vinos-direct');
+    // Copy must not claim the customer requested anything — this trigger
+    // bypasses invite/request flows entirely (distributor vouching directly).
+    expect(mail.html.toLowerCase()).not.toContain('accepted your request');
   });
 
-  it('omits the catalogue button across all four link-eligible emails when portalUrl is null', async () => {
-    await service.sendTradeRelationshipRequestAccepted('a@b.example', { distributorName: 'X', portalUrl: null });
-    await service.sendTradeRelationshipUnsuspended('a@b.example', { distributorName: 'X', portalUrl: null });
-    await service.sendTradeRelationshipActivated('a@b.example', { distributorName: 'X', portalUrl: null });
+  it('omits the catalogue button across all three link-eligible emails when portalUrl is null', async () => {
+    await service.sendTradeRelationshipRequestAccepted('a@b.example', tradeRelationshipParams({ portalUrl: null }));
+    await service.sendTradeRelationshipUnsuspended('a@b.example', tradeRelationshipParams({ portalUrl: null }));
+    await service.sendTradeRelationshipActivated('a@b.example', tradeRelationshipParams({ portalUrl: null }));
 
     for (const call of sendMail.mock.calls) {
       expect(call[0].html).not.toContain('View catalogue');
+    }
+  });
+
+  it('shows the distributor logo when provided, and omits it gracefully when not', async () => {
+    await service.sendTradeRelationshipSuspended(
+      'buyer@winebar.example',
+      tradeRelationshipParams({ distributorLogoUrl: 'https://cdn.stocdup.com/logo.png' }),
+    );
+    const withLogo = sendMail.mock.calls[sendMail.mock.calls.length - 1][0];
+    expect(withLogo.html).toContain('https://cdn.stocdup.com/logo.png');
+
+    await service.sendTradeRelationshipSuspended('buyer@winebar.example', tradeRelationshipParams({ distributorLogoUrl: null }));
+    const withoutLogo = sendMail.mock.calls[sendMail.mock.calls.length - 1][0];
+    expect(withoutLogo.html.match(/<img\b/g)).toHaveLength(1); // only the Stocdup mark
+  });
+
+  it('includes a distributor contact line built from whichever of email/phone are set, across all five emails', async () => {
+    const withContact = tradeRelationshipParams({ distributorEmail: 'orders@vinos.example', distributorPhone: null });
+
+    await service.sendTradeRelationshipRequestAccepted('buyer@winebar.example', withContact);
+    await service.sendTradeRelationshipRequestDeclined('buyer@winebar.example', withContact);
+    await service.sendTradeRelationshipSuspended('buyer@winebar.example', withContact);
+    await service.sendTradeRelationshipUnsuspended('buyer@winebar.example', withContact);
+    await service.sendTradeRelationshipActivated('buyer@winebar.example', withContact);
+
+    for (const call of sendMail.mock.calls) {
+      expect(call[0].html).toContain('orders@vinos.example');
+      expect(call[0].text).toContain('orders@vinos.example');
     }
   });
 });

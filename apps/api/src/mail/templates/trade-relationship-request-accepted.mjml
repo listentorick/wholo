@@ -1,0 +1,100 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: the customer asked to connect and the distributor said yes — a
+  genuine first-touch moment, the mirror image of invite.mjml (there, the
+  distributor reaches out first; here, the customer did, and this is the
+  "you're in" reply). Worth the same weight as invite.mjml: identity, the
+  benefits checklist, one CTA — not a terse one-liner.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited from invite.mjml — same
+  header/footer chrome, same cobalt-light hero band, same floated-identity
+  technique, same benefits-checklist markup (verbatim from invite.mjml,
+  including its real-Chromium-verified table-based checkmark rows — see that
+  file's v4 note on why a hanging-indent div silently drops the glyph).
+  Headline is a short status word ("Request accepted"), not invite.mjml's
+  more editorial "Welcome to the club" — deliberate: this new set of status
+  emails (order received/confirmed, this, suspended, etc.) all use the
+  status itself as the headline, so the whole set scans consistently even
+  though invite.mjml (reviewed and shipped separately) doesn't match it.
+  STORY: a customer who asked to connect sees it worked, knows who they're
+  now connected to, gets a reminder of what they can do, and goes to look.
+  FIRST VIEWPORT: header, one blue band — headline, distributor identity +
+  confirmation sentence, CTA — then the benefits checklist, then the footer.
+  FORM: extends the established world; direction was already set.
+  FINISH: verified via a real MJML render/screenshot + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>{{distributorName}} accepted your connection request</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+  <mj-style>
+    @media only screen and (max-width:480px) {
+      .distributor-byline-logo {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 23px !important;
+      }
+    }
+  </mj-style>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#E6EEFF" padding="32px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Request accepted
+      </mj-text>
+      {{> identity-row}}
+      {{#if portalUrl}}
+      <mj-button href="{{portalUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0" inner-padding="14px 32px" align="center">
+        View catalogue
+      </mj-button>
+      {{/if}}
+    </mj-column>
+  </mj-section>
+
+  <!-- Benefits checklist: verbatim from invite.mjml (see that file's v4 note
+       for why the checkmark uses a 2-cell table rather than a hanging-indent
+       div). Reused, not re-derived, so a future edit to the wording or icon
+       treatment has one place to happen, not five. -->
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text padding-bottom="16px" font-weight="600" font-size="14px">
+        Through Stocdup, you can:
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Browse {{distributorName}}'s catalogue</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">See your agreed products and prices</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Choose an available delivery date</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="0">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Place and review orders online</td>
+        </tr></table>
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  {{> footer}}
+
+</mj-body>
+</mjml>

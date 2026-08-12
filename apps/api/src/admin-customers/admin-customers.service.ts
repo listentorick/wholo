@@ -448,7 +448,7 @@ export class AdminCustomersService {
       where: { id, distributorId, deletedAt: null },
       include: {
         customer: { select: { id: true, name: true, email: true } },
-        distributor: { select: { name: true, slug: true } },
+        distributor: { select: { name: true, slug: true, email: true, phone: true } },
       },
     });
     if (!rel) throw new NotFoundException('Customer not found');
@@ -478,6 +478,8 @@ export class AdminCustomersService {
         customerName: rel.customer.name,
         customerEmail: rel.customer.email,
         distributorName: rel.distributor.name,
+        distributorEmail: rel.distributor.email,
+        distributorPhone: rel.distributor.phone,
         portalUrl,
       });
     });

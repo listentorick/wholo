@@ -9,6 +9,7 @@ import {
 } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
 import { OrderPlacedNotificationPayload } from './notification-payload';
@@ -31,6 +32,7 @@ export class OrderPlacedNotificationService {
     private readonly prisma: PrismaService,
     @InjectQueue(NOTIFICATION_DELIVERY_QUEUE) private readonly deliveryQueue: Queue,
     private readonly adminNotifications: AdminNotificationsService,
+    private readonly r2Storage: R2StorageService,
   ) {}
 
   // Idempotent under at-least-once event delivery: Notification is upserted on
@@ -38,10 +40,10 @@ export class OrderPlacedNotificationService {
   // (notificationId, channel, recipient) unique, and delivery jobs use
   // jobId = delivery.id so re-enqueueing is a no-op.
   async handleOrderSubmitted(event: OrderSubmittedEventPayload): Promise<void> {
-    const [distributor, settings, customer] = await Promise.all([
+    const [distributor, settings, customer, logoImage] = await Promise.all([
       this.prisma.organisation.findUnique({
         where: { id: event.distributorId },
-        select: { name: true, email: true },
+        select: { name: true, email: true, phone: true, slug: true },
       }),
       this.prisma.distributorSettings.findUnique({
         where: { distributorId: event.distributorId },
@@ -50,6 +52,12 @@ export class OrderPlacedNotificationService {
       this.prisma.organisation.findUnique({
         where: { id: event.traderCustomerId },
         select: { name: true, email: true },
+      }),
+      // Resolved here rather than carried on the outbox event, same
+      // rationale as CustomerInviteNotificationService — the logo can
+      // change between order placement and a retried delivery.
+      this.prisma.assetImage.findFirst({
+        where: { assetType: 'distributor-logo', entityId: event.distributorId },
       }),
     ]);
 
@@ -73,10 +81,18 @@ export class OrderPlacedNotificationService {
       return;
     }
 
+    const distributorLogoUrl = logoImage
+      ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
+      : null;
+
     const payload: OrderPlacedNotificationPayload = {
       orderId: event.orderId,
       orderNumber: event.orderNumber,
       distributorName: distributor.name,
+      distributorEmail: distributor.email,
+      distributorPhone: distributor.phone,
+      distributorSlug: distributor.slug,
+      distributorLogoUrl,
       customerName: customer.name,
       autoAccepted: event.acceptanceModeSnapshot === OrderAcceptanceMode.AUTO_ON_SUBMISSION,
       placedByUserId: event.placedByUserId,

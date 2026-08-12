@@ -1,0 +1,22 @@
+<!-- Shared identity-row partial: distributor logo circle + a sentence,
+     vertically centered against each other via a 2-cell table (valign
+     "middle" on both cells) — not the float+clearfix technique invite.mjml
+     uses, which only top-aligns text against a taller float and was flagged
+     as visually off on these newer templates. Needs {{distributorLogoUrl}}
+     (empty omits the whole icon cell — the {{#if}} wraps the <td>, not just
+     the <img>, so with no logo the row collapses to one full-width text
+     cell rather than an empty gap), {{distributorName}} (img alt),
+     {{identityText}} (the sentence itself, pre-built with any <strong>
+     tags), {{identityRowGap}} (bare number, e.g. "8" — the "px" suffix is
+     appended below since MJML rejects a unitless padding-bottom; "8" when
+     another paragraph follows directly, "24" when a CTA button follows
+     directly),
+     {{identityBorderColor}} (the circle's own border — E6ECF2 everywhere
+     except trade-relationship-suspended.mjml, whose band fill IS E6ECF2, so
+     that template passes FFFFFF for contrast against its own background). -->
+<mj-text color="#0B1D3A" padding-bottom="{{identityRowGap}}px">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+    {{#if distributorLogoUrl}}<td width="60" valign="middle" style="width:60px;padding-right:16px;"><img src="{{distributorLogoUrl}}" alt="{{distributorName}}" width="60" height="60" class="distributor-byline-logo" style="width:60px;height:60px;border-radius:31px;border:1px solid {{identityBorderColor}};display:block;" /></td>{{/if}}
+    <td valign="middle" style="font-size:14px;color:#0B1D3A;line-height:1.5;">{{identityText}}</td>
+  </tr></table>
+</mj-text>

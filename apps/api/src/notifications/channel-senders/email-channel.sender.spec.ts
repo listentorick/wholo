@@ -7,6 +7,10 @@ const basePayload = {
   orderId: 'order-1',
   orderNumber: 'ORD-2026-00042',
   distributorName: 'Vinos Direct',
+  distributorEmail: 'orders@vinos.example',
+  distributorPhone: '(03) 9123 4567',
+  distributorSlug: 'vinos-direct',
+  distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
   customerName: 'The Wine Bar',
   autoAccepted: false,
   placedByUserId: 'user-1',
@@ -54,17 +58,21 @@ describe('EmailChannelSender', () => {
     });
   });
 
-  it('sends the received email to customers for manually-accepted orders', async () => {
+  it('sends the received email to customers for manually-accepted orders, with a portal order link', async () => {
     await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'), makeNotification());
 
     expect(mail.sendOrderReceivedToCustomer).toHaveBeenCalledWith('buyer@winebar.example', {
       distributorName: 'Vinos Direct',
+      distributorEmail: 'orders@vinos.example',
+      distributorPhone: '(03) 9123 4567',
+      distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
       orderNumber: 'ORD-2026-00042',
+      orderUrl: 'http://localhost:3010/vinos-direct/orders/order-1',
     });
     expect(mail.sendOrderConfirmedToCustomer).not.toHaveBeenCalled();
   });
 
-  it('sends the confirmed email to customers for auto-accepted orders', async () => {
+  it('sends the confirmed email to customers for auto-accepted orders, with a portal order link', async () => {
     await sender.send(
       makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'),
       makeNotification({ autoAccepted: true }),
@@ -72,9 +80,25 @@ describe('EmailChannelSender', () => {
 
     expect(mail.sendOrderConfirmedToCustomer).toHaveBeenCalledWith('buyer@winebar.example', {
       distributorName: 'Vinos Direct',
+      distributorEmail: 'orders@vinos.example',
+      distributorPhone: '(03) 9123 4567',
+      distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
       orderNumber: 'ORD-2026-00042',
+      orderUrl: 'http://localhost:3010/vinos-direct/orders/order-1',
     });
     expect(mail.sendOrderReceivedToCustomer).not.toHaveBeenCalled();
+  });
+
+  it('omits the order URL when the distributor has no portal slug', async () => {
+    await sender.send(
+      makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'),
+      makeNotification({ distributorSlug: null as unknown as string }),
+    );
+
+    expect(mail.sendOrderReceivedToCustomer).toHaveBeenCalledWith(
+      'buyer@winebar.example',
+      expect.objectContaining({ orderUrl: null }),
+    );
   });
 
   it('sends the invite email for CUSTOMER_INVITE_SENT notifications', async () => {
@@ -121,13 +145,23 @@ describe('EmailChannelSender', () => {
     it(`routes ${type} notifications to MailService.${method}`, async () => {
       const notification = {
         type,
-        payload: { relationshipId: 'rel-1', distributorName: 'Vinos Direct', portalUrl: 'http://localhost:3010/vinos-direct' },
+        payload: {
+          relationshipId: 'rel-1',
+          distributorName: 'Vinos Direct',
+          distributorEmail: 'orders@vinos.example',
+          distributorPhone: '(03) 9123 4567',
+          distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
+          portalUrl: 'http://localhost:3010/vinos-direct',
+        },
       } as unknown as Notification;
 
       await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'), notification);
 
       expect(mail[method]).toHaveBeenCalledWith('buyer@winebar.example', {
         distributorName: 'Vinos Direct',
+        distributorEmail: 'orders@vinos.example',
+        distributorPhone: '(03) 9123 4567',
+        distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
         portalUrl: 'http://localhost:3010/vinos-direct',
       });
       for (const { method: otherMethod } of tradeRelationshipCases) {

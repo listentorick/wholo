@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { NotificationAudience, NotificationChannel, NotificationType } from '@prisma/client';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
 import { TradeRelationshipEventPayload, TradeRelationshipNotificationService } from './trade-relationship-notification.service';
@@ -15,6 +16,8 @@ function makeEvent(overrides: Partial<TradeRelationshipEventPayload> = {}): Trad
     customerName: 'The Wine Bar',
     customerEmail: 'buyer@winebar.example',
     distributorName: 'Vinos Direct',
+    distributorEmail: null,
+    distributorPhone: null,
     portalUrl: 'http://localhost:3010/vinos-direct',
     ...overrides,
   };
@@ -25,7 +28,9 @@ describe('TradeRelationshipNotificationService', () => {
   let prisma: {
     notification: { upsert: jest.Mock };
     notificationDelivery: { createMany: jest.Mock; findMany: jest.Mock };
+    assetImage: { findFirst: jest.Mock };
   };
+  let r2Storage: { getPublicUrl: jest.Mock };
   let queue: { add: jest.Mock };
 
   beforeEach(async () => {
@@ -35,13 +40,16 @@ describe('TradeRelationshipNotificationService', () => {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
         findMany: jest.fn().mockResolvedValue([{ id: 'del-1' }]),
       },
+      assetImage: { findFirst: jest.fn().mockResolvedValue(null) },
     };
+    r2Storage = { getPublicUrl: jest.fn((key: string) => `https://cdn.stocdup.com/${key}`) };
     queue = { add: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TradeRelationshipNotificationService,
         { provide: PrismaService, useValue: prisma },
+        { provide: R2StorageService, useValue: r2Storage },
         { provide: getQueueToken(NOTIFICATION_DELIVERY_QUEUE), useValue: queue },
       ],
     }).compile();
@@ -143,5 +151,38 @@ describe('TradeRelationshipNotificationService', () => {
     await service.handleTradeRelationshipSuspended(makeEvent(), 'evt-1');
 
     expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('resolves the distributor logo URL via AssetImage when one is uploaded', async () => {
+    prisma.assetImage.findFirst.mockResolvedValue({
+      variants: { full: 'distributors/dist-1/branding/logo/img-1/full.webp', thumb: 'distributors/dist-1/branding/logo/img-1/thumb.webp' },
+    });
+
+    await service.handleTradeRelationshipSuspended(makeEvent(), 'evt-1');
+
+    expect(prisma.assetImage.findFirst).toHaveBeenCalledWith({
+      where: { assetType: 'distributor-logo', entityId: DISTRIBUTOR_ID },
+    });
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.distributorLogoUrl).toBe('https://cdn.stocdup.com/distributors/dist-1/branding/logo/img-1/full.webp');
+  });
+
+  it('leaves distributorLogoUrl null when the distributor has no uploaded logo', async () => {
+    await service.handleTradeRelationshipSuspended(makeEvent(), 'evt-1');
+
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.distributorLogoUrl).toBeNull();
+    expect(r2Storage.getPublicUrl).not.toHaveBeenCalled();
+  });
+
+  it('carries the distributor contact details through onto the notification payload', async () => {
+    await service.handleTradeRelationshipSuspended(
+      makeEvent({ distributorEmail: 'orders@vinos.example', distributorPhone: '(03) 9123 4567' }),
+      'evt-1',
+    );
+
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.distributorEmail).toBe('orders@vinos.example');
+    expect(payload.distributorPhone).toBe('(03) 9123 4567');
   });
 });

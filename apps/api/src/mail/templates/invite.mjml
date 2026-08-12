@@ -126,6 +126,17 @@
     this world — DESIGN.md's Square Edge and Reach rules), and the
     float+clearfix technique for the circular distributor mark and its
     mobile shrink.
+
+  V5 — SHARED PARTIALS: the header lockup and closing-card/footer sections
+  below were extracted verbatim into partials/_header.mjml and
+  _footer.mjml (mail-template.ts gained a small partial-splice primitive —
+  NOTE: never write that marker's literal syntax in a template comment, it
+  runs over the raw source before mjml parses out comments and will try to
+  load a partial by that name) once a second, third... email needed the
+  exact same chrome —
+  one source of truth instead of copy-pasting ~60 lines of proven markup
+  into every new template. Purely mechanical: rendered output is unchanged,
+  verified via the existing test suite rather than a new screenshot pass.
 -->
 <mj-head>
   <mj-title>{{distributorName}} invited you to Stocdup</mj-title>
@@ -158,22 +169,7 @@
 </mj-head>
 <mj-body background-color="#F2F4F7" width="480px">
 
-  <!-- Header: icon-only mark + real live text, not a wordmark baked into an
-       image — mirrors the admin app's own chrome lockup exactly
-       (apps/admin/src/components/Sidebar.tsx), sized up from that chrome's
-       36px/18px so this reads as a standalone header moment (matching the
-       v4 mockup's bigger top lockup) rather than compact in-app chrome.
-       Padding is symmetric (32px top/bottom) so the lockup sits centered in
-       its own white zone before the hero band's color starts — an earlier
-       pass left the section's bottom padding at 0, which read as lopsided
-       (32px of air above the logo, none below it). -->
-  <mj-section background-color="#FFFFFF" padding="32px 32px 32px" border="1px solid #E6ECF2" border-bottom="none">
-    <mj-column>
-      <mj-text align="center" padding-bottom="0">
-        <img src="{{stocdupIconUrl}}" alt="" width="40" height="40" style="width:40px;height:40px;display:inline-block;vertical-align:middle;margin-right:12px;" /><span style="font-size:20px;font-weight:700;letter-spacing:-0.01em;line-height:1;vertical-align:middle;"><span style="color:#0B1D3A;">stocd</span><span style="color:#1565FF;">up</span></span>
-      </mj-text>
-    </mj-column>
-  </mj-section>
+  {{> header}}
 
   <!-- Hero band: identity mark, headline, detail copy and the CTA all live
        together on one pale-blue tint (DESIGN.md's cobalt-blue-light token)
@@ -261,28 +257,7 @@
     </mj-column>
   </mj-section>
 
-  <mj-section background-color="#FFFFFF" padding="24px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2" border-bottom="1px solid #E6ECF2">
-    <mj-column>
-      <mj-divider border-width="1px" border-color="#E6ECF2" padding-top="0" padding-bottom="16px" />
-      {{#if distributorContactLine}}
-      <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="8px">
-        Questions about your account, products or pricing? Contact {{distributorName}} at {{distributorContactLine}}.
-      </mj-text>
-      {{/if}}
-      <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="0">
-        Need help using Stocdup? Contact {{stocdupSupportEmail}}.
-      </mj-text>
-    </mj-column>
-  </mj-section>
-
-  <!-- Footer, outside the card -->
-  <mj-section padding="24px 32px 0">
-    <mj-column>
-      <mj-text align="center" font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F">
-        Stocdup provides the online ordering service used by {{distributorName}}.
-      </mj-text>
-    </mj-column>
-  </mj-section>
+  {{> footer}}
 
 </mj-body>
 </mjml>
