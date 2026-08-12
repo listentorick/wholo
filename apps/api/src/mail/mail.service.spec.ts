@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { MailService } from './mail.service';
+import { MailService, SendInviteParams } from './mail.service';
 
 jest.mock('nodemailer', () => ({
   createTransport: jest.fn(),
@@ -268,7 +268,7 @@ describe('MailService — invite from-address', () => {
     } as unknown as ConfigService;
 
     const service = new MailService(config);
-    await service.sendInvite('buyer@winebar.example', 'Vinos Direct', 'http://localhost:3010/accept-invite?token=abc');
+    await service.sendInvite('buyer@winebar.example', inviteParams());
 
     expect(sendMail.mock.calls[0][0].from).toBe('noreply@stocdup.com');
   });
@@ -282,8 +282,148 @@ describe('MailService — invite from-address', () => {
     } as unknown as ConfigService;
 
     const service = new MailService(config);
-    await service.sendInvite('buyer@winebar.example', 'Vinos Direct', 'http://localhost:3010/accept-invite?token=abc');
+    await service.sendInvite('buyer@winebar.example', inviteParams());
 
     expect(sendMail.mock.calls[0][0].from).toBe('noreply@wholo.com.au');
+  });
+});
+
+function inviteParams(overrides: Partial<SendInviteParams> = {}): SendInviteParams {
+  return {
+    distributorName: 'Vinos Direct',
+    customerName: 'The Wine Bar',
+    inviteUrl: 'http://localhost:3010/accept-invite?token=abc',
+    recipientEmail: 'buyer@winebar.example',
+    expiresAt: new Date('2026-08-19T00:00:00Z'),
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    ...overrides,
+  };
+}
+
+describe('MailService — invite email', () => {
+  let service: MailService;
+  let sendMail: jest.Mock;
+
+  beforeEach(() => {
+    sendMail = jest.fn().mockResolvedValue({});
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+    } as unknown as ConfigService;
+
+    service = new MailService(config);
+  });
+
+  it('sends a subject naming the distributor and a body naming the customer, invite link, recipient and expiry', async () => {
+    await service.sendInvite('buyer@winebar.example', inviteParams());
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe('buyer@winebar.example');
+    expect(mail.subject).toBe('Vinos Direct invited you to Stocdup');
+    for (const body of [mail.text, mail.html]) {
+      expect(body).toContain('Vinos Direct');
+      expect(body).toContain('The Wine Bar');
+      expect(body).toContain('http://localhost:3010/accept-invite?token=abc');
+      expect(body).toContain('buyer@winebar.example');
+      expect(body).toContain('19 August 2026');
+    }
+  });
+
+  it('always shows the icon-only Stocdup mark paired with live text, matching the admin app chrome, never a wordmark image', async () => {
+    await service.sendInvite('buyer@winebar.example', inviteParams({ distributorLogoUrl: null }));
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).toContain('/logos/stocdup-logo-only.png');
+    expect(mail.html).not.toContain('/logos/stocdup-logo.png"');
+    expect(mail.html).toMatch(/color:#0B1D3A;">stocd<\/span><span style="color:#1565FF;">up/);
+  });
+
+  it('omits the distributor logo image entirely when none is uploaded (only the Stocdup logo remains)', async () => {
+    await service.sendInvite('buyer@winebar.example', inviteParams({ distributorLogoUrl: null }));
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html.match(/<img\b/g)).toHaveLength(1);
+  });
+
+  it('renders the distributor logo as a circular image, floated so the headline text wraps around it, when one is uploaded', async () => {
+    await service.sendInvite(
+      'buyer@winebar.example',
+      inviteParams({ distributorLogoUrl: 'https://cdn.stocdup.com/logo.png' }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).toMatch(
+      /<img src="https:\/\/cdn\.stocdup\.com\/logo\.png"[^>]*float:left[^>]*border-radius:31px/,
+    );
+  });
+
+  it('always names the distributor in the headline, with or without a logo', async () => {
+    await service.sendInvite('buyer@winebar.example', inviteParams({ distributorLogoUrl: null }));
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).toContain('Vinos Direct');
+    expect(mail.html).not.toContain('float:left'); // no logo => headline runs full-width, nothing to float
+  });
+
+  it('omits the distributor contact line when neither email nor phone is available', async () => {
+    await service.sendInvite(
+      'buyer@winebar.example',
+      inviteParams({ distributorEmail: null, distributorPhone: null }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.text).not.toContain('Questions about your account');
+    expect(mail.html).not.toContain('Questions about your account');
+  });
+
+  it('includes a distributor contact line built from whichever of email/phone are set', async () => {
+    await service.sendInvite(
+      'buyer@winebar.example',
+      inviteParams({ distributorEmail: 'orders@vinos.example', distributorPhone: '(03) 9123 4567' }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    for (const body of [mail.text, mail.html]) {
+      expect(body).toContain('orders@vinos.example');
+      expect(body).toContain('(03) 9123 4567');
+    }
+  });
+
+  it('always shows the Stocdup support contact', async () => {
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) =>
+        key === 'SMTP_SUPPORT_EMAIL' ? 'help@stocdup.com' : defaultValue,
+      ),
+    } as unknown as ConfigService;
+    const supportService = new MailService(config);
+
+    await supportService.sendInvite('buyer@winebar.example', inviteParams());
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.text).toContain('help@stocdup.com');
+    expect(mail.html).toContain('help@stocdup.com');
+  });
+
+  it('escapes HTML in the distributor and customer names', async () => {
+    await service.sendInvite(
+      'buyer@winebar.example',
+      inviteParams({ distributorName: '<img src=x onerror=alert(1)>', customerName: '<b>evil</b>' }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).not.toContain('<img src=x onerror=alert(1)>');
+    expect(mail.html).not.toContain('<b>evil</b>');
+    expect(mail.html).toContain('&lt;img');
+  });
+
+  it('rethrows transport failures so callers can record them', async () => {
+    sendMail.mockRejectedValue(new Error('SMTP connection refused'));
+
+    await expect(service.sendInvite('buyer@winebar.example', inviteParams())).rejects.toThrow(
+      'SMTP connection refused',
+    );
   });
 });

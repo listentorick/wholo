@@ -331,8 +331,8 @@ export class AdminCustomersService {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { id, distributorId, deletedAt: null },
       include: {
-        customer: { select: { email: true } },
-        distributor: { select: { name: true } },
+        customer: { select: { email: true, name: true } },
+        distributor: { select: { name: true, email: true, phone: true } },
       },
     });
     if (!rel) throw new NotFoundException('Customer not found');
@@ -368,7 +368,11 @@ export class AdminCustomersService {
         distributorId,
         email: target,
         distributorName: rel.distributor.name,
+        distributorEmail: rel.distributor.email,
+        distributorPhone: rel.distributor.phone,
+        customerName: rel.customer.name,
         inviteUrl,
+        expiresAt: expiresAt.toISOString(),
       });
     });
 

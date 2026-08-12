@@ -10,10 +10,19 @@ export interface OrderPlacedNotificationPayload {
 }
 
 // Snapshot stored on Notification.payload for CUSTOMER_INVITE_SENT.
+// distributorLogoUrl is resolved at handling time (not carried on the
+// outbox event) since it can change between when the invite is sent and
+// when the email is actually delivered/retried.
 export interface CustomerInviteNotificationPayload {
   invitationId: string;
   distributorName: string;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+  distributorLogoUrl: string | null;
+  customerName: string;
+  recipientEmail: string;
   inviteUrl: string;
+  expiresAt: string;
 }
 
 // Snapshot stored on Notification.payload for the four trade-relationship

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { compileMjmlTemplate } from './mail-template';
 
 // Organisation names are set by users — escape anything interpolated into
 // HTML bodies, and keep header values free of CR/LF.
@@ -26,13 +27,26 @@ const BRAND = {
   muted: '#9BA3AE',
 };
 
+export interface SendInviteParams {
+  distributorName: string;
+  customerName: string;
+  inviteUrl: string;
+  recipientEmail: string;
+  expiresAt: Date;
+  distributorLogoUrl: string | null;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+}
+
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly transporter: nodemailer.Transporter;
   private readonly from: string;
   private readonly inviteFrom: string;
+  private readonly supportEmail: string;
   private readonly logoUrl: string;
+  private readonly logoOnlyUrl: string;
 
   constructor(private config: ConfigService) {
     const host = config.get<string>('SMTP_HOST', 'localhost');
@@ -46,12 +60,20 @@ export class MailService {
     // verified sending address than order notifications (mirrors Keycloak's
     // own smtpFrom decoupling from api.smtp.from — see values.live.yaml).
     this.inviteFrom = config.get<string>('SMTP_INVITE_FROM', this.from);
+    // Shown in the invite email's "need help using Stocdup?" line — a
+    // platform-level contact, distinct from the distributor's own contact.
+    this.supportEmail = config.get<string>('SMTP_SUPPORT_EMAIL', 'support@stocdup.com');
 
     // Served from the admin app's public folder (apps/admin/public/logos),
     // same asset used in-app — not baked in, so it stays correct if the logo
     // is ever swapped without a mail service redeploy.
     const adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3020');
     this.logoUrl = `${adminUrl}/logos/stocdup-logo.png`;
+    // Icon-only mark, paired with real live text (not baked into the image)
+    // in the invite email's header — mirrors the admin app's own sidebar
+    // chrome lockup (apps/admin/src/components/Sidebar.tsx), not a new
+    // pattern invented for email.
+    this.logoOnlyUrl = `${adminUrl}/logos/stocdup-logo-only.png`;
 
     this.transporter = nodemailer.createTransport({
       host,
@@ -91,36 +113,61 @@ export class MailService {
     `;
   }
 
-  async sendInvite(to: string, distributorName: string, inviteUrl: string): Promise<void> {
+  // The one email built from a real MJML template (apps/api/src/mail/templates/invite.mjml)
+  // matching the portal's own design system, rather than the wrapHtml/wrapText
+  // chrome used by every other email below — see ADR/plan discussion on why
+  // invite gets the richer treatment. distributorLogoUrl/distributorEmail/
+  // distributorPhone are optional and degrade gracefully when absent (no
+  // broken image, no empty "contact" line) — see the template's {{#if}} blocks.
+  async sendInvite(to: string, params: SendInviteParams): Promise<void> {
+    const {
+      distributorName, customerName, inviteUrl, recipientEmail, expiresAt,
+      distributorLogoUrl, distributorEmail, distributorPhone,
+    } = params;
+
     const subject = `${headerSafe(distributorName)} invited you to Stocdup`;
-    const text = this.wrapText([
-      `Hi,`,
+    const expiresAtFormatted = expiresAt.toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+
+    const text = [
+      `${distributorName} has invited you to access its online catalogue and place orders through Stocdup.`,
       ``,
-      `${distributorName} would like you to access their store on Stocdup. ${distributorName} uses Stocdup to manage wholesale ordering.`,
+      `Your account will be connected to ${customerName}, giving you access to the products, prices and delivery options available to your business.`,
       ``,
-      `By accepting this invitation, you'll be able to browse their catalogue and place orders on Stocdup.`,
+      `Through Stocdup, you can:`,
+      `- Browse ${distributorName}'s catalogue`,
+      `- See your agreed products and prices`,
+      `- Choose an available delivery date`,
+      `- Place and review orders online`,
       ``,
       `Accept your invitation:`,
-      `${inviteUrl}`,
+      inviteUrl,
       ``,
-      `This invitation will expire in 7 days.`,
+      `This invitation was sent to ${recipientEmail} and will expire on ${expiresAtFormatted}.`,
       ``,
-      `If you weren't expecting this invitation, you can safely ignore it.`,
-    ]);
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        <strong>${esc(distributorName)}</strong> would like you to access their store on Stocdup.
-        ${esc(distributorName)} uses Stocdup to manage wholesale ordering.
-      </p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        By accepting this invitation, you'll be able to browse their catalogue and place orders on Stocdup.
-      </p>
-      ${this.button(inviteUrl, 'Accept invitation')}
-      <p style="font-size:13px; color:${BRAND.muted}; text-align:center; margin:0 0 8px;">This invitation will expire in 7 days.</p>
-      <p style="font-size:12px; color:${BRAND.muted}; text-align:center; margin:0;">If you weren't expecting this invitation, you can safely ignore it.</p>
-    `);
+    const html = await compileMjmlTemplate('invite', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      customerName: esc(customerName),
+      inviteUrl: esc(inviteUrl),
+      recipientEmail: esc(recipientEmail),
+      expiresAtFormatted: esc(expiresAtFormatted),
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     try {
       await this.transporter.sendMail({ from: this.inviteFrom, to, subject, text, html });

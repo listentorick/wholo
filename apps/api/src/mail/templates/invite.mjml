@@ -1,0 +1,288 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: the distributor's circular mark sits to the left, with the
+  invitation headline wrapping around it — the same read as an author photo
+  beside a byline headline — so identity and invitation land as one visual
+  unit instead of a small icon and a separate paragraph. Sized as a supporting
+  identity mark (60px), not a hero image — the user's reference mockup used a
+  larger circle only to demonstrate the wrap position, not the target size.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited exactly — Deep Navy #0B1D3A /
+  Cobalt Blue #1565FF (single CTA only) / Slate Blue #5B6B7F / Pale Stone
+  #F2F4F7 / Light Blue Grey #E6ECF2, Inter, hard 0px corners everywhere
+  except identity circles. Amber (#F2864D, tints amber-light/amber-border)
+  now backs the benefits list as a callout — DESIGN.md's own documented use
+  ("Amber... personality... tints back status badges and callouts"), not a
+  second competing action color. The Stocdup logo asset is navy-on-white by
+  design — never recolored or placed on a dark band.
+  Revision history on this template: v1 recolored the Stocdup logo white on
+  a navy band (wrong — the real asset is navy-on-white, never inverted). v2
+  moved to a small inline byline icon (safer for email clients, but read as
+  disconnected from the headline). v3 (this version) matches the layout of
+  the user's reference mockup (screenshots/email_layout.png), at a smaller
+  size per their follow-up (the mockup's circle was to show wrap/position,
+  not target size): a circular mark, floated left, with the headline text
+  wrapping around it directly — built
+  with a real CSS float on the image inside one mj-text block (the simplest,
+  most broadly-supported float case: one image, one paragraph, not a
+  multi-column layout), with an explicit clearfix so later content doesn't
+  collide if the headline text is shorter than the image.
+  STORY: a customer sees the supplier's mark and the invitation as one
+  connected unit, reads what they'll be able to do, and acts.
+  FIRST VIEWPORT: white card — Stocdup logo, then the distributor's circular
+  mark with a Title-weight (16px/600, not a big display headline) sentence
+  wrapping beside it, an Amber-backed callout for the benefits list, a
+  single Cobalt CTA. Consistent 24px (xl token) rhythm between every block,
+  32px card edges — no ad hoc padding values.
+  FORM: extends an established world onto a new (email) surface — no
+  concept-seed tournament run; the visual system and copy were already
+  fully specified going in (root conversation, not this file).
+  FINISH: unreviewed and undocumented is unfinished; this build ends with
+  the finish review, the verdict, and DESIGN.md.
+
+  IMPECCABLE CRITIQUE PASS (dual-agent, apps/api/src/mail/templates/invite.mjml):
+  found the "consistent 24px rhythm" claim above was not actually enforced —
+  every un-styled mj-text silently inherited MJML's own default padding
+  (10px top, 25px sides) on top of each section's declared padding, adding
+  hidden top/side offsets. Fixed via a global `mj-text` padding:0 default in
+  mj-attributes, so section padding is now the ONLY spacing source. Also
+  fixed: body copy now matches DESIGN.md's `body` token exactly (14px/400/
+  1.5, was an invented 15px/1.6); the 13px contact-line text (not on
+  DESIGN.md's scale at all) and the 12px expiry/footer text (right size,
+  missing the Label token's 500-weight/0.02em tracking) now both fully
+  adopt the `label` token; bullets got a true hanging indent (wrapped lines
+  were falling back to the left margin instead of aligning under the text);
+  the circular logo's border-radius was off by 1px for a true circle once
+  its own border is included; the floated logo now shrinks on narrow
+  viewports (a mobile-only `mj-style` rule) since the wrap was reported to
+  go to 5 cramped lines otherwise; the "Your account will be connected to…"
+  line now uses Slate Blue (an actual DESIGN.md token, not an invented
+  color) to differentiate it from the headline, per a cognitive-load
+  finding that headline and body were too visually similar. The reviewed
+  broken-Stocdup-logo finding was traced to an empty `src` and initially
+  looked like a real defect — root-caused to the ad hoc preview script used
+  to generate review screenshots, not this template or the real send
+  pipeline (which always supplies a real, non-empty URL; confirmed via a
+  real send through the actual production pipeline).
+
+  LOGO CORRECTION (post-critique): the header used the full wordmark image
+  (stocdup-logo.png) baked as a single asset. Wrong — this codebase never
+  does that for UI chrome; every real usage (apps/admin's Sidebar and login
+  page, apps/portal's equivalents) pairs the icon-only mark
+  (stocdup-logo-only.png) with live text, "stocd" in Deep Navy + "up" in
+  Cobalt Blue. Now matches the Sidebar's own compact chrome-header sizing
+  (36px icon, 18px/700 text, 10px gap) rather than the bigger 34px/700
+  Display-token treatment used on full-page login heroes — this header is
+  chrome, not a hero moment.
+
+  V4 — LAYOUT REBASE (screenshots/email_layout2.png): the user supplied a
+  second reference mockup with a different composition, not just a
+  different skin, and asked for the layout only — DESIGN.md's real tokens
+  stayed in force, not the mockup's rounded card, drop shadow, or blue
+  checkmarks.
+  - The identity mark, headline, detail copy, and CTA now live together
+    inside one pale-blue band (DESIGN.md's `cobalt-blue-light` token,
+    #E6EEFF) instead of three separate white sections — the mockup's
+    biggest structural difference from v3.
+  - The CTA moved from after the benefits list to inside this band,
+    matching the mockup's order.
+  - Added a short headline above the existing specific invite sentence — a
+    deliberate two-tier copy structure per the mockup, confirmed with the
+    user rather than assumed. Uses the mockup's own literal wording,
+    "Welcome to the club" (DESIGN.md's `headline` token, 24px/600) — a
+    first pass substituted invented copy ("You're invited") here instead
+    of the user's actual reference text; corrected on review. Every other
+    existing sentence/line is preserved verbatim, just repositioned. The
+    headline runs full-width on its own; the distributor's circular mark
+    floats beside the specific sentence right below it instead (also
+    corrected on review — it was first placed beside the short headline,
+    which read as the mark identifying "the club" rather than identifying
+    who the specific sentence is about).
+  - The benefits list dropped its amber callout box (the pale-blue hero
+    band now carries that "highlight" role) for a checklist: a small
+    2-cell table per row (icon cell + text cell) rather than a
+    hanging-indent div — real-browser verification (not just markup
+    review) caught that negative text-indent on a row's containing block
+    silently deletes an inline-block child's own text content in this
+    rendering engine (the circle painted, the checkmark glyph inside it
+    did not); the table approach has no such failure mode and still gets
+    wrapped second lines aligned under the label text for free, via the
+    text cell's own column width. Small solid-fill circular checkmark
+    (Success Green #16A34A, a real DESIGN.md semantic token, white glyph)
+    — confirmed with the user as Success Green rather than Cobalt,
+    specifically so it doesn't dilute the Confident Blue Rule (Cobalt
+    stays reserved for the CTA alone). A unicode glyph rather than a drawn
+    icon is a deliberate medium call, not an oversight: HTML email has no
+    reliable SVG/icon-font support across clients (Outlook desktop in
+    particular), and an <img>-based icon would both add an external asset
+    dependency and break the "exactly one <img> when no distributor logo
+    is set" invariant this template already holds.
+  - The header wordmark grew (36px→40px icon, 18px→20px text) to read as a
+    standalone header moment rather than compact chrome, matching the
+    mockup's bigger top lockup; the exact tested icon+"stocd"/"up" two-span
+    markup is unchanged.
+  - Kept, unchanged from v3: hard 0px corners and flat hairline-bordered
+    card edges (the mockup's rounded corners/drop shadow are not part of
+    this world — DESIGN.md's Square Edge and Reach rules), and the
+    float+clearfix technique for the circular distributor mark and its
+    mobile shrink.
+-->
+<mj-head>
+  <mj-title>{{distributorName}} invited you to Stocdup</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-all font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" />
+    <!-- DESIGN.md's `body` token exactly (14px/400/1.5) — was an invented
+         15px/1.6. padding:0 is deliberate: MJML's own mj-text default is
+         10px top / 25px sides, which was silently stacking on top of every
+         section's own padding. Each mj-text below sets only the
+         padding-bottom it needs; section padding is the only other spacing
+         source, so the declared card rhythm is actually the one in effect. -->
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+  <!-- Shrinks the floated distributor mark on narrow viewports — at the
+       full 60px it was wrapping the headline into cramped lines on a
+       375px phone. Non-inline (only clients that honor <style>/media
+       queries apply it; others keep the 60px desktop size, a safe,
+       non-breaking fallback, not a functional regression). -->
+  <mj-style>
+    @media only screen and (max-width:480px) {
+      .distributor-byline-logo {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 23px !important;
+        margin: 0 12px 6px 0 !important;
+      }
+    }
+  </mj-style>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  <!-- Header: icon-only mark + real live text, not a wordmark baked into an
+       image — mirrors the admin app's own chrome lockup exactly
+       (apps/admin/src/components/Sidebar.tsx), sized up from that chrome's
+       36px/18px so this reads as a standalone header moment (matching the
+       v4 mockup's bigger top lockup) rather than compact in-app chrome.
+       Padding is symmetric (32px top/bottom) so the lockup sits centered in
+       its own white zone before the hero band's color starts — an earlier
+       pass left the section's bottom padding at 0, which read as lopsided
+       (32px of air above the logo, none below it). -->
+  <mj-section background-color="#FFFFFF" padding="32px 32px 32px" border="1px solid #E6ECF2" border-bottom="none">
+    <mj-column>
+      <mj-text align="center" padding-bottom="0">
+        <img src="{{stocdupIconUrl}}" alt="" width="40" height="40" style="width:40px;height:40px;display:inline-block;vertical-align:middle;margin-right:12px;" /><span style="font-size:20px;font-weight:700;letter-spacing:-0.01em;line-height:1;vertical-align:middle;"><span style="color:#0B1D3A;">stocd</span><span style="color:#1565FF;">up</span></span>
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <!-- Hero band: identity mark, headline, detail copy and the CTA all live
+       together on one pale-blue tint (DESIGN.md's cobalt-blue-light token)
+       instead of separate white sections — the v4 mockup's central
+       structural idea. Headline text is the mockup's own literal copy,
+       "Welcome to the club" — not invented wording; DESIGN.md's Headline
+       scale (24px/600) is used for it. It runs full-width, on its own,
+       NOT wrapped around the distributor's circular mark: the mark floats
+       inside the SAME text block as the specific, factual sentence right
+       below it ("{{distributorName}} has invited you to access its online
+       catalogue…", unchanged copy from v3) so the mark reads as identifying
+       who that sentence is about, exactly like an author photo beside a
+       byline — a trailing clear:both div is the clearfix, so the column's
+       height still accounts for the image even if the sentence is shorter
+       than it is tall. Graceful degradation: with no uploaded logo, the
+       image tag is simply absent and the sentence runs full-width. -->
+  <mj-section background-color="#E6EEFF" padding="32px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Welcome to the club
+      </mj-text>
+      <mj-text color="#0B1D3A" padding-bottom="8px">
+        {{#if distributorLogoUrl}}<img src="{{distributorLogoUrl}}" alt="{{distributorName}}" width="60" height="60" class="distributor-byline-logo" style="float:left;width:60px;height:60px;border-radius:31px;border:1px solid #E6ECF2;margin:0 16px 8px 0;" />{{/if}}<strong>{{distributorName}}</strong> has invited you to access its online catalogue and place orders through <strong>Stocdup</strong>.<div style="clear:both;"></div>
+      </mj-text>
+      <mj-text color="#5B6B7F" padding-bottom="24px">
+        Your account will be connected to <strong style="color:#0B1D3A;">{{customerName}}</strong>, giving you access to the products, prices and delivery options available to your business.
+      </mj-text>
+      <mj-button href="{{inviteUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0 0 32px" inner-padding="14px 32px" align="center">
+        Accept invitation
+      </mj-button>
+    </mj-column>
+  </mj-section>
+
+  <!-- Benefits checklist: the amber callout box from v3 is gone — the hero
+       band above now carries that "highlight" role — replaced with a
+       checklist read. Each row is a small 2-cell table (icon cell + text
+       cell) rather than v3's hanging-indent div: empirically verified (real
+       Chromium render, not just markup review) that negative text-indent on
+       the row's containing block makes an inline-block child's own text
+       content (the checkmark glyph) disappear in this engine — the circle
+       itself still painted, but the glyph inside it vanished — while the
+       table approach doesn't have that failure mode and still gets wrapped
+       second lines aligned under the label text (via the text cell's own
+       column width) for free. Success Green (#16A34A, a real DESIGN.md
+       semantic token) fill, white glyph. Row spacing widened to DESIGN.md's
+       `lg` (20px) token, matching the mockup's roomier list. -->
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text padding-bottom="16px" font-weight="600" font-size="14px">
+        Through Stocdup, you can:
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Browse {{distributorName}}'s catalogue</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">See your agreed products and prices</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="20px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Choose an available delivery date</td>
+        </tr></table>
+      </mj-text>
+      <mj-text padding-bottom="0">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+          <td width="20" valign="top" style="width:20px;padding-right:10px;"><span style="display:inline-block;width:20px;height:20px;border-radius:10px;background-color:#16A34A;color:#FFFFFF;font-size:12px;font-weight:700;line-height:20px;text-align:center;">&#10003;</span></td>
+          <td valign="top" style="font-size:14px;color:#0B1D3A;line-height:1.5;">Place and review orders online</td>
+        </tr></table>
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text align="center" font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="0">
+        This invitation was sent to {{recipientEmail}} and will expire on {{expiresAtFormatted}}.
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section background-color="#FFFFFF" padding="24px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2" border-bottom="1px solid #E6ECF2">
+    <mj-column>
+      <mj-divider border-width="1px" border-color="#E6ECF2" padding-top="0" padding-bottom="16px" />
+      {{#if distributorContactLine}}
+      <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="8px">
+        Questions about your account, products or pricing? Contact {{distributorName}} at {{distributorContactLine}}.
+      </mj-text>
+      {{/if}}
+      <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="0">
+        Need help using Stocdup? Contact {{stocdupSupportEmail}}.
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <!-- Footer, outside the card -->
+  <mj-section padding="24px 32px 0">
+    <mj-column>
+      <mj-text align="center" font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F">
+        Stocdup provides the online ordering service used by {{distributorName}}.
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+</mj-body>
+</mjml>

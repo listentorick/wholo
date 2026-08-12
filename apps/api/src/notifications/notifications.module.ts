@@ -1,6 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { NOTIFICATION_DELIVERY_QUEUE, NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
 import { CHANNEL_SENDERS } from './channel-senders/channel-sender.interface';
 import { EmailChannelSender } from './channel-senders/email-channel.sender';
@@ -31,6 +32,7 @@ import { TradeRelationshipNotificationService } from './trade-relationship-notif
     AdminNotificationsModule,
   ],
   providers: [
+    R2StorageService,
     OrderPlacedNotificationService,
     CustomerInviteNotificationService,
     TradeRelationshipNotificationService,

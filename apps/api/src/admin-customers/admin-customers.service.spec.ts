@@ -470,7 +470,10 @@ describe('AdminCustomersService', () => {
   describe('invite', () => {
     it('revokes pending invites, creates a new one, and writes a CustomerInviteSent outbox event', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
-        makeRel({ customer: makeOrg({ email: 'acme@example.com' }), distributor: { name: 'Winos Pty Ltd' } }),
+        makeRel({
+          customer: makeOrg({ email: 'acme@example.com', name: 'Acme Bar' }),
+          distributor: { name: 'Winos Pty Ltd', email: 'orders@winos.example', phone: '(03) 9123 4567' },
+        }),
       );
       mockPrisma.customerInvitation.updateMany.mockResolvedValue({ count: 0 });
       mockPrisma.customerInvitation.create.mockResolvedValue({ id: 'inv-1' });
@@ -500,7 +503,11 @@ describe('AdminCustomersService', () => {
           distributorId: 'dist-1',
           email: 'acme@example.com',
           distributorName: 'Winos Pty Ltd',
+          distributorEmail: 'orders@winos.example',
+          distributorPhone: '(03) 9123 4567',
+          customerName: 'Acme Bar',
           inviteUrl: result.inviteUrl,
+          expiresAt: result.expiresAt,
         }),
       );
     });

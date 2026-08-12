@@ -79,6 +79,9 @@ api:
     # (e.g. one already proven to work via Keycloak) independent of the
     # address used for order notification emails.
     inviteFrom: ""
+    # Support contact shown in the invite email's "need help using Stocdup?"
+    # line — a platform-level contact, distinct from the distributor's own.
+    supportEmail: "support@stocdup.com"
   xero:
     clientId: ""
     clientSecret: ""

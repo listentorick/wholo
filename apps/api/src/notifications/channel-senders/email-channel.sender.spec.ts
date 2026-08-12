@@ -83,17 +83,28 @@ describe('EmailChannelSender', () => {
       payload: {
         invitationId: 'inv-1',
         distributorName: 'Vinos Direct',
+        distributorEmail: 'orders@vinos.example',
+        distributorPhone: '(03) 9123 4567',
+        distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
+        customerName: 'The Wine Bar',
+        recipientEmail: 'buyer@winebar.example',
         inviteUrl: 'http://localhost:3010/accept-invite?token=abc',
+        expiresAt: '2026-08-19T00:00:00.000Z',
       },
     } as unknown as Notification;
 
     await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'), notification);
 
-    expect(mail.sendInvite).toHaveBeenCalledWith(
-      'buyer@winebar.example',
-      'Vinos Direct',
-      'http://localhost:3010/accept-invite?token=abc',
-    );
+    expect(mail.sendInvite).toHaveBeenCalledWith('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      customerName: 'The Wine Bar',
+      inviteUrl: 'http://localhost:3010/accept-invite?token=abc',
+      recipientEmail: 'buyer@winebar.example',
+      expiresAt: new Date('2026-08-19T00:00:00.000Z'),
+      distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
+      distributorEmail: 'orders@vinos.example',
+      distributorPhone: '(03) 9123 4567',
+    });
     expect(mail.sendOrderReceivedToCustomer).not.toHaveBeenCalled();
     expect(mail.sendOrderConfirmedToCustomer).not.toHaveBeenCalled();
   });

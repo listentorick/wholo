@@ -21,7 +21,16 @@ export class EmailChannelSender implements ChannelSender {
   async send(delivery: NotificationDelivery, notification: Notification): Promise<void> {
     if (notification.type === NotificationType.CUSTOMER_INVITE_SENT) {
       const invitePayload = notification.payload as unknown as CustomerInviteNotificationPayload;
-      await this.mail.sendInvite(delivery.recipient, invitePayload.distributorName, invitePayload.inviteUrl);
+      await this.mail.sendInvite(delivery.recipient, {
+        distributorName: invitePayload.distributorName,
+        customerName: invitePayload.customerName,
+        inviteUrl: invitePayload.inviteUrl,
+        recipientEmail: invitePayload.recipientEmail,
+        expiresAt: new Date(invitePayload.expiresAt),
+        distributorLogoUrl: invitePayload.distributorLogoUrl,
+        distributorEmail: invitePayload.distributorEmail,
+        distributorPhone: invitePayload.distributorPhone,
+      });
       return;
     }
 
