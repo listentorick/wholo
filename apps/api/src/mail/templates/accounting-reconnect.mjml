@@ -1,0 +1,62 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: Operate mode, same as order-placed-distributor.mjml — an
+  operational alert to the distributor's own admin, not a relationship
+  moment, so no floated identity circle (no "other party" logo concept
+  applies to a distributor's own integration status). Unlike that email,
+  this genuinely is "your attention needed, one click fixes it" — Amber is
+  DESIGN.md's own documented role for exactly that ("pending/status
+  accents... look here"), not error-red: red is a UI validation color in
+  this codebase, never established as an email-banner tone (see
+  trade-relationship-suspended.mjml's same reasoning), and this is a
+  routine integration hiccup with a one-click fix, not a crisis.
+  STORY: the reader knows immediately which integration broke, WHY (not
+  just that it did — this is the one concrete content gap closed here: the
+  specific error reason already exists and already reaches the in-app
+  notification for this exact audience, but never reached the email until
+  now), and has one button that fixes it.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited exactly — same header/
+  distributor-footer chrome, hard 0px corners, Cobalt reserved for the CTA,
+  Amber band using the same #FEEFE7 fill already established in
+  order-received.mjml for the same DESIGN.md role (pending/attention).
+  FIRST VIEWPORT: header, one amber band — headline, the specific-provider
+  sentence, the reason (a real error message, not generic boilerplate),
+  "Reconnect {{provider}}" — then the distributor-footer.
+  FORM: extends the established world onto the second Operate-mode
+  distributor email; direction was already set.
+  FINISH: verified via a real MJML render/screenshot + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>{{provider}} needs to be reconnected</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#FEEFE7" padding="32px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Reconnect needed
+      </mj-text>
+      <mj-text color="#0B1D3A" padding-bottom="8px">
+        Your <strong>{{provider}}</strong> connection has stopped working, and syncing is paused until it's reconnected.
+      </mj-text>
+      <mj-text color="#5B6B7F" padding-bottom="24px">
+        {{reason}}
+      </mj-text>
+      <mj-button href="{{reconnectUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0" inner-padding="14px 32px" align="center">
+        Reconnect {{provider}}
+      </mj-button>
+    </mj-column>
+  </mj-section>
+
+  {{> distributor-footer}}
+
+</mj-body>
+</mjml>

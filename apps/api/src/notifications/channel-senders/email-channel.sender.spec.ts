@@ -14,6 +14,12 @@ const basePayload = {
   customerName: 'The Wine Bar',
   autoAccepted: false,
   placedByUserId: 'user-1',
+  totalAmount: '842.50',
+  currency: 'GBP',
+  requestedDeliveryDate: '2026-08-19T00:00:00.000Z',
+  customerReference: 'PO-9981',
+  lineItemCount: 14,
+  orderLines: [{ productName: 'Wine', sku: 'SKU-1', quantity: 2, lineTotal: '24.46' }],
 };
 
 function makeDelivery(audience: NotificationAudience, recipient = 'someone@example.com'): NotificationDelivery {
@@ -48,13 +54,19 @@ describe('EmailChannelSender', () => {
     sender = new EmailChannelSender(mail, config);
   });
 
-  it('sends the distributor email with an admin order link', async () => {
+  it('sends the distributor email with an admin order link and the full order-detail summary', async () => {
     await sender.send(makeDelivery(NotificationAudience.DISTRIBUTOR, 'ops@vinos.example'), makeNotification());
 
     expect(mail.sendOrderPlacedToDistributor).toHaveBeenCalledWith('ops@vinos.example', {
       customerName: 'The Wine Bar',
       orderNumber: 'ORD-2026-00042',
       orderUrl: 'http://localhost:3020/orders/order-1',
+      totalAmount: '842.50',
+      currency: 'GBP',
+      requestedDeliveryDate: '2026-08-19T00:00:00.000Z',
+      customerReference: 'PO-9981',
+      lineItemCount: 14,
+      orderLines: [{ productName: 'Wine', sku: 'SKU-1', quantity: 2, lineTotal: '24.46' }],
     });
   });
 

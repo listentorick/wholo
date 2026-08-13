@@ -445,6 +445,11 @@ export class AccountingConnectionService {
             distributorName: distributor?.name ?? 'Your organisation',
             provider: providerName,
             reconnectUrl: `${adminUrl}/integrations/accounting`,
+            // Same message already used for the in-app notification's body
+            // above — human-authored, already deemed presentable to this
+            // exact audience; previously only reached the in-app inbox, not
+            // the email most likely to actually be seen promptly.
+            reason: error.message,
           })
           .catch((err) => {
             this.logger.error(

@@ -346,6 +346,23 @@ export class OrdersService {
         acceptanceModeSnapshot: mode,
         orderNumber,
         occurredAt: now.toISOString(),
+        // Snapshot for the distributor's own order-placed notification email —
+        // already selected on newOrder (orderSelect) / already in scope (lines),
+        // so this is free: no extra query beyond what submit() already does.
+        totalAmount: newOrder.totalAmount.toFixed(2),
+        currency: newOrder.currency,
+        requestedDeliveryDate: newOrder.requestedDeliveryDate?.toISOString() ?? null,
+        customerReference: newOrder.customerReference,
+        lineItemCount: lines.length,
+        // The actual product list for the distributor's new-order email — a
+        // distributor triaging a new order needs to see what was ordered,
+        // not just a count (see notification-payload.ts's OrderLineSnapshot).
+        orderLines: lines.map((l) => ({
+          productName: l.productNameSnapshot,
+          sku: l.skuSnapshot,
+          quantity: l.quantityOrdered,
+          lineTotal: l.totalAmount.toFixed(2),
+        })),
       };
 
       await this.outbox.writeEvent(tx, 'Order', newOrder.id, 'OrderSubmitted', {

@@ -6,13 +6,14 @@ import {
   NotificationDeliveryStatus,
   NotificationType,
   OrderAcceptanceMode,
+  Prisma,
 } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../queues/queue.constants';
-import { OrderPlacedNotificationPayload } from './notification-payload';
+import { OrderLineSnapshot, OrderPlacedNotificationPayload } from './notification-payload';
 
 export interface OrderSubmittedEventPayload {
   orderId: string;
@@ -22,6 +23,16 @@ export interface OrderSubmittedEventPayload {
   isOrderedByDelegate?: boolean;
   acceptanceModeSnapshot?: OrderAcceptanceMode;
   orderNumber: string;
+  // Distributor-notification content, snapshotted at submit() time (see
+  // orders.service.ts) rather than re-queried here — already in scope there
+  // at zero extra cost. Optional: events written before this field existed
+  // (pre-this-change replays) fall back gracefully in the template.
+  totalAmount?: string;
+  currency?: string;
+  requestedDeliveryDate?: string | null;
+  customerReference?: string | null;
+  lineItemCount?: number;
+  orderLines?: OrderLineSnapshot[];
 }
 
 @Injectable()
@@ -96,6 +107,12 @@ export class OrderPlacedNotificationService {
       customerName: customer.name,
       autoAccepted: event.acceptanceModeSnapshot === OrderAcceptanceMode.AUTO_ON_SUBMISSION,
       placedByUserId: event.placedByUserId,
+      totalAmount: event.totalAmount ?? null,
+      currency: event.currency ?? null,
+      requestedDeliveryDate: event.requestedDeliveryDate ?? null,
+      customerReference: event.customerReference ?? null,
+      lineItemCount: event.lineItemCount ?? null,
+      orderLines: event.orderLines ?? null,
     };
 
     const notification = await this.prisma.notification.upsert({
@@ -106,7 +123,11 @@ export class OrderPlacedNotificationService {
         distributorId: event.distributorId,
         orderId: event.orderId,
         dedupeKey: `ORDER_PLACED:${event.orderId}`,
-        payload: { ...payload },
+        // orderLines (an array of the named OrderLineSnapshot interface) is
+        // still plain JSON-serializable data — Prisma's InputJsonValue just
+        // doesn't structurally match a named interface array the way it
+        // matches inline object/array literals; the runtime value is fine.
+        payload: { ...payload } as Prisma.InputJsonValue,
       },
     });
 

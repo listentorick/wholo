@@ -127,6 +127,40 @@ describe('OrderPlacedNotificationService', () => {
     expect(created.data).toHaveLength(3);
   });
 
+  it('passes order total, currency, requested delivery date, PO reference, item count and product lines onto the notification payload', async () => {
+    const orderLines = [{ productName: 'Wine', sku: 'SKU-1', quantity: 2, lineTotal: '24.46' }];
+    await service.handleOrderSubmitted(
+      makeEvent({
+        totalAmount: '842.50',
+        currency: 'GBP',
+        requestedDeliveryDate: '2026-08-19T00:00:00.000Z',
+        customerReference: 'PO-9981',
+        lineItemCount: 14,
+        orderLines,
+      }),
+    );
+
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.totalAmount).toBe('842.50');
+    expect(payload.currency).toBe('GBP');
+    expect(payload.requestedDeliveryDate).toBe('2026-08-19T00:00:00.000Z');
+    expect(payload.customerReference).toBe('PO-9981');
+    expect(payload.lineItemCount).toBe(14);
+    expect(payload.orderLines).toEqual(orderLines);
+  });
+
+  it('defaults order-detail fields to null when the event predates them', async () => {
+    await service.handleOrderSubmitted(makeEvent());
+
+    const payload = prisma.notification.upsert.mock.calls[0][0].create.payload;
+    expect(payload.totalAmount).toBeNull();
+    expect(payload.currency).toBeNull();
+    expect(payload.requestedDeliveryDate).toBeNull();
+    expect(payload.customerReference).toBeNull();
+    expect(payload.lineItemCount).toBeNull();
+    expect(payload.orderLines).toBeNull();
+  });
+
   it('notifies distributor admins of the new order via the in-app inbox', async () => {
     await service.handleOrderSubmitted(makeEvent());
 

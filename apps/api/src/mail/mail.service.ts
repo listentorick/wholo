@@ -18,15 +18,6 @@ function headerSafe(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim();
 }
 
-// Matches the Stocdup brand system used by the Keycloak login theme
-// (apps/keycloak/themes/wholo/login/resources/css/login.css) — keep in sync
-// if that palette changes.
-const BRAND = {
-  navy: '#1e2436',
-  blue: '#1565FF',
-  muted: '#9BA3AE',
-};
-
 export interface SendInviteParams {
   distributorName: string;
   customerName: string;
@@ -50,6 +41,36 @@ export interface OrderStatusEmailParams {
   distributorPhone: string | null;
 }
 
+export interface OrderLineItem {
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  lineTotal: string;
+}
+
+// totalAmount/currency/requestedDeliveryDate/customerReference/lineItemCount/
+// orderLines are all nullable: events written before these fields existed
+// replay without them, and PO reference in particular is genuinely optional
+// on the order itself.
+export interface SendOrderPlacedToDistributorParams {
+  customerName: string;
+  orderNumber: string;
+  orderUrl: string;
+  totalAmount: string | null;
+  currency: string | null;
+  requestedDeliveryDate: string | null;
+  customerReference: string | null;
+  lineItemCount: number | null;
+  orderLines: OrderLineItem[] | null;
+}
+
+export interface SendAccountingReconnectParams {
+  distributorName: string;
+  provider: string;
+  reconnectUrl: string;
+  reason: string;
+}
+
 // Shared by all five trade-relationship status-transition emails. portalUrl
 // is null for Suspended (nothing to browse while suspended) and Declined
 // (the relationship isn't active) — each template decides whether to render
@@ -69,7 +90,6 @@ export class MailService {
   private readonly from: string;
   private readonly inviteFrom: string;
   private readonly supportEmail: string;
-  private readonly logoUrl: string;
   private readonly logoOnlyUrl: string;
 
   constructor(private config: ConfigService) {
@@ -92,7 +112,6 @@ export class MailService {
     // same asset used in-app — not baked in, so it stays correct if the logo
     // is ever swapped without a mail service redeploy.
     const adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3020');
-    this.logoUrl = `${adminUrl}/logos/stocdup-logo.png`;
     // Icon-only mark, paired with real live text (not baked into the image)
     // in the invite email's header — mirrors the admin app's own sidebar
     // chrome lockup (apps/admin/src/components/Sidebar.tsx), not a new
@@ -107,42 +126,9 @@ export class MailService {
     });
   }
 
-  // Shared header/footer chrome for every outbound email — keeps sender
-  // identity consistent regardless of which flow triggered the send.
-  private wrapHtml(bodyHtml: string): string {
-    return `
-      <div style="font-family: 'Inter', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: ${BRAND.navy};">
-        <div style="text-align:center; margin-bottom: 36px;">
-          <img src="${this.logoUrl}" alt="Stocdup" style="height: 26px; width: auto;" />
-        </div>
-        ${bodyHtml}
-        <p style="margin-top: 36px; font-size: 13px; color: ${BRAND.muted}; text-align:center;">
-          Kind regards,<br/>The Stocdup team
-        </p>
-      </div>
-    `.trim();
-  }
-
-  private wrapText(bodyLines: string[]): string {
-    return [...bodyLines, '', 'Kind regards,', 'The Stocdup team'].join('\n');
-  }
-
-  private button(url: string, label: string): string {
-    return `
-      <p style="text-align:center; margin: 28px 0;">
-        <a href="${esc(url)}" style="display:inline-block;padding:13px 28px;background:${BRAND.blue};color:#ffffff;text-decoration:none;border-radius:4px;font-weight:600;font-size:14px;">
-          ${esc(label)}
-        </a>
-      </p>
-    `;
-  }
-
-  // The one email built from a real MJML template (apps/api/src/mail/templates/invite.mjml)
-  // matching the portal's own design system, rather than the wrapHtml/wrapText
-  // chrome used by every other email below — see ADR/plan discussion on why
-  // invite gets the richer treatment. distributorLogoUrl/distributorEmail/
-  // distributorPhone are optional and degrade gracefully when absent (no
-  // broken image, no empty "contact" line) — see the template's {{#if}} blocks.
+  // distributorLogoUrl/distributorEmail/distributorPhone are optional and
+  // degrade gracefully when absent (no broken image, no empty "contact"
+  // line) — see the template's {{#if}} blocks.
   async sendInvite(to: string, params: SendInviteParams): Promise<void> {
     const {
       distributorName, customerName, inviteUrl, recipientEmail, expiresAt,
@@ -202,30 +188,76 @@ export class MailService {
     }
   }
 
-  async sendOrderPlacedToDistributor(
-    to: string,
-    params: { customerName: string; orderNumber: string; orderUrl: string },
-  ): Promise<void> {
-    const { customerName, orderNumber, orderUrl } = params;
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-placed-distributor.mjml. Unlike
+  // the customer order emails, this one carries the full "should I care
+  // right now" fact set (total, item count, requested delivery, PO
+  // reference) since the recipient is the distributor's own ops team, not
+  // a trade customer — closing a real gap, not just a re-skin.
+  async sendOrderPlacedToDistributor(to: string, params: SendOrderPlacedToDistributorParams): Promise<void> {
+    const { customerName, orderNumber, orderUrl, totalAmount, currency, requestedDeliveryDate, customerReference, lineItemCount, orderLines } = params;
     const subject = `New order from ${headerSafe(customerName)}`;
-    const text = this.wrapText([
-      `Hi,`,
-      ``,
-      `${customerName} has placed order ${orderNumber}.`,
-      ``,
-      `Review the order:`,
-      `${orderUrl}`,
-    ]);
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        <strong>${esc(customerName)}</strong> has placed order <strong>${esc(orderNumber)}</strong>.
-      </p>
-      ${this.button(orderUrl, 'Review order')}
-    `);
+    const orderTotalFormatted = totalAmount && currency ? `${currency} ${totalAmount}` : null;
+    const requestedDeliveryDateFormatted = requestedDeliveryDate
+      ? new Date(requestedDeliveryDate).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null;
+    const hasOrderLines = !!orderLines && orderLines.length > 0;
+
+    const text = [
+      `${customerName} placed order ${orderNumber}.`,
+      ``,
+      ...(orderTotalFormatted ? [`Order total: ${orderTotalFormatted}`] : []),
+      ...(requestedDeliveryDateFormatted ? [`Requested delivery: ${requestedDeliveryDateFormatted}`] : []),
+      ...(customerReference ? [`PO reference: ${customerReference}`] : []),
+      ``,
+      ...(hasOrderLines
+        ? [
+            `Items (${lineItemCount ?? orderLines!.length}):`,
+            ...orderLines!.map((l) => `- ${l.productName}${l.sku ? ` (${l.sku})` : ''} × ${l.quantity} — ${l.lineTotal}`),
+            ``,
+          ]
+        : []),
+      `Review the order:`,
+      orderUrl,
+      ``,
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('order-placed-distributor', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      customerName: esc(customerName),
+      orderNumber: esc(orderNumber),
+      orderUrl: esc(orderUrl),
+      orderTotalFormatted: orderTotalFormatted ? esc(orderTotalFormatted) : '',
+      requestedDeliveryDateFormatted: requestedDeliveryDateFormatted ? esc(requestedDeliveryDateFormatted) : '',
+      customerReference: customerReference ? esc(customerReference) : '',
+      hasOrderLines: hasOrderLines ? 'true' : '',
+      lineItemCount: hasOrderLines ? String(lineItemCount ?? orderLines!.length) : '',
+      orderLinesHtml: hasOrderLines ? orderLines!.map((l) => this.renderOrderLineRow(l)).join('') : '',
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'order-placed distributor');
+  }
+
+  // One row per ordered product for the distributor's new-order email — the
+  // templating engine (mail-template.ts) has no loop construct, so this is
+  // built here and passed through as one pre-rendered HTML string
+  // (orderLinesHtml), the same pattern already used for identityText.
+  private renderOrderLineRow(line: OrderLineItem): string {
+    const skuQty = line.sku ? `${esc(line.sku)} · Qty ${line.quantity}` : `Qty ${line.quantity}`;
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border-bottom:1px solid #E6ECF2;"><tr>
+        <td valign="top" style="padding:12px 0;font-size:14px;color:#0B1D3A;">
+          <strong>${esc(line.productName)}</strong><br/>
+          <span style="font-size:12px;color:#5B6B7F;">${skuQty}</span>
+        </td>
+        <td valign="top" align="right" style="padding:12px 0 12px 12px;font-size:14px;color:#0B1D3A;white-space:nowrap;">
+          ${esc(line.lineTotal)}
+        </td>
+      </tr></table>
+    `;
   }
 
   // Wording must not imply acceptance: the order is submitted, not yet
@@ -516,28 +548,33 @@ export class MailService {
     await this.send(to, subject, text, html, 'trade-relationship activated');
   }
 
-  async sendAccountingConnectionNeedsReconnect(
-    to: string,
-    params: { distributorName: string; provider: string; reconnectUrl: string },
-  ): Promise<void> {
-    const { distributorName, provider, reconnectUrl } = params;
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/accounting-reconnect.mjml. `reason` is
+  // the real error message (already used for the in-app notification's
+  // body) now also reaching the email — previously the email said only
+  // that something broke, not why.
+  async sendAccountingConnectionNeedsReconnect(to: string, params: SendAccountingReconnectParams): Promise<void> {
+    const { distributorName, provider, reconnectUrl, reason } = params;
     const subject = `${headerSafe(provider)} needs to be reconnected`;
-    const text = this.wrapText([
-      `Hi,`,
+
+    const text = [
+      `${distributorName}'s ${provider} connection has stopped working, and syncing is paused until it's reconnected.`,
       ``,
-      `${distributorName}'s ${provider} connection has stopped working and needs to be reconnected before syncing can resume.`,
+      reason,
       ``,
       `Reconnect:`,
       reconnectUrl,
-    ]);
+      ``,
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+    ].join('\n');
 
-    const html = this.wrapHtml(`
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">Hi,</p>
-      <p style="font-size:15px; line-height:1.6; margin:0 0 16px;">
-        <strong>${esc(distributorName)}</strong>'s <strong>${esc(provider)}</strong> connection has stopped working and needs to be reconnected before syncing can resume.
-      </p>
-      ${this.button(reconnectUrl, 'Reconnect')}
-    `);
+    const html = await compileMjmlTemplate('accounting-reconnect', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      provider: esc(provider),
+      reconnectUrl: esc(reconnectUrl),
+      reason: esc(reason),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
 
     await this.send(to, subject, text, html, 'accounting-connection needs-reconnect');
   }

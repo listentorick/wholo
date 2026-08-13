@@ -1,5 +1,19 @@
+// One order line, snapshotted for the distributor's new-order email — not
+// re-derived from the Order model at render time, same rationale as every
+// other field on OrderPlacedNotificationPayload.
+export interface OrderLineSnapshot {
+  productName: string;
+  sku: string | null;
+  quantity: number;
+  lineTotal: string;
+}
+
 // Snapshot stored on Notification.payload for ORDER_PLACED — everything the
 // channel senders need to render without querying back to the order.
+// totalAmount/currency/requestedDeliveryDate/customerReference/lineItemCount/
+// orderLines are distributor-notification content only (the customer
+// templates don't reference them) — nullable because events written before
+// these fields existed replay without them.
 export interface OrderPlacedNotificationPayload {
   orderId: string;
   orderNumber: string;
@@ -11,6 +25,12 @@ export interface OrderPlacedNotificationPayload {
   customerName: string;
   autoAccepted: boolean;
   placedByUserId: string;
+  totalAmount: string | null;
+  currency: string | null;
+  requestedDeliveryDate: string | null;
+  customerReference: string | null;
+  lineItemCount: number | null;
+  orderLines: OrderLineSnapshot[] | null;
 }
 
 // Snapshot stored on Notification.payload for CUSTOMER_INVITE_SENT.

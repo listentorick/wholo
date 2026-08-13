@@ -1,0 +1,16 @@
+<!-- Shared closing-card partial for distributor-facing emails only
+     (order-placed-distributor.mjml, accounting-reconnect.mjml) — NOT the
+     same as _footer.mjml. That one's "Questions about your account? Contact
+     {{distributorName}}" line and "Stocdup provides the service used by
+     {{distributorName}}" line are written for a trade customer emailing
+     about someone else's account; here the recipient IS the distributor,
+     so both would read as talking to themselves. Just the support contact
+     and the closing border. Needs {{stocdupSupportEmail}}. -->
+<mj-section background-color="#FFFFFF" padding="24px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2" border-bottom="1px solid #E6ECF2">
+  <mj-column>
+    <mj-divider border-width="1px" border-color="#E6ECF2" padding-top="0" padding-bottom="16px" />
+    <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="0">
+      Need help using Stocdup? Contact {{stocdupSupportEmail}}.
+    </mj-text>
+  </mj-column>
+</mj-section>

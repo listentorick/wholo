@@ -1,6 +1,13 @@
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { MailService, OrderStatusEmailParams, SendInviteParams, TradeRelationshipEmailParams } from './mail.service';
+import {
+  MailService,
+  OrderStatusEmailParams,
+  SendAccountingReconnectParams,
+  SendInviteParams,
+  SendOrderPlacedToDistributorParams,
+  TradeRelationshipEmailParams,
+} from './mail.service';
 
 function orderStatusParams(overrides: Partial<OrderStatusEmailParams> = {}): OrderStatusEmailParams {
   return {
@@ -10,6 +17,33 @@ function orderStatusParams(overrides: Partial<OrderStatusEmailParams> = {}): Ord
     distributorLogoUrl: null,
     distributorEmail: null,
     distributorPhone: null,
+    ...overrides,
+  };
+}
+
+function orderPlacedDistributorParams(
+  overrides: Partial<SendOrderPlacedToDistributorParams> = {},
+): SendOrderPlacedToDistributorParams {
+  return {
+    customerName: 'The Wine Bar',
+    orderNumber: 'ORD-2026-00042',
+    orderUrl: 'http://localhost:3020/orders/order-1',
+    totalAmount: null,
+    currency: null,
+    requestedDeliveryDate: null,
+    customerReference: null,
+    lineItemCount: null,
+    orderLines: null,
+    ...overrides,
+  };
+}
+
+function accountingReconnectParams(overrides: Partial<SendAccountingReconnectParams> = {}): SendAccountingReconnectParams {
+  return {
+    distributorName: 'Vinos Direct',
+    provider: 'Xero',
+    reconnectUrl: 'http://localhost:3020/integrations/accounting',
+    reason: 'Xero refresh token is no longer valid (invalid_grant) — reconnecting Xero is required.',
     ...overrides,
   };
 }
@@ -48,11 +82,7 @@ describe('MailService — order emails', () => {
 
   describe('sendOrderPlacedToDistributor', () => {
     it('sends an email naming the customer, order number and order link', async () => {
-      await service.sendOrderPlacedToDistributor('ops@dist.example', {
-        customerName: 'The Wine Bar',
-        orderNumber: 'ORD-2026-00042',
-        orderUrl: 'http://localhost:3020/orders/order-1',
-      });
+      await service.sendOrderPlacedToDistributor('ops@dist.example', orderPlacedDistributorParams());
 
       expect(sendMail).toHaveBeenCalledTimes(1);
       const mail = sendMail.mock.calls[0][0];
@@ -61,6 +91,66 @@ describe('MailService — order emails', () => {
       expect(mail.text).toContain('ORD-2026-00042');
       expect(mail.text).toContain('http://localhost:3020/orders/order-1');
       expect(mail.html).toContain('http://localhost:3020/orders/order-1');
+    });
+
+    it('includes order total, requested delivery date and PO reference when set', async () => {
+      await service.sendOrderPlacedToDistributor(
+        'ops@dist.example',
+        orderPlacedDistributorParams({
+          totalAmount: '842.50',
+          currency: 'GBP',
+          requestedDeliveryDate: '2026-08-19T00:00:00.000Z',
+          customerReference: 'PO-9981',
+        }),
+      );
+
+      const mail = sendMail.mock.calls[0][0];
+      for (const body of [mail.text, mail.html]) {
+        expect(body).toContain('GBP 842.50');
+        expect(body).toContain('19 August 2026');
+        expect(body).toContain('PO-9981');
+      }
+    });
+
+    // The single most important fix in this template's history: it used to
+    // show only a count ("Items: 14"), never what was actually ordered — a
+    // distributor triaging a new order needs the product list, not a number.
+    it('lists every product ordered, with SKU, quantity and line total, uncapped regardless of order size', async () => {
+      const manyLines = Array.from({ length: 20 }, (_, i) => ({
+        productName: `Product ${i + 1}`,
+        sku: `SKU-${1000 + i}`,
+        quantity: i + 1,
+        lineTotal: `${(i + 1) * 10}.00`,
+      }));
+
+      await service.sendOrderPlacedToDistributor(
+        'ops@dist.example',
+        orderPlacedDistributorParams({ lineItemCount: 20, orderLines: manyLines }),
+      );
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).toContain('Items (20)');
+      // Not truncated: the 20th (last) item must be present, not just the first few.
+      expect(mail.html).toContain('Product 20');
+      expect(mail.html).toContain('SKU-1019');
+      expect(mail.html).toContain('200.00');
+      expect(mail.text).toContain('Product 20');
+    });
+
+    it('omits the items section entirely when no order lines are available (pre-this-change event replay)', async () => {
+      await service.sendOrderPlacedToDistributor('ops@dist.example', orderPlacedDistributorParams({ orderLines: null }));
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).not.toContain('Items (');
+    });
+
+    it('omits total/items/delivery/PO reference lines gracefully when not set', async () => {
+      await service.sendOrderPlacedToDistributor('ops@dist.example', orderPlacedDistributorParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).not.toContain('Order total');
+      expect(mail.html).not.toContain('Requested delivery');
+      expect(mail.html).not.toContain('PO reference');
     });
   });
 
@@ -162,11 +252,10 @@ describe('MailService — order emails', () => {
   });
 
   it('escapes HTML in user-controlled names and strips newlines from subjects', async () => {
-    await service.sendOrderPlacedToDistributor('ops@dist.example', {
-      customerName: '<img src=x onerror=alert(1)>\r\nBcc: evil@x',
-      orderNumber: 'ORD-2026-00042',
-      orderUrl: 'http://localhost:3020/orders/order-1',
-    });
+    await service.sendOrderPlacedToDistributor(
+      'ops@dist.example',
+      orderPlacedDistributorParams({ customerName: '<img src=x onerror=alert(1)>\r\nBcc: evil@x' }),
+    );
 
     const mail = sendMail.mock.calls[0][0];
     expect(mail.html).not.toContain('<img src=x onerror=alert(1)>');
@@ -182,17 +271,12 @@ describe('MailService — order emails', () => {
     ).rejects.toThrow('SMTP connection refused');
   });
 
-  it('brands every email with the Stocdup logo and sign-off, not Wholo', async () => {
-    await service.sendOrderPlacedToDistributor('ops@dist.example', {
-      customerName: 'The Wine Bar',
-      orderNumber: 'ORD-2026-00042',
-      orderUrl: 'http://localhost:3020/orders/order-1',
-    });
+  it('brands every email with the Stocdup icon lockup, not Wholo', async () => {
+    await service.sendOrderPlacedToDistributor('ops@dist.example', orderPlacedDistributorParams());
 
     const mail = sendMail.mock.calls[0][0];
-    expect(mail.html).toContain('/logos/stocdup-logo.png');
-    expect(mail.html).toContain('The Stocdup team');
-    expect(mail.text).toContain('The Stocdup team');
+    expect(mail.html).toContain('/logos/stocdup-logo-only.png');
+    expect(mail.html).toMatch(/color:#0B1D3A;">stocd<\/span><span style="color:#1565FF;">up/);
     expect(mail.html).not.toContain('Wholo');
     expect(mail.text).not.toContain('Wholo');
   });
@@ -316,11 +400,7 @@ describe('MailService — accounting connection emails', () => {
   });
 
   it('sendAccountingConnectionNeedsReconnect names the distributor, provider and links to the reconnect page', async () => {
-    await service.sendAccountingConnectionNeedsReconnect('admin@dist.example', {
-      distributorName: 'Vinos Direct',
-      provider: 'Xero',
-      reconnectUrl: 'http://localhost:3020/integrations/accounting',
-    });
+    await service.sendAccountingConnectionNeedsReconnect('admin@dist.example', accountingReconnectParams());
 
     expect(sendMail).toHaveBeenCalledTimes(1);
     const mail = sendMail.mock.calls[0][0];
@@ -329,6 +409,17 @@ describe('MailService — accounting connection emails', () => {
     expect(mail.text).toContain('Vinos Direct');
     expect(mail.text).toContain('http://localhost:3020/integrations/accounting');
     expect(mail.html).toContain('http://localhost:3020/integrations/accounting');
+  });
+
+  it('includes the specific reason the connection failed, not just that it did', async () => {
+    await service.sendAccountingConnectionNeedsReconnect(
+      'admin@dist.example',
+      accountingReconnectParams({ reason: 'Xero refresh token is no longer valid (invalid_grant) — reconnecting Xero is required.' }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).toContain('Xero refresh token is no longer valid (invalid_grant)');
+    expect(mail.text).toContain('Xero refresh token is no longer valid (invalid_grant)');
   });
 });
 

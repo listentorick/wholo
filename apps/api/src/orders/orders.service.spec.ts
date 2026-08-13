@@ -235,6 +235,30 @@ describe('OrdersService — delivery date revalidation', () => {
     );
   });
 
+  // The distributor's order-placed email needs these to show a useful
+  // summary (total, currency, item count) without an extra query —
+  // snapshotted onto the event at zero extra cost since newOrder/lines are
+  // already in scope at this exact point (see orders.service.ts submit()).
+  it('snapshots order total, currency and item count onto the OrderSubmitted event', async () => {
+    setupHappyPath();
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(outbox.writeEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      'Order',
+      'order-1',
+      'OrderSubmitted',
+      expect.objectContaining({
+        totalAmount: '20.00',
+        currency: 'GBP',
+        lineItemCount: 1,
+        requestedDeliveryDate: null,
+        customerReference: null,
+        orderLines: [{ productName: 'Wine', sku: 'SKU-1', quantity: 2, lineTotal: '24.46' }],
+      }),
+    );
+  });
+
   it('flags isOrderedByDelegate in the OrderSubmitted event for order-as submissions', async () => {
     setupHappyPath();
     await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);

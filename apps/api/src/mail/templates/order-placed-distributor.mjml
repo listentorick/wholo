@@ -1,0 +1,97 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: v1 of this template made a wrong call — plain white, no product
+  list, reasoning that a frequent operational email shouldn't compete for
+  urgency. Corrected on user review: a new order is revenue, arguably the
+  single most consequential event in a distributor's inbox, and under-
+  signalling that relative to every other email in this set (all colored)
+  was backwards. v2: Cobalt-light band, same token and "positive, settled,
+  this matters" reasoning as order-confirmed.mjml — and the actual product
+  list, not just a count, because triaging a new order ("do I have stock,
+  is this a rush job, anything unusual") needs to know what was ordered,
+  not just how much it added up to. Still no floated identity circle — the
+  only uploaded-logo asset type in this system is `distributor-logo`;
+  there's no "other party" (the customer) logo to show, so that technique
+  still doesn't apply to this audience.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited exactly — same header/
+  distributor-footer chrome, hard 0px corners, Cobalt reserved for the one
+  CTA, Inter, the label/bold-value line pattern from order-received.mjml/
+  order-confirmed.mjml ("Order number: **ORD-1042**"). The product list
+  below the hero uses a hairline `#E6ECF2` border between rows — DESIGN.md's
+  own separator language ("Borders... are the system's primary way of
+  separating surfaces"), not a new pattern invented for this list.
+  Deliberately NOT truncated regardless of order size — the whole point of
+  this revision is showing more, not less.
+  STORY: whoever opens this on the distributor's side knows immediately
+  whether this order needs urgent handling (value, requested delivery date,
+  PO reference, and now every product ordered) without opening the admin
+  app first.
+  FIRST VIEWPORT: header, one Cobalt-light hero — "New order" headline, the
+  customer+order-number sentence, a compact fact list (total, requested
+  delivery, PO reference — each line only appears if that data exists),
+  "Review order" — then a white section listing every product ordered,
+  then the distributor-footer.
+  FORM: extends the established world onto a new (Operate-mode) audience;
+  direction was already set by the customer-email pass.
+  FINISH: verified via a real MJML render/screenshot (both a short and a
+  long order) + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>New order from {{customerName}}</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#E6EEFF" padding="32px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        New order
+      </mj-text>
+      <mj-text color="#0B1D3A" padding-bottom="20px">
+        <strong>{{customerName}}</strong> placed order <strong>{{orderNumber}}</strong>.
+      </mj-text>
+      {{#if orderTotalFormatted}}
+      <mj-text padding-bottom="4px">
+        <span style="color:#5B6B7F;">Order total:</span> <strong style="color:#0B1D3A;">{{orderTotalFormatted}}</strong>
+      </mj-text>
+      {{/if}}
+      {{#if requestedDeliveryDateFormatted}}
+      <mj-text padding-bottom="4px">
+        <span style="color:#5B6B7F;">Requested delivery:</span> <strong style="color:#0B1D3A;">{{requestedDeliveryDateFormatted}}</strong>
+      </mj-text>
+      {{/if}}
+      {{#if customerReference}}
+      <mj-text padding-bottom="4px">
+        <span style="color:#5B6B7F;">PO reference:</span> <strong style="color:#0B1D3A;">{{customerReference}}</strong>
+      </mj-text>
+      {{/if}}
+      <mj-button href="{{orderUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="24px 0 32px" inner-padding="14px 32px" align="center">
+        Review order
+      </mj-button>
+    </mj-column>
+  </mj-section>
+
+  {{#if hasOrderLines}}
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text padding-bottom="4px" font-weight="600" font-size="14px">
+        Items ({{lineItemCount}})
+      </mj-text>
+      <mj-text padding-bottom="0">
+        {{orderLinesHtml}}
+      </mj-text>
+    </mj-column>
+  </mj-section>
+  {{/if}}
+
+  {{> distributor-footer}}
+
+</mj-body>
+</mjml>

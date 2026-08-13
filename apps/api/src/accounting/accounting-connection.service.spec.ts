@@ -558,7 +558,11 @@ describe('AccountingConnectionService', () => {
         expect(mockMail.sendAccountingConnectionNeedsReconnect).toHaveBeenCalledTimes(2);
         expect(mockMail.sendAccountingConnectionNeedsReconnect).toHaveBeenCalledWith(
           'admin1@example.com',
-          expect.objectContaining({ distributorName: 'Acme Wines', provider: 'Xero' }),
+          expect.objectContaining({
+            distributorName: 'Acme Wines',
+            provider: 'Xero',
+            reason: 'Xero refresh token is no longer valid (invalid_grant) — reconnecting Xero is required',
+          }),
         );
         // Lock is released before any notification is sent — SMTP/DB latency
         // for the notification must never extend lock hold time.

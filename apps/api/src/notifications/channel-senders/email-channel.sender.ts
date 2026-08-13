@@ -77,6 +77,12 @@ export class EmailChannelSender implements ChannelSender {
         customerName: payload.customerName,
         orderNumber: payload.orderNumber,
         orderUrl: `${this.adminUrl}/orders/${payload.orderId}`,
+        totalAmount: payload.totalAmount,
+        currency: payload.currency,
+        requestedDeliveryDate: payload.requestedDeliveryDate,
+        customerReference: payload.customerReference,
+        lineItemCount: payload.lineItemCount,
+        orderLines: payload.orderLines,
       });
       return;
     }
