@@ -4,7 +4,8 @@ Topology and rationale: [ADR-048](../adrs/ADR-048-live-environment-k3s.md).
 
 - Cluster: 3 nodes — `k3s-00` (control-plane, schedulable), `k3s-01`, `k3s-02`. ~2 CPU / 4 GiB RAM / 22 GiB disk each.
 - Storage: `local-path` only (node-local, ReclaimPolicy **Delete** — `helm uninstall` destroys data; PVC deletion is unrecoverable).
-- Edge: Cloudflare (proxied DNS, edge TLS, WAF rules, SSL mode **Full (strict)**) → on-prem WAF appliance (terminates the Cloudflare leg with a Cloudflare Origin CA cert) → bundled Traefik over **plain HTTP :80** (`ingress.tls: false`; Traefik trusts the WAF's `X-Forwarded-Proto` via `deploy/live/traefik-forwarded-headers.yaml`). No cert-manager / Let's Encrypt.
+- Edge: Cloudflare (proxied DNS, edge TLS, WAF rules, SSL mode **Full (strict)**) → on-prem WAF appliance (terminates the Cloudflare leg with a Cloudflare Origin CA cert) → bundled Traefik over **plain HTTP :80** (`ingress.tls: false`; Traefik trusts the WAF's `X-Forwarded-Proto` via `deploy/live/traefik-config.yaml`). No cert-manager / Let's Encrypt.
+- Traefik runs as a DaemonSet, one pod per node labelled `svccontroller.k3s.cattle.io/enablelb=true` (all 3 nodes currently), with `externalTrafficPolicy: Local` so the real client IP always reaches Traefik regardless of which node a request lands on — see `deploy/live/traefik-config.yaml`.
 - Images: GHCR packages (currently public — pods pull anonymously, no pull secret; if made private, create the `ghcr-pull` secret and set `imagePullSecrets` per values.live.example.yaml), published by the `build-images` GitHub Actions workflow on every push to `master` (tags `sha-<shortsha>` + `latest`). Always deploy a pinned `sha-` tag.
 - Live config: `helm/wholo/values.live.yaml` (gitignored) — copy from `values.live.example.yaml`.
 
@@ -36,11 +37,27 @@ Topology and rationale: [ADR-048](../adrs/ADR-048-live-environment-k3s.md).
    `X-Forwarded-Proto: https`; accept inbound 443 only from
    [Cloudflare's IP ranges](https://www.cloudflare.com/ips/).
 
-3. **Traefik forwarded-headers trust** — fill the WAF's internal IP into
-   `deploy/live/traefik-forwarded-headers.yaml`, then:
+3. **Traefik node placement + forwarded-headers trust** — label every node
+   that should run ingress traffic (currently all 3; this is also the label
+   k3s's own ServiceLB uses to decide which nodes it exposes at all, so
+   labelling a node here is what makes it an "ingress node"):
    ```bash
-   kubectl apply -f deploy/live/traefik-forwarded-headers.yaml
+   kubectl label node k3s-00 svccontroller.k3s.cattle.io/enablelb=true
+   kubectl label node k3s-01 svccontroller.k3s.cattle.io/enablelb=true
+   kubectl label node k3s-02 svccontroller.k3s.cattle.io/enablelb=true
    ```
+   Then fill the WAF's internal IP into `deploy/live/traefik-config.yaml` and
+   apply it:
+   ```bash
+   kubectl apply -f deploy/live/traefik-config.yaml
+   ```
+   This runs Traefik as a DaemonSet (one pod per labelled node) with
+   `externalTrafficPolicy: Local`, so every ingress node serves traffic from
+   its own local pod and Traefik always sees the real client IP — required
+   for the `healthAccess.allowedIPs` allowlist to hold regardless of which
+   node a request lands on. If a node is later added to or removed from the
+   cluster's ingress-facing set, re-run the matching `kubectl label` command
+   for it (`...enablelb-` to remove).
 
 4. **Namespace**
    ```bash

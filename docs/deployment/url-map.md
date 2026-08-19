@@ -8,7 +8,7 @@ On live, the edge is a chain in front of Traefik:
 `Browser —TLS→ Cloudflare (proxied DNS, edge cert, WAF rules, Full (strict))
 —TLS→ WAF appliance (Cloudflare Origin CA cert) —plain HTTP :80→ Traefik`.
 Traefik serves no TLS on live (`ingress.tls: false`) and trusts the WAF's
-`X-Forwarded-Proto` (`deploy/live/traefik-forwarded-headers.yaml`).
+`X-Forwarded-Proto` (`deploy/live/traefik-config.yaml`).
 
 ```mermaid
 flowchart LR

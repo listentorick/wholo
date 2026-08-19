@@ -105,7 +105,7 @@ ingress:
   annotations: {}
   # TLS terminates upstream (Cloudflare -> WAF appliance); Traefik receives
   # plain HTTP — see docs/deployment/live-k3s.md and
-  # deploy/live/traefik-forwarded-headers.yaml.
+  # deploy/live/traefik-config.yaml.
   tls: false
   hosts:
     portal: portal.<domain>

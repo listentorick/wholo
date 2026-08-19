@@ -1,0 +1,59 @@
+# One-time cluster-scoped infrastructure for the live k3s cluster.
+# Applied manually (not part of the Helm chart) because it configures k3s's
+# bundled Traefik, which lives in kube-system and is managed by k3s's own
+# HelmChart controller:
+#   kubectl apply -f deploy/live/traefik-config.yaml
+#
+# There can only be one HelmChartConfig named "traefik" in kube-system, so
+# this file carries every cluster-level Traefik patch this repo needs —
+# don't split it into multiple files, a second one would silently overwrite
+# this one rather than merge with it.
+#
+# --- Forwarded-headers trust ---------------------------------------------
+# Live topology: Cloudflare -> WAF appliance (terminates TLS) -> Traefik :80.
+# The WAF forwards plain HTTP with X-Forwarded-Proto: https. By default
+# Traefik STRIPS X-Forwarded-* headers from untrusted client IPs (correctly —
+# they are trivially spoofable) and would restamp requests as plain http,
+# breaking scheme detection in Keycloak and the BFFs (redirect loops,
+# http:// URLs). Trusting the WAF's IP keeps its headers intact.
+#
+# NOTE: do NOT add an 80->443 redirect here — the WAF always speaks plain
+# HTTP to Traefik, so a redirect would loop every request. Browser-side
+# http->https is handled at the Cloudflare edge ("Always Use HTTPS").
+#
+# --- Node placement + client IP preservation ------------------------------
+# The live cluster is 3 nodes; k3s's ServiceLB exposes all of them, but stock
+# k3s only runs a single Traefik pod on one node. A request landing on a
+# different node gets forwarded cross-node by kube-proxy, which SNATs it —
+# Traefik then sees the forwarding node's IP instead of the real client/WAF
+# IP, silently defeating the healthAccess IP allowlist
+# (helm/wholo/templates/health-access.yaml) whenever traffic lands on a node
+# without the Traefik pod.
+#
+# Fix: run Traefik as a DaemonSet on every node labelled
+# svccontroller.k3s.cattle.io/enablelb=true (see docs/deployment/live-k3s.md,
+# "One-time cluster setup" — this label also restricts which nodes k3s's
+# ServiceLB exposes at all, so the same label controls both), and set
+# externalTrafficPolicy: Local so kube-proxy only ever routes to the local
+# node's own pod instead of forwarding cross-node. Together this guarantees
+# every exposed node has exactly one local Traefik pod and never SNATs.
+#
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        forwardedHeaders:
+          trustedIPs:
+            - "192.168.1.4/32" # the WAF appliance — the only trusted proxy
+    nodeSelector:
+      svccontroller.k3s.cattle.io/enablelb: "true"
+    deployment:
+      kind: DaemonSet
+    service:
+      spec:
+        externalTrafficPolicy: Local
