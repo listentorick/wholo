@@ -1371,6 +1371,145 @@ export interface DeliveryAvailabilityResponse {
   profileId: string | null;
 }
 
+// ─── Delivery Routes (native delivery planning) ──────────────────────────────
+// Reusable customer groupings with a usual drop order — deliberately
+// separate from DeliveryProfile above, which governs when a customer may be
+// delivered to, not which run they normally travel with.
+
+export interface DeliveryRouteCustomer {
+  id: string;
+  routeId: string;
+  customerId: string;
+  customerName?: string;
+  deliveryAddress?: {
+    addressLine1: string | null;
+    addressCity: string | null;
+    addressPostcode: string | null;
+  };
+  defaultDropPosition: number;
+  assignedAt: string;
+}
+
+export interface DeliveryRoute {
+  id: string;
+  distributorId: string;
+  name: string;
+  code: string | null;
+  defaultDriverName: string | null;
+  active: boolean;
+  customers: DeliveryRouteCustomer[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeliveryRouteSummary {
+  id: string;
+  distributorId: string;
+  name: string;
+  code: string | null;
+  defaultDriverName: string | null;
+  active: boolean;
+  customerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDeliveryRouteRequest {
+  name: string;
+  code?: string;
+  defaultDriverName?: string;
+  active?: boolean;
+}
+
+export interface UpdateDeliveryRouteRequest {
+  name?: string;
+  code?: string;
+  defaultDriverName?: string;
+  active?: boolean;
+}
+
+export interface AssignRouteCustomerRequest {
+  customerId: string;
+}
+
+export interface ReorderRouteCustomersRequest {
+  orderedCustomerIds: string[];
+}
+
+export interface DeliveryRouteListParams {
+  limit?: number;
+  cursor?: string;
+  active?: boolean;
+}
+
+// ─── Delivery Runs board (native delivery planning) ───────────────────────────
+// Why an order ended up with no run allocation. Computed, never stored — the
+// board derives it at read time from the same facts the allocation worker
+// uses (see DeliveryRunAllocationService.allocateOrder).
+export type UnallocatedReason = 'NO_SCHEDULED_DATE' | 'NO_ROUTE' | 'RUN_READY';
+export type DeliveryAttention = 'NONE' | 'UNASSIGNED' | 'MISSED';
+
+export interface DeliveryCardAddress {
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+}
+
+export interface DeliveryCard {
+  orderId: string;
+  orderNumber: string;
+  traderCustomerId: string;
+  customerName: string;
+  deliveryAddress: DeliveryCardAddress | null;
+  stopNumber: number | null;        // null when unassigned
+  lineCount: number;
+  itemCount: number;                // SUM(quantityOrdered)
+  attention: DeliveryAttention;
+  unallocatedReason: UnallocatedReason | null;
+  suggestedRunId: string | null;
+  suggestedRouteName: string | null;
+  scheduledDeliveryDate: string | null;
+  allocationSource: 'DEFAULT_ROUTE' | 'MANUAL' | 'EXTERNAL_PROVIDER' | null;
+}
+
+export interface DeliveryRunColumn {
+  runId: string;
+  routeId: string | null;
+  name: string;
+  driverName: string | null;
+  status: 'OPEN' | 'READY';
+  version: number;
+  cards: DeliveryCard[];
+  stopCount: number;   // card count, not distinct customers
+  itemCount: number;
+}
+
+export interface DeliveryDayBoard {
+  distributorId: string;
+  date: string;
+  runs: DeliveryRunColumn[];
+  unassigned: DeliveryCard[];
+}
+
+export interface DeliveryDaySummary {
+  date: string;
+  runCount: number;
+  stopCount: number;
+  unassignedCount: number;
+}
+
+export interface DeliveryDaysListParams {
+  from: string;
+  to: string;
+}
+
+export interface DeliveryDaysListResponse {
+  data: DeliveryDaySummary[];   // no pagination block — bounded, capped window
+}
+
 // ─── Analytics (wholesaler homepage dashboard) ────────────────────────────────
 
 export type AnalyticsPeriodKey = 'today' | 'week' | 'month' | 'rolling7' | 'rolling30' | 'rolling90' | 'rolling365' | 'custom';

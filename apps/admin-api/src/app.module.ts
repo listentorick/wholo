@@ -13,6 +13,8 @@ import { TaxTypesModule } from './tax-types/tax-types.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
+import { DeliveryRoutesModule } from './delivery-routes/delivery-routes.module';
+import { DeliveryRunsModule } from './delivery-runs/delivery-runs.module';
 import { OrderAsModule } from './order-as/order-as.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -36,6 +38,8 @@ import { HealthController } from './health.controller';
     AssetImagesModule,
     SettingsModule,
     DeliveryProfilesModule,
+    DeliveryRoutesModule,
+    DeliveryRunsModule,
     OrderAsModule,
     AccountingModule,
     NotificationsModule,

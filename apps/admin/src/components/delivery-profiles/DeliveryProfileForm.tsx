@@ -14,6 +14,7 @@ import { FormCard, FieldLabel, TextInput } from '@/components/form';
 import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
 import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
+import { toIso } from '@/lib/date';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -190,13 +191,6 @@ function AddCutoffRuleForm({
 }
 
 // ─── Date exceptions picker ───────────────────────────────────────────────────
-
-function toIso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function buildMonthGrid(year: number, month: number): (Date | null)[][] {
   const startCol = new Date(year, month, 1).getDay();

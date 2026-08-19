@@ -227,78 +227,81 @@ enum AccountingBulkImportJobStatus {
 }
 
 model Organisation {
-  id                              String              @id @default(cuid())
-  name                            String
-  slug                            String?             @unique
-  type                            OrganisationType
-  email                           String?
-  phone                           String?
-  legalName                       String?
-  addressLine1                    String?
-  addressLine2                    String?
-  addressCity                     String?
-  addressState                    String?
-  addressPostcode                 String?
-  addressCountry                  String?
-  billingLine1                    String?
-  billingLine2                    String?
-  billingCity                     String?
-  billingState                    String?
-  billingPostcode                 String?
-  billingCountry                  String?
-  createdAt                       DateTime            @default(now())
-  updatedAt                       DateTime            @updatedAt
-  deletedAt                       DateTime?
-  memberships                     Membership[]
-  productTypes                    ProductType[]       @relation("DistributorProductTypes")
-  suppliers                       Supplier[]          @relation("DistributorSuppliers")
-  products                        Product[]           @relation("DistributorProducts")
-  catalogues                      Catalogue[]         @relation("DistributorCatalogues")
-  tradeRelationshipsAsDistributor TradeRelationship[] @relation("DistributorRelationships")
-  tradeRelationshipsAsCustomer    TradeRelationship[] @relation("CustomerRelationships")
-  customerInvitations             CustomerInvitation[]
-  cartOrdersAsDistributor         CartOrder[]         @relation("DistributorCartOrders")
-  cartOrdersAsCustomer            CartOrder[]         @relation("CustomerCartOrders")
-  ordersAsDistributor             Order[]             @relation("DistributorOrders")
-  ordersAsCustomer                Order[]             @relation("CustomerOrders")
-  distributorSettings             DistributorSettings?
-  priceLists                      PriceList[]         @relation("DistributorPriceLists")
-  taxTypes                        TaxType[]           @relation("DistributorTaxTypes")
-  deliveryProfiles                DeliveryProfile[]   @relation("DistributorDeliveryProfiles")
-  orderAsSessionsAsDistributor    OrderAsSession[]    @relation("OrderAsDistributor")
-  orderAsSessionsAsCustomer       OrderAsSession[]    @relation("OrderAsCustomer")
-  accountingConnections           AccountingConnection[]
-  externalAccountingContacts      ExternalAccountingContact[]
-  customerAccountingMappings      CustomerAccountingMapping[]
+  id                                String                             @id @default(cuid())
+  name                              String
+  slug                              String?                            @unique
+  type                              OrganisationType
+  email                             String?
+  phone                             String?
+  legalName                         String?
+  addressLine1                      String?
+  addressLine2                      String?
+  addressCity                       String?
+  addressState                      String?
+  addressPostcode                   String?
+  addressCountry                    String?
+  billingLine1                      String?
+  billingLine2                      String?
+  billingCity                       String?
+  billingState                      String?
+  billingPostcode                   String?
+  billingCountry                    String?
+  createdAt                         DateTime                           @default(now())
+  updatedAt                         DateTime                           @updatedAt
+  deletedAt                         DateTime?
+  memberships                       Membership[]
+  productTypes                      ProductType[]                      @relation("DistributorProductTypes")
+  suppliers                         Supplier[]                         @relation("DistributorSuppliers")
+  products                          Product[]                          @relation("DistributorProducts")
+  catalogues                        Catalogue[]                        @relation("DistributorCatalogues")
+  tradeRelationshipsAsDistributor   TradeRelationship[]                @relation("DistributorRelationships")
+  tradeRelationshipsAsCustomer      TradeRelationship[]                @relation("CustomerRelationships")
+  customerInvitations               CustomerInvitation[]
+  cartOrdersAsDistributor           CartOrder[]                        @relation("DistributorCartOrders")
+  cartOrdersAsCustomer              CartOrder[]                        @relation("CustomerCartOrders")
+  ordersAsDistributor               Order[]                            @relation("DistributorOrders")
+  ordersAsCustomer                  Order[]                            @relation("CustomerOrders")
+  distributorSettings               DistributorSettings?
+  priceLists                        PriceList[]                        @relation("DistributorPriceLists")
+  taxTypes                          TaxType[]                          @relation("DistributorTaxTypes")
+  deliveryProfiles                  DeliveryProfile[]                  @relation("DistributorDeliveryProfiles")
+  deliveryRoutes                    DeliveryRoute[]                    @relation("DistributorDeliveryRoutes")
+  deliveryRuns                      DeliveryRun[]                      @relation("DistributorDeliveryRuns")
+  deliveryRouteCustomerAssignments  DeliveryRouteCustomer[]            @relation("DeliveryRouteCustomerAssignments")
+  orderAsSessionsAsDistributor      OrderAsSession[]                   @relation("OrderAsDistributor")
+  orderAsSessionsAsCustomer         OrderAsSession[]                   @relation("OrderAsCustomer")
+  accountingConnections             AccountingConnection[]
+  externalAccountingContacts        ExternalAccountingContact[]
+  customerAccountingMappings        CustomerAccountingMapping[]
   accountingContactMatchSuggestions AccountingContactMatchSuggestion[]
-  externalAccountingProducts      ExternalAccountingProduct[]
-  productAccountingMappings       ProductAccountingMapping[]
+  externalAccountingProducts        ExternalAccountingProduct[]
+  productAccountingMappings         ProductAccountingMapping[]
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
-  externalAccountingTaxTypes      ExternalAccountingTaxType[]
-  taxTypeAccountingMappings       TaxTypeAccountingMapping[]
+  externalAccountingTaxTypes        ExternalAccountingTaxType[]
+  taxTypeAccountingMappings         TaxTypeAccountingMapping[]
   accountingTaxTypeMatchSuggestions AccountingTaxTypeMatchSuggestion[]
-  accountingInvoiceExports        AccountingInvoiceExport[]
-  accountingBulkImportJobs        AccountingBulkImportJob[]
-  auditLogs                       AuditLog[]
+  accountingInvoiceExports          AccountingInvoiceExport[]
+  accountingBulkImportJobs          AccountingBulkImportJob[]
+  auditLogs                         AuditLog[]
 
   @@map("organisations")
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  keycloakId    String?        @unique
-  passwordHash  String?
-  firstName     String
-  lastName      String
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-  memberships   Membership[]
-  refreshTokens RefreshToken[]
-  cartOrders    CartOrder[]
-  orderAsSessions      OrderAsSession[]      @relation("AdminOrderAsSessions")
-  delegateOrders       Order[]               @relation("DelegateOrders")
+  id              String           @id @default(cuid())
+  email           String           @unique
+  keycloakId      String?          @unique
+  passwordHash    String?
+  firstName       String
+  lastName        String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+  memberships     Membership[]
+  refreshTokens   RefreshToken[]
+  cartOrders      CartOrder[]
+  orderAsSessions OrderAsSession[] @relation("AdminOrderAsSessions")
+  delegateOrders  Order[]          @relation("DelegateOrders")
 
   @@map("users")
 }
@@ -360,30 +363,30 @@ model Supplier {
 }
 
 model Product {
-  id                 String                     @id @default(cuid())
-  distributorId      String
-  productTypeId      String?
-  supplierId         String?
-  name               String
-  description        String?
-  sku                String?
-  status             ProductStatus              @default(DRAFT)
-  price              Decimal?                   @db.Decimal(10, 2)
-  taxTypeId          String?
-  deletedAt          DateTime?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  distributor        Organisation               @relation("DistributorProducts", fields: [distributorId], references: [id])
-  productType        ProductType?               @relation(fields: [productTypeId], references: [id])
-  supplier           Supplier?                  @relation(fields: [supplierId], references: [id])
-  taxType            TaxType?                   @relation(fields: [taxTypeId], references: [id])
-  externalReferences ProductExternalReference[]
-  cartOrderLines     CartOrderLine[]
-  orderLines         OrderLine[]
-  catalogues         CatalogueProduct[]
-  priceListRules     PriceListRule[]             @relation("ProductPriceListRules")
-  searchDocument     ProductSearchDocument?
-  accountingMappings ProductAccountingMapping[]
+  id                         String                             @id @default(cuid())
+  distributorId              String
+  productTypeId              String?
+  supplierId                 String?
+  name                       String
+  description                String?
+  sku                        String?
+  status                     ProductStatus                      @default(DRAFT)
+  price                      Decimal?                           @db.Decimal(10, 2)
+  taxTypeId                  String?
+  deletedAt                  DateTime?
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
+  distributor                Organisation                       @relation("DistributorProducts", fields: [distributorId], references: [id])
+  productType                ProductType?                       @relation(fields: [productTypeId], references: [id])
+  supplier                   Supplier?                          @relation(fields: [supplierId], references: [id])
+  taxType                    TaxType?                           @relation(fields: [taxTypeId], references: [id])
+  externalReferences         ProductExternalReference[]
+  cartOrderLines             CartOrderLine[]
+  orderLines                 OrderLine[]
+  catalogues                 CatalogueProduct[]
+  priceListRules             PriceListRule[]                    @relation("ProductPriceListRules")
+  searchDocument             ProductSearchDocument?
+  accountingMappings         ProductAccountingMapping[]
   accountingMatchSuggestions AccountingProductMatchSuggestion[]
 
   @@unique([distributorId, sku])
@@ -438,33 +441,33 @@ model ProductExternalReference {
 // Maintained automatically by the trade_relationships_set_marker trigger
 // (see the add_active_marker_triggers migration) — not application code.
 model TradeRelationship {
-  id               String                  @id @default(cuid())
-  distributorId    String
-  customerId       String
-  status           TradeRelationshipStatus @default(PENDING_INVITE)
-  accountNumber    String?
-  activeAccountNumber String?
-  creditLimit          Decimal?                @db.Decimal(10, 2)
-  minimumOrderSpend    Decimal?                @db.Decimal(10, 2)
-  paymentTerms         String?
-  notes            String?
-  recentContactSelfDeclared Boolean?
-  deliveryLine1    String?
-  deliveryLine2    String?
-  deliveryCity     String?
-  deliveryState    String?
-  deliveryPostcode String?
-  deliveryCountry  String?
-  deletedAt        DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  distributor      Organisation            @relation("DistributorRelationships", fields: [distributorId], references: [id])
-  customer         Organisation            @relation("CustomerRelationships", fields: [customerId], references: [id])
-  invitations      CustomerInvitation[]
-  catalogues       CustomerCatalogue[]
-  traderCustomerSettings TraderCustomerSettings?
-  orderAsSessions        OrderAsSession[]
-  accountingMappings     CustomerAccountingMapping[]
+  id                         String                             @id @default(cuid())
+  distributorId              String
+  customerId                 String
+  status                     TradeRelationshipStatus            @default(PENDING_INVITE)
+  accountNumber              String?
+  activeAccountNumber        String?
+  creditLimit                Decimal?                           @db.Decimal(10, 2)
+  minimumOrderSpend          Decimal?                           @db.Decimal(10, 2)
+  paymentTerms               String?
+  notes                      String?
+  recentContactSelfDeclared  Boolean?
+  deliveryLine1              String?
+  deliveryLine2              String?
+  deliveryCity               String?
+  deliveryState              String?
+  deliveryPostcode           String?
+  deliveryCountry            String?
+  deletedAt                  DateTime?
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
+  distributor                Organisation                       @relation("DistributorRelationships", fields: [distributorId], references: [id])
+  customer                   Organisation                       @relation("CustomerRelationships", fields: [customerId], references: [id])
+  invitations                CustomerInvitation[]
+  catalogues                 CustomerCatalogue[]
+  traderCustomerSettings     TraderCustomerSettings?
+  orderAsSessions            OrderAsSession[]
+  accountingMappings         CustomerAccountingMapping[]
   accountingMatchSuggestions AccountingContactMatchSuggestion[]
 
   @@unique([distributorId, customerId])
@@ -543,54 +546,61 @@ model CartOrderLine {
 // ─── Commercial orders ────────────────────────────────────────────────────────
 
 model Order {
-  id               String               @id @default(cuid())
+  id               String @id @default(cuid())
   distributorId    String
   traderCustomerId String
   placedByUserId   String
-  orderNumber      String               @unique
+  orderNumber      String @unique
 
-  status                       OrderStatus
-  fulfilmentStatus             String?
-  invoiceStatus                String?
-  paymentStatus                String?
+  status           OrderStatus
+  fulfilmentStatus String?
+  invoiceStatus    String?
+  paymentStatus    String?
 
   acceptanceModeSnapshot       OrderAcceptanceMode
   acceptanceModeSourceSnapshot AcceptanceModeSource
 
-  currency       String              @default("GBP")
-  subtotalAmount Decimal             @db.Decimal(10, 2)
-  taxAmount      Decimal             @db.Decimal(10, 2)
-  totalAmount    Decimal             @db.Decimal(10, 2)
+  currency       String  @default("GBP")
+  subtotalAmount Decimal @db.Decimal(10, 2)
+  taxAmount      Decimal @db.Decimal(10, 2)
+  totalAmount    Decimal @db.Decimal(10, 2)
 
   billingAddressSnapshot  Json?
   deliveryAddressSnapshot Json?
   requestedDeliveryDate   DateTime? @db.Date
+  // Distributor's current committed delivery date — set from
+  // requestedDeliveryDate on first native-delivery-planning allocation
+  // (DeliveryRunAllocationProcessor), independently mutable afterwards via
+  // the change-delivery-date action. requestedDeliveryDate is never touched
+  // again once set, for audit/customer-service visibility.
+  scheduledDeliveryDate   DateTime? @db.Date
   customerReference       String?
   notes                   String?
 
-  submittedAt          DateTime?
-  acceptedAt           DateTime?
-  acceptedByActorType  AcceptedByActorType?
-  acceptedByUserId     String?
-  rejectedAt           DateTime?
-  rejectedByUserId     String?
-  rejectionReason      String?
-  cancelledAt          DateTime?
-  cancelledByUserId    String?
-  cancellationReason   String?
+  submittedAt         DateTime?
+  acceptedAt          DateTime?
+  acceptedByActorType AcceptedByActorType?
+  acceptedByUserId    String?
+  rejectedAt          DateTime?
+  rejectedByUserId    String?
+  rejectionReason     String?
+  cancelledAt         DateTime?
+  cancelledByUserId   String?
+  cancellationReason  String?
 
-  isOrderedByDelegate   Boolean  @default(false)
-  delegateAdminUserId   String?
+  isOrderedByDelegate Boolean @default(false)
+  delegateAdminUserId String?
 
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  distributor    Organisation @relation("DistributorOrders", fields: [distributorId], references: [id])
-  customer       Organisation @relation("CustomerOrders", fields: [traderCustomerId], references: [id])
-  delegateAdmin  User?        @relation("DelegateOrders", fields: [delegateAdminUserId], references: [id])
-  lines          OrderLine[]
-  notifications  Notification[]
-  invoiceExports AccountingInvoiceExport[]
+  distributor       Organisation              @relation("DistributorOrders", fields: [distributorId], references: [id])
+  customer          Organisation              @relation("CustomerOrders", fields: [traderCustomerId], references: [id])
+  delegateAdmin     User?                     @relation("DelegateOrders", fields: [delegateAdminUserId], references: [id])
+  lines             OrderLine[]
+  notifications     Notification[]
+  invoiceExports    AccountingInvoiceExport[]
+  deliveryRunOrders DeliveryRunOrder[]
 
   @@index([distributorId, status])
   @@index([traderCustomerId, status])
@@ -599,32 +609,32 @@ model Order {
 }
 
 model OrderLine {
-  id               String          @id @default(cuid())
+  id               String @id @default(cuid())
   orderId          String
   distributorId    String
   traderCustomerId String
   productId        String
 
-  productVariantId       String?
-  skuSnapshot            String?
-  productNameSnapshot    String
-  unitOfMeasureSnapshot  String?
+  productVariantId      String?
+  skuSnapshot           String?
+  productNameSnapshot   String
+  unitOfMeasureSnapshot String?
 
-  quantityOrdered         Int
-  unitPriceSnapshot       Decimal @db.Decimal(10, 2)
-  subtotalAmount          Decimal @db.Decimal(10, 2)
-  taxAmount               Decimal @db.Decimal(10, 2)
-  totalAmount             Decimal @db.Decimal(10, 2)
-  priceListIdSnapshot     String?
-  priceListRuleIdSnapshot String?
+  quantityOrdered           Int
+  unitPriceSnapshot         Decimal            @db.Decimal(10, 2)
+  subtotalAmount            Decimal            @db.Decimal(10, 2)
+  taxAmount                 Decimal            @db.Decimal(10, 2)
+  totalAmount               Decimal            @db.Decimal(10, 2)
+  priceListIdSnapshot       String?
+  priceListRuleIdSnapshot   String?
   // Frozen at order placement (never touched again — AC7): rate is carried
   // from the cart's own frozen taxRateSnapshot; name/classification are
   // joined from TaxType at that one moment. taxTypeId is a bare pointer for
   // reporting, same un-related style as priceListIdSnapshot above.
   taxTypeId                 String?
-  taxTypeNameSnapshot        String?
-  taxClassificationSnapshot  TaxClassification?
-  taxRatePercentageSnapshot  Decimal?           @db.Decimal(5, 2)
+  taxTypeNameSnapshot       String?
+  taxClassificationSnapshot TaxClassification?
+  taxRatePercentageSnapshot Decimal?           @db.Decimal(5, 2)
 
   status    OrderLineStatus
   createdAt DateTime        @default(now())
@@ -726,6 +736,11 @@ model DistributorSettings {
   // day/week/month boundaries for analytics period comparisons — see the
   // wholesaler homepage dashboard PRD, §4.1.
   timezone                   String              @default("UTC")
+  // Look-ahead window (days) for surfacing "another delivery to the same
+  // address" review suggestions on the Delivery Runs board. Reviewable
+  // suggestion only — orders are never auto-moved/merged. No settings UI
+  // in the initial native delivery-planning PBI; fixed default of 3.
+  nearbyDeliveryWindowDays   Int                 @default(3)
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
 
   @@map("distributor_settings")
@@ -744,36 +759,36 @@ model DistributorSettings {
 // add_active_marker_triggers migration) — not application code — so the
 // rule holds regardless of what writes the row.
 model AccountingConnection {
-  id                       String                     @id @default(cuid())
-  distributorId            String
-  connectedDistributorId   String?
-  provider                 AccountingProvider
-  status                   AccountingConnectionStatus
-  externalOrganisationId   String
-  externalOrganisationName String
-  scopes                   String
-  encryptedCredentialData  String
-  connectedByUserId        String
-  connectedAt              DateTime
-  disconnectedAt           DateTime?
-  lastSyncedAt             DateTime?
-  lastErrorAt              DateTime?
-  lastErrorMessage         String?
-  invoiceExportTargetStatus AccountingInvoiceTargetStatus @default(DRAFT)
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
-  distributor              Organisation               @relation(fields: [distributorId], references: [id])
-  externalContacts         ExternalAccountingContact[]
-  customerMappings         CustomerAccountingMapping[]
-  contactMatchSuggestions  AccountingContactMatchSuggestion[]
-  externalProducts         ExternalAccountingProduct[]
-  productMappings          ProductAccountingMapping[]
-  productMatchSuggestions  AccountingProductMatchSuggestion[]
-  externalTaxTypes         ExternalAccountingTaxType[]
-  taxTypeMappings          TaxTypeAccountingMapping[]
-  taxTypeMatchSuggestions  AccountingTaxTypeMatchSuggestion[]
-  invoiceExports           AccountingInvoiceExport[]
-  bulkImportJobs           AccountingBulkImportJob[]
+  id                        String                             @id @default(cuid())
+  distributorId             String
+  connectedDistributorId    String?
+  provider                  AccountingProvider
+  status                    AccountingConnectionStatus
+  externalOrganisationId    String
+  externalOrganisationName  String
+  scopes                    String
+  encryptedCredentialData   String
+  connectedByUserId         String
+  connectedAt               DateTime
+  disconnectedAt            DateTime?
+  lastSyncedAt              DateTime?
+  lastErrorAt               DateTime?
+  lastErrorMessage          String?
+  invoiceExportTargetStatus AccountingInvoiceTargetStatus      @default(DRAFT)
+  createdAt                 DateTime                           @default(now())
+  updatedAt                 DateTime                           @updatedAt
+  distributor               Organisation                       @relation(fields: [distributorId], references: [id])
+  externalContacts          ExternalAccountingContact[]
+  customerMappings          CustomerAccountingMapping[]
+  contactMatchSuggestions   AccountingContactMatchSuggestion[]
+  externalProducts          ExternalAccountingProduct[]
+  productMappings           ProductAccountingMapping[]
+  productMatchSuggestions   AccountingProductMatchSuggestion[]
+  externalTaxTypes          ExternalAccountingTaxType[]
+  taxTypeMappings           TaxTypeAccountingMapping[]
+  taxTypeMatchSuggestions   AccountingTaxTypeMatchSuggestion[]
+  invoiceExports            AccountingInvoiceExport[]
+  bulkImportJobs            AccountingBulkImportJob[]
 
   @@unique([connectedDistributorId])
   @@index([distributorId])
@@ -854,14 +869,14 @@ model ExternalAccountingContact {
 // explicit user action (import/confirm/match) — never by the sync/matcher,
 // regardless of match confidence.
 model CustomerAccountingMapping {
-  id                     String                        @id @default(cuid())
+  id                     String                       @id @default(cuid())
   distributorId          String
   accountingConnectionId String
   tradeRelationshipId    String
   externalContactId      String
   matchMethod            AccountingContactMatchMethod
   linkedByUserId         String
-  linkedAt               DateTime                      @default(now())
+  linkedAt               DateTime                     @default(now())
   unlinkedAt             DateTime?
   // See ADR-052: true while linked (unlinkedAt is null), null once unlinked —
   // rides along in both uniques below so an unlink-then-relink of the same
@@ -869,13 +884,13 @@ model CustomerAccountingMapping {
   // the customer_accounting_mappings_set_marker trigger (see the
   // add_active_marker_triggers migration) — not application code.
   linkedMarker           Boolean?
-  createdAt              DateTime                      @default(now())
-  updatedAt              DateTime                      @updatedAt
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
 
   distributor       Organisation              @relation(fields: [distributorId], references: [id])
-  connection         AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
-  tradeRelationship TradeRelationship          @relation(fields: [tradeRelationshipId], references: [id])
-  externalContact    ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
+  connection        AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  tradeRelationship TradeRelationship         @relation(fields: [tradeRelationshipId], references: [id])
+  externalContact   ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
 
   @@unique([accountingConnectionId, tradeRelationshipId, linkedMarker])
   @@unique([accountingConnectionId, externalContactId, linkedMarker])
@@ -887,24 +902,24 @@ model CustomerAccountingMapping {
 // here; CustomerAccountingMapping rows are created exclusively by an
 // explicit confirm/match action, regardless of confidence.
 model AccountingContactMatchSuggestion {
-  id                            String                        @id @default(cuid())
-  distributorId                 String
-  accountingConnectionId        String
-  externalContactId             String
-  suggestedTradeRelationshipId  String
-  confidence                    Int
-  matchMethod                   AccountingContactMatchMethod
-  matchReason                   String
-  status                        AccountingContactMatchStatus @default(SUGGESTED)
-  reviewedByUserId              String?
-  reviewedAt                    DateTime?
-  createdAt                     DateTime                     @default(now())
-  updatedAt                     DateTime                     @updatedAt
+  id                           String                       @id @default(cuid())
+  distributorId                String
+  accountingConnectionId       String
+  externalContactId            String
+  suggestedTradeRelationshipId String
+  confidence                   Int
+  matchMethod                  AccountingContactMatchMethod
+  matchReason                  String
+  status                       AccountingContactMatchStatus @default(SUGGESTED)
+  reviewedByUserId             String?
+  reviewedAt                   DateTime?
+  createdAt                    DateTime                     @default(now())
+  updatedAt                    DateTime                     @updatedAt
 
   distributor                Organisation              @relation(fields: [distributorId], references: [id])
-  connection                  AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
-  externalContact             ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
-  suggestedTradeRelationship TradeRelationship          @relation(fields: [suggestedTradeRelationshipId], references: [id])
+  connection                 AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  externalContact            ExternalAccountingContact @relation(fields: [externalContactId], references: [id])
+  suggestedTradeRelationship TradeRelationship         @relation(fields: [suggestedTradeRelationshipId], references: [id])
 
   @@index([distributorId, status])
   @@index([externalContactId, status])
@@ -1101,7 +1116,7 @@ model TaxTypeAccountingMapping {
 // ever writes here; TaxTypeAccountingMapping rows are created exclusively by
 // an explicit confirm/match action, regardless of confidence.
 model AccountingTaxTypeMatchSuggestion {
-  id                     String                        @id @default(cuid())
+  id                     String                       @id @default(cuid())
   distributorId          String
   accountingConnectionId String
   externalTaxTypeId      String
@@ -1112,11 +1127,11 @@ model AccountingTaxTypeMatchSuggestion {
   status                 AccountingTaxTypeMatchStatus @default(SUGGESTED)
   reviewedByUserId       String?
   reviewedAt             DateTime?
-  createdAt              DateTime                      @default(now())
-  updatedAt              DateTime                      @updatedAt
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
 
   distributor      Organisation              @relation(fields: [distributorId], references: [id])
-  connection        AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
+  connection       AccountingConnection      @relation(fields: [accountingConnectionId], references: [id])
   externalTaxType  ExternalAccountingTaxType @relation(fields: [externalTaxTypeId], references: [id])
   suggestedTaxType TaxType                   @relation(fields: [suggestedTaxTypeId], references: [id])
 
@@ -1168,22 +1183,22 @@ model AccountingInvoiceExport {
 // updatedAt doubles as the processor's crash-recovery heartbeat (see
 // PROCESSING_STALE_MS in the processor).
 model AccountingBulkImportJob {
-  id                     String                          @id @default(cuid())
+  id                     String                         @id @default(cuid())
   distributorId          String
   accountingConnectionId String
   recordType             AccountingBulkImportRecordType
   requestedByUserId      String
-  status                 AccountingBulkImportJobStatus   @default(QUEUED)
-  honourSuggestions      Boolean                         @default(false)
+  status                 AccountingBulkImportJobStatus  @default(QUEUED)
+  honourSuggestions      Boolean                        @default(false)
   selection              Json
-  totalCount             Int                             @default(0)
-  importedCount          Int                             @default(0)
-  matchedCount           Int                             @default(0)
-  skippedCount           Int                             @default(0)
-  failedCount            Int                             @default(0)
-  results                Json                            @default("[]")
-  createdAt              DateTime                        @default(now())
-  updatedAt              DateTime                        @updatedAt
+  totalCount             Int                            @default(0)
+  importedCount          Int                            @default(0)
+  matchedCount           Int                            @default(0)
+  skippedCount           Int                            @default(0)
+  failedCount            Int                            @default(0)
+  results                Json                           @default("[]")
+  createdAt              DateTime                       @default(now())
+  updatedAt              DateTime                       @updatedAt
   completedAt            DateTime?
 
   distributor Organisation         @relation(fields: [distributorId], references: [id])
@@ -1380,26 +1395,26 @@ model PriceList {
 }
 
 model PriceListRule {
-  id                 String                          @id @default(cuid())
+  id                 String                         @id @default(cuid())
   distributorId      String
   priceListId        String
   selectorType       PriceListRuleSelectorType
   productId          String?
   productVariantId   String?
-  minQuantity        Int                             @default(1)
-  valueType          PriceListRuleValueType          @default(FIXED_PRICE)
-  unitPrice          Decimal?                        @db.Decimal(10, 2)
-  discountPercentage Decimal?                        @db.Decimal(5, 2)
+  minQuantity        Int                            @default(1)
+  valueType          PriceListRuleValueType         @default(FIXED_PRICE)
+  unitPrice          Decimal?                       @db.Decimal(10, 2)
+  discountPercentage Decimal?                       @db.Decimal(5, 2)
   discountBaseType   PriceListRuleDiscountBaseType?
   basePriceListId    String?
-  currency           String                          @default("GBP")
-  sortOrder          Int                             @default(0)
-  active             Boolean                         @default(true)
-  createdAt          DateTime                        @default(now())
-  updatedAt          DateTime                        @updatedAt
-  priceList          PriceList                       @relation(fields: [priceListId], references: [id])
-  product            Product?                        @relation("ProductPriceListRules", fields: [productId], references: [id])
-  basePriceList      PriceList?                      @relation("BasePriceListRules", fields: [basePriceListId], references: [id])
+  currency           String                         @default("GBP")
+  sortOrder          Int                            @default(0)
+  active             Boolean                        @default(true)
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  priceList          PriceList                      @relation(fields: [priceListId], references: [id])
+  product            Product?                       @relation("ProductPriceListRules", fields: [productId], references: [id])
+  basePriceList      PriceList?                     @relation("BasePriceListRules", fields: [basePriceListId], references: [id])
 
   @@index([priceListId, active])
   @@index([priceListId, selectorType, productId])
@@ -1413,22 +1428,22 @@ model PriceListRule {
 // calculation (Phase 2). Not yet linked to Xero — that's Phase 3/4.
 
 model TaxType {
-  id             String             @id @default(cuid())
-  distributorId  String
-  name           String
-  classification TaxClassification
-  ratePercentage Decimal            @db.Decimal(5, 2)
-  active         Boolean            @default(true)
+  id                         String                             @id @default(cuid())
+  distributorId              String
+  name                       String
+  classification             TaxClassification
+  ratePercentage             Decimal                            @db.Decimal(5, 2)
+  active                     Boolean                            @default(true)
   // System-seeded 0% fallback, one per distributor, created by the one-off
   // backfill script (apps/api/src/scripts/backfill-default-tax-types.ts) so
   // pre-existing products stay orderable once taxTypeId exists. Never
   // created by user action; admin UI should flag products still on it.
-  isDefault      Boolean            @default(false)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  distributor    Organisation       @relation("DistributorTaxTypes", fields: [distributorId], references: [id])
-  products       Product[]
-  cartOrderLines CartOrderLine[]
+  isDefault                  Boolean                            @default(false)
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
+  distributor                Organisation                       @relation("DistributorTaxTypes", fields: [distributorId], references: [id])
+  products                   Product[]
+  cartOrderLines             CartOrderLine[]
   accountingMappings         TaxTypeAccountingMapping[]
   accountingMatchSuggestions AccountingTaxTypeMatchSuggestion[]
 
@@ -1472,22 +1487,198 @@ model DeliveryProfileCutoffRule {
   @@map("delivery_profile_cutoff_rules")
 }
 
+// ─── Delivery Routes & Runs (native planning) ────────────────────────────────
+// DeliveryRoute is the reusable definition (which customers normally travel
+// together, and in what usual drop order) — deliberately separate from
+// DeliveryProfile, which governs *when* a customer may be delivered to.
+// DeliveryRun is a dated occurrence created lazily from an accepted order;
+// DeliveryRunOrder is that order's allocation within a run. Both carry
+// nullable provider-compatibility fields (source/externalProvider/
+// externalId/vehicle*/provider*) so a future delivery-provider integration
+// (e.g. SolBox) is additive — one adapter, following the same
+// provider-neutral pattern as ADR-051's accounting integration — never a
+// schema rewrite. This PBI only ever writes the STOCDUP-native values.
+
+enum DeliveryRunStatus {
+  OPEN
+  READY
+}
+
+enum DeliveryRunSource {
+  STOCDUP
+  // Future provider values (e.g. SOLBOX) are appended here only, when a real
+  // integration is built — no other schema change needed.
+}
+
+enum DeliveryAllocationSource {
+  DEFAULT_ROUTE
+  MANUAL
+  EXTERNAL_PROVIDER
+}
+
+enum DeliveryRunOrderStatus {
+  PLANNED
+  // Later execution states (IN_TRANSIT, DELIVERED, FAILED, ...) are reserved
+  // for a future provider integration; this PBI only ever writes PLANNED.
+}
+
+model DeliveryRoute {
+  id                String   @id @default(cuid())
+  distributorId     String
+  name              String
+  code              String?
+  // Free-text usual driver name, copied onto a dated run when it's first
+  // created (changing that run's driver never changes this default). No
+  // Driver/staff directory model exists yet, so this is a bare label, not an
+  // FK — a future real driver directory would need a migration to backfill
+  // relationships from these free-text values.
+  defaultDriverName String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  distributor Organisation            @relation("DistributorDeliveryRoutes", fields: [distributorId], references: [id])
+  customers   DeliveryRouteCustomer[]
+  runs        DeliveryRun[]
+
+  @@index([distributorId, active])
+  @@map("delivery_routes")
+}
+
+// "A customer has at most one active default route within a distributor" is
+// enforced via activeDistributorCustomerId (ADR-052 marker-column pattern):
+// it mirrors `${distributorId}:${customerId}` only while removedAt is null,
+// and is null otherwise. Maintained by a BEFORE INSERT OR UPDATE trigger
+// (see the add_delivery_route_active_marker_trigger migration) — not
+// application code — so the rule holds regardless of what writes the row.
+model DeliveryRouteCustomer {
+  id                  String    @id @default(cuid())
+  routeId             String
+  customerId          String
+  defaultDropPosition Int
+  assignedAt          DateTime  @default(now())
+  assignedByUserId    String
+  removedAt           DateTime?
+  removedByUserId     String?
+
+  activeDistributorCustomerId String?
+
+  route    DeliveryRoute @relation(fields: [routeId], references: [id])
+  customer Organisation  @relation("DeliveryRouteCustomerAssignments", fields: [customerId], references: [id])
+
+  @@unique([activeDistributorCustomerId])
+  @@index([routeId, defaultDropPosition])
+  @@index([customerId])
+  @@map("delivery_route_customers")
+}
+
+model DeliveryRun {
+  id            String   @id @default(cuid())
+  distributorId String
+  // Nullable: required for native route-created runs, but left open for a
+  // future provider-supplied run with no native route mapping.
+  routeId       String?
+  deliveryDate  DateTime @db.Date
+  // Snapshot of the route's name at run-creation time — a run created under
+  // "Yorkshire" stays labelled "Yorkshire" even if the route is later
+  // renamed, same reasoning as Order's *Snapshot fields.
+  name          String
+  // Actual driver for this date, independent of the route's default driver.
+  driverName    String?
+  vehicleId     String?
+  vehicleName   String?
+
+  status DeliveryRunStatus @default(OPEN)
+
+  source           DeliveryRunSource @default(STOCDUP)
+  externalProvider String?
+  externalId       String?
+  optimised        Boolean           @default(false)
+
+  readyAt       DateTime?
+  readyByUserId String?
+
+  // First optimistic-concurrency column in this schema, deliberately scoped
+  // to this table only. Bumped on every mutating write (move in/out,
+  // reorder, driver change, mark-ready, reopen); mutating endpoints require
+  // the caller's last-known value and reject with a conflict if it's stale.
+  version Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  distributor Organisation       @relation("DistributorDeliveryRuns", fields: [distributorId], references: [id])
+  route       DeliveryRoute?     @relation(fields: [routeId], references: [id])
+  orders      DeliveryRunOrder[]
+
+  // Find-or-lazily-create key for "the route's OPEN run for this date" —
+  // Postgres never treats two NULLs as equal, so this never collides across
+  // the (out-of-scope-for-this-PBI) routeId: null case.
+  @@unique([distributorId, routeId, deliveryDate])
+  @@index([distributorId, deliveryDate, status])
+  @@map("delivery_runs")
+}
+
+// "An order has at most one active run allocation" is enforced via
+// activeOrderId (ADR-052 marker-column pattern): mirrors orderId only while
+// removedAt is null, else null. Maintained by a BEFORE INSERT OR UPDATE
+// trigger — not application code.
+model DeliveryRunOrder {
+  id               String                   @id @default(cuid())
+  runId            String
+  orderId          String
+  deliverySequence Int?
+  // Reserved, provider-compatible relative sequence; unpopulated this PBI.
+  relativeSequence Int?
+  allocationSource DeliveryAllocationSource
+  deliveryStatus   DeliveryRunOrderStatus   @default(PLANNED)
+
+  // Reserved provider-compatibility fields — all nullable, unpopulated by
+  // this PBI (see the section header above).
+  providerStatus String?
+  plannedAt      DateTime?
+  etaAt          DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  signedBy       String?
+  providerData   Json?
+
+  assignedAt       DateTime  @default(now())
+  // Nullable: system-driven allocation (allocationSource DEFAULT_ROUTE /
+  // EXTERNAL_PROVIDER) has no acting user, same reasoning as
+  // Order.acceptedByUserId being nullable for auto-accept. Only a MANUAL
+  // (human-driven) move ever sets this.
+  assignedByUserId String?
+  removedAt        DateTime?
+  removedByUserId  String?
+
+  activeOrderId String?
+
+  run   DeliveryRun @relation(fields: [runId], references: [id])
+  order Order       @relation(fields: [orderId], references: [id])
+
+  @@unique([activeOrderId])
+  @@index([runId, deliverySequence])
+  @@index([orderId])
+  @@map("delivery_run_order")
+}
+
 // ─── Order-as (order on behalf of customer) ──────────────────────────────────
 
 model OrderAsSession {
-  id                  String    @id  // crypto.randomBytes(24).toString('base64url')
+  id                  String   @id // crypto.randomBytes(24).toString('base64url')
   adminUserId         String
   tradeRelationshipId String
-  customerId          String    // denormalised from tradeRelationship.customerId for fast interceptor access
-  distributorId       String    // denormalised from tradeRelationship.distributorId for fast interceptor access
+  customerId          String // denormalised from tradeRelationship.customerId for fast interceptor access
+  distributorId       String // denormalised from tradeRelationship.distributorId for fast interceptor access
   expiresAt           DateTime
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  adminUser         User              @relation("AdminOrderAsSessions", fields: [adminUserId], references: [id])
-  tradeRelationship TradeRelationship @relation(fields: [tradeRelationshipId], references: [id], onDelete: Cascade)
-  customer          Organisation      @relation("OrderAsCustomer", fields: [customerId], references: [id])
-  distributor       Organisation      @relation("OrderAsDistributor", fields: [distributorId], references: [id])
+  adminUser         User                   @relation("AdminOrderAsSessions", fields: [adminUserId], references: [id])
+  tradeRelationship TradeRelationship      @relation(fields: [tradeRelationshipId], references: [id], onDelete: Cascade)
+  customer          Organisation           @relation("OrderAsCustomer", fields: [customerId], references: [id])
+  distributor       Organisation           @relation("OrderAsDistributor", fields: [distributorId], references: [id])
   deliveryTokens    OrderAsDeliveryToken[]
 
   @@unique([adminUserId, tradeRelationshipId])
@@ -1501,7 +1692,7 @@ model OrderAsDeliveryToken {
   expiresAt DateTime
   usedAt    DateTime?
 
-  session   OrderAsSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session OrderAsSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@map("order_as_delivery_tokens")
 }

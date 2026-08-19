@@ -13,6 +13,7 @@ import { AccountingInvoiceExportModule } from './accounting-invoice-export/accou
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
 import { AccountingTaxTypeSyncModule } from './accounting-tax-type-sync/accounting-tax-type-sync.module';
 import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
+import { DeliveryRunAllocationModule } from './delivery-run-allocation/delivery-run-allocation.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -26,6 +27,7 @@ import {
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
   ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
+  DELIVERY_RUN_ALLOCATION_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queues/queue.constants';
 import { redisConnectionFromUrl } from './queues/redis-connection';
@@ -86,6 +88,18 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
           removeOnFail: false,
         },
       },
+      {
+        name: DELIVERY_RUN_ALLOCATION_QUEUE,
+        // Local DB operations only (route lookup, run upsert) — same backoff
+        // reasoning as ANALYTICS_FACTS_QUEUE, not the generous external-API
+        // backoff the invoice export needs.
+        defaultJobOptions: {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 5_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
     ),
     PrismaModule,
     MailModule,
@@ -97,6 +111,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingProductSyncModule,
     AccountingTaxTypeSyncModule,
     AnalyticsFactsModule,
+    DeliveryRunAllocationModule,
     OutboxModule,
     HealthModule,
   ],

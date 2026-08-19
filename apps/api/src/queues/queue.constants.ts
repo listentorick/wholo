@@ -8,6 +8,7 @@ export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 export const ACCOUNTING_TAX_TYPE_SYNC_QUEUE = 'accounting-tax-type-sync';
 export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
 export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
+export const DELIVERY_RUN_ALLOCATION_QUEUE = 'delivery-run-allocation';
 
 // Domain event type → queues whose consumers care about it.
 // Activation rule (ADR-047): a route entry ships in the same PR as its
@@ -30,7 +31,7 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   TradeRelationshipSuspended: [NOTIFICATIONS_QUEUE],
   TradeRelationshipUnsuspended: [NOTIFICATIONS_QUEUE],
   TradeRelationshipActivated: [NOTIFICATIONS_QUEUE],
-  OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE, ANALYTICS_FACTS_QUEUE],
+  OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE, ANALYTICS_FACTS_QUEUE, DELIVERY_RUN_ALLOCATION_QUEUE],
   OrderRejected: [ANALYTICS_FACTS_QUEUE],
   OrderCancelled: [ANALYTICS_FACTS_QUEUE],
   // Manual "retry export" — same uniform-outbox rationale as the sync events;

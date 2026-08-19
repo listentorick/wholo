@@ -9,6 +9,8 @@ export { adminOrdersApi } from './orders';
 export { adminPriceListsApi } from './price-lists';
 export { adminTaxTypesApi } from './tax-types';
 export { adminDeliveryProfilesApi } from './delivery-profiles';
+export { adminDeliveryRoutesApi } from './delivery-routes';
+export { adminDeliveryRunsApi } from './delivery-runs';
 export { adminSettingsApi } from './settings';
 export { adminOrderAsApi } from './order-as';
 export { adminAccountingApi } from './accounting';

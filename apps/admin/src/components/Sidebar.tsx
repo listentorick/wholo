@@ -106,6 +106,30 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: 'Delivery Routes',
+    href: '/delivery-routes',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+        <circle cx="6" cy="19" r="2.5" />
+        <circle cx="18" cy="5" r="2.5" />
+        <path d="M8.2 17.7L15.8 6.3" />
+        <path d="M8.5 19h6a3 3 0 003-3v-1a3 3 0 00-3-3h-1" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Delivery Runs',
+    href: '/delivery-runs',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+        <rect x="1" y="6" width="15" height="12" rx="1.5" />
+        <path d="M16 10h3.5L22 13.5V18h-2" />
+        <circle cx="6.5" cy="19" r="1.75" />
+        <circle cx="17.5" cy="19" r="1.75" />
+      </svg>
+    ),
+  },
+  {
     label: 'Integrations',
     href: '/integrations',
     icon: (

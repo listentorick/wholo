@@ -17,6 +17,8 @@ import { AdminSettingsModule } from './admin-settings/admin-settings.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
 import { DeliveryAvailabilityModule } from './delivery-availability/delivery-availability.module';
+import { DeliveryRoutesModule } from './delivery-routes/delivery-routes.module';
+import { DeliveryRunsModule } from './delivery-runs/delivery-runs.module';
 import { OrderAsModule } from './order-as/order-as.module';
 import { MailModule } from './mail/mail.module';
 import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
@@ -51,6 +53,8 @@ import './asset-images/branding-asset-types';
     AdminSettingsModule,
     DeliveryProfilesModule,
     DeliveryAvailabilityModule,
+    DeliveryRoutesModule,
+    DeliveryRunsModule,
     OrderAsModule,
     MailModule,
     PortalInvitationsModule,
