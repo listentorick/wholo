@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { DeliveryCard as DeliveryCardType } from '@wholo/types';
 import { UnassignedColumn } from './UnassignedColumn';
+
+const NOOP = { allRuns: [], pendingOrderId: null, onMove: vi.fn() };
 
 function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
   return {
@@ -25,17 +27,17 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
 
 describe('UnassignedColumn', () => {
   it('renders the Unassigned heading', () => {
-    render(<UnassignedColumn cards={[]} />);
+    render(<UnassignedColumn cards={[]} {...NOOP} />);
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
   });
 
   it('shows an empty-state message with no cards', () => {
-    render(<UnassignedColumn cards={[]} />);
+    render(<UnassignedColumn cards={[]} {...NOOP} />);
     expect(screen.getByText(/everything/i)).toBeInTheDocument();
   });
 
   it('renders every unassigned card and sums their item totals', () => {
-    render(<UnassignedColumn cards={[makeCard({ orderId: 'a', itemCount: 5 }), makeCard({ orderId: 'b', itemCount: 7 })]} />);
+    render(<UnassignedColumn cards={[makeCard({ orderId: 'a', itemCount: 5 }), makeCard({ orderId: 'b', itemCount: 7 })]} {...NOOP} />);
     expect(screen.getByText('2 stops · 12 items')).toBeInTheDocument();
   });
 });

@@ -1,5 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException, ConflictException, NotFoundException, UnprocessableEntityException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -56,27 +59,43 @@ function makeRun(overrides: Record<string, unknown> = {}) {
 
 describe('DeliveryRunsService', () => {
   let service: DeliveryRunsService;
-  let prisma: jest.Mocked<PrismaService>;
+  let prisma: any;
+  let outbox: { writeEvent: jest.Mock };
+  let audit: { record: jest.Mock };
+  let tx: any;
 
   beforeEach(async () => {
-    const mockPrisma = {
-      deliveryRun: { findMany: jest.fn() },
-      order: { findMany: jest.fn() },
-      deliveryRouteCustomer: { findMany: jest.fn() },
-      $queryRaw: jest.fn(),
+    tx = {
+      deliveryRun: { updateMany: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({}) },
+      deliveryRunOrder: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn().mockResolvedValue({ id: 'dro-new' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
     };
+
+    prisma = {
+      deliveryRun: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn() },
+      order: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn() },
+      deliveryRouteCustomer: { findMany: jest.fn().mockResolvedValue([]) },
+      deliveryRunOrder: { findFirst: jest.fn().mockResolvedValue(null), findMany: jest.fn().mockResolvedValue([]) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      $transaction: jest.fn(async (cb: any) => cb(tx)),
+    };
+    outbox = { writeEvent: jest.fn().mockResolvedValue({}) };
+    audit = { record: jest.fn().mockResolvedValue({}) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeliveryRunsService,
-        { provide: PrismaService, useValue: mockPrisma },
-        { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
-        { provide: AuditService, useValue: { record: jest.fn() } },
+        { provide: PrismaService, useValue: prisma },
+        { provide: OutboxService, useValue: outbox },
+        { provide: AuditService, useValue: audit },
       ],
     }).compile();
 
     service = module.get(DeliveryRunsService);
-    prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
   });
 
   describe('getDay', () => {
@@ -254,6 +273,258 @@ describe('DeliveryRunsService', () => {
       expect(result.data.map((d) => d.date)).toEqual(['2026-08-19', '2026-08-20', '2026-08-21']);
       expect(result.data[0]).toEqual({ date: '2026-08-19', runCount: 0, stopCount: 0, unassignedCount: 0 });
       expect(result.data[1]).toEqual({ date: '2026-08-20', runCount: 1, stopCount: 3, unassignedCount: 0 });
+    });
+  });
+
+  describe('assignOrderToRun', () => {
+    it('throws NotFoundException when the destination run is not found', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws UnprocessableEntityException when the destination run is READY', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun({ status: 'READY' }));
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('throws NotFoundException when the order is not found', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws UnprocessableEntityException when the order date does not match the run date', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun({ deliveryDate: DAY }));
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder({
+        scheduledDeliveryDate: new Date('2026-08-21T00:00:00.000Z'),
+        requestedDeliveryDate: new Date('2026-08-21T00:00:00.000Z'),
+      }));
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('no-ops without touching the transaction when the order is already in the target run', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce({ id: 'dro-1', runId: 'run-1' });
+
+      await service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1');
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(outbox.writeEvent).not.toHaveBeenCalled();
+    });
+
+    it('throws UnprocessableEntityException when the source run is READY', async () => {
+      prisma.deliveryRun.findFirst
+        .mockResolvedValueOnce(makeRun({ id: 'run-2' }))
+        .mockResolvedValueOnce(makeRun({ id: 'run-1', status: 'READY' }));
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce({ id: 'dro-1', runId: 'run-1' });
+
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-2', { orderId: 'order-1', version: 0, sourceRunId: 'run-1' }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('throws ConflictException when the destination version is stale', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      tx.deliveryRun.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 5 }, 'user-1'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException when the source allocation has already moved', async () => {
+      prisma.deliveryRun.findFirst
+        .mockResolvedValueOnce(makeRun({ id: 'run-2' }))
+        .mockResolvedValueOnce(makeRun({ id: 'run-1', status: 'OPEN' }));
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce({ id: 'dro-1', runId: 'run-1' });
+      tx.deliveryRunOrder.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-2', { orderId: 'order-1', version: 0, sourceRunId: 'run-1' }, 'user-1'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('soft-removes the source allocation before creating the destination row (load-bearing ordering)', async () => {
+      prisma.deliveryRun.findFirst
+        .mockResolvedValueOnce(makeRun({ id: 'run-2' }))
+        .mockResolvedValueOnce(makeRun({ id: 'run-1', status: 'OPEN' }));
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce({ id: 'dro-1', runId: 'run-1' });
+
+      const callOrder: string[] = [];
+      tx.deliveryRunOrder.updateMany.mockImplementation(async () => {
+        callOrder.push('remove');
+        return { count: 1 };
+      });
+      tx.deliveryRunOrder.create.mockImplementation(async () => {
+        callOrder.push('create');
+        return { id: 'dro-new' };
+      });
+
+      await service.assignOrderToRun('dist-1', 'run-2', { orderId: 'order-1', version: 0, sourceRunId: 'run-1' }, 'user-1');
+
+      expect(callOrder).toEqual(['remove', 'create']);
+      expect(tx.deliveryRunOrder.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          runId: 'run-2', orderId: 'order-1', allocationSource: 'MANUAL', assignedByUserId: 'user-1',
+        }),
+      }));
+    });
+
+    it('blind-increments the source run version and writes outbox + audit inside the transaction', async () => {
+      prisma.deliveryRun.findFirst
+        .mockResolvedValueOnce(makeRun({ id: 'run-2' }))
+        .mockResolvedValueOnce(makeRun({ id: 'run-1', status: 'OPEN' }));
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce({ id: 'dro-1', runId: 'run-1' });
+
+      await service.assignOrderToRun('dist-1', 'run-2', { orderId: 'order-1', version: 0, sourceRunId: 'run-1' }, 'user-1');
+
+      expect(tx.deliveryRun.update).toHaveBeenCalledWith({ where: { id: 'run-1' }, data: { version: { increment: 1 } } });
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        tx, 'DeliveryRun', 'run-2', 'DeliveryRunOrderMoved', expect.objectContaining({ orderId: 'order-1' }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'DELIVERY_RUN_ORDER_MOVED' }));
+    });
+
+    it('translates a P2002 race (order already active elsewhere) into ConflictException', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      prisma.deliveryRunOrder.findFirst.mockResolvedValueOnce(null);
+      tx.deliveryRunOrder.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: '6.0.0' }),
+      );
+
+      await expect(
+        service.assignOrderToRun('dist-1', 'run-1', { orderId: 'order-1', version: 0 }, 'user-1'),
+      ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  describe('unassignOrderFromRun', () => {
+    it('throws NotFoundException when the run is not found', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(null);
+      await expect(service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws UnprocessableEntityException when the run is READY', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun({ status: 'READY' }));
+      await expect(service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1')).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('throws NotFoundException when the order is not found', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(null);
+      await expect(service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws ConflictException when the run version is stale', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      tx.deliveryRun.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 5, 'user-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('throws ConflictException when the allocation has already moved', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      tx.deliveryRunOrder.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1')).rejects.toThrow(ConflictException);
+    });
+
+    it('densifies the remaining active sequence after removal', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+      tx.deliveryRunOrder.findMany.mockResolvedValueOnce([{ id: 'dro-b' }, { id: 'dro-c' }]);
+
+      await service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1');
+
+      expect(tx.deliveryRunOrder.update).toHaveBeenNthCalledWith(1, { where: { id: 'dro-b' }, data: { deliverySequence: 1 } });
+      expect(tx.deliveryRunOrder.update).toHaveBeenNthCalledWith(2, { where: { id: 'dro-c' }, data: { deliverySequence: 2 } });
+    });
+
+    it('writes an outbox event and audit record inside the transaction', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.order.findFirst.mockResolvedValueOnce(makeOrder());
+
+      await service.unassignOrderFromRun('dist-1', 'run-1', 'order-1', 0, 'user-1');
+
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        tx, 'DeliveryRun', 'run-1', 'DeliveryRunOrderUnassigned', expect.objectContaining({ orderId: 'order-1' }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'DELIVERY_RUN_ORDER_UNASSIGNED' }));
+    });
+  });
+
+  describe('reorderRunOrders', () => {
+    it('throws NotFoundException when the run is not found', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.reorderRunOrders('dist-1', 'run-1', { version: 0, orderedOrderIds: ['a'] }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws UnprocessableEntityException when the run is READY', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun({ status: 'READY' }));
+      await expect(
+        service.reorderRunOrders('dist-1', 'run-1', { version: 0, orderedOrderIds: ['a'] }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('rejects a reorder that omits an active order', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.deliveryRunOrder.findMany.mockResolvedValueOnce([{ id: 'dro-a', orderId: 'a' }, { id: 'dro-b', orderId: 'b' }]);
+
+      await expect(
+        service.reorderRunOrders('dist-1', 'run-1', { version: 0, orderedOrderIds: ['a'] }, 'user-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException on a stale version', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.deliveryRunOrder.findMany.mockResolvedValueOnce([{ id: 'dro-a', orderId: 'a' }, { id: 'dro-b', orderId: 'b' }]);
+      tx.deliveryRun.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(
+        service.reorderRunOrders('dist-1', 'run-1', { version: 5, orderedOrderIds: ['b', 'a'] }, 'user-1'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('renumbers deliverySequence to match orderedOrderIds exactly', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.deliveryRunOrder.findMany.mockResolvedValueOnce([{ id: 'dro-a', orderId: 'a' }, { id: 'dro-b', orderId: 'b' }]);
+
+      await service.reorderRunOrders('dist-1', 'run-1', { version: 0, orderedOrderIds: ['b', 'a'] }, 'user-1');
+
+      expect(tx.deliveryRunOrder.update).toHaveBeenCalledWith({ where: { id: 'dro-b' }, data: { deliverySequence: 1 } });
+      expect(tx.deliveryRunOrder.update).toHaveBeenCalledWith({ where: { id: 'dro-a' }, data: { deliverySequence: 2 } });
+    });
+
+    it('writes an outbox event and audit record inside the transaction', async () => {
+      prisma.deliveryRun.findFirst.mockResolvedValueOnce(makeRun());
+      prisma.deliveryRunOrder.findMany.mockResolvedValueOnce([{ id: 'dro-a', orderId: 'a' }]);
+
+      await service.reorderRunOrders('dist-1', 'run-1', { version: 0, orderedOrderIds: ['a'] }, 'user-1');
+
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        tx, 'DeliveryRun', 'run-1', 'DeliveryRunOrdersResequenced', expect.objectContaining({ orderedOrderIds: ['a'] }),
+      );
+      expect(audit.record).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'DELIVERY_RUN_ORDERS_RESEQUENCED' }));
     });
   });
 });

@@ -1510,6 +1510,18 @@ export interface DeliveryDaysListResponse {
   data: DeliveryDaySummary[];   // no pagination block — bounded, capped window
 }
 
+export interface AssignOrderToRunRequest {
+  orderId: string;
+  version: number;
+  sourceRunId?: string;
+  position?: number;
+}
+
+export interface ReorderRunOrdersRequest {
+  version: number;
+  orderedOrderIds: string[];
+}
+
 // ─── Analytics (wholesaler homepage dashboard) ────────────────────────────────
 
 export type AnalyticsPeriodKey = 'today' | 'week' | 'month' | 'rolling7' | 'rolling30' | 'rolling90' | 'rolling365' | 'custom';

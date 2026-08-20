@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { adminDeliveryRunsApi, ApiError } from '@wholo/admin-api-client';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
 import { AdminLayout } from '@/components/AdminLayout';
@@ -36,8 +37,67 @@ export default function DeliveryRunsPage() {
   const { accessToken } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => toIso(new Date()));
   const [viewMode, setViewMode] = useState<BoardViewMode>('board');
+  const [mutationBanner, setMutationBanner] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
 
-  const { board, isLoading, isRefreshing, error } = useDeliveryDay(accessToken, selectedDate);
+  const {
+    board, isLoading, isRefreshing, error, refetch, mutate,
+  } = useDeliveryDay(accessToken, selectedDate);
+
+  // Mutation flow: never auto-retry a 409 — the board the user acted on no
+  // longer exists, so the only correct move is a fresh re-GET.
+  async function handleMove(orderId: string, fromRunId: string | null, toRunId: string | null) {
+    if (!board || !accessToken) return;
+    setPendingOrderId(orderId);
+    setMutationBanner(null);
+    try {
+      let refreshed;
+      if (toRunId === null) {
+        const sourceRun = board.runs.find((r) => r.runId === fromRunId);
+        if (!sourceRun || !fromRunId) return;
+        refreshed = await adminDeliveryRunsApi.unassignOrderFromRun(accessToken, fromRunId, orderId, sourceRun.version);
+      } else {
+        const destinationRun = board.runs.find((r) => r.runId === toRunId);
+        if (!destinationRun) return;
+        refreshed = await adminDeliveryRunsApi.assignOrderToRun(accessToken, toRunId, {
+          orderId,
+          version: destinationRun.version,
+          sourceRunId: fromRunId ?? undefined,
+        });
+      }
+      mutate(refreshed);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setMutationBanner('This board changed elsewhere — refreshed.');
+        await refetch();
+      } else if (e instanceof ApiError && e.status === 422) {
+        setMutationBanner(e.problem.detail ?? 'That move is not allowed.');
+        await refetch();
+      } else {
+        setMutationBanner('Could not move the delivery. Please try again.');
+      }
+    } finally {
+      setPendingOrderId(null);
+    }
+  }
+
+  async function handleReorder(runId: string, orderedOrderIds: string[]) {
+    if (!board || !accessToken) return;
+    const run = board.runs.find((r) => r.runId === runId);
+    if (!run) return;
+    setMutationBanner(null);
+    try {
+      const refreshed = await adminDeliveryRunsApi.reorderRunOrders(accessToken, runId, { version: run.version, orderedOrderIds });
+      mutate(refreshed);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setMutationBanner('This board changed elsewhere — refreshed.');
+        await refetch();
+      } else {
+        setMutationBanner('Could not reorder the run. Please try again.');
+      }
+    }
+  }
 
   if (authLoading) {
     return (
@@ -60,6 +120,12 @@ export default function DeliveryRunsPage() {
 
         <WorkloadStrip token={accessToken} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
+        {mutationBanner && (
+          <div className="mb-4">
+            <ListErrorBanner message={mutationBanner} />
+          </div>
+        )}
+
         {isLoading ? (
           <ListSpinner />
         ) : error ? (
@@ -74,7 +140,12 @@ export default function DeliveryRunsPage() {
           />
         ) : (
           <div className={`flex min-h-0 flex-1 flex-col ${isRefreshing ? 'opacity-60' : ''}`}>
-            <DeliveryRunBoard board={board} />
+            <DeliveryRunBoard
+              board={board}
+              pendingOrderId={pendingOrderId}
+              onMove={handleMove}
+              onReorder={handleReorder}
+            />
           </div>
         )}
       </div>

@@ -1,12 +1,17 @@
-import type { DeliveryCard as DeliveryCardType } from '@wholo/types';
+import type { DeliveryCard as DeliveryCardType, DeliveryRunColumn } from '@wholo/types';
 import { DeliveryCard } from './DeliveryCard';
 import { totalsCopy } from './attention';
 
 interface UnassignedColumnProps {
   cards: DeliveryCardType[];
+  allRuns: DeliveryRunColumn[];
+  pendingOrderId: string | null;
+  onMove: (orderId: string, fromRunId: string | null, toRunId: string | null) => void;
 }
 
-export function UnassignedColumn({ cards }: UnassignedColumnProps) {
+export function UnassignedColumn({
+  cards, allRuns, pendingOrderId, onMove,
+}: UnassignedColumnProps) {
   const itemCount = cards.reduce((sum, c) => sum + c.itemCount, 0);
 
   return (
@@ -20,7 +25,14 @@ export function UnassignedColumn({ cards }: UnassignedColumnProps) {
         ) : (
           <div className="space-y-2">
             {cards.map((card) => (
-              <DeliveryCard key={card.orderId} card={card} />
+              <DeliveryCard
+                key={card.orderId}
+                card={card}
+                currentRunId={null}
+                runs={allRuns}
+                pending={pendingOrderId === card.orderId}
+                onMove={(targetRunId) => onMove(card.orderId, null, targetRunId)}
+              />
             ))}
           </div>
         )}

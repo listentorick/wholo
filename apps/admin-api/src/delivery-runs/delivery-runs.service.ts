@@ -14,4 +14,18 @@ export class DeliveryRunsService {
   getDay(distributorId: string, date: string, token: string) {
     return this.api.get(`/distributors/${distributorId}/delivery-days/${date}`, token);
   }
+
+  assignOrderToRun(distributorId: string, runId: string, body: unknown, token: string) {
+    return this.api.post(`/distributors/${distributorId}/delivery-runs/${runId}/orders`, token, body);
+  }
+
+  // ApiClientService.delete takes no query param, so the ?version= is built
+  // into the path here.
+  unassignOrderFromRun(distributorId: string, runId: string, orderId: string, version: string, token: string) {
+    return this.api.delete(`/distributors/${distributorId}/delivery-runs/${runId}/orders/${orderId}?version=${version}`, token);
+  }
+
+  reorderRunOrders(distributorId: string, runId: string, body: unknown, token: string) {
+    return this.api.patch(`/distributors/${distributorId}/delivery-runs/${runId}/orders/reorder`, token, body);
+  }
 }

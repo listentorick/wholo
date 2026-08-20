@@ -1,9 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { OrderStatus, DeliveryRunStatus, Prisma } from '@prisma/client';
+import {
+  BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException,
+} from '@nestjs/common';
+import {
+  ActorType, DeliveryAllocationSource, OrderStatus, DeliveryRunStatus, Prisma,
+} from '@prisma/client';
 import { UnallocatedReason } from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
+import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
+import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
 
 const CUSTOMER_SELECT = { id: true, name: true } satisfies Prisma.OrganisationSelect;
 
@@ -19,10 +25,6 @@ interface ReasonResult {
 export class DeliveryRunsService {
   constructor(
     private prisma: PrismaService,
-    // Unused in M3a — imported now so M3b's mutation methods (which write
-    // outbox events + audit rows in the same transaction as the domain
-    // write, per the delivery-run-allocation.service.ts template) don't
-    // need a module/constructor edit.
     private outbox: OutboxService,
     private audit: AuditService,
   ) {}
@@ -187,6 +189,246 @@ export class DeliveryRunsService {
     return { data };
   }
 
+  // Assigns an order into a run — either from Unassigned (no sourceRunId)
+  // or as a cross-run move (sourceRunId set). Two different CAS targets,
+  // deliberately: the destination run is CAS'd on `version`; the source is
+  // CAS'd on the allocation row itself (activeOrderId + runId) — "this
+  // delivery is still where the caller thinks it is" is the real invariant,
+  // stronger than a version compare.
+  async assignOrderToRun(distributorId: string, runId: string, dto: AssignOrderToRunDto, actorUserId: string) {
+    const destination = await this.prisma.deliveryRun.findFirst({ where: { id: runId, distributorId } });
+    if (!destination) throw new NotFoundException('Delivery run not found');
+    if (destination.status === DeliveryRunStatus.READY) {
+      throw new UnprocessableEntityException('Cannot assign into a run that is already marked ready');
+    }
+
+    const order = await this.prisma.order.findFirst({ where: { id: dto.orderId, distributorId } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const orderDate = order.scheduledDeliveryDate ?? order.requestedDeliveryDate;
+    if (!orderDate || orderDate.getTime() !== destination.deliveryDate.getTime()) {
+      throw new UnprocessableEntityException(
+        `Order is scheduled for ${orderDate ? toIsoDate(orderDate) : 'no date'} but run is for ${toIsoDate(destination.deliveryDate)}`,
+      );
+    }
+
+    const existing = await this.prisma.deliveryRunOrder.findFirst({ where: { activeOrderId: dto.orderId } });
+    // No-op guard: already in this exact run — return unchanged, no version
+    // bump, no event, so drag jitter/repeat clicks don't spam the outbox.
+    if (existing?.runId === runId) {
+      return this.getDay(distributorId, toIsoDate(destination.deliveryDate));
+    }
+
+    // A READY run's membership is locked until an explicit Reopen — that
+    // applies to removal (this cross-run move) exactly as it does to
+    // unassignOrderFromRun, not just to the destination check above.
+    if (dto.sourceRunId) {
+      const sourceRun = await this.prisma.deliveryRun.findFirst({ where: { id: dto.sourceRunId, distributorId } });
+      if (sourceRun?.status === DeliveryRunStatus.READY) {
+        throw new UnprocessableEntityException('Cannot move a delivery out of a run that is already marked ready');
+      }
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // 1. CAS the destination version first — a stale caller causes zero
+        // row churn, and ownership folds into the predicate.
+        const destUpdate = await tx.deliveryRun.updateMany({
+          where: {
+            id: runId, distributorId, version: dto.version, status: DeliveryRunStatus.OPEN,
+          },
+          data: { version: { increment: 1 } },
+        });
+        if (destUpdate.count !== 1) throw new ConflictException('Delivery run has changed — refresh and try again');
+
+        // 2. Soft-remove the source allocation BEFORE the create. Load-bearing,
+        // not stylistic: DeliveryRunOrder.activeOrderId's @@unique is
+        // non-deferrable and the ADR-052 trigger nulls it the instant
+        // removedAt is set — create-before-remove would have two rows
+        // claiming the slot and P2002.
+        if (dto.sourceRunId) {
+          const srcRemove = await tx.deliveryRunOrder.updateMany({
+            where: { activeOrderId: dto.orderId, runId: dto.sourceRunId },
+            data: { removedAt: new Date(), removedByUserId: actorUserId },
+          });
+          if (srcRemove.count !== 1) {
+            throw new ConflictException('This delivery has already moved — refresh and try again');
+          }
+        }
+
+        // 3. Create, splice at position, renumber dense 1..n.
+        const siblings = await tx.deliveryRunOrder.findMany({
+          where: { runId, removedAt: null },
+          orderBy: [{ deliverySequence: 'asc' }, { assignedAt: 'asc' }],
+          select: { id: true },
+        });
+        const created = await tx.deliveryRunOrder.create({
+          data: {
+            runId,
+            orderId: dto.orderId,
+            allocationSource: DeliveryAllocationSource.MANUAL,
+            assignedByUserId: actorUserId,
+          },
+        });
+        const insertAt = dto.position ? Math.min(dto.position - 1, siblings.length) : siblings.length;
+        const ordered = [...siblings.slice(0, insertAt), { id: created.id }, ...siblings.slice(insertAt)];
+        await Promise.all(ordered.map((s, index) => tx.deliveryRunOrder.update({
+          where: { id: s.id },
+          data: { deliverySequence: index + 1 },
+        })));
+
+        // 4. Blind-increment the source run's version — step 2 already CAS'd
+        // the real invariant; increments commute, no CAS needed here.
+        if (dto.sourceRunId && dto.sourceRunId !== runId) {
+          await tx.deliveryRun.update({ where: { id: dto.sourceRunId }, data: { version: { increment: 1 } } });
+        }
+
+        await this.outbox.writeEvent(tx, 'DeliveryRun', runId, 'DeliveryRunOrderMoved', {
+          runId,
+          distributorId,
+          orderId: dto.orderId,
+          sourceRunId: dto.sourceRunId ?? null,
+          deliverySequence: insertAt + 1,
+          occurredAt: new Date().toISOString(),
+        });
+        await this.audit.record(tx, {
+          distributorId,
+          entityType: 'DELIVERY_RUN',
+          entityId: runId,
+          action: 'DELIVERY_RUN_ORDER_MOVED',
+          actorType: ActorType.USER,
+          actorUserId,
+          summary: `Moved order ${order.orderNumber} into run ${destination.name}`,
+          changes: { orderId: dto.orderId, fromRunId: dto.sourceRunId ?? null, toRunId: runId },
+        });
+      });
+    } catch (err) {
+      // Backstop for the (sourceRunId omitted) case where the order turns
+      // out to already have an active allocation elsewhere — the DB
+      // constraint is the real enforcement, this turns the P2002 into a
+      // clean conflict rather than a 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This order already has an active delivery run allocation — refresh and try again');
+      }
+      throw err;
+    }
+
+    return this.getDay(distributorId, toIsoDate(destination.deliveryDate));
+  }
+
+  async unassignOrderFromRun(distributorId: string, runId: string, orderId: string, version: number, actorUserId: string) {
+    const run = await this.prisma.deliveryRun.findFirst({ where: { id: runId, distributorId } });
+    if (!run) throw new NotFoundException('Delivery run not found');
+    if (run.status === DeliveryRunStatus.READY) {
+      throw new UnprocessableEntityException('Cannot remove a delivery from a run that is already marked ready');
+    }
+
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, distributorId } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      const casResult = await tx.deliveryRun.updateMany({
+        where: {
+          id: runId, distributorId, version, status: DeliveryRunStatus.OPEN,
+        },
+        data: { version: { increment: 1 } },
+      });
+      if (casResult.count !== 1) throw new ConflictException('Delivery run has changed — refresh and try again');
+
+      // CAS on the allocation row itself, same reasoning as the source-CAS
+      // in assignOrderToRun — this is the "this delivery is still here"
+      // invariant, not the run's version.
+      const removed = await tx.deliveryRunOrder.updateMany({
+        where: { activeOrderId: orderId, runId },
+        data: { removedAt: new Date(), removedByUserId: actorUserId },
+      });
+      if (removed.count !== 1) {
+        throw new ConflictException('This delivery has already moved — refresh and try again');
+      }
+
+      // Densify the remaining sequence — unlike a cross-run move, there's
+      // no destination to seed, so every remaining active row is renumbered.
+      const remaining = await tx.deliveryRunOrder.findMany({
+        where: { runId, removedAt: null },
+        orderBy: [{ deliverySequence: 'asc' }, { assignedAt: 'asc' }],
+        select: { id: true },
+      });
+      await Promise.all(remaining.map((s, index) => tx.deliveryRunOrder.update({
+        where: { id: s.id },
+        data: { deliverySequence: index + 1 },
+      })));
+
+      await this.outbox.writeEvent(tx, 'DeliveryRun', runId, 'DeliveryRunOrderUnassigned', {
+        runId, distributorId, orderId, occurredAt: new Date().toISOString(),
+      });
+      await this.audit.record(tx, {
+        distributorId,
+        entityType: 'DELIVERY_RUN',
+        entityId: runId,
+        action: 'DELIVERY_RUN_ORDER_UNASSIGNED',
+        actorType: ActorType.USER,
+        actorUserId,
+        summary: `Removed order ${order.orderNumber} from run ${run.name}`,
+        changes: { orderId, runId },
+      });
+    });
+
+    return this.getDay(distributorId, toIsoDate(run.deliveryDate));
+  }
+
+  async reorderRunOrders(distributorId: string, runId: string, dto: ReorderRunOrdersDto, actorUserId: string) {
+    const run = await this.prisma.deliveryRun.findFirst({ where: { id: runId, distributorId } });
+    if (!run) throw new NotFoundException('Delivery run not found');
+    if (run.status === DeliveryRunStatus.READY) {
+      throw new UnprocessableEntityException('Cannot reorder a run that is already marked ready');
+    }
+
+    const active = await this.prisma.deliveryRunOrder.findMany({
+      where: { runId, removedAt: null },
+      select: { id: true, orderId: true },
+    });
+    const activeOrderIds = new Set(active.map((a) => a.orderId));
+    const providedOrderIds = new Set(dto.orderedOrderIds);
+    const sameSet = activeOrderIds.size === providedOrderIds.size
+      && [...activeOrderIds].every((id) => providedOrderIds.has(id));
+    if (!sameSet) {
+      throw new BadRequestException('orderedOrderIds must contain exactly the run\'s current active orders');
+    }
+
+    const idByOrderId = new Map(active.map((a) => [a.orderId, a.id]));
+
+    await this.prisma.$transaction(async (tx) => {
+      const casResult = await tx.deliveryRun.updateMany({
+        where: {
+          id: runId, distributorId, version: dto.version, status: DeliveryRunStatus.OPEN,
+        },
+        data: { version: { increment: 1 } },
+      });
+      if (casResult.count !== 1) throw new ConflictException('Delivery run has changed — refresh and try again');
+
+      await Promise.all(dto.orderedOrderIds.map((orderId, index) => tx.deliveryRunOrder.update({
+        where: { id: idByOrderId.get(orderId)! },
+        data: { deliverySequence: index + 1 },
+      })));
+
+      await this.outbox.writeEvent(tx, 'DeliveryRun', runId, 'DeliveryRunOrdersResequenced', {
+        runId, distributorId, orderedOrderIds: dto.orderedOrderIds, occurredAt: new Date().toISOString(),
+      });
+      await this.audit.record(tx, {
+        distributorId,
+        entityType: 'DELIVERY_RUN',
+        entityId: runId,
+        action: 'DELIVERY_RUN_ORDERS_RESEQUENCED',
+        actorType: ActorType.USER,
+        actorUserId,
+        summary: `Reordered ${dto.orderedOrderIds.length} deliveries in run ${run.name}`,
+        changes: { orderedOrderIds: dto.orderedOrderIds },
+      });
+    });
+
+    return this.getDay(distributorId, toIsoDate(run.deliveryDate));
+  }
+
   // Reproduces DeliveryRunAllocationService.allocateOrder's branch order
   // exactly (apps/api/src/delivery-run-allocation/delivery-run-allocation.service.ts)
   // so the board's "why unassigned" always matches what allocation would do.
@@ -246,4 +488,8 @@ export class DeliveryRunsService {
       allocationSource: opts.allocationSource,
     };
   }
+}
+
+function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }

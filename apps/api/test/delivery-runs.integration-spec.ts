@@ -1,9 +1,12 @@
 /**
- * Integration tests for the Delivery Runs board (M3a — read path only; the
- * mutation tests 2-8 & 10 land with M3b). Proves two things a mocked-Prisma
- * unit test cannot: real cross-tenant scoping on the board read, and that
- * the read path genuinely never creates a DeliveryRun row (the whole point
- * of using a plain findMany instead of findOrCreateRun on GET).
+ * Integration tests for the Delivery Runs board — the read path (M3a) plus
+ * the mutation endpoints (M3b: assign/unassign/reorder). Proves things a
+ * mocked-Prisma unit test cannot: real cross-tenant scoping, that the read
+ * path genuinely never creates a DeliveryRun row, that the optimistic-
+ * concurrency CAS actually resolves a real concurrent race (via Postgres
+ * row locking under $transaction, not just mocked call counts), and that
+ * the ADR-052 trigger/unique-constraint pair is what the soft-remove-
+ * before-create ordering depends on.
  *
  * Prerequisites:
  *   kubectl port-forward svc/wholo-postgresql 5432:5432
@@ -80,6 +83,12 @@ describe('Delivery Runs board (integration)', () => {
   });
 
   afterEach(async () => {
+    const runs = await prisma.deliveryRun.findMany({ where: { distributorId: { in: [DIST_A, DIST_B] } }, select: { id: true } });
+    const runIds = runs.map((r) => r.id);
+    if (runIds.length) {
+      await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'DeliveryRun', aggregateId: { in: runIds } } });
+    }
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.deliveryRunOrder.deleteMany({ where: { run: { distributorId: { in: [DIST_A, DIST_B] } } } });
     await prisma.deliveryRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -97,6 +106,18 @@ describe('Delivery Runs board (integration)', () => {
 
   const createRoute = (distributorId: string, name: string) => prisma.deliveryRoute.create({
     data: { distributorId, name },
+  });
+
+  const createRun = (distributorId: string, name: string, overrides: Record<string, unknown> = {}) => prisma.deliveryRun.create({
+    data: {
+      distributorId, name, deliveryDate: new Date(`${DELIVERY_DATE}T00:00:00.000Z`), ...overrides,
+    },
+  });
+
+  const createAllocation = (runId: string, orderId: string, overrides: Record<string, unknown> = {}) => prisma.deliveryRunOrder.create({
+    data: {
+      runId, orderId, allocationSource: 'MANUAL', assignedByUserId: ADMIN_USER, ...overrides,
+    },
   });
 
   const createOrder = async (distributorId: string, traderCustomerId: string, overrides: Record<string, unknown> = {}) => {
@@ -212,6 +233,210 @@ describe('Delivery Runs board (integration)', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('assignOrderToRun (mutation)', () => {
+    it('returns 404, not 403, when the run id belongs to another distributor', async () => {
+      const runB = await createRun(DIST_B, 'B Local');
+      const orderA = await createOrder(DIST_A, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${runB.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: orderA.id, version: 0 });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('never allows assigning distributor B\'s order into distributor A\'s run', async () => {
+      const runA = await createRun(DIST_A, 'A Local');
+      const orderB = await createOrder(DIST_B, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${runA.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: orderB.id, version: 0 });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('resolves a concurrent same-version race to exactly one 2xx and one 409, one active allocation, version incremented once', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+
+      const send = () => request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, version: 0 });
+
+      const [res1, res2] = await Promise.all([send(), send()]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const activeAllocations = await prisma.deliveryRunOrder.count({ where: { runId: run.id, removedAt: null } });
+      expect(activeAllocations).toBe(1);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.version).toBe(1);
+    });
+
+    it('returns 422 as application/problem+json when assigning into a run that is already READY', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire', { status: 'READY' });
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, version: 0 });
+
+      expect(res.status).toBe(422);
+      expect(res.headers['content-type']).toContain('application/problem+json');
+      expect(res.body.detail).toBe('Cannot assign into a run that is already marked ready');
+    });
+
+    it('writes exactly one outbox event and one audit row for the mutation', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, version: 0 });
+      expect(res.status).toBe(200);
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunOrderMoved' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: run.id, action: 'DELIVERY_RUN_ORDER_MOVED' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+  });
+
+  describe('ADR-052 ordering proof (soft-remove must happen before create)', () => {
+    it('a cross-run move succeeds via the real endpoint — a create-before-remove reversal would P2002 and this would start failing', async () => {
+      const runA1 = await createRun(DIST_A, 'Local');
+      const runA2 = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(runA1.id, order.id);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs/${runA2.id}/orders`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ orderId: order.id, version: 0, sourceRunId: runA1.id });
+
+      expect(res.status).toBe(200);
+
+      const activeAllocation = await prisma.deliveryRunOrder.findFirst({ where: { activeOrderId: order.id } });
+      expect(activeAllocation?.runId).toBe(runA2.id);
+    });
+
+    it('a raw create cannot produce a second active allocation for the same order (trigger + unique constraint)', async () => {
+      const runA1 = await createRun(DIST_A, 'Local');
+      const runA2 = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(runA1.id, order.id);
+
+      await expect(createAllocation(runA2.id, order.id)).rejects.toThrow(Prisma.PrismaClientKnownRequestError);
+    });
+  });
+
+  describe('unassignOrderFromRun (mutation)', () => {
+    it('unassigns, densifies the remaining sequence, and bumps version exactly once', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const orderA = await createOrder(DIST_A, CUSTOMER_1);
+      const orderB = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(run.id, orderA.id, { deliverySequence: 1 });
+      await createAllocation(run.id, orderB.id, { deliverySequence: 2 });
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders/${orderA.id}?version=0`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+
+      const rows = await prisma.deliveryRunOrder.findMany({ where: { runId: run.id, removedAt: null } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].orderId).toBe(orderB.id);
+      expect(rows[0].deliverySequence).toBe(1);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.version).toBe(1);
+    });
+
+    it('writes exactly one outbox event and one audit row for the mutation', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(run.id, order.id, { deliverySequence: 1 });
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders/${order.id}?version=0`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunOrderUnassigned' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: run.id, action: 'DELIVERY_RUN_ORDER_UNASSIGNED' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+  });
+
+  describe('reorderRunOrders (mutation)', () => {
+    it('reorders, leaves dense 1..n, and bumps version exactly once', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const orderA = await createOrder(DIST_A, CUSTOMER_1);
+      const orderB = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(run.id, orderA.id, { deliverySequence: 1 });
+      await createAllocation(run.id, orderB.id, { deliverySequence: 2 });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders/reorder`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, orderedOrderIds: [orderB.id, orderA.id] });
+
+      expect(res.status).toBe(200);
+
+      const rows = await prisma.deliveryRunOrder.findMany({
+        where: { runId: run.id, removedAt: null },
+        orderBy: { deliverySequence: 'asc' },
+      });
+      expect(rows.map((r) => r.orderId)).toEqual([orderB.id, orderA.id]);
+      expect(rows.map((r) => r.deliverySequence)).toEqual([1, 2]);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.version).toBe(1);
+    });
+
+    it('writes exactly one outbox event and one audit row for the mutation', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(run.id, order.id, { deliverySequence: 1 });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}/orders/reorder`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, orderedOrderIds: [order.id] });
+      expect(res.status).toBe(200);
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunOrdersResequenced' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: run.id, action: 'DELIVERY_RUN_ORDERS_RESEQUENCED' },
+      });
+      expect(auditRows).toHaveLength(1);
     });
   });
 });
