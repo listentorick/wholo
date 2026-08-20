@@ -38,4 +38,27 @@ describe('DeliveryCardActions', () => {
     await userEvent.click(screen.getByLabelText('Move down'));
     expect(onMoveUpDown).toHaveBeenCalledWith('down');
   });
+
+  it('renders no change-date control at all when onChangeDate is omitted', () => {
+    render(<DeliveryCardActions currentRunId="run-1" runs={[]} suggestedRunId={null} onMove={vi.fn()} />);
+    expect(screen.queryByLabelText('Change delivery date')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  it('renders a plain icon button for non-missed attention', async () => {
+    const onChangeDate = vi.fn();
+    render(
+      <DeliveryCardActions currentRunId="run-1" runs={[]} suggestedRunId={null} attention="NONE" onMove={vi.fn()} onChangeDate={onChangeDate} />,
+    );
+    await userEvent.click(screen.getByLabelText('Change delivery date'));
+    expect(onChangeDate).toHaveBeenCalled();
+  });
+
+  it('promotes a leading "Reschedule" button, in place of the icon button, for MISSED attention', () => {
+    render(
+      <DeliveryCardActions currentRunId={null} runs={[]} suggestedRunId={null} attention="MISSED" onMove={vi.fn()} onChangeDate={vi.fn()} />,
+    );
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Change delivery date')).not.toBeInTheDocument();
+  });
 });

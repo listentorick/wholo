@@ -13,7 +13,16 @@ function makeBoard(overrides: Partial<DeliveryDayBoard> = {}): DeliveryDayBoard 
   };
 }
 
-const NOOP = { pendingOrderId: null, onMove: vi.fn(), onReorder: vi.fn() };
+const NOOP = {
+  pendingOrderId: null,
+  pendingRunId: null,
+  onMove: vi.fn(),
+  onReorder: vi.fn(),
+  onMarkReady: vi.fn(),
+  onReopen: vi.fn(),
+  onSetDriver: vi.fn(),
+  onChangeDate: vi.fn(),
+};
 
 describe('DeliveryRunBoard', () => {
   it('always renders the Unassigned column, even with zero runs', () => {

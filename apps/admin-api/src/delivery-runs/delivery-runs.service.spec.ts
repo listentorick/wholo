@@ -50,4 +50,21 @@ describe('DeliveryRunsService (BFF)', () => {
     await service.reorderRunOrders('dist-1', 'run-1', body, 'token-1');
     expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/delivery-runs/run-1/orders/reorder', 'token-1', body);
   });
+
+  it('forwards updateRun as a PATCH against the run resource itself, with the request body', async () => {
+    const body = { version: 0, status: 'READY' };
+    await service.updateRun('dist-1', 'run-1', body, 'token-1');
+    expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/delivery-runs/run-1', 'token-1', body);
+  });
+
+  it('forwards getReschedulePreview with the date as a query param', async () => {
+    await service.getReschedulePreview('dist-1', 'order-1', '2026-08-25', 'token-1');
+    expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/orders/order-1/reschedule-preview?date=2026-08-25', 'token-1');
+  });
+
+  it('forwards changeScheduledDeliveryDate as a PATCH against the order resource, with the request body', async () => {
+    const body = { scheduledDeliveryDate: '2026-08-25', expectedScheduledDeliveryDate: '2026-08-20' };
+    await service.changeScheduledDeliveryDate('dist-1', 'order-1', body, 'token-1');
+    expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/orders/order-1/scheduled-delivery-date', 'token-1', body);
+  });
 });

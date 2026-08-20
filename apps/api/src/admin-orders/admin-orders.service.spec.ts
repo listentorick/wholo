@@ -133,6 +133,40 @@ describe('AdminOrdersService', () => {
         }),
       );
     });
+
+    it('applies the undated filter as requestedDeliveryDate: null', async () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.order.count.mockResolvedValue(0);
+
+      await service.listOrders('dist-1', { undated: true });
+
+      expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ requestedDeliveryDate: null }),
+            ]),
+          }),
+        }),
+      );
+    });
+
+    it('undated wins over a deliveryDateAfter/Before range if both are somehow sent', async () => {
+      mockPrisma.order.findMany.mockResolvedValue([]);
+      mockPrisma.order.count.mockResolvedValue(0);
+
+      await service.listOrders('dist-1', { undated: true, deliveryDateAfter: '2026-08-01' });
+
+      expect(mockPrisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: expect.arrayContaining([
+              expect.objectContaining({ requestedDeliveryDate: null }),
+            ]),
+          }),
+        }),
+      );
+    });
   });
 
   // ── getOrder ────────────────────────────────────────────────────────────────

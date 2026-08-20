@@ -8,6 +8,7 @@ import { DeliveryRunsService } from './delivery-runs.service';
 import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
 import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
 import { UnassignOrderQueryDto } from './dto/unassign-order-query.dto';
+import { UpdateDeliveryRunDto } from './dto/update-delivery-run.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string };
@@ -60,5 +61,16 @@ export class DeliveryRunsController {
     @Req() req: RequestWithUser,
   ) {
     return this.service.reorderRunOrders(distributorId, runId, dto, req.user.sub);
+  }
+
+  @Patch(':runId')
+  @ApiOperation({ summary: 'Mark a run ready, reopen it, or change its driver override' })
+  updateRun(
+    @Param('distributorId') distributorId: string,
+    @Param('runId') runId: string,
+    @Body() dto: UpdateDeliveryRunDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.service.updateRun(distributorId, runId, dto, req.user.sub);
   }
 }

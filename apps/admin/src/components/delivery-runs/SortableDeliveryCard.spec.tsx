@@ -20,6 +20,7 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: 'DEFAULT_ROUTE',
     ...overrides,
   };

@@ -9,12 +9,13 @@ interface UnassignedColumnProps {
   allRuns: DeliveryRunColumn[];
   pendingOrderId: string | null;
   onMove: (orderId: string, fromRunId: string | null, toRunId: string | null) => void;
+  onChangeDate: (orderId: string) => void;
 }
 
 const COLUMN_ID = 'unassigned';
 
 export function UnassignedColumn({
-  cards, allRuns, pendingOrderId, onMove,
+  cards, allRuns, pendingOrderId, onMove, onChangeDate,
 }: UnassignedColumnProps) {
   const itemCount = cards.reduce((sum, c) => sum + c.itemCount, 0);
   const { setNodeRef } = useDroppable({ id: COLUMN_ID, data: { type: 'column', columnId: COLUMN_ID } });
@@ -39,6 +40,7 @@ export function UnassignedColumn({
                   runs={allRuns}
                   pending={pendingOrderId === card.orderId}
                   onMove={(targetRunId) => onMove(card.orderId, null, targetRunId)}
+                  onChangeDate={() => onChangeDate(card.orderId)}
                 />
               ))}
             </div>

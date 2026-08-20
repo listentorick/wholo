@@ -1,4 +1,4 @@
-import type { DeliveryCard, DeliveryDayBoard } from '@wholo/types';
+import type { DeliveryCard, DeliveryDayBoard, DeliveryRunColumn } from '@wholo/types';
 
 function findAndRemove(board: DeliveryDayBoard, orderId: string): { card: DeliveryCard | null; board: DeliveryDayBoard } {
   let card: DeliveryCard | null = null;
@@ -62,6 +62,29 @@ export function applyReorder(board: DeliveryDayBoard, runId: string, orderedOrde
       const byId = new Map(r.cards.map((c) => [c.orderId, c]));
       const cards = orderedOrderIds.map((id) => byId.get(id)).filter((c): c is DeliveryCard => c != null);
       return { ...r, cards };
+    }),
+  };
+}
+
+// Optimistic mirror of updateRun (mark ready / reopen / driver override) —
+// only the one matching run's status/driverName/readyAt change; membership
+// and ordering are untouched. readyAt only needs a non-null placeholder for
+// this optimistic pass — the real timestamp comes back from the server on
+// success, and readyAt isn't rendered anywhere on the board today.
+export function applyRunUpdate(
+  board: DeliveryDayBoard,
+  runId: string,
+  patch: { status?: 'OPEN' | 'READY'; driverName?: string | null },
+): DeliveryDayBoard {
+  return {
+    ...board,
+    runs: board.runs.map((r): DeliveryRunColumn => {
+      if (r.runId !== runId) return r;
+      return {
+        ...r,
+        ...(patch.status !== undefined && { status: patch.status }),
+        ...(patch.driverName !== undefined && { driverName: patch.driverName }),
+      };
     }),
   };
 }

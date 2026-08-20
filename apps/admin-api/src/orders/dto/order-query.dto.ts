@@ -1,5 +1,7 @@
-import { IsOptional, IsString, IsInt, IsEnum, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min, Max,
+} from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
 
 export class OrderQueryDto {
@@ -33,6 +35,12 @@ export class OrderQueryDto {
   @IsOptional()
   @IsString()
   deliveryDateBefore?: string;
+
+  // Not @Type(() => Boolean) — Boolean('false') === true in JS.
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  undated?: boolean;
 
   @IsOptional()
   @IsEnum(['createdAt', 'requestedDeliveryDate'])

@@ -41,4 +41,10 @@ export class DeliveryRunsController {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.reorderRunOrders(organisationId, runId, body, token);
   }
+
+  @Patch(':runId')
+  updateRun(@Req() req: Request, @Param('runId') runId: string, @Body() body: unknown) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.updateRun(organisationId, runId, body, token);
+  }
 }

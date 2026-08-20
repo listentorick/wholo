@@ -16,4 +16,11 @@ describe('DeliveryBoardFilters', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Unassigned only' }));
     expect(onChange).toHaveBeenCalledWith('unassigned');
   });
+
+  it('renders and selects the Missed only option', async () => {
+    const onChange = vi.fn();
+    render(<DeliveryBoardFilters filter="all" onChange={onChange} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Missed only' }));
+    expect(onChange).toHaveBeenCalledWith('missed');
+  });
 });

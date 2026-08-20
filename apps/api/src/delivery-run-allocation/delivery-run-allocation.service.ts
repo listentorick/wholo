@@ -130,7 +130,13 @@ export class DeliveryRunAllocationService {
   // constraint. Two orders racing to create the same day's run settle on the
   // constraint rather than a check-then-create race, so exactly one run is
   // created and the loser re-reads it.
-  private async findOrCreateRun(
+  //
+  // Public (not private) so the change-delivery-date action
+  // (delivery-runs.service.ts) can resolve/create the destination run
+  // through the exact same code path rather than a second reimplementation —
+  // unlike deriveReason's read-only lookup (which is deliberately duplicated
+  // with its own comment), a run *creation* path must never exist twice.
+  async findOrCreateRun(
     distributorId: string,
     routeId: string,
     routeName: string,

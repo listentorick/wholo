@@ -1,24 +1,18 @@
-import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { AuditModule } from '../audit/audit.module';
-import { DELIVERY_RUN_ALLOCATION_QUEUE } from '../queues/queue.constants';
-import { DeliveryRunAllocationProcessor } from './delivery-run-allocation.processor';
 import { DeliveryRunAllocationService } from './delivery-run-allocation.service';
 
-// Worker-only, same as the accounting processors — imported by WorkerModule,
-// never AppModule (the HTTP API process has no BullMQ wiring, by deliberate
-// rule). The service is exported so the later change-delivery-date action can
-// reuse the same allocation logic synchronously from the HTTP side.
+// Plain, queue-free — importable by both the HTTP-side DeliveryRunsModule
+// (the change-delivery-date action reuses this service synchronously, per
+// this module's original comment) and by DeliveryRunAllocationWorkerModule,
+// which layers the BullMQ queue/processor on top for the worker process.
+// Mirrors AccountingModule's own shape (a plain HTTP-side module imported by
+// WorkerModule) in the opposite direction.
 @Module({
-  imports: [
-    BullModule.registerQueue({ name: DELIVERY_RUN_ALLOCATION_QUEUE }),
-    PrismaModule,
-    OutboxModule,
-    AuditModule,
-  ],
-  providers: [DeliveryRunAllocationProcessor, DeliveryRunAllocationService],
+  imports: [PrismaModule, OutboxModule, AuditModule],
+  providers: [DeliveryRunAllocationService],
   exports: [DeliveryRunAllocationService],
 })
 export class DeliveryRunAllocationModule {}

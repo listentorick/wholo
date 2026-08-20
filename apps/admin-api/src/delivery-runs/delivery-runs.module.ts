@@ -3,10 +3,11 @@ import { ApiClientModule } from '../api-client/api-client.module';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { DeliveryDaysController } from './delivery-days.controller';
 import { DeliveryRunsController } from './delivery-runs.controller';
+import { OrderSchedulingController } from './order-scheduling.controller';
 
 @Module({
   imports: [ApiClientModule],
-  controllers: [DeliveryDaysController, DeliveryRunsController],
+  controllers: [DeliveryDaysController, DeliveryRunsController, OrderSchedulingController],
   providers: [DeliveryRunsService],
   exports: [DeliveryRunsService],
 })

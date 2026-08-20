@@ -11,13 +11,15 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { useDeliveryDay } from '@/lib/hooks/use-delivery-day';
-import { applyMove, applyReorder } from '@/lib/optimistic-board-update';
+import { applyMove, applyReorder, applyRunUpdate } from '@/lib/optimistic-board-update';
 import { toIso } from '@/lib/date';
 import { WorkloadStrip } from '@/components/delivery-runs/WorkloadStrip';
+import { UndatedDeliveriesPanel } from '@/components/delivery-runs/UndatedDeliveriesPanel';
 import { BoardViewToggle, type BoardViewMode } from '@/components/delivery-runs/BoardViewToggle';
 import { DeliveryBoardFilters, type BoardAttentionFilter } from '@/components/delivery-runs/DeliveryBoardFilters';
 import { DeliveryRunBoard } from '@/components/delivery-runs/DeliveryRunBoard';
 import { DeliveryRunList, type DeliveryListRow } from '@/components/delivery-runs/DeliveryRunList';
+import { ChangeDeliveryDateDialog } from '@/components/delivery-runs/ChangeDeliveryDateDialog';
 
 function DeliveryRunsEmptyState() {
   return (
@@ -44,6 +46,12 @@ export default function DeliveryRunsPage() {
   const [attentionFilter, setAttentionFilter] = useState<BoardAttentionFilter>('all');
   const [mutationBanner, setMutationBanner] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
+  const [changeDateOrderId, setChangeDateOrderId] = useState<string | null>(null);
+  // Bumped after a successful reschedule so WorkloadStrip re-fetches — it's
+  // the only mutation that moves a stop's count from one day to another;
+  // move/reorder/mark-ready/reopen all stay within the currently viewed day.
+  const [workloadRefreshKey, setWorkloadRefreshKey] = useState(0);
 
   const {
     board, isLoading, isRefreshing, error, refetch, mutate,
@@ -116,6 +124,87 @@ export default function DeliveryRunsPage() {
     }
   }
 
+  // Mark ready / reopen / driver-override — one PATCH, same optimistic-
+  // update-then-rollback shape as handleMove/handleReorder above.
+  async function handleUpdateRun(runId: string, patch: { status?: 'OPEN' | 'READY'; driverName?: string | null }) {
+    if (!board || !accessToken) return;
+    const run = board.runs.find((r) => r.runId === runId);
+    if (!run) return;
+    const previousBoard = board;
+    setPendingRunId(runId);
+    setMutationBanner(null);
+    mutate(applyRunUpdate(board, runId, patch));
+    try {
+      const refreshed = await adminDeliveryRunsApi.updateRun(accessToken, runId, { version: run.version, ...patch });
+      mutate(refreshed);
+    } catch (e) {
+      mutate(previousBoard);
+      if (e instanceof ApiError && e.status === 409) {
+        setMutationBanner('This board changed elsewhere — refreshed.');
+        await refetch();
+      } else if (e instanceof ApiError && e.status === 422) {
+        setMutationBanner(e.problem.detail ?? 'That change is not allowed.');
+        await refetch();
+      } else {
+        setMutationBanner('Could not update the run. Please try again.');
+      }
+    } finally {
+      setPendingRunId(null);
+    }
+  }
+
+  function handleMarkReady(runId: string) {
+    return handleUpdateRun(runId, { status: 'READY' });
+  }
+
+  function handleReopen(runId: string) {
+    return handleUpdateRun(runId, { status: 'OPEN' });
+  }
+
+  function handleSetDriver(runId: string, driverName: string | null) {
+    return handleUpdateRun(runId, { driverName });
+  }
+
+  function findCard(orderId: string) {
+    if (!board) return null;
+    return board.unassigned.find((c) => c.orderId === orderId)
+      ?? board.runs.flatMap((r) => r.cards).find((c) => c.orderId === orderId)
+      ?? null;
+  }
+
+  // Unlike handleMove/handleReorder/handleUpdateRun above, this has no
+  // optimistic pre-update — it's a modal-gated action (not drag/drop), so a
+  // brief isRefreshing dim is acceptable, and the mutation can move the card
+  // to a different day than the one on screen, so there's no local board
+  // shape to optimistically compute. Always closes the dialog afterwards
+  // (success or failure), same as RunHeaderControls' confirm dialogs.
+  async function handleChangeDeliveryDate(
+    orderId: string,
+    params: { scheduledDeliveryDate: string; expectedScheduledDeliveryDate: string | null },
+  ) {
+    if (!accessToken) return;
+    setPendingOrderId(orderId);
+    setMutationBanner(null);
+    try {
+      await adminDeliveryRunsApi.changeScheduledDeliveryDate(accessToken, orderId, params);
+      await refetch();
+      setWorkloadRefreshKey((k) => k + 1);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setMutationBanner('This board changed elsewhere — refreshed.');
+        await refetch();
+      } else if (e instanceof ApiError && e.status === 422) {
+        setMutationBanner(e.problem.detail ?? 'That date change is not allowed.');
+        await refetch();
+      } else {
+        setMutationBanner('Could not change the delivery date. Please try again.');
+      }
+    } finally {
+      setPendingOrderId(null);
+      setChangeDateOrderId(null);
+    }
+  }
+
   // Same arrayMove-based resequencing as RunColumn's own Move up/down —
   // the list view acts on a run it doesn't render as a column, so it needs
   // the source run's current card order from the board itself.
@@ -154,7 +243,13 @@ export default function DeliveryRunsPage() {
           )}
         />
 
-        <WorkloadStrip token={accessToken} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+        <WorkloadStrip
+          token={accessToken}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          refreshKey={workloadRefreshKey}
+        />
+        <UndatedDeliveriesPanel token={accessToken} />
 
         {mutationBanner && (
           <div className="mb-4">
@@ -175,9 +270,15 @@ export default function DeliveryRunsPage() {
                 <DeliveryRunList
                   board={board}
                   pendingOrderId={pendingOrderId}
+                  pendingRunId={pendingRunId}
                   filterUnassignedOnly={attentionFilter === 'unassigned'}
+                  filterMissedOnly={attentionFilter === 'missed'}
                   onMove={handleMove}
                   onMoveUpDown={handleListMoveUpDown}
+                  onMarkReady={handleMarkReady}
+                  onReopen={handleReopen}
+                  onSetDriver={handleSetDriver}
+                  onChangeDate={setChangeDateOrderId}
                 />
               </div>
             ) : (
@@ -194,17 +295,28 @@ export default function DeliveryRunsPage() {
                   <DeliveryRunBoard
                     board={board}
                     pendingOrderId={pendingOrderId}
+                    pendingRunId={pendingRunId}
                     onMove={handleMove}
                     onReorder={handleReorder}
+                    onMarkReady={handleMarkReady}
+                    onReopen={handleReopen}
+                    onSetDriver={handleSetDriver}
+                    onChangeDate={setChangeDateOrderId}
                   />
                 </div>
                 <div data-testid="list-view" className="md:hidden">
                   <DeliveryRunList
                     board={board}
                     pendingOrderId={pendingOrderId}
+                    pendingRunId={pendingRunId}
                     filterUnassignedOnly={attentionFilter === 'unassigned'}
+                    filterMissedOnly={attentionFilter === 'missed'}
                     onMove={handleMove}
                     onMoveUpDown={handleListMoveUpDown}
+                    onMarkReady={handleMarkReady}
+                    onReopen={handleReopen}
+                    onSetDriver={handleSetDriver}
+                    onChangeDate={setChangeDateOrderId}
                   />
                 </div>
               </>
@@ -212,6 +324,23 @@ export default function DeliveryRunsPage() {
           </div>
         )}
       </div>
+      {changeDateOrderId && (() => {
+        const card = findCard(changeDateOrderId);
+        if (!card) return null;
+        return (
+          <ChangeDeliveryDateDialog
+            token={accessToken}
+            orderId={card.orderId}
+            orderNumber={card.orderNumber}
+            customerName={card.customerName}
+            currentScheduledDeliveryDate={card.scheduledDeliveryDate}
+            requestedDeliveryDate={card.requestedDeliveryDate}
+            submitting={pendingOrderId === card.orderId}
+            onCancel={() => setChangeDateOrderId(null)}
+            onConfirm={(params) => handleChangeDeliveryDate(card.orderId, params)}
+          />
+        );
+      })()}
     </AdminLayout>
   );
 }

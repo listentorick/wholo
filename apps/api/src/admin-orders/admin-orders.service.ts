@@ -127,6 +127,13 @@ export class AdminOrdersService {
           }
         : undefined;
 
+    // `requestedDeliveryDate: null` is sufficient on its own — it's never
+    // mutated after being set (see schema.prisma), so a null value here
+    // means scheduledDeliveryDate is null too and the order never appears
+    // on any dated delivery-runs board. `undated` wins over a date-range
+    // filter if both were somehow sent — they're mutually exclusive concepts.
+    const requestedDeliveryDateFilter = query.undated ? null : deliveryDateFilter;
+
     const baseWhere: Prisma.OrderWhereInput = {
       distributorId,
       ...(query.status && { status: query.status }),
@@ -134,7 +141,7 @@ export class AdminOrdersService {
       ...(query.customerName && {
         customer: { name: { contains: query.customerName, mode: 'insensitive' } },
       }),
-      ...(deliveryDateFilter && { requestedDeliveryDate: deliveryDateFilter }),
+      ...(requestedDeliveryDateFilter !== undefined && { requestedDeliveryDate: requestedDeliveryDateFilter }),
     };
 
     let cursorWhere: Prisma.OrderWhereInput = {};

@@ -8,12 +8,21 @@ import { UnallocatedReason } from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
+import { DeliveryRunAllocationService } from '../delivery-run-allocation/delivery-run-allocation.service';
 import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
 import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
+import { UpdateDeliveryRunDto } from './dto/update-delivery-run.dto';
+import { ChangeScheduledDeliveryDateDto } from './dto/change-scheduled-delivery-date.dto';
 
 const CUSTOMER_SELECT = { id: true, name: true } satisfies Prisma.OrganisationSelect;
 
 const MAX_LIST_DAYS_WINDOW = 31;
+
+const DEFAULT_NEARBY_DELIVERY_WINDOW_DAYS = 3;
+
+type ResolutionOutcome =
+  | { allocated: true; runId: string; runName: string }
+  | { allocated: false; reason: UnallocatedReason };
 
 interface ReasonResult {
   reason: UnallocatedReason | null;
@@ -27,6 +36,7 @@ export class DeliveryRunsService {
     private prisma: PrismaService,
     private outbox: OutboxService,
     private audit: AuditService,
+    private allocation: DeliveryRunAllocationService,
   ) {}
 
   // Five queries, no N+1: (1) runs + active allocations, (2) unassigned
@@ -35,6 +45,15 @@ export class DeliveryRunsService {
   // a GET must not create a run.
   async getDay(distributorId: string, date: string) {
     const day = new Date(`${date}T00:00:00.000Z`); // @db.Date round-trips as UTC midnight
+
+    // MISSED applies only to still-unassigned cards on a past day — there is
+    // no delivery-completion signal anywhere in the schema
+    // (DeliveryRunOrderStatus has only PLANNED), so a card sitting inside a
+    // run on a past date can't be told apart from "delivered fine". An order
+    // that was never allocated and whose date has passed is unambiguous:
+    // nobody was ever going to deliver it.
+    const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const isPastDay = day.getTime() < today.getTime();
 
     const runs = await this.prisma.deliveryRun.findMany({
       where: { distributorId, deliveryDate: day },
@@ -129,7 +148,7 @@ export class DeliveryRunsService {
         return this.formatCard(order, rollupByOrderId, {
           stopNumber: null,
           allocationSource: null,
-          attention: 'UNASSIGNED',
+          attention: isPastDay ? 'MISSED' : 'UNASSIGNED',
           reason,
           suggestedRunId,
           suggestedRouteName,
@@ -429,6 +448,101 @@ export class DeliveryRunsService {
     return this.getDay(distributorId, toIsoDate(run.deliveryDate));
   }
 
+  // Mark ready / reopen / driver-override, unified into one PATCH per
+  // CLAUDE.md's "prefer coarse resources over fine-grained field endpoints"
+  // — these are all just partial updates of the DeliveryRun resource
+  // itself, unlike the three mutations above which own the `orders`
+  // sub-resource. Driver is locked exactly like membership/sequence: a
+  // driver-only change also requires the run to be OPEN, so one CAS
+  // predicate (`expectedCurrentStatus`) covers all three cases below.
+  async updateRun(distributorId: string, runId: string, dto: UpdateDeliveryRunDto, actorUserId: string) {
+    if (dto.status === undefined && dto.driverName === undefined) {
+      throw new BadRequestException('At least one of status or driverName must be provided');
+    }
+
+    const run = await this.prisma.deliveryRun.findFirst({ where: { id: runId, distributorId } });
+    if (!run) throw new NotFoundException('Delivery run not found');
+
+    // Reopening expects the run to currently be READY; going ready or
+    // changing the driver both expect it to currently be OPEN.
+    const expectedCurrentStatus = dto.status === DeliveryRunStatus.OPEN
+      ? DeliveryRunStatus.READY
+      : DeliveryRunStatus.OPEN;
+
+    if (run.status !== expectedCurrentStatus) {
+      if (dto.status === DeliveryRunStatus.READY) throw new UnprocessableEntityException('Run is already marked ready');
+      if (dto.status === DeliveryRunStatus.OPEN) throw new UnprocessableEntityException('Run is not marked ready');
+      throw new UnprocessableEntityException('Cannot change driver on a run that is already marked ready');
+    }
+
+    const data: Prisma.DeliveryRunUpdateManyMutationInput = { version: { increment: 1 } };
+    const auditEntries: Array<{
+      eventType: string; auditAction: string; summary: string; changes: Prisma.InputJsonValue;
+    }> = [];
+
+    if (dto.status === DeliveryRunStatus.READY) {
+      data.status = DeliveryRunStatus.READY;
+      data.readyAt = new Date();
+      data.readyByUserId = actorUserId;
+      auditEntries.push({
+        eventType: 'DeliveryRunMarkedReady',
+        auditAction: 'DELIVERY_RUN_MARKED_READY',
+        summary: `Marked run ${run.name} ready`,
+        changes: { status: 'READY' },
+      });
+    } else if (dto.status === DeliveryRunStatus.OPEN) {
+      data.status = DeliveryRunStatus.OPEN;
+      data.readyAt = null;
+      data.readyByUserId = null;
+      auditEntries.push({
+        eventType: 'DeliveryRunReopened',
+        auditAction: 'DELIVERY_RUN_REOPENED',
+        summary: `Reopened run ${run.name}`,
+        changes: { status: 'OPEN' },
+      });
+    }
+
+    if (dto.driverName !== undefined) {
+      data.driverName = dto.driverName;
+      auditEntries.push({
+        eventType: 'DeliveryRunDriverChanged',
+        auditAction: 'DELIVERY_RUN_DRIVER_CHANGED',
+        summary: dto.driverName
+          ? `Set driver for run ${run.name} to ${dto.driverName}`
+          : `Cleared the driver for run ${run.name}`,
+        changes: { driverName: dto.driverName },
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const casResult = await tx.deliveryRun.updateMany({
+        where: {
+          id: runId, distributorId, version: dto.version, status: expectedCurrentStatus,
+        },
+        data,
+      });
+      if (casResult.count !== 1) throw new ConflictException('Delivery run has changed — refresh and try again');
+
+      for (const entry of auditEntries) {
+        await this.outbox.writeEvent(tx, 'DeliveryRun', runId, entry.eventType, {
+          runId, distributorId, ...(entry.changes as Record<string, unknown>), occurredAt: new Date().toISOString(),
+        });
+        await this.audit.record(tx, {
+          distributorId,
+          entityType: 'DELIVERY_RUN',
+          entityId: runId,
+          action: entry.auditAction,
+          actorType: ActorType.USER,
+          actorUserId,
+          summary: entry.summary,
+          changes: entry.changes,
+        });
+      }
+    });
+
+    return this.getDay(distributorId, toIsoDate(run.deliveryDate));
+  }
+
   // Reproduces DeliveryRunAllocationService.allocateOrder's branch order
   // exactly (apps/api/src/delivery-run-allocation/delivery-run-allocation.service.ts)
   // so the board's "why unassigned" always matches what allocation would do.
@@ -485,11 +599,281 @@ export class DeliveryRunsService {
       suggestedRunId: opts.suggestedRunId,
       suggestedRouteName: opts.suggestedRouteName,
       scheduledDeliveryDate: deliveryDate ? deliveryDate.toISOString().slice(0, 10) : null,
+      requestedDeliveryDate: order.requestedDeliveryDate ? order.requestedDeliveryDate.toISOString().slice(0, 10) : null,
       allocationSource: opts.allocationSource,
     };
+  }
+
+  // Read-only preview: never calls findOrCreateRun (a run that doesn't exist
+  // yet for the candidate date is still a valid "would allocate" outcome, not
+  // a reason to create it early). Reproduces the same route lookup as
+  // DeliveryRunAllocationService.allocateOrder / deriveReason above — see
+  // those comments for why this is duplicated rather than shared.
+  async getReschedulePreview(distributorId: string, orderId: string, date: string) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, distributorId } });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const targetDate = new Date(`${date}T00:00:00.000Z`);
+
+    const routeCustomer = await this.prisma.deliveryRouteCustomer.findFirst({
+      where: { activeDistributorCustomerId: `${distributorId}:${order.traderCustomerId}` },
+      include: { route: true },
+    });
+
+    let resolution: { allocated: true; runId: string | null; runName: string } | { allocated: false; reason: UnallocatedReason };
+    if (!routeCustomer || !routeCustomer.route.active) {
+      resolution = { allocated: false, reason: 'NO_ROUTE' };
+    } else {
+      const run = await this.prisma.deliveryRun.findUnique({
+        where: {
+          distributorId_routeId_deliveryDate: {
+            distributorId, routeId: routeCustomer.route.id, deliveryDate: targetDate,
+          },
+        },
+      });
+      resolution = run?.status === DeliveryRunStatus.READY
+        ? { allocated: false, reason: 'RUN_READY' }
+        : { allocated: true, runId: run?.id ?? null, runName: routeCustomer.route.name };
+    }
+
+    const nearbyDeliveries = await this.findNearbyDeliveries(distributorId, order, targetDate);
+
+    return { resolution, nearbyDeliveries };
+  }
+
+  // Changes an order's *scheduled* date (the internal replanning date) and
+  // synchronously re-resolves its route/run for the new date — unlike M2's
+  // allocation, this is an interactive row action, not an acceptance-time
+  // trigger, so it must not be deferred to the outbox/worker. The customer's
+  // requestedDeliveryDate is never touched. CAS target is the order's own
+  // scheduledDeliveryDate (Order has no version column) — the same "CAS on
+  // the real invariant" philosophy as assignOrderToRun's source-row CAS.
+  async changeScheduledDeliveryDate(
+    distributorId: string,
+    orderId: string,
+    dto: ChangeScheduledDeliveryDateDto,
+    actorUserId: string,
+  ) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, distributorId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status !== OrderStatus.ACCEPTED) {
+      throw new UnprocessableEntityException('Only accepted orders can be rescheduled');
+    }
+
+    const currentDateIso = order.scheduledDeliveryDate ? toIsoDate(order.scheduledDeliveryDate) : null;
+    if (currentDateIso === dto.scheduledDeliveryDate) {
+      throw new BadRequestException('New scheduled delivery date must differ from the current one');
+    }
+
+    const newDate = new Date(`${dto.scheduledDeliveryDate}T00:00:00.000Z`);
+    const expected = dto.expectedScheduledDeliveryDate
+      ? new Date(`${dto.expectedScheduledDeliveryDate}T00:00:00.000Z`)
+      : null;
+
+    const previousAllocation = await this.prisma.deliveryRunOrder.findFirst({
+      where: { activeOrderId: orderId },
+      include: { run: true },
+    });
+    // A READY run's membership is locked until an explicit Reopen — that
+    // applies to a reschedule exactly as it does to a manual move.
+    if (previousAllocation?.run.status === DeliveryRunStatus.READY) {
+      throw new UnprocessableEntityException('Cannot reschedule a delivery that is already in a run marked ready');
+    }
+
+    const routeCustomer = await this.prisma.deliveryRouteCustomer.findFirst({
+      where: { activeDistributorCustomerId: `${distributorId}:${order.traderCustomerId}` },
+      include: { route: true },
+    });
+
+    // Resolve/create the destination run OUTSIDE the CAS transaction below —
+    // findOrCreateRun is its own atomic, constraint-settled unit (see its own
+    // comment), never nested inside another transaction. Checked here so a
+    // destination that's already READY is rejected before any state changes;
+    // re-checked again inside the transaction as a race guard.
+    let destinationRun: { id: string; name: string; status: DeliveryRunStatus } | null = null;
+    if (routeCustomer && routeCustomer.route.active) {
+      destinationRun = await this.allocation.findOrCreateRun(
+        distributorId,
+        routeCustomer.route.id,
+        routeCustomer.route.name,
+        routeCustomer.route.defaultDriverName,
+        newDate,
+      );
+      if (destinationRun.status === DeliveryRunStatus.READY) {
+        throw new UnprocessableEntityException('Cannot reschedule into a run that is already marked ready');
+      }
+    }
+
+    let allocationResult!: ResolutionOutcome;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const casResult = await tx.order.updateMany({
+          where: { id: orderId, distributorId, scheduledDeliveryDate: expected },
+          data: { scheduledDeliveryDate: newDate },
+        });
+        if (casResult.count !== 1) {
+          throw new ConflictException('This order\'s delivery date has changed — refresh and try again');
+        }
+
+        // Soft-remove the old allocation BEFORE creating the new one — same
+        // non-deferrable-unique/trigger reasoning as assignOrderToRun.
+        if (previousAllocation) {
+          const removed = await tx.deliveryRunOrder.updateMany({
+            where: { activeOrderId: orderId, runId: previousAllocation.runId },
+            data: { removedAt: new Date(), removedByUserId: actorUserId },
+          });
+          if (removed.count !== 1) {
+            throw new ConflictException('This delivery has already moved — refresh and try again');
+          }
+          const remaining = await tx.deliveryRunOrder.findMany({
+            where: { runId: previousAllocation.runId, removedAt: null },
+            orderBy: [{ deliverySequence: 'asc' }, { assignedAt: 'asc' }],
+            select: { id: true },
+          });
+          await Promise.all(remaining.map((s, index) => tx.deliveryRunOrder.update({
+            where: { id: s.id },
+            data: { deliverySequence: index + 1 },
+          })));
+          await tx.deliveryRun.update({ where: { id: previousAllocation.runId }, data: { version: { increment: 1 } } });
+        }
+
+        if (!destinationRun) {
+          allocationResult = { allocated: false, reason: 'NO_ROUTE' };
+        } else {
+          // Race guard: re-check the destination is still OPEN inside the
+          // transaction — any throw here rolls back the CAS'd date change
+          // and the source soft-remove above.
+          const freshDestination = await tx.deliveryRun.findUniqueOrThrow({ where: { id: destinationRun.id } });
+          if (freshDestination.status === DeliveryRunStatus.READY) {
+            throw new UnprocessableEntityException('Cannot reschedule into a run that is already marked ready');
+          }
+
+          const created = await tx.deliveryRunOrder.create({
+            data: {
+              runId: destinationRun.id,
+              orderId,
+              allocationSource: DeliveryAllocationSource.MANUAL,
+              assignedByUserId: actorUserId,
+            },
+          });
+          const siblings = await tx.deliveryRunOrder.findMany({
+            where: { runId: destinationRun.id, removedAt: null, id: { not: created.id } },
+            orderBy: [{ deliverySequence: 'asc' }, { assignedAt: 'asc' }],
+            select: { id: true },
+          });
+          const ordered = [...siblings, { id: created.id }];
+          await Promise.all(ordered.map((s, index) => tx.deliveryRunOrder.update({
+            where: { id: s.id },
+            data: { deliverySequence: index + 1 },
+          })));
+          await tx.deliveryRun.update({ where: { id: destinationRun.id }, data: { version: { increment: 1 } } });
+
+          allocationResult = { allocated: true, runId: destinationRun.id, runName: destinationRun.name };
+        }
+
+        await this.outbox.writeEvent(tx, 'Order', orderId, 'OrderScheduledDeliveryDateChanged', {
+          orderId,
+          distributorId,
+          previousScheduledDeliveryDate: currentDateIso,
+          scheduledDeliveryDate: dto.scheduledDeliveryDate,
+          previousRunId: previousAllocation?.runId ?? null,
+          newRunId: allocationResult.allocated ? allocationResult.runId : null,
+          occurredAt: new Date().toISOString(),
+        });
+        await this.audit.record(tx, {
+          distributorId,
+          entityType: 'ORDER',
+          entityId: orderId,
+          action: 'ORDER_SCHEDULED_DELIVERY_DATE_CHANGED',
+          actorType: ActorType.USER,
+          actorUserId,
+          summary: `Changed order ${order.orderNumber}'s delivery date to ${dto.scheduledDeliveryDate}`,
+          changes: { previousScheduledDeliveryDate: currentDateIso, scheduledDeliveryDate: dto.scheduledDeliveryDate },
+        });
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('This order already has an active delivery run allocation — refresh and try again');
+      }
+      throw err;
+    }
+
+    return {
+      orderId,
+      scheduledDeliveryDate: dto.scheduledDeliveryDate,
+      requestedDeliveryDate: order.requestedDeliveryDate ? toIsoDate(order.requestedDeliveryDate) : null,
+      allocation: allocationResult,
+    };
+  }
+
+  // Same-address match within DistributorSettings.nearbyDeliveryWindowDays
+  // (default 3, no settings UI). Reviewable suggestion only — never
+  // auto-merged/moved. Address comparison happens in JS (line1+postcode,
+  // normalized) since deliveryAddressSnapshot is an opaque JSON blob and the
+  // per-distributor/window candidate set is small — not worth a JSON-path
+  // SQL predicate.
+  private async findNearbyDeliveries(
+    distributorId: string,
+    order: { id: string; deliveryAddressSnapshot: Prisma.JsonValue },
+    targetDate: Date,
+  ) {
+    const targetAddress = normalizeAddress(order.deliveryAddressSnapshot);
+    if (!targetAddress) return [];
+
+    const settings = await this.prisma.distributorSettings.findUnique({
+      where: { distributorId },
+      select: { nearbyDeliveryWindowDays: true },
+    });
+    const windowDays = settings?.nearbyDeliveryWindowDays ?? DEFAULT_NEARBY_DELIVERY_WINDOW_DAYS;
+
+    const from = new Date(targetDate);
+    from.setUTCDate(from.getUTCDate() - windowDays);
+    const to = new Date(targetDate);
+    to.setUTCDate(to.getUTCDate() + windowDays);
+
+    const candidates = await this.prisma.order.findMany({
+      where: {
+        distributorId,
+        status: OrderStatus.ACCEPTED,
+        id: { not: order.id },
+        OR: [
+          { scheduledDeliveryDate: { gte: from, lte: to } },
+          { AND: [{ scheduledDeliveryDate: null }, { requestedDeliveryDate: { gte: from, lte: to } }] },
+        ],
+      },
+      include: {
+        customer: { select: CUSTOMER_SELECT },
+        deliveryRunOrders: { where: { removedAt: null }, include: { run: { select: { id: true, name: true } } } },
+      },
+    });
+
+    return candidates
+      .filter((c) => normalizeAddress(c.deliveryAddressSnapshot) === targetAddress)
+      .map((c) => {
+        const active = c.deliveryRunOrders[0];
+        const effectiveDate = c.scheduledDeliveryDate ?? c.requestedDeliveryDate;
+        return {
+          orderId: c.id,
+          orderNumber: c.orderNumber,
+          customerName: c.customer.name,
+          scheduledDeliveryDate: effectiveDate ? toIsoDate(effectiveDate) : null,
+          runId: active?.run.id ?? null,
+          runName: active?.run.name ?? null,
+        };
+      });
   }
 }
 
 function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+function normalizeAddress(snapshot: Prisma.JsonValue): string | null {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const s = snapshot as Record<string, unknown>;
+  const line1 = typeof s.line1 === 'string' ? s.line1.trim().toLowerCase() : '';
+  const postcode = typeof s.postcode === 'string' ? s.postcode.trim().toLowerCase() : '';
+  if (!line1 || !postcode) return null;
+  return `${line1}|${postcode}`;
 }

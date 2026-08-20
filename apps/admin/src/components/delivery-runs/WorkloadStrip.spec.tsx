@@ -70,4 +70,19 @@ describe('WorkloadStrip', () => {
 
     await waitFor(() => expect(screen.getByText('Failed to load the workload strip.')).toBeInTheDocument());
   });
+
+  it('re-fetches the same week when refreshKey changes — e.g. after a cross-day reschedule elsewhere', async () => {
+    mockListDays.mockResolvedValue({ data: makeDays('2026-08-17') });
+
+    const { rerender } = render(
+      <WorkloadStrip token="token-1" selectedDate="2026-08-19" onSelectDate={vi.fn()} refreshKey={0} />,
+    );
+    await waitFor(() => expect(mockListDays).toHaveBeenCalledTimes(1));
+
+    rerender(<WorkloadStrip token="token-1" selectedDate="2026-08-19" onSelectDate={vi.fn()} refreshKey={1} />);
+
+    await waitFor(() => expect(mockListDays).toHaveBeenCalledTimes(2));
+    const [, params] = mockListDays.mock.calls[1];
+    expect(params).toEqual({ from: '2026-08-17', to: '2026-08-23' });
+  });
 });

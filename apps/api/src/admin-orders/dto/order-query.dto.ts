@@ -1,5 +1,7 @@
-import { IsOptional, IsString, IsInt, IsEnum, Min, Max } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min, Max,
+} from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -35,6 +37,15 @@ export class OrderQueryDto {
   @IsOptional()
   @IsString()
   deliveryDateBefore?: string;
+
+  // Accepted orders with no delivery date at all — never appear on any
+  // dated board (see docs/delivery-planning-pbi-plan.md's M3 risk note),
+  // this is how the M4 undated-deliveries panel finds them. Not
+  // @Type(() => Boolean) — Boolean('false') === true in JS.
+  @IsOptional()
+  @Transform(({ value }) => value === 'true')
+  @IsBoolean()
+  undated?: boolean;
 
   @IsOptional()
   @IsEnum(['createdAt', 'requestedDeliveryDate'])

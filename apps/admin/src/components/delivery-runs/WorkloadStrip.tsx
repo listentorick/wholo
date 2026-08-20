@@ -9,6 +9,11 @@ interface WorkloadStripProps {
   token: string | null | undefined;
   selectedDate: string;
   onSelectDate: (date: string) => void;
+  // Bump this (e.g. after a change-delivery-date mutation moves a stop from
+  // one day to another) to force a re-fetch of the current week — this
+  // component otherwise only reloads on token/week-navigation changes, so a
+  // cross-day move would leave its counts stale otherwise.
+  refreshKey?: number;
 }
 
 function startOfWeek(date: Date): Date {
@@ -29,7 +34,9 @@ function addDays(date: Date, days: number): Date {
 // Doubles as the date picker (decision #10 in the delivery-planning-pbi-plan
 // decisions log) — replaces a calendar popover with a always-visible 7-day
 // strip showing each day's workload count.
-export function WorkloadStrip({ token, selectedDate, onSelectDate }: WorkloadStripProps) {
+export function WorkloadStrip({
+  token, selectedDate, onSelectDate, refreshKey,
+}: WorkloadStripProps) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(`${selectedDate}T00:00:00`)));
   const [days, setDays] = useState<DeliveryDaySummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,9 +57,11 @@ export function WorkloadStrip({ token, selectedDate, onSelectDate }: WorkloadStr
     }
   }, [token, weekStart]);
 
+  // refreshKey carries no data of its own — it's only in this dependency
+  // list to force a re-fetch when a cross-day mutation happens elsewhere.
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   return (
     <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-white p-2">

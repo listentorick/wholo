@@ -3,7 +3,9 @@ import { render, screen } from '@testing-library/react';
 import type { DeliveryCard as DeliveryCardType } from '@wholo/types';
 import { UnassignedColumn } from './UnassignedColumn';
 
-const NOOP = { allRuns: [], pendingOrderId: null, onMove: vi.fn() };
+const NOOP = {
+  allRuns: [], pendingOrderId: null, onMove: vi.fn(), onChangeDate: vi.fn(),
+};
 
 function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
   return {
@@ -20,6 +22,7 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: null,
     ...overrides,
   };

@@ -16,11 +16,11 @@ Two independent design-review passes on the PBI's own mockups (Figures 1–2, ex
 |---|---|
 | **M1 — Schema + Route CRUD** | ✅ Done, merged, green |
 | **M2 — Auto-allocation on order acceptance** | ✅ Done, merged, green |
-| **M3 — Board + move + List view** | 📋 Planned in detail below |
-| **M4 — Readiness + concurrency UX** | Outlined |
-| **M5 — Change delivery date + missed/nearby** | Outlined |
+| **M3 — Board + move + List view** | ✅ Done (M3a–d), green |
+| **M4 — Readiness + concurrency UX** | ✅ Done, green |
+| **M5 — Change delivery date + missed/nearby** | ✅ Done, green |
 
-Current test state: `apps/api` **1075 unit tests across 88 suites**, plus 24 delivery integration tests (14 route + 10 allocation). All green.
+All milestones green across `apps/api` unit + integration, `apps/admin-api`, and `apps/admin`.
 
 ## Reconciliation notes (PBI's illustrative names → real codebase)
 
@@ -220,13 +220,15 @@ Below `md` the view is **forced to List**. `DeliveryRunList` renders a desktop `
 
 ---
 
-# M4 — Readiness + concurrency UX (outline)
+# M4 — Readiness + concurrency UX ✅
 
-Mark-ready / reopen endpoints with audit records, the READY-locked column treatment and `ReopenConfirm`, a `MarkReadyDialog` interstitial (it's a hard lock, so it needs confirmation), the per-run driver override labelled distinctly from the route's default ("Driver for this run — overrides the route default"), and end-to-end 409-conflict UX with a genuine concurrent-mutation integration test. Also the natural home for the **undated-deliveries** gap M3 surfaces.
+Mark-ready / reopen unified into one `PATCH distributors/:distributorId/delivery-runs/:runId` (`UpdateDeliveryRunDto`: `version`, optional `status`, three-state `driverName`), covering status transitions and the driver override in a single CAS. `RunHeaderControls` owns the `MarkReadyDialog`/`ReopenConfirm` interstitials and `RunDriverField`'s inline click-to-edit, shared by Board (`RunColumn`) and List (`DeliveryRunList`'s `GroupHeader`). `UndatedDeliveriesPanel` closes the **undated-deliveries** gap M3 flagged (visibility only in M4; M5 added the "Set delivery date" action to it).
 
-# M5 — Change delivery date + missed/nearby (outline)
+# M5 — Change delivery date + missed/nearby ✅
 
-`PATCH .../scheduled-delivery-date` re-running the same route/run resolution **synchronously** (it's an interactive row action, not an acceptance-time trigger), retaining `requestedDeliveryDate`, warning on date drift, and surfacing — never auto-merging — same-address deliveries on the target date. Plus `ChangeDeliveryDateDialog`, the missed-delivery derivation feeding the `MISSED` attention state M3 already renders, and use of `nearbyDeliveryWindowDays` (no settings UI).
+**Backend**: `DeliveryRunAllocationModule` was split into a plain, queue-free module (exports `DeliveryRunAllocationService`, its `findOrCreateRun` made public) plus a `DeliveryRunAllocationWorkerModule` wrapper that adds the BullMQ queue/processor — mirroring `AccountingModule`'s own HTTP-module-imported-by-WorkerModule shape in reverse, so `DeliveryRunsModule` (HTTP) can reuse the same run-resolution logic synchronously without pulling queue wiring into the API process. New `distributors/:distributorId/orders/:orderId/` sub-resource (`order-scheduling.controller.ts`): `GET reschedule-preview?date=` (read-only — never creates a run; returns the resolution outcome + same-address `nearbyDeliveries` within `nearbyDeliveryWindowDays`) and `PATCH scheduled-delivery-date` (CAS'd on the order's own `scheduledDeliveryDate`, since `Order` has no version column; soft-removes the old allocation before creating the new one, same non-deferrable-unique/trigger ordering as `assignOrderToRun`; blocks with 422 if the source or resolved destination run is READY; retains `requestedDeliveryDate` always; one `OrderScheduledDeliveryDateChanged` outbox event + `ORDER_SCHEDULED_DELIVERY_DATE_CHANGED` audit row per change). `getDay` now derives `MISSED` (replacing `UNASSIGNED`, never stacked) for still-unassigned cards whose effective date has passed — cards already inside a run are never flagged, since there's no completion signal in the schema to check against.
+
+**Frontend**: `ChangeDeliveryDateDialog` (built on the shared `Modal`) — single screen, not a wizard: date input with the requested date always shown for reference, a non-blocking drift note, a live debounced resolution preview reusing `unallocatedReasonCopy`, and an inert same-address nearby-deliveries panel (noticing only, never a merge action). Wired into `DeliveryCardActions` as a trailing icon button on ordinary cards, promoted to a leading amber "Reschedule" button on `MISSED` cards. `attention.ts`'s `MISSED_CLASSES`/`MISSED_CHIP_CLASSES`/`missedCopy` (scaffolded since M3, never wired until now) are applied in `DeliveryCard`. `DeliveryBoardFilters` gained a third "Missed only" option (List view only, per decision #2). `UndatedDeliveriesPanel` reuses the same dialog for its own "Set delivery date" action, independent of the board's own mutation flow.
 
 ---
 

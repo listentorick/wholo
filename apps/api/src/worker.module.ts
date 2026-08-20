@@ -13,7 +13,7 @@ import { AccountingInvoiceExportModule } from './accounting-invoice-export/accou
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
 import { AccountingTaxTypeSyncModule } from './accounting-tax-type-sync/accounting-tax-type-sync.module';
 import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
-import { DeliveryRunAllocationModule } from './delivery-run-allocation/delivery-run-allocation.module';
+import { DeliveryRunAllocationWorkerModule } from './delivery-run-allocation/delivery-run-allocation-worker.module';
 import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -111,7 +111,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingProductSyncModule,
     AccountingTaxTypeSyncModule,
     AnalyticsFactsModule,
-    DeliveryRunAllocationModule,
+    DeliveryRunAllocationWorkerModule,
     OutboxModule,
     HealthModule,
   ],

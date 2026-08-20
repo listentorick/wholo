@@ -19,6 +19,7 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: 'DEFAULT_ROUTE',
     ...overrides,
   };
@@ -143,5 +144,42 @@ describe('DeliveryCard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Move to…' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Lancashire' }));
     expect(onMove).toHaveBeenCalledWith('run-2');
+  });
+
+  it('shows the Missed chip (replacing the stop-number badge) and the amber left border for a missed card', () => {
+    render(
+      <DeliveryCard
+        card={makeCard({
+          attention: 'MISSED', stopNumber: null, scheduledDeliveryDate: '2026-08-12',
+        })}
+        currentRunId={null}
+        runs={[]}
+        onMove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Missed — was due 12 Aug')).toBeInTheDocument();
+  });
+
+  it('promotes a leading amber "Reschedule" button on a missed card instead of a plain icon button', async () => {
+    const onChangeDate = vi.fn();
+    render(
+      <DeliveryCard
+        card={makeCard({ attention: 'MISSED', stopNumber: null })}
+        currentRunId={null}
+        runs={[]}
+        onMove={vi.fn()}
+        onChangeDate={onChangeDate}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Reschedule' }));
+    expect(onChangeDate).toHaveBeenCalled();
+    expect(screen.queryByLabelText('Change delivery date')).not.toBeInTheDocument();
+  });
+
+  it('renders a plain Change-delivery-date icon button on a non-missed card when onChangeDate is provided', async () => {
+    const onChangeDate = vi.fn();
+    render(<DeliveryCard card={makeCard()} currentRunId="run-1" runs={[]} onMove={vi.fn()} onChangeDate={onChangeDate} />);
+    await userEvent.click(screen.getByLabelText('Change delivery date'));
+    expect(onChangeDate).toHaveBeenCalled();
   });
 });

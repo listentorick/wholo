@@ -115,7 +115,11 @@ describe('Admin Orders (integration)', () => {
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
-  const createOrder = async (distributorId: string, status: OrderStatus = OrderStatus.SUBMITTED) => {
+  const createOrder = async (
+    distributorId: string,
+    status: OrderStatus = OrderStatus.SUBMITTED,
+    overrides: Record<string, unknown> = {},
+  ) => {
     const seqResult = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
     const orderNumber = `TEST-ORD-${seqResult[0].nextval}`;
 
@@ -133,6 +137,7 @@ describe('Admin Orders (integration)', () => {
         taxAmount: new Prisma.Decimal('0.00'),
         totalAmount: new Prisma.Decimal('100.00'),
         submittedAt: new Date(),
+        ...overrides,
       },
     });
   };
@@ -198,6 +203,25 @@ describe('Admin Orders (integration)', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
+    });
+
+    // The M4 undated-deliveries panel relies on this filter — an accepted
+    // order with no requestedDeliveryDate never appears on any dated
+    // delivery-runs board (see docs/delivery-planning-pbi-plan.md).
+    it('the undated filter returns only this distributor\'s dateless orders', async () => {
+      const undatedA = await createOrder(DIST_A, OrderStatus.ACCEPTED);
+      const datedA = await createOrder(DIST_A, OrderStatus.ACCEPTED, { requestedDeliveryDate: new Date('2026-09-01T00:00:00.000Z') });
+      const undatedB = await createOrder(DIST_B, OrderStatus.ACCEPTED);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders?status=ACCEPTED&undated=true`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((o: { id: string }) => o.id);
+      expect(ids).toContain(undatedA.id);
+      expect(ids).not.toContain(datedA.id);
+      expect(ids).not.toContain(undatedB.id);
     });
   });
 

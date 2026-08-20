@@ -14,6 +14,7 @@ interface SortableDeliveryCardProps {
   locked?: boolean;
   onMove: (targetRunId: string | null) => void;
   onMoveUpDown?: (direction: 'up' | 'down') => void;
+  onChangeDate?: () => void;
 }
 
 // Carries the dnd-kit sortable wiring so DeliveryCard itself never imports

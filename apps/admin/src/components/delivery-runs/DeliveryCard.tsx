@@ -1,5 +1,7 @@
 import type { DeliveryCard as DeliveryCardType, DeliveryRunColumn } from '@wholo/types';
-import { unallocatedReasonCopy, lineItemsCopy } from './attention';
+import {
+  unallocatedReasonCopy, lineItemsCopy, missedCopy, MISSED_CLASSES, MISSED_CHIP_CLASSES,
+} from './attention';
 import { DeliveryCardActions } from './DeliveryCardActions';
 
 interface DeliveryCardProps {
@@ -19,19 +21,23 @@ interface DeliveryCardProps {
   dragHandle?: React.ReactNode;
   onMove: (targetRunId: string | null) => void;
   onMoveUpDown?: (direction: 'up' | 'down') => void;
+  onChangeDate?: () => void;
 }
 
 export function DeliveryCard({
-  card, currentRunId, runs, isFirst, isLast, pending, locked, dragHandle, onMove, onMoveUpDown,
+  card, currentRunId, runs, isFirst, isLast, pending, locked, dragHandle, onMove, onMoveUpDown, onChangeDate,
 }: DeliveryCardProps) {
+  const isMissed = card.attention === 'MISSED';
   return (
-    <div className={`rounded-md border border-border bg-white p-2.5 shadow-sm ${pending ? 'opacity-50' : ''}`}>
+    <div className={`rounded-md border border-border bg-white p-2.5 shadow-sm ${pending ? 'opacity-50' : ''} ${isMissed ? MISSED_CLASSES : ''}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-start gap-1.5">
           {dragHandle}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-sm font-medium text-text">
-              {card.stopNumber != null && (
+              {isMissed && card.scheduledDeliveryDate ? (
+                <span className={MISSED_CHIP_CLASSES}>{missedCopy(card.scheduledDeliveryDate)}</span>
+              ) : card.stopNumber != null && (
                 <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
                   {card.stopNumber}
                 </span>
@@ -52,11 +58,13 @@ export function DeliveryCard({
           currentRunId={currentRunId}
           runs={runs}
           suggestedRunId={card.suggestedRunId}
+          attention={card.attention}
           disabled={pending || locked}
           isFirst={isFirst}
           isLast={isLast}
           onMove={onMove}
           onMoveUpDown={onMoveUpDown}
+          onChangeDate={onChangeDate}
         />
       </div>
     </div>

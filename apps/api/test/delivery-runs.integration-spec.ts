@@ -439,4 +439,368 @@ describe('Delivery Runs board (integration)', () => {
       expect(auditRows).toHaveLength(1);
     });
   });
+
+  describe('updateRun (mark ready / reopen / driver override)', () => {
+    it('returns 404, not 403, when the run id belongs to another distributor', async () => {
+      const runB = await createRun(DIST_B, 'B Local');
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${runB.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, status: 'READY' });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('marks a run ready: status/readyAt/readyByUserId set, version bumped once, outbox + audit written', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, status: 'READY' });
+
+      expect(res.status).toBe(200);
+      const runBody = res.body.runs.find((r: { runId: string }) => r.runId === run.id);
+      expect(runBody.status).toBe('READY');
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.status).toBe('READY');
+      expect(updatedRun.readyAt).not.toBeNull();
+      expect(updatedRun.readyByUserId).toBe(ADMIN_USER);
+      expect(updatedRun.version).toBe(1);
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunMarkedReady' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: run.id, action: 'DELIVERY_RUN_MARKED_READY' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+
+    it('reopens a READY run: readyAt/readyByUserId nulled, version bumped once', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire', {
+        status: 'READY', readyAt: new Date(), readyByUserId: ADMIN_USER,
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, status: 'OPEN' });
+
+      expect(res.status).toBe(200);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.status).toBe('OPEN');
+      expect(updatedRun.readyAt).toBeNull();
+      expect(updatedRun.readyByUserId).toBeNull();
+      expect(updatedRun.version).toBe(1);
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunReopened' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+    });
+
+    it('changes the driver on an OPEN run', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, driverName: 'Sam' });
+
+      expect(res.status).toBe(200);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.driverName).toBe('Sam');
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: run.id, eventType: 'DeliveryRunDriverChanged' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+    });
+
+    it('returns 422 as application/problem+json when marking ready a run that is already READY', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire', { status: 'READY' });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, status: 'READY' });
+
+      expect(res.status).toBe(422);
+      expect(res.headers['content-type']).toContain('application/problem+json');
+      expect(res.body.detail).toBe('Run is already marked ready');
+    });
+
+    it('returns 422 when changing the driver on a READY run', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire', { status: 'READY' });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, driverName: 'Sam' });
+
+      expect(res.status).toBe(422);
+      expect(res.body.detail).toBe('Cannot change driver on a run that is already marked ready');
+    });
+
+    it('returns 400 when neither status nor driverName is provided', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0 });
+
+      expect(res.status).toBe(400);
+    });
+
+    // Mandatory per the M4 plan — proves the CAS actually resolves a real
+    // concurrent race via Postgres row locking, not just mocked call counts.
+    it('resolves a concurrent mark-ready race to exactly one 2xx and one 409, version incremented once', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire');
+
+      const send = () => request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/delivery-runs/${run.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ version: 0, status: 'READY' });
+
+      const [res1, res2] = await Promise.all([send(), send()]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const updatedRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: run.id } });
+      expect(updatedRun.status).toBe('READY');
+      expect(updatedRun.version).toBe(1);
+    });
+  });
+
+  describe('changeScheduledDeliveryDate (M5 mutation)', () => {
+    it('returns 404, not 403, when the order belongs to another distributor', async () => {
+      const orderB = await createOrder(DIST_B, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${orderB.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('reschedules into a different run under the same route: densifies both ends and bumps both versions exactly once', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      await prisma.deliveryRouteCustomer.create({
+        data: {
+          routeId: route.id, customerId: CUSTOMER_1, defaultDropPosition: 1, assignedByUserId: ADMIN_USER,
+        },
+      });
+      const runOld = await createRun(DIST_A, 'Yorkshire', { routeId: route.id });
+      const orderA = await createOrder(DIST_A, CUSTOMER_1);
+      const orderB = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(runOld.id, orderA.id, { deliverySequence: 1 });
+      await createAllocation(runOld.id, orderB.id, { deliverySequence: 2 });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${orderA.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(200);
+      expect(res.body.allocation.allocated).toBe(true);
+      const newRunId = res.body.allocation.runId;
+      expect(newRunId).not.toBe(runOld.id);
+
+      const oldRunRows = await prisma.deliveryRunOrder.findMany({ where: { runId: runOld.id, removedAt: null } });
+      expect(oldRunRows).toHaveLength(1);
+      expect(oldRunRows[0].orderId).toBe(orderB.id);
+      expect(oldRunRows[0].deliverySequence).toBe(1);
+
+      const newRunRows = await prisma.deliveryRunOrder.findMany({ where: { runId: newRunId, removedAt: null } });
+      expect(newRunRows).toHaveLength(1);
+      expect(newRunRows[0].orderId).toBe(orderA.id);
+
+      const updatedOldRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: runOld.id } });
+      expect(updatedOldRun.version).toBe(1);
+      const updatedNewRun = await prisma.deliveryRun.findUniqueOrThrow({ where: { id: newRunId } });
+      expect(updatedNewRun.version).toBe(1);
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: orderA.id } });
+      expect(updatedOrder.scheduledDeliveryDate?.toISOString().slice(0, 10)).toBe('2026-08-26');
+      // requestedDeliveryDate — the customer's original agreed date — is never touched.
+      expect(updatedOrder.requestedDeliveryDate?.toISOString().slice(0, 10)).toBe(DELIVERY_DATE);
+    });
+
+    it('resolves a concurrent same-expected-date race to exactly one 2xx and one 409, order rescheduled exactly once', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      await prisma.deliveryRouteCustomer.create({
+        data: {
+          routeId: route.id, customerId: CUSTOMER_1, defaultDropPosition: 1, assignedByUserId: ADMIN_USER,
+        },
+      });
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+
+      const send = () => request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${order.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      const [res1, res2] = await Promise.all([send(), send()]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 409]);
+
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.scheduledDeliveryDate?.toISOString().slice(0, 10)).toBe('2026-08-26');
+
+      const activeAllocations = await prisma.deliveryRunOrder.count({ where: { orderId: order.id, removedAt: null } });
+      expect(activeAllocations).toBe(1);
+    });
+
+    it('returns 422 and leaves everything untouched when the current allocation is in a READY run', async () => {
+      const run = await createRun(DIST_A, 'Yorkshire', { status: 'READY' });
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(run.id, order.id);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${order.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(422);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.scheduledDeliveryDate?.toISOString().slice(0, 10)).toBe(DELIVERY_DATE);
+      const activeAllocation = await prisma.deliveryRunOrder.findFirst({ where: { activeOrderId: order.id } });
+      expect(activeAllocation?.runId).toBe(run.id);
+    });
+
+    // The transaction-ordering proof for M5: the destination is already READY
+    // at request time, so the pre-transaction check rejects before the CAS'd
+    // order-date update and the source soft-remove ever run — proven here by
+    // asserting neither actually changed, not just by the status code.
+    it('returns 422 and leaves everything untouched when the resolved destination run for the new date is already READY', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      await prisma.deliveryRouteCustomer.create({
+        data: {
+          routeId: route.id, customerId: CUSTOMER_1, defaultDropPosition: 1, assignedByUserId: ADMIN_USER,
+        },
+      });
+      const runOld = await createRun(DIST_A, 'Yorkshire', { routeId: route.id });
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      await createAllocation(runOld.id, order.id);
+      await createRun(DIST_A, 'Yorkshire', {
+        routeId: route.id, deliveryDate: new Date('2026-08-26T00:00:00.000Z'), status: 'READY',
+      });
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${order.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(422);
+      const updatedOrder = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+      expect(updatedOrder.scheduledDeliveryDate?.toISOString().slice(0, 10)).toBe(DELIVERY_DATE);
+      const activeAllocation = await prisma.deliveryRunOrder.findFirst({ where: { activeOrderId: order.id } });
+      expect(activeAllocation?.runId).toBe(runOld.id);
+    });
+
+    it('leaves the order unassigned (NO_ROUTE) with no active route, writing exactly one outbox event and one audit row for the whole action', async () => {
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/orders/${order.id}/scheduled-delivery-date`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ scheduledDeliveryDate: '2026-08-26', expectedScheduledDeliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(200);
+      expect(res.body.allocation).toEqual({ allocated: false, reason: 'NO_ROUTE' });
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'Order', aggregateId: order.id, eventType: 'OrderScheduledDeliveryDateChanged' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: order.id, action: 'ORDER_SCHEDULED_DELIVERY_DATE_CHANGED' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+  });
+
+  describe('getReschedulePreview', () => {
+    it('surfaces another accepted order at the same delivery address within the window, excluding itself', async () => {
+      const address = { line1: '12 High Street', postcode: 'YO1 1AA' };
+      const order = await createOrder(DIST_A, CUSTOMER_1, { deliveryAddressSnapshot: address });
+      const nearby = await createOrder(DIST_A, CUSTOMER_1, {
+        deliveryAddressSnapshot: address,
+        requestedDeliveryDate: new Date('2026-08-24T00:00:00.000Z'),
+        scheduledDeliveryDate: new Date('2026-08-24T00:00:00.000Z'),
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/reschedule-preview?date=${DELIVERY_DATE}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.nearbyDeliveries.map((d: { orderId: string }) => d.orderId)).toEqual([nearby.id]);
+    });
+
+    it('excludes a same-window order at a different address', async () => {
+      const order = await createOrder(DIST_A, CUSTOMER_1, {
+        deliveryAddressSnapshot: { line1: '12 High Street', postcode: 'YO1 1AA' },
+      });
+      await createOrder(DIST_A, CUSTOMER_1, {
+        deliveryAddressSnapshot: { line1: 'Other Road', postcode: 'YO2 2BB' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/reschedule-preview?date=${DELIVERY_DATE}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.nearbyDeliveries).toEqual([]);
+    });
+
+    it('never creates a run on the preview path', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      await prisma.deliveryRouteCustomer.create({
+        data: {
+          routeId: route.id, customerId: CUSTOMER_1, defaultDropPosition: 1, assignedByUserId: ADMIN_USER,
+        },
+      });
+      const order = await createOrder(DIST_A, CUSTOMER_1);
+      const countBefore = await prisma.deliveryRun.count({ where: { distributorId: DIST_A } });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/reschedule-preview?date=2026-08-27`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.resolution).toEqual({ allocated: true, runId: null, runName: 'Yorkshire' });
+      const countAfter = await prisma.deliveryRun.count({ where: { distributorId: DIST_A } });
+      expect(countAfter).toBe(countBefore);
+    });
+  });
+
+  describe('getDay — MISSED attention (M5)', () => {
+    it('flags a still-unassigned order as MISSED once its date is in the past', async () => {
+      const pastDate = '2020-01-01';
+      const order = await createOrder(DIST_A, CUSTOMER_1, {
+        requestedDeliveryDate: new Date(`${pastDate}T00:00:00.000Z`),
+        scheduledDeliveryDate: new Date(`${pastDate}T00:00:00.000Z`),
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/delivery-days/${pastDate}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const card = res.body.unassigned.find((c: { orderId: string }) => c.orderId === order.id);
+      expect(card.attention).toBe('MISSED');
+    });
+  });
 });

@@ -23,10 +23,15 @@ export const OPEN_BADGE: { label: string; tone: StatusTone } = { label: 'Open', 
 export const MISSED_CLASSES = 'border-l-2 border-l-amber-400';
 export const MISSED_CHIP_CLASSES = 'inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800';
 
+// Shared by missedCopy below and ChangeDeliveryDateDialog's drift note — one
+// short-date format for the whole feature.
+export function formatShortDate(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 export function missedCopy(dueDate: string): string {
-  const d = new Date(`${dueDate}T00:00:00.000Z`);
-  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  return `Missed — was due ${formatted}`;
+  return `Missed — was due ${formatShortDate(dueDate)}`;
 }
 
 export function totalsCopy(stopCount: number, itemCount: number): string {

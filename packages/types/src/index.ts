@@ -295,6 +295,9 @@ export interface OrderListParams {
   customerName?: string;
   deliveryDateAfter?: string;
   deliveryDateBefore?: string;
+  // ACCEPTED orders with no delivery date at all — invisible on every dated
+  // delivery-runs board. Wins over deliveryDateAfter/Before if both are sent.
+  undated?: boolean;
   sortBy?: 'createdAt' | 'requestedDeliveryDate';
   sortOrder?: 'asc' | 'desc';
 }
@@ -1472,6 +1475,10 @@ export interface DeliveryCard {
   suggestedRunId: string | null;
   suggestedRouteName: string | null;
   scheduledDeliveryDate: string | null;
+  // The customer's original agreed date — immutable, retained permanently
+  // even as scheduledDeliveryDate is replanned. Used client-side to detect
+  // "date drift" when changing the delivery date (M5).
+  requestedDeliveryDate: string | null;
   allocationSource: 'DEFAULT_ROUTE' | 'MANUAL' | 'EXTERNAL_PROVIDER' | null;
 }
 
@@ -1520,6 +1527,62 @@ export interface AssignOrderToRunRequest {
 export interface ReorderRunOrdersRequest {
   version: number;
   orderedOrderIds: string[];
+}
+
+// Mark ready ({status: 'READY'}), reopen ({status: 'OPEN'}), and driver
+// override (driverName, null clears it) — one PATCH of the DeliveryRun
+// resource itself, per CLAUDE.md's "prefer coarse resources over
+// fine-grained field endpoints".
+export interface UpdateDeliveryRunRequest {
+  version: number;
+  status?: 'OPEN' | 'READY';
+  driverName?: string | null;
+}
+
+// ─── Change delivery date (M5) ────────────────────────────────────────────────
+// Another accepted order at the same delivery address, within the
+// distributor's configured nearbyDeliveryWindowDays of a candidate date.
+// Reviewable suggestion only — surfaced so staff can notice a consolidation
+// opportunity by hand; nothing is ever auto-merged/moved.
+export interface NearbyDelivery {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  scheduledDeliveryDate: string | null;
+  runId: string | null;
+  runName: string | null;
+}
+
+// Read-only preview for a candidate date, fetched live as the date is edited
+// in ChangeDeliveryDateDialog, before anything is committed. `runId: null`
+// with `allocated: true` means a run doesn't exist for that date yet — it
+// would be lazily created on commit, matching getDay's own "null reason is
+// allocatable" convention.
+export interface ReschedulePreviewResponse {
+  resolution:
+    | { allocated: true; runId: string | null; runName: string }
+    | { allocated: false; reason: UnallocatedReason };
+  nearbyDeliveries: NearbyDelivery[];
+}
+
+export interface ChangeScheduledDeliveryDateRequest {
+  scheduledDeliveryDate: string;
+  // CAS target — the order's last-known scheduledDeliveryDate. Always
+  // required (Order has no version column to fall back on), null when the
+  // order has never had a scheduled date.
+  expectedScheduledDeliveryDate: string | null;
+}
+
+// Deliberately not a DeliveryDayBoard — unlike M3's mutations, this action
+// can move an order to a different day than the one on screen, so "the"
+// board doesn't apply. The caller refetches whichever day is currently open.
+export interface ChangeScheduledDeliveryDateResponse {
+  orderId: string;
+  scheduledDeliveryDate: string;
+  requestedDeliveryDate: string | null;
+  allocation:
+    | { allocated: true; runId: string; runName: string }
+    | { allocated: false; reason: UnallocatedReason };
 }
 
 // ─── Analytics (wholesaler homepage dashboard) ────────────────────────────────

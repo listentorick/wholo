@@ -15,8 +15,13 @@ import { DeliveryCard } from './DeliveryCard';
 interface DeliveryRunBoardProps {
   board: DeliveryDayBoard;
   pendingOrderId: string | null;
+  pendingRunId: string | null;
   onMove: (orderId: string, fromRunId: string | null, toRunId: string | null) => void;
   onReorder: (runId: string, orderedOrderIds: string[]) => void;
+  onMarkReady: (runId: string) => Promise<void>;
+  onReopen: (runId: string) => Promise<void>;
+  onSetDriver: (runId: string, driverName: string | null) => void;
+  onChangeDate: (orderId: string) => void;
 }
 
 function findCard(board: DeliveryDayBoard, orderId: string): DeliveryCardType | null {
@@ -37,7 +42,7 @@ function findCard(board: DeliveryDayBoard, orderId: string): DeliveryCardType | 
 // column, which position) lives in resolveDragEnd, unit-tested separately
 // since dnd-kit's pointer gestures don't simulate reliably in jsdom.
 export function DeliveryRunBoard({
-  board, pendingOrderId, onMove, onReorder,
+  board, pendingOrderId, pendingRunId, onMove, onReorder, onMarkReady, onReopen, onSetDriver, onChangeDate,
 }: DeliveryRunBoardProps) {
   const [activeCard, setActiveCard] = useState<DeliveryCardType | null>(null);
 
@@ -73,6 +78,7 @@ export function DeliveryRunBoard({
             allRuns={board.runs}
             pendingOrderId={pendingOrderId}
             onMove={onMove}
+            onChangeDate={onChangeDate}
           />
           {board.runs.map((run) => (
             <RunColumn
@@ -80,8 +86,13 @@ export function DeliveryRunBoard({
               run={run}
               allRuns={board.runs}
               pendingOrderId={pendingOrderId}
+              pendingRunId={pendingRunId}
               onMove={onMove}
               onReorder={onReorder}
+              onMarkReady={onMarkReady}
+              onReopen={onReopen}
+              onSetDriver={onSetDriver}
+              onChangeDate={onChangeDate}
             />
           ))}
         </div>

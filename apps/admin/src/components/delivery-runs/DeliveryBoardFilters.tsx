@@ -1,4 +1,4 @@
-export type BoardAttentionFilter = 'all' | 'unassigned';
+export type BoardAttentionFilter = 'all' | 'unassigned' | 'missed';
 
 interface DeliveryBoardFiltersProps {
   filter: BoardAttentionFilter;
@@ -8,13 +8,14 @@ interface DeliveryBoardFiltersProps {
 const OPTIONS: { value: BoardAttentionFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'unassigned', label: 'Unassigned only' },
+  { value: 'missed', label: 'Missed only' },
 ];
 
-// Only Unassigned is filterable in M3 — Missed doesn't exist until M5, and
-// a single boolean doesn't justify FilterBar's multi-select/operator
-// machinery (built for the flat entity tables it's used on elsewhere).
-// Only affects the List view; Board stays fully visible unconditionally
-// (decision #2 in the delivery-planning-pbi-plan decisions log).
+// A single-select toggle group, not FilterBar's multi-select/operator
+// machinery (built for the flat entity tables it's used on elsewhere) — three
+// mutually exclusive states don't justify it. Only affects the List view;
+// Board stays fully visible unconditionally (decision #2 in the
+// delivery-planning-pbi-plan decisions log).
 export function DeliveryBoardFilters({ filter, onChange }: DeliveryBoardFiltersProps) {
   return (
     <div className="inline-flex rounded-md border border-border p-0.5" role="group" aria-label="Filter deliveries">

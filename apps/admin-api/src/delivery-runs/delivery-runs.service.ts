@@ -28,4 +28,16 @@ export class DeliveryRunsService {
   reorderRunOrders(distributorId: string, runId: string, body: unknown, token: string) {
     return this.api.patch(`/distributors/${distributorId}/delivery-runs/${runId}/orders/reorder`, token, body);
   }
+
+  updateRun(distributorId: string, runId: string, body: unknown, token: string) {
+    return this.api.patch(`/distributors/${distributorId}/delivery-runs/${runId}`, token, body);
+  }
+
+  getReschedulePreview(distributorId: string, orderId: string, date: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/orders/${orderId}/reschedule-preview?date=${date}`, token);
+  }
+
+  changeScheduledDeliveryDate(distributorId: string, orderId: string, body: unknown, token: string) {
+    return this.api.patch(`/distributors/${distributorId}/orders/${orderId}/scheduled-delivery-date`, token, body);
+  }
 }

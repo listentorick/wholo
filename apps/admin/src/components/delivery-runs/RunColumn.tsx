@@ -1,23 +1,27 @@
 import { useDroppable } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { DeliveryRunColumn } from '@wholo/types';
-import { StatusBadge } from '@/components/list/StatusBadge';
 import { SortableDeliveryCard } from './SortableDeliveryCard';
-import { READY_BADGE, OPEN_BADGE, totalsCopy } from './attention';
+import { RunHeaderControls } from './RunHeaderControls';
+import { totalsCopy } from './attention';
 
 interface RunColumnProps {
   run: DeliveryRunColumn;
   allRuns: DeliveryRunColumn[];
   pendingOrderId: string | null;
+  pendingRunId: string | null;
   onMove: (orderId: string, fromRunId: string | null, toRunId: string | null) => void;
   onReorder: (runId: string, orderedOrderIds: string[]) => void;
+  onMarkReady: (runId: string) => Promise<void>;
+  onReopen: (runId: string) => Promise<void>;
+  onSetDriver: (runId: string, driverName: string | null) => void;
+  onChangeDate: (orderId: string) => void;
 }
 
 export function RunColumn({
-  run, allRuns, pendingOrderId, onMove, onReorder,
+  run, allRuns, pendingOrderId, pendingRunId, onMove, onReorder, onMarkReady, onReopen, onSetDriver, onChangeDate,
 }: RunColumnProps) {
   const isReady = run.status === 'READY';
-  const badge = isReady ? READY_BADGE : OPEN_BADGE;
   const columnId = `run:${run.runId}`;
   const { setNodeRef } = useDroppable({ id: columnId, data: { type: 'column', columnId } });
 
@@ -36,12 +40,14 @@ export function RunColumn({
         isReady ? 'border-green-200 bg-green-50/40' : 'border-border bg-white'
       }`}
     >
-      <header className="flex items-start justify-between gap-2 border-b border-border p-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-text">{run.name}</h3>
-          <p className="truncate text-xs text-muted">{run.driverName ?? 'No driver assigned'}</p>
-        </div>
-        <StatusBadge label={badge.label} tone={badge.tone} />
+      <header className="border-b border-border p-3">
+        <RunHeaderControls
+          run={run}
+          pending={pendingRunId === run.runId}
+          onMarkReady={onMarkReady}
+          onReopen={onReopen}
+          onSetDriver={onSetDriver}
+        />
       </header>
       <div className="flex-1 overflow-y-auto p-2">
         {run.cards.length === 0 ? (
@@ -62,6 +68,7 @@ export function RunColumn({
                   locked={isReady}
                   onMove={(targetRunId) => onMove(card.orderId, run.runId, targetRunId)}
                   onMoveUpDown={(direction) => handleMoveUpDown(card.orderId, direction)}
+                  onChangeDate={() => onChangeDate(card.orderId)}
                 />
               ))}
             </div>

@@ -34,12 +34,22 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: 'DEFAULT_ROUTE',
     ...overrides,
   };
 }
 
-const NOOP = { pendingOrderId: null, onMove: vi.fn(), onReorder: vi.fn() };
+const NOOP = {
+  pendingOrderId: null,
+  pendingRunId: null,
+  onMove: vi.fn(),
+  onReorder: vi.fn(),
+  onMarkReady: vi.fn(),
+  onReopen: vi.fn(),
+  onSetDriver: vi.fn(),
+  onChangeDate: vi.fn(),
+};
 
 describe('RunColumn', () => {
   it('renders the run name and driver', () => {
@@ -76,7 +86,7 @@ describe('RunColumn', () => {
   it('calls onReorder with the swapped order when Move down is clicked', async () => {
     const onReorder = vi.fn();
     const run = makeRun({ cards: [makeCard({ orderId: 'a' }), makeCard({ orderId: 'b' })] });
-    render(<RunColumn run={run} allRuns={[]} pendingOrderId={null} onMove={vi.fn()} onReorder={onReorder} />);
+    render(<RunColumn run={run} allRuns={[]} {...NOOP} onReorder={onReorder} />);
 
     await userEvent.click(screen.getAllByLabelText('Move down')[0]);
 

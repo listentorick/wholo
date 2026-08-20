@@ -19,6 +19,7 @@ function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: 'DEFAULT_ROUTE',
     ...overrides,
   };
@@ -50,34 +51,46 @@ function makeBoard(): DeliveryDayBoard {
   };
 }
 
-const NOOP = { pendingOrderId: null, onMove: vi.fn(), onMoveUpDown: vi.fn() };
+const NOOP = {
+  pendingOrderId: null,
+  pendingRunId: null,
+  onMove: vi.fn(),
+  onMoveUpDown: vi.fn(),
+  onMarkReady: vi.fn(),
+  onReopen: vi.fn(),
+  onSetDriver: vi.fn(),
+  onChangeDate: vi.fn(),
+};
 
-// MobileCardList (self-md:hidden) and the desktop <table> (hidden md:block)
-// are both mounted at once — jsdom never applies the Tailwind classes that
-// hide one of them, so assertions must scope to one surface via
-// within(screen.getByRole('table'|'list')), same convention as
-// AccountingContactsTable.spec.tsx.
+// Grouped by run — each group is its own bordered section with its own
+// desktop <table>, so multiple tables exist at once (Unassigned first, then
+// each run in board order — buildGroups' deterministic order). MobileCardList
+// (self-md:hidden) and each group's desktop <table> (hidden md:block) are
+// both mounted; jsdom never applies the classes that hide one of them, same
+// convention as AccountingContactsTable.spec.tsx.
 describe('DeliveryRunList', () => {
-  it('renders one row per card, Unassigned first', () => {
+  it('groups rows by run, Unassigned first', () => {
     render(<DeliveryRunList board={makeBoard()} {...NOOP} />);
-    const table = within(screen.getByRole('table'));
-    const rows = table.getAllByText(/ORD-/);
-    expect(rows.map((r) => r.textContent)).toEqual(['ORD-B', 'ORD-A', 'ORD-C']);
+    const tables = screen.getAllByRole('table');
+    expect(tables).toHaveLength(2);
+    expect(within(tables[0]).getByText('ORD-B')).toBeInTheDocument();
+    expect(within(tables[1]).getByText('ORD-A')).toBeInTheDocument();
+    expect(within(tables[1]).getByText('ORD-C')).toBeInTheDocument();
   });
 
-  it('shows the run name and status for a run row, and Unassigned + reason for an unassigned row', () => {
+  it('shows the run name and status in the group header, and Unassigned + reason for the unassigned group', () => {
     render(<DeliveryRunList board={makeBoard()} {...NOOP} />);
-    const table = within(screen.getByRole('table'));
-    expect(table.getAllByText('Yorkshire').length).toBe(2);
-    expect(table.getByText('Unassigned')).toBeInTheDocument();
-    expect(table.getByText('No delivery route')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Yorkshire' })).toBeInTheDocument();
+    expect(screen.getByText('Open')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Unassigned' })).toBeInTheDocument();
+    expect(screen.getAllByText('No delivery route').length).toBeGreaterThan(0);
   });
 
-  it('filters to unassigned-only rows when filterUnassignedOnly is set', () => {
+  it('filters to unassigned-only rows, dropping empty run groups entirely', () => {
     render(<DeliveryRunList board={makeBoard()} {...NOOP} filterUnassignedOnly />);
-    const table = within(screen.getByRole('table'));
-    expect(table.getByText('ORD-B')).toBeInTheDocument();
-    expect(table.queryByText('ORD-A')).not.toBeInTheDocument();
+    expect(screen.getAllByText('ORD-B').length).toBeGreaterThan(0);
+    expect(screen.queryByText('ORD-A')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Yorkshire' })).not.toBeInTheDocument();
   });
 
   it('shows an empty state when the filter matches nothing', () => {
@@ -89,15 +102,31 @@ describe('DeliveryRunList', () => {
 
   it('calls onMoveUpDown with the row and direction', async () => {
     const onMoveUpDown = vi.fn();
-    render(<DeliveryRunList board={makeBoard()} pendingOrderId={null} onMove={vi.fn()} onMoveUpDown={onMoveUpDown} />);
-    const table = within(screen.getByRole('table'));
+    render(<DeliveryRunList board={makeBoard()} {...NOOP} onMoveUpDown={onMoveUpDown} />);
     // Unassigned rows have no Move up/down control; of the two run rows,
     // ORD-A is first (Move down enabled) and ORD-C is last (Move down
     // disabled) — DOM order matches, so index 0 is ORD-A's button.
-    await userEvent.click(table.getAllByLabelText('Move down')[0]);
+    await userEvent.click(screen.getAllByLabelText('Move down')[0]);
     expect(onMoveUpDown).toHaveBeenCalledWith(
       expect.objectContaining({ card: expect.objectContaining({ orderId: 'a' }) }),
       'down',
     );
+  });
+
+  it('renders "No deliveries yet" for a run group with no cards', () => {
+    const board = makeBoard();
+    board.runs[0].cards = [];
+    render(<DeliveryRunList board={board} {...NOOP} />);
+    expect(screen.getByText('No deliveries yet')).toBeInTheDocument();
+  });
+
+  it('wires the Yorkshire group\'s Mark ready control to onMarkReady with that run\'s id', async () => {
+    const onMarkReady = vi.fn().mockResolvedValue(undefined);
+    render(<DeliveryRunList board={makeBoard()} {...NOOP} onMarkReady={onMarkReady} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark ready' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Mark ready' }));
+
+    expect(onMarkReady).toHaveBeenCalledWith('run-1');
   });
 });

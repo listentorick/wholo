@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { DeliveryDayBoard } from '@wholo/types';
-import { applyMove, applyReorder } from './optimistic-board-update';
+import { applyMove, applyReorder, applyRunUpdate } from './optimistic-board-update';
 
 function makeCard(orderId: string) {
   return {
@@ -17,6 +17,7 @@ function makeCard(orderId: string) {
     suggestedRunId: null,
     suggestedRouteName: null,
     scheduledDeliveryDate: '2026-08-20',
+    requestedDeliveryDate: '2026-08-20',
     allocationSource: 'DEFAULT_ROUTE' as const,
   };
 }
@@ -101,5 +102,37 @@ describe('applyReorder', () => {
 
     expect(result.runs.find((r) => r.runId === 'run-2')).toBe(board.runs[1]);
     expect(result.unassigned).toBe(board.unassigned);
+  });
+});
+
+describe('applyRunUpdate', () => {
+  it('sets the run status', () => {
+    const result = applyRunUpdate(makeBoard(), 'run-1', { status: 'READY' });
+
+    expect(result.runs.find((r) => r.runId === 'run-1')?.status).toBe('READY');
+  });
+
+  it('sets the driver name', () => {
+    const result = applyRunUpdate(makeBoard(), 'run-1', { driverName: 'Sam' });
+
+    expect(result.runs.find((r) => r.runId === 'run-1')?.driverName).toBe('Sam');
+  });
+
+  it('clears the driver name back to null', () => {
+    const board = makeBoard();
+    board.runs[0].driverName = 'Sam';
+    const result = applyRunUpdate(board, 'run-1', { driverName: null });
+
+    expect(result.runs.find((r) => r.runId === 'run-1')?.driverName).toBeNull();
+  });
+
+  it('leaves other runs, Unassigned, and unrelated fields untouched', () => {
+    const board = makeBoard();
+    const result = applyRunUpdate(board, 'run-1', { status: 'READY' });
+
+    expect(result.runs.find((r) => r.runId === 'run-2')).toBe(board.runs[1]);
+    expect(result.unassigned).toBe(board.unassigned);
+    expect(result.runs.find((r) => r.runId === 'run-1')?.cards).toBe(board.runs[0].cards);
+    expect(result.runs.find((r) => r.runId === 'run-1')?.version).toBe(0);
   });
 });
