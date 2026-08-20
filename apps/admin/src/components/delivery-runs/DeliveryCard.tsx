@@ -13,26 +13,34 @@ interface DeliveryCardProps {
   // True when the containing run is READY — its membership is locked until
   // an explicit Reopen (M4), so every move/reorder control is disabled.
   locked?: boolean;
+  // Injected by SortableDeliveryCard (dnd-kit's grip handle) — kept as a
+  // plain slot here so this component never imports dnd-kit itself; that
+  // lets DragOverlay render this same component as a plain, non-sortable
+  // floating copy.
+  dragHandle?: React.ReactNode;
   onMove: (targetRunId: string | null) => void;
   onMoveUpDown?: (direction: 'up' | 'down') => void;
 }
 
 export function DeliveryCard({
-  card, currentRunId, runs, isFirst, isLast, pending, locked, onMove, onMoveUpDown,
+  card, currentRunId, runs, isFirst, isLast, pending, locked, dragHandle, onMove, onMoveUpDown,
 }: DeliveryCardProps) {
   return (
     <div className={`rounded-md border border-border bg-white p-2.5 shadow-sm ${pending ? 'opacity-50' : ''}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm font-medium text-text">
-            {card.stopNumber != null && (
-              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                {card.stopNumber}
-              </span>
-            )}
-            <span className="truncate">{card.customerName}</span>
+        <div className="flex min-w-0 items-start gap-1.5">
+          {dragHandle}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-text">
+              {card.stopNumber != null && (
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {card.stopNumber}
+                </span>
+              )}
+              <span className="truncate">{card.customerName}</span>
+            </div>
+            <p className="truncate text-xs text-muted">{card.orderNumber}</p>
           </div>
-          <p className="truncate text-xs text-muted">{card.orderNumber}</p>
         </div>
         {card.attention === 'UNASSIGNED' && (
           <StatusBadge label={UNASSIGNED_BADGE.label} tone={UNASSIGNED_BADGE.tone} />

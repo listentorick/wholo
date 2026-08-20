@@ -1,7 +1,8 @@
-import { arrayMove } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
+import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { DeliveryRunColumn } from '@wholo/types';
 import { StatusBadge } from '@/components/list/StatusBadge';
-import { DeliveryCard } from './DeliveryCard';
+import { SortableDeliveryCard } from './SortableDeliveryCard';
 import { READY_BADGE, OPEN_BADGE, totalsCopy } from './attention';
 
 interface RunColumnProps {
@@ -17,6 +18,8 @@ export function RunColumn({
 }: RunColumnProps) {
   const isReady = run.status === 'READY';
   const badge = isReady ? READY_BADGE : OPEN_BADGE;
+  const columnId = `run:${run.runId}`;
+  const { setNodeRef } = useDroppable({ id: columnId, data: { type: 'column', columnId } });
 
   function handleMoveUpDown(orderId: string, direction: 'up' | 'down') {
     const orderIds = run.cards.map((c) => c.orderId);
@@ -28,6 +31,7 @@ export function RunColumn({
 
   return (
     <div
+      ref={setNodeRef}
       className={`flex h-full w-[300px] shrink-0 min-h-0 flex-col rounded-lg border ${
         isReady ? 'border-green-200 bg-green-50/40' : 'border-border bg-white'
       }`}
@@ -43,22 +47,25 @@ export function RunColumn({
         {run.cards.length === 0 ? (
           <p className="px-2 py-6 text-center text-xs text-muted">No deliveries yet</p>
         ) : (
-          <div className="space-y-2">
-            {run.cards.map((card, index) => (
-              <DeliveryCard
-                key={card.orderId}
-                card={card}
-                currentRunId={run.runId}
-                runs={allRuns}
-                isFirst={index === 0}
-                isLast={index === run.cards.length - 1}
-                pending={pendingOrderId === card.orderId}
-                locked={isReady}
-                onMove={(targetRunId) => onMove(card.orderId, run.runId, targetRunId)}
-                onMoveUpDown={(direction) => handleMoveUpDown(card.orderId, direction)}
-              />
-            ))}
-          </div>
+          <SortableContext items={run.cards.map((c) => c.orderId)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {run.cards.map((card, index) => (
+                <SortableDeliveryCard
+                  key={card.orderId}
+                  card={card}
+                  columnId={columnId}
+                  currentRunId={run.runId}
+                  runs={allRuns}
+                  isFirst={index === 0}
+                  isLast={index === run.cards.length - 1}
+                  pending={pendingOrderId === card.orderId}
+                  locked={isReady}
+                  onMove={(targetRunId) => onMove(card.orderId, run.runId, targetRunId)}
+                  onMoveUpDown={(direction) => handleMoveUpDown(card.orderId, direction)}
+                />
+              ))}
+            </div>
+          </SortableContext>
         )}
       </div>
       <footer className="border-t border-border px-3 py-2 text-xs text-muted">
