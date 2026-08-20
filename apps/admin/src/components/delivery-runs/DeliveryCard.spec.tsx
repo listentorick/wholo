@@ -52,15 +52,34 @@ describe('DeliveryCard', () => {
     expect(screen.getByText('4 lines · 22 items')).toBeInTheDocument();
   });
 
-  it('shows an Unassigned badge and the reason line when attention is UNASSIGNED', () => {
+  it('shows no Unassigned badge — the column header already says that', () => {
     render(<DeliveryCard
       card={makeCard({ attention: 'UNASSIGNED', unallocatedReason: 'NO_ROUTE', stopNumber: null })}
       currentRunId={null}
       runs={[]}
       onMove={vi.fn()}
     />);
-    expect(screen.getByText('Unassigned')).toBeInTheDocument();
+    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+  });
+
+  it('shows the unallocated-reason line when there is a real reason', () => {
+    render(<DeliveryCard
+      card={makeCard({ attention: 'UNASSIGNED', unallocatedReason: 'NO_ROUTE', stopNumber: null })}
+      currentRunId={null}
+      runs={[]}
+      onMove={vi.fn()}
+    />);
     expect(screen.getByText('No delivery route')).toBeInTheDocument();
+  });
+
+  it('hides the reason line for the no-real-reason case, instead of showing filler copy', () => {
+    render(<DeliveryCard
+      card={makeCard({ attention: 'UNASSIGNED', unallocatedReason: null, stopNumber: null })}
+      currentRunId={null}
+      runs={[]}
+      onMove={vi.fn()}
+    />);
+    expect(screen.queryByText('Ready to assign')).not.toBeInTheDocument();
   });
 
   it('renders no stop-number badge when unassigned', () => {

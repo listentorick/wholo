@@ -1,6 +1,5 @@
 import type { DeliveryCard as DeliveryCardType, DeliveryRunColumn } from '@wholo/types';
-import { StatusBadge } from '@/components/list/StatusBadge';
-import { UNASSIGNED_BADGE, unallocatedReasonCopy, lineItemsCopy } from './attention';
+import { unallocatedReasonCopy, lineItemsCopy } from './attention';
 import { DeliveryCardActions } from './DeliveryCardActions';
 
 interface DeliveryCardProps {
@@ -42,11 +41,8 @@ export function DeliveryCard({
             <p className="truncate text-xs text-muted">{card.orderNumber}</p>
           </div>
         </div>
-        {card.attention === 'UNASSIGNED' && (
-          <StatusBadge label={UNASSIGNED_BADGE.label} tone={UNASSIGNED_BADGE.tone} />
-        )}
       </div>
-      {card.attention === 'UNASSIGNED' && (
+      {card.unallocatedReason != null && (
         <p className="mt-1.5 text-xs text-blue-700">{unallocatedReasonCopy(card.unallocatedReason)}</p>
       )}
       <p className="mt-1.5 text-xs text-muted">{lineItemsCopy(card.lineCount, card.itemCount)}</p>
