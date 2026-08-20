@@ -102,6 +102,25 @@ describe('DeliveryRunsPage — mutation flow', () => {
     mockGetDay.mockResolvedValue(makeBoard());
   });
 
+  it('moves the card immediately, without waiting for the network response', async () => {
+    let resolveAssign: (board: DeliveryDayBoard) => void;
+    mockAssignOrderToRun.mockReturnValue(new Promise((resolve) => { resolveAssign = resolve; }));
+
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+
+    await moveOrder1IntoYorkshire();
+
+    // Still awaiting the network response, but the optimistic update should
+    // already have moved the card out of Unassigned — no snap-back-then-
+    // disappear flicker while the request is in flight.
+    const boardView = within(screen.getByTestId('board-view'));
+    expect(boardView.getByText('Everything’s assigned')).toBeInTheDocument();
+
+    resolveAssign!(makeBoard({ unassigned: [] }));
+    await waitFor(() => expect(screen.queryByText('Blackbird Kitchen')).not.toBeInTheDocument());
+  });
+
   it('on success, swaps in the returned board with no extra fetch', async () => {
     const refreshedBoard = makeBoard({ unassigned: [] });
     mockAssignOrderToRun.mockResolvedValue(refreshedBoard);
@@ -144,7 +163,7 @@ describe('DeliveryRunsPage — mutation flow', () => {
     expect(mockGetDay).toHaveBeenCalledTimes(2);
   });
 
-  it('on any other error, shows a generic banner without refetching', async () => {
+  it('on any other error, shows a generic banner, rolls back the optimistic move, and does not refetch', async () => {
     mockAssignOrderToRun.mockRejectedValue(new Error('network down'));
 
     render(<DeliveryRunsPage />);
@@ -154,5 +173,9 @@ describe('DeliveryRunsPage — mutation flow', () => {
 
     await waitFor(() => expect(screen.getByText('Could not move the delivery. Please try again.')).toBeInTheDocument());
     expect(mockGetDay).toHaveBeenCalledTimes(1);
+
+    const boardView = within(screen.getByTestId('board-view'));
+    expect(boardView.getByText('Blackbird Kitchen')).toBeInTheDocument();
+    expect(boardView.getByText('No deliveries yet')).toBeInTheDocument();
   });
 });

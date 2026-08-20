@@ -11,6 +11,7 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { useDeliveryDay } from '@/lib/hooks/use-delivery-day';
+import { applyMove, applyReorder } from '@/lib/optimistic-board-update';
 import { toIso } from '@/lib/date';
 import { WorkloadStrip } from '@/components/delivery-runs/WorkloadStrip';
 import { BoardViewToggle, type BoardViewMode } from '@/components/delivery-runs/BoardViewToggle';
@@ -50,10 +51,18 @@ export default function DeliveryRunsPage() {
 
   // Mutation flow: never auto-retry a 409 — the board the user acted on no
   // longer exists, so the only correct move is a fresh re-GET.
+  // Optimistic update: reorder/move the board locally, synchronously, before
+  // the mutation even starts. Without this, dnd-kit's SortableContext
+  // re-renders the dropped card against the still-unchanged board on the
+  // very next frame and CSS-transitions it back to its old slot, then jumps
+  // it to the real slot once the response lands — a confusing snap-back-
+  // then-disappear flicker. Roll back to previousBoard on failure.
   async function handleMove(orderId: string, fromRunId: string | null, toRunId: string | null) {
     if (!board || !accessToken) return;
+    const previousBoard = board;
     setPendingOrderId(orderId);
     setMutationBanner(null);
+    mutate(applyMove(board, orderId, fromRunId, toRunId));
     try {
       let refreshed;
       if (toRunId === null) {
@@ -71,6 +80,7 @@ export default function DeliveryRunsPage() {
       }
       mutate(refreshed);
     } catch (e) {
+      mutate(previousBoard);
       if (e instanceof ApiError && e.status === 409) {
         setMutationBanner('This board changed elsewhere — refreshed.');
         await refetch();
@@ -89,11 +99,14 @@ export default function DeliveryRunsPage() {
     if (!board || !accessToken) return;
     const run = board.runs.find((r) => r.runId === runId);
     if (!run) return;
+    const previousBoard = board;
     setMutationBanner(null);
+    mutate(applyReorder(board, runId, orderedOrderIds));
     try {
       const refreshed = await adminDeliveryRunsApi.reorderRunOrders(accessToken, runId, { version: run.version, orderedOrderIds });
       mutate(refreshed);
     } catch (e) {
+      mutate(previousBoard);
       if (e instanceof ApiError && e.status === 409) {
         setMutationBanner('This board changed elsewhere — refreshed.');
         await refetch();
