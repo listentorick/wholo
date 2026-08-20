@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { arrayMove } from '@dnd-kit/sortable';
 import { adminDeliveryRunsApi, ApiError } from '@wholo/admin-api-client';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
@@ -13,7 +14,9 @@ import { useDeliveryDay } from '@/lib/hooks/use-delivery-day';
 import { toIso } from '@/lib/date';
 import { WorkloadStrip } from '@/components/delivery-runs/WorkloadStrip';
 import { BoardViewToggle, type BoardViewMode } from '@/components/delivery-runs/BoardViewToggle';
+import { DeliveryBoardFilters, type BoardAttentionFilter } from '@/components/delivery-runs/DeliveryBoardFilters';
 import { DeliveryRunBoard } from '@/components/delivery-runs/DeliveryRunBoard';
+import { DeliveryRunList, type DeliveryListRow } from '@/components/delivery-runs/DeliveryRunList';
 
 function DeliveryRunsEmptyState() {
   return (
@@ -37,6 +40,7 @@ export default function DeliveryRunsPage() {
   const { accessToken } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => toIso(new Date()));
   const [viewMode, setViewMode] = useState<BoardViewMode>('board');
+  const [attentionFilter, setAttentionFilter] = useState<BoardAttentionFilter>('all');
   const [mutationBanner, setMutationBanner] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
 
@@ -99,6 +103,20 @@ export default function DeliveryRunsPage() {
     }
   }
 
+  // Same arrayMove-based resequencing as RunColumn's own Move up/down —
+  // the list view acts on a run it doesn't render as a column, so it needs
+  // the source run's current card order from the board itself.
+  function handleListMoveUpDown(row: DeliveryListRow, direction: 'up' | 'down') {
+    if (!board || !row.runId) return;
+    const run = board.runs.find((r) => r.runId === row.runId);
+    if (!run) return;
+    const orderIds = run.cards.map((c) => c.orderId);
+    const index = orderIds.indexOf(row.card.orderId);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (index === -1 || targetIndex < 0 || targetIndex >= orderIds.length) return;
+    handleReorder(run.runId, arrayMove(orderIds, index, targetIndex));
+  }
+
   if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-canvas">
@@ -115,7 +133,12 @@ export default function DeliveryRunsPage() {
         <ListPageHeader
           title="Delivery Runs"
           className="mb-4"
-          actions={<BoardViewToggle mode={viewMode} onChange={setViewMode} />}
+          actions={(
+            <div className="flex items-center gap-2">
+              <DeliveryBoardFilters filter={attentionFilter} onChange={setAttentionFilter} />
+              <BoardViewToggle mode={viewMode} onChange={setViewMode} />
+            </div>
+          )}
         />
 
         <WorkloadStrip token={accessToken} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
@@ -132,20 +155,47 @@ export default function DeliveryRunsPage() {
           <ListErrorBanner message={error} />
         ) : !board ? null : isEmpty ? (
           <DeliveryRunsEmptyState />
-        ) : viewMode === 'list' ? (
-          <ListEmptyState
-            icon={<span className="text-2xl" aria-hidden>☰</span>}
-            title="List view is coming soon"
-            description="Use the board view for now — a table view is on the way."
-          />
         ) : (
           <div className={`flex min-h-0 flex-1 flex-col ${isRefreshing ? 'opacity-60' : ''}`}>
-            <DeliveryRunBoard
-              board={board}
-              pendingOrderId={pendingOrderId}
-              onMove={handleMove}
-              onReorder={handleReorder}
-            />
+            {viewMode === 'list' ? (
+              <div data-testid="list-view">
+                <DeliveryRunList
+                  board={board}
+                  pendingOrderId={pendingOrderId}
+                  filterUnassignedOnly={attentionFilter === 'unassigned'}
+                  onMove={handleMove}
+                  onMoveUpDown={handleListMoveUpDown}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Board view is the default on md+ screens. Below md it's
+                    forced to List regardless of the toggle — both are
+                    mounted and CSS decides which one shows, matching
+                    MobileCardList's own self-md:hidden convention rather
+                    than tracking the breakpoint in JS. (Both surfaces exist
+                    in the DOM at once, same as MobileCardList's own table +
+                    list pairing — tests scope queries with within(), same
+                    convention as AccountingContactsTable.spec.tsx.) */}
+                <div data-testid="board-view" className="hidden min-h-0 flex-1 flex-col md:flex">
+                  <DeliveryRunBoard
+                    board={board}
+                    pendingOrderId={pendingOrderId}
+                    onMove={handleMove}
+                    onReorder={handleReorder}
+                  />
+                </div>
+                <div data-testid="list-view" className="md:hidden">
+                  <DeliveryRunList
+                    board={board}
+                    pendingOrderId={pendingOrderId}
+                    filterUnassignedOnly={attentionFilter === 'unassigned'}
+                    onMove={handleMove}
+                    onMoveUpDown={handleListMoveUpDown}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

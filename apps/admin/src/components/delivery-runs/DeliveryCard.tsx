@@ -1,7 +1,7 @@
 import type { DeliveryCard as DeliveryCardType, DeliveryRunColumn } from '@wholo/types';
 import { StatusBadge } from '@/components/list/StatusBadge';
 import { UNASSIGNED_BADGE, unallocatedReasonCopy, lineItemsCopy } from './attention';
-import { MoveToMenu } from './MoveToMenu';
+import { DeliveryCardActions } from './DeliveryCardActions';
 
 interface DeliveryCardProps {
   card: DeliveryCardType;
@@ -51,40 +51,17 @@ export function DeliveryCard({
       )}
       <p className="mt-1.5 text-xs text-muted">{lineItemsCopy(card.lineCount, card.itemCount)}</p>
 
-      <div className="mt-2 flex items-center gap-1.5 border-t border-border pt-2">
-        <MoveToMenu
+      <div className="mt-2 border-t border-border pt-2">
+        <DeliveryCardActions
           currentRunId={currentRunId}
           runs={runs}
           suggestedRunId={card.suggestedRunId}
           disabled={pending || locked}
-          onSelect={onMove}
+          isFirst={isFirst}
+          isLast={isLast}
+          onMove={onMove}
+          onMoveUpDown={onMoveUpDown}
         />
-        {onMoveUpDown && (
-          <div className="ml-auto flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onMoveUpDown('up')}
-              disabled={pending || locked || isFirst}
-              aria-label="Move up"
-              className="rounded p-1 text-muted hover:bg-canvas hover:text-text disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-muted"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => onMoveUpDown('down')}
-              disabled={pending || locked || isLast}
-              aria-label="Move down"
-              className="rounded p-1 text-muted hover:bg-canvas hover:text-text disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-muted"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
