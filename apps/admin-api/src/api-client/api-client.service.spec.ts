@@ -93,4 +93,36 @@ describe('ApiClientService (admin-api)', () => {
       status: 502,
     });
   });
+
+  describe('getBinary', () => {
+    it('returns the raw buffer, content-type, and content-disposition on success', async () => {
+      const bytes = Buffer.from('%PDF-1.4 fake pdf bytes');
+      fetchMock.mockResolvedValue(new Response(bytes, {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="manifest.pdf"' },
+      }));
+
+      const result = await service.getBinary('/distributors/dist-1/delivery-runs/run-1/manifest', 'token');
+
+      expect(result.buffer.equals(bytes)).toBe(true);
+      expect(result.contentType).toBe('application/pdf');
+      expect(result.contentDisposition).toBe('attachment; filename="manifest.pdf"');
+    });
+
+    it('falls back to application/octet-stream when no content-type header is present', async () => {
+      fetchMock.mockResolvedValue(new Response(Buffer.from('x'), { status: 200, headers: {} }));
+
+      const result = await service.getBinary('/things/x', 'token');
+
+      expect(result.contentType).toBe('application/octet-stream');
+      expect(result.contentDisposition).toBeNull();
+    });
+
+    it('throws HttpException with the upstream problem detail on failure, not a corrupted binary read', async () => {
+      fetchMock.mockResolvedValue(makeResponse(422, '{"detail":"Run must be marked ready before a driver manifest can be generated"}'));
+
+      await expect(service.getBinary('/distributors/dist-1/delivery-runs/run-1/manifest', 'token'))
+        .rejects.toMatchObject({ message: 'Run must be marked ready before a driver manifest can be generated', status: 422 });
+    });
+  });
 });

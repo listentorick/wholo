@@ -3,6 +3,12 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RunHeaderControls } from './RunHeaderControls';
 
+// A READY run renders DriverManifestButton, which reads useAuth() on every
+// render (not just on click) — needed even in tests that never click it.
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ accessToken: 'token-1' }),
+}));
+
 const NOOP = {
   pending: false,
   onMarkReady: vi.fn().mockResolvedValue(undefined),

@@ -99,4 +99,27 @@ export class ApiClientService {
     });
     return this.parseResponse<T>(res);
   }
+
+  // Sibling to request<T>/parseResponse rather than folded into them —
+  // parseResponse always does res.text() -> JSON.parse, which would corrupt
+  // a binary body (e.g. the driver manifest PDF). Errors still go through
+  // parseResponse for a consistent problem-detail error shape.
+  async getBinary(
+    path: string,
+    token: string,
+  ): Promise<{ buffer: Buffer; contentType: string; contentDisposition: string | null }> {
+    const url = `${this.baseUrl}/api/v1${path}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      await this.parseResponse(res); // throws
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    return {
+      buffer: Buffer.from(arrayBuffer),
+      contentType: res.headers.get('content-type') ?? 'application/octet-stream',
+      contentDisposition: res.headers.get('content-disposition'),
+    };
+  }
 }

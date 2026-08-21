@@ -4,7 +4,7 @@ import { ApiClientService } from '../api-client/api-client.service';
 
 describe('DeliveryRunsService (BFF)', () => {
   let service: DeliveryRunsService;
-  let mockApi: { get: jest.Mock; post: jest.Mock; patch: jest.Mock; delete: jest.Mock };
+  let mockApi: { get: jest.Mock; post: jest.Mock; patch: jest.Mock; delete: jest.Mock; getBinary: jest.Mock };
 
   beforeEach(async () => {
     mockApi = {
@@ -12,6 +12,7 @@ describe('DeliveryRunsService (BFF)', () => {
       post: jest.fn().mockResolvedValue({}),
       patch: jest.fn().mockResolvedValue({}),
       delete: jest.fn().mockResolvedValue({}),
+      getBinary: jest.fn().mockResolvedValue({ buffer: Buffer.from('x'), contentType: 'application/pdf', contentDisposition: null }),
     };
     const module = await Test.createTestingModule({
       providers: [DeliveryRunsService, { provide: ApiClientService, useValue: mockApi }],
@@ -66,5 +67,10 @@ describe('DeliveryRunsService (BFF)', () => {
     const body = { scheduledDeliveryDate: '2026-08-25', expectedScheduledDeliveryDate: '2026-08-20' };
     await service.changeScheduledDeliveryDate('dist-1', 'order-1', body, 'token-1');
     expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/orders/order-1/scheduled-delivery-date', 'token-1', body);
+  });
+
+  it('forwards getManifest as a getBinary call against the manifest resource', async () => {
+    await service.getManifest('dist-1', 'run-1', 'token-1');
+    expect(mockApi.getBinary).toHaveBeenCalledWith('/distributors/dist-1/delivery-runs/run-1/manifest', 'token-1');
   });
 });

@@ -7,6 +7,7 @@ import { READY_BADGE, OPEN_BADGE } from './attention';
 import { RunDriverField } from './RunDriverField';
 import { MarkReadyDialog } from './MarkReadyDialog';
 import { ReopenConfirm } from './ReopenConfirm';
+import { DriverManifestButton } from './DriverManifestButton';
 
 interface Props {
   run: Pick<DeliveryRunColumn, 'runId' | 'name' | 'driverName' | 'status'>;
@@ -48,6 +49,7 @@ export function RunHeaderControls({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StatusBadge label={badge.label} tone={badge.tone} />
+          {isReady && <DriverManifestButton runId={run.runId} />}
           <button
             type="button"
             onClick={() => setConfirming(isReady ? 'reopen' : 'ready')}

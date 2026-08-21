@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import type { DeliveryCard as DeliveryCardType, DeliveryRunColumn } from '@wholo/types';
 import { RunColumn } from './RunColumn';
 
+// A READY run renders DriverManifestButton (via RunHeaderControls), which
+// reads useAuth() on every render, not just on click.
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ accessToken: 'token-1' }),
+}));
+
 function makeRun(overrides: Partial<DeliveryRunColumn> = {}): DeliveryRunColumn {
   return {
     runId: 'run-1',

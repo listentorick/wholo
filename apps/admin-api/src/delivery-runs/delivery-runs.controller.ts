@@ -1,7 +1,7 @@
 import {
-  Body, Controller, Delete, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, Res, UseGuards,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DeliveryRunsService } from './delivery-runs.service';
 
@@ -46,5 +46,19 @@ export class DeliveryRunsController {
   updateRun(@Req() req: Request, @Param('runId') runId: string, @Body() body: unknown) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.updateRun(organisationId, runId, body, token);
+  }
+
+  // Plain @Res() (not passthrough) — this method has no JSON return-value
+  // contract for Nest to serialize, so it takes full manual control of the
+  // response rather than returning something for Nest to interpret.
+  @Get(':runId/manifest')
+  async getManifest(@Req() req: Request, @Param('runId') runId: string, @Res() res: Response) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    const { buffer, contentType, contentDisposition } = await this.service.getManifest(organisationId, runId, token);
+    res.set({
+      'Content-Type': contentType,
+      ...(contentDisposition && { 'Content-Disposition': contentDisposition }),
+    });
+    res.send(buffer);
   }
 }

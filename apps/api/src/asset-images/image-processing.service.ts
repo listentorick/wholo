@@ -5,6 +5,10 @@ import { AssetTypeConfig, ProcessedVariants } from './asset-images.types';
 
 @Injectable()
 export class ImageProcessingService {
+  async toPng(buffer: Buffer): Promise<Buffer> {
+    return sharp(buffer).png().toBuffer();
+  }
+
   async process(
     buffer: Buffer,
     mimetype: string,

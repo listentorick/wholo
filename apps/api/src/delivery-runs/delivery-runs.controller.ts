@@ -1,7 +1,8 @@
 import {
-  Body, Controller, Delete, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards,
+  Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, Res, StreamableFile, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { DeliveryRunsService } from './delivery-runs.service';
@@ -9,6 +10,7 @@ import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
 import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
 import { UnassignOrderQueryDto } from './dto/unassign-order-query.dto';
 import { UpdateDeliveryRunDto } from './dto/update-delivery-run.dto';
+import { ManifestService } from './manifest/manifest.service';
 
 interface RequestWithUser extends Request {
   user: { sub: string };
@@ -20,7 +22,7 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
 @Controller('distributors/:distributorId/delivery-runs')
 export class DeliveryRunsController {
-  constructor(private service: DeliveryRunsService) {}
+  constructor(private service: DeliveryRunsService, private manifestService: ManifestService) {}
 
   @Post(':runId/orders')
   @HttpCode(HttpStatus.OK)
@@ -72,5 +74,21 @@ export class DeliveryRunsController {
     @Req() req: RequestWithUser,
   ) {
     return this.service.updateRun(distributorId, runId, dto, req.user.sub);
+  }
+
+  @Get(':runId/manifest')
+  @ApiOperation({ summary: 'Generate a printable driver manifest PDF for a Ready run' })
+  async getManifest(
+    @Param('distributorId') distributorId: string,
+    @Param('runId') runId: string,
+    @Req() req: RequestWithUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { buffer, filename } = await this.manifestService.generate(distributorId, runId, req.user.sub);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+    });
+    return new StreamableFile(buffer);
   }
 }

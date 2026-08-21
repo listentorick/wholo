@@ -10,6 +10,6 @@ import { R2StorageService } from './r2-storage.service';
   imports: [ConfigModule],
   controllers: [AssetImagesController],
   providers: [AssetImagesService, ImageProcessingService, R2StorageService],
-  exports: [AssetImagesService, R2StorageService],
+  exports: [AssetImagesService, ImageProcessingService, R2StorageService],
 })
 export class AssetImagesModule {}

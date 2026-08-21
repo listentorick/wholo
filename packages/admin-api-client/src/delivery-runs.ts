@@ -5,11 +5,12 @@ import type {
   DeliveryDayBoard,
   DeliveryDaysListParams,
   DeliveryDaysListResponse,
+  ProblemDetail,
   ReorderRunOrdersRequest,
   ReschedulePreviewResponse,
   UpdateDeliveryRunRequest,
 } from '@wholo/types';
-import { apiFetch } from './base';
+import { ApiError, apiFetch, getBaseUrl } from './base';
 
 export const adminDeliveryRunsApi = {
   listDays(token: string, params: DeliveryDaysListParams, signal?: AbortSignal): Promise<DeliveryDaysListResponse> {
@@ -74,5 +75,25 @@ export const adminDeliveryRunsApi = {
       body: JSON.stringify(req),
       token,
     });
+  },
+
+  // Bypasses apiFetch, which always sets Content-Type: application/json and
+  // does res.text() -> JSON.parse — wrong for a binary PDF response.
+  async downloadManifest(token: string, runId: string): Promise<Blob> {
+    const res = await fetch(`${getBaseUrl()}/api/v1/delivery-runs/${runId}/manifest`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      let problem: ProblemDetail;
+      try {
+        problem = await res.json();
+      } catch {
+        problem = { type: 'about:blank', title: res.statusText, status: res.status, detail: res.statusText };
+      }
+      throw new ApiError(problem, res.status);
+    }
+
+    return res.blob();
   },
 };
