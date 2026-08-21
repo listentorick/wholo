@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event';
 import type { DeliveryCard as DeliveryCardType, DeliveryDayBoard } from '@wholo/types';
 import { DeliveryRunList } from './DeliveryRunList';
 
+// DriverManifestButton is always rendered (locked/unlocked) inside each run
+// group's header and reads useAuth() on every render.
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ accessToken: 'token-1' }),
+}));
+
 function makeCard(overrides: Partial<DeliveryCardType> = {}): DeliveryCardType {
   return {
     orderId: 'order-1',

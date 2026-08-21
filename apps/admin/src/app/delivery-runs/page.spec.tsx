@@ -371,3 +371,27 @@ describe('DeliveryRunsPage — change delivery date flow', () => {
     expect(mockGetDay).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('DeliveryRunsPage — filters visibility', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetDay.mockResolvedValue(makeBoard());
+  });
+
+  it('hides the filters at md+ while Board is the active view, since Board renders unfiltered there', async () => {
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+
+    expect(screen.getByTestId('board-filters').className).toContain('md:hidden');
+  });
+
+  it('shows the filters unconditionally once List is the active view', async () => {
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+
+    await userEvent.click(screen.getByRole('button', { name: 'List' }));
+    await screen.findByTestId('list-view');
+
+    expect(screen.getByTestId('board-filters').className).not.toContain('md:hidden');
+  });
+});

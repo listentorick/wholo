@@ -3,8 +3,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RunHeaderControls } from './RunHeaderControls';
 
-// A READY run renders DriverManifestButton, which reads useAuth() on every
-// render (not just on click) — needed even in tests that never click it.
+// DriverManifestButton is always rendered (locked/unlocked, not conditional
+// on status) and reads useAuth() on every render — needed even in tests
+// that never click it.
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ accessToken: 'token-1' }),
 }));
@@ -17,17 +18,19 @@ const NOOP = {
 };
 
 describe('RunHeaderControls', () => {
-  it('shows the run name, an Open badge, and a Mark ready trigger for an OPEN run', () => {
+  it('shows the run name, an Open badge, a Mark ready trigger, and a locked manifest button for an OPEN run', () => {
     render(<RunHeaderControls run={{ runId: 'run-1', name: 'Yorkshire', driverName: null, status: 'OPEN' }} {...NOOP} />);
     expect(screen.getByRole('heading', { name: 'Yorkshire' })).toBeInTheDocument();
     expect(screen.getByText('Open')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mark ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Driver manifest' })).toBeDisabled();
   });
 
-  it('shows a Ready badge and a Reopen trigger for a READY run', () => {
+  it('shows a Ready badge, a Reopen trigger, and an unlocked manifest button for a READY run', () => {
     render(<RunHeaderControls run={{ runId: 'run-1', name: 'Yorkshire', driverName: null, status: 'READY' }} {...NOOP} />);
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Driver manifest' })).not.toBeDisabled();
   });
 
   it('opens MarkReadyDialog on click and calls onMarkReady with the run id on confirm', async () => {

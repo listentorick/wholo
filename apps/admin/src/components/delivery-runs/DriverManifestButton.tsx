@@ -6,19 +6,23 @@ import { useAuth } from '@/lib/auth-context';
 
 interface Props {
   runId: string;
+  // True while the run is OPEN — manifest generation only makes sense once
+  // the run's stop order is finalized (READY), so downloads are locked
+  // until then. Mirrors RunDriverField's locked prop, inverted.
+  locked: boolean;
 }
 
 // Sources its own access token via useAuth rather than being prop-drilled
 // like onMarkReady/onReopen — a download has no board-state mutation to
 // route back through page.tsx's handler plumbing, unlike every other action
 // in RunHeaderControls.
-export function DriverManifestButton({ runId }: Props) {
+export function DriverManifestButton({ runId, locked }: Props) {
   const { accessToken } = useAuth();
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleClick() {
-    if (!accessToken || downloading) return;
+    if (!accessToken || downloading || locked) return;
     setDownloading(true);
     setError(null);
     try {
@@ -41,8 +45,13 @@ export function DriverManifestButton({ runId }: Props) {
       <button
         type="button"
         onClick={handleClick}
-        disabled={downloading}
-        className="rounded-md border border-border px-2 py-1 text-xs font-medium text-text transition-colors hover:bg-border/20 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={locked || downloading}
+        title={locked ? 'Mark the run ready to download the driver manifest' : undefined}
+        className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          locked
+            ? 'border-border text-text hover:bg-border/20'
+            : 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10'
+        }`}
       >
         {downloading ? 'Generating…' : 'Driver manifest'}
       </button>

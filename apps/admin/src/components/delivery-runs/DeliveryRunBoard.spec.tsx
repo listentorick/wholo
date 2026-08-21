@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import type { DeliveryDayBoard } from '@wholo/types';
 import { DeliveryRunBoard } from './DeliveryRunBoard';
 
+// DriverManifestButton is always rendered (locked/unlocked) inside each run
+// column's header and reads useAuth() on every render.
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ accessToken: 'token-1' }),
+}));
+
 function makeBoard(overrides: Partial<DeliveryDayBoard> = {}): DeliveryDayBoard {
   return {
     distributorId: 'dist-1',

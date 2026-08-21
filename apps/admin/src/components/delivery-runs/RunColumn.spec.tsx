@@ -58,15 +58,9 @@ const NOOP = {
 };
 
 describe('RunColumn', () => {
-  it('renders the run name and driver', () => {
+  it('renders the run name', () => {
     render(<RunColumn run={makeRun()} allRuns={[]} {...NOOP} />);
     expect(screen.getByText('Yorkshire')).toBeInTheDocument();
-    expect(screen.getByText('Dave Walsh')).toBeInTheDocument();
-  });
-
-  it('shows "No driver assigned" when driverName is null', () => {
-    render(<RunColumn run={makeRun({ driverName: null })} allRuns={[]} {...NOOP} />);
-    expect(screen.getByText('No driver assigned')).toBeInTheDocument();
   });
 
   it('shows an Open badge for an OPEN run', () => {

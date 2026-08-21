@@ -237,8 +237,25 @@ export default function DeliveryRunsPage() {
           className="mb-4"
           actions={(
             <div className="flex items-center gap-2">
-              <DeliveryBoardFilters filter={attentionFilter} onChange={setAttentionFilter} />
-              <BoardViewToggle mode={viewMode} onChange={setViewMode} />
+              {/* Filters only actually affect what's rendered when List is the
+                  visible view — either viewMode === 'list', or Board is CSS-forced
+                  to List below md (see the board/list rendering below). Hide the
+                  filters exactly when Board is what's showing (viewMode === 'board'
+                  at md+) so this control isn't a dead no-op there. Board itself
+                  keeps rendering unconditionally regardless (decision #2 in the
+                  delivery-planning-pbi-plan decisions log) — this is a page-level
+                  visibility change only, not a reversal of that decision. */}
+              <div data-testid="board-filters" className={viewMode === 'board' ? 'md:hidden' : undefined}>
+                <DeliveryBoardFilters filter={attentionFilter} onChange={setAttentionFilter} />
+              </div>
+              {/* Below md, Board is always CSS-forced to List regardless of
+                  this toggle (see the board/list rendering below), so the
+                  toggle itself would be a dead control on phones — hide it
+                  at the same breakpoint that forces List, and only show it
+                  once Board actually renders (tablet and up). */}
+              <div className="hidden md:inline-flex">
+                <BoardViewToggle mode={viewMode} onChange={setViewMode} />
+              </div>
             </div>
           )}
         />

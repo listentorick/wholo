@@ -36,7 +36,7 @@ describe('DriverManifestButton', () => {
     const blob = new Blob(['%PDF'], { type: 'application/pdf' });
     downloadManifest.mockResolvedValue(blob);
 
-    render(<DriverManifestButton runId="run-1" />);
+    render(<DriverManifestButton runId="run-1" locked={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Driver manifest' }));
 
     await waitFor(() => expect(downloadManifest).toHaveBeenCalledWith('token-1', 'run-1'));
@@ -48,7 +48,7 @@ describe('DriverManifestButton', () => {
     let resolveDownload: (blob: Blob) => void;
     downloadManifest.mockReturnValue(new Promise((resolve) => { resolveDownload = resolve; }));
 
-    render(<DriverManifestButton runId="run-1" />);
+    render(<DriverManifestButton runId="run-1" locked={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Driver manifest' }));
 
     expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled();
@@ -60,10 +60,20 @@ describe('DriverManifestButton', () => {
   it('shows an inline error and re-enables the button when the download fails, without crashing', async () => {
     downloadManifest.mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Conflict', status: 422, detail: 'Run must be marked ready' }, 422));
 
-    render(<DriverManifestButton runId="run-1" />);
+    render(<DriverManifestButton runId="run-1" locked={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Driver manifest' }));
 
     expect(await screen.findByText('Run must be marked ready')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Driver manifest' })).not.toBeDisabled();
+  });
+
+  it('is disabled and does not download when locked', async () => {
+    render(<DriverManifestButton runId="run-1" locked />);
+
+    const button = screen.getByRole('button', { name: 'Driver manifest' });
+    expect(button).toBeDisabled();
+
+    await userEvent.click(button);
+    expect(downloadManifest).not.toHaveBeenCalled();
   });
 });
