@@ -5,8 +5,10 @@ import { useRequireAuth } from './use-require-auth';
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace }),
+  usePathname: () => '/delivery-runs',
 }));
 
+const login = vi.fn();
 const authState: Record<string, unknown> = {};
 vi.mock('../auth-context', () => ({
   useAuth: () => authState,
@@ -14,7 +16,7 @@ vi.mock('../auth-context', () => ({
 
 function setAuth(overrides: Record<string, unknown>) {
   for (const key of Object.keys(authState)) delete authState[key];
-  Object.assign(authState, { user: null, isLoading: false, onboardingRequired: false }, overrides);
+  Object.assign(authState, { user: null, isLoading: false, onboardingRequired: false, login }, overrides);
 }
 
 beforeEach(() => {
@@ -22,10 +24,11 @@ beforeEach(() => {
 });
 
 describe('useRequireAuth', () => {
-  it('redirects unauthenticated visitors to /login', () => {
+  it('logs unauthenticated visitors in via Keycloak with the current path as the return destination', () => {
     setAuth({});
     renderHook(() => useRequireAuth());
-    expect(replace).toHaveBeenCalledWith('/login');
+    expect(login).toHaveBeenCalledWith('/delivery-runs');
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('redirects authenticated-but-unonboarded visitors to /onboarding (no login loop)', () => {

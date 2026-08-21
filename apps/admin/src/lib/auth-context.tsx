@@ -1,7 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminAuthApi, adminAssetImagesApi, ApiError } from '@wholo/admin-api-client';
 import type { AuthUser, SessionIdentity } from '@wholo/types';
 
@@ -18,11 +17,17 @@ interface AuthContextValue {
   identity: SessionIdentity | null;
   /** Re-fetch the session (e.g. right after onboarding completes). */
   refreshSession: () => Promise<void>;
-  login: () => void;
+  login: (returnUrl?: string) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function isSafeReturnUrl(url: string): boolean {
+  return (
+    url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') && !url.includes('@')
+  );
+}
 
 async function fetchLogoUrl(
   token: string,
@@ -72,9 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
-  const router = useRouter();
-  const routerRef = useRef(router);
-  useEffect(() => { routerRef.current = router; });
 
   const loadSession = useCallback(async (token: string) => {
     try {
@@ -131,15 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token: string = kc.token;
         setAccessToken(token);
 
-        const postLoginRedirect = sessionStorage.getItem('kc_post_login_redirect');
-        if (postLoginRedirect) sessionStorage.removeItem('kc_post_login_redirect');
-
         await loadSession(token);
-
-        // Client-side navigation so AuthProvider stays mounted and user state persists
-        if (postLoginRedirect && postLoginRedirect !== '/') {
-          routerRef.current.push(postLoginRedirect);
-        }
       })
       .finally(() => setIsLoading(false));
   }, [loadSession, handleTokenExpired]);
@@ -150,12 +144,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) await loadSession(token);
   }, [loadSession]);
 
-  const login = useCallback(() => {
+  const login = useCallback((returnUrlOverride?: string) => {
     const kc = (window as any).__kc;
     const params = new URLSearchParams(window.location.search);
-    const returnUrl = params.get('returnUrl') ?? '/';
-    sessionStorage.setItem('kc_post_login_redirect', returnUrl);
-    const redirectUri = window.location.origin + '/';
+    const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
+    // Concatenated directly onto origin below, so a value that isn't a plain
+    // same-origin path (e.g. leading "//" or an "@") could re-parse as a
+    // redirect to an attacker-controlled host — reject anything but a path.
+    const returnUrl = isSafeReturnUrl(requestedReturnUrl) ? requestedReturnUrl : '/';
+    const redirectUri = window.location.origin + returnUrl;
     if (kc) {
       kc.login({ redirectUri });
     } else {

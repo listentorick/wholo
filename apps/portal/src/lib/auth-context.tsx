@@ -36,6 +36,12 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function isSafeReturnUrl(url: string): boolean {
+  return (
+    url.startsWith('/') && !url.startsWith('//') && !url.startsWith('/\\') && !url.includes('@')
+  );
+}
+
 let initPromise: Promise<boolean> | null = null;
 
 async function getKeycloakAuth(onTokenExpired: () => void): Promise<boolean> {
@@ -117,7 +123,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback((returnUrlOverride?: string) => {
     const kc = (window as any).__kc;
     const params = new URLSearchParams(window.location.search);
-    const returnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
+    const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
+    // Concatenated directly onto origin below, so a value that isn't a plain
+    // same-origin path (e.g. leading "//" or an "@") could re-parse as a
+    // redirect to an attacker-controlled host — reject anything but a path.
+    const returnUrl = isSafeReturnUrl(requestedReturnUrl) ? requestedReturnUrl : '/';
     const redirectUri = window.location.origin + returnUrl;
     if (kc) {
       kc.login({ redirectUri });
