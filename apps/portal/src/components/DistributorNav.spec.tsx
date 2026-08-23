@@ -4,6 +4,9 @@ import { DistributorNav } from './DistributorNav';
 
 const mockPush = vi.fn();
 let mockCartCount = 0;
+let mockSubtotal = 0;
+let mockMinOrderBarScrolledPast = false;
+let mockEffectiveMinSpend: number | null = null;
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/winos',
@@ -27,12 +30,22 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/lib/cart-context', () => ({
-  useCart: () => ({ cartCount: mockCartCount }),
+  useCart: () => ({ cartCount: mockCartCount, subtotal: mockSubtotal }),
+}));
+
+vi.mock('@/lib/distributor-context', () => ({
+  useDistributor: () => ({
+    minOrderBarScrolledPast: mockMinOrderBarScrolledPast,
+    effectiveMinSpend: mockEffectiveMinSpend,
+  }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockCartCount = 0;
+  mockSubtotal = 0;
+  mockMinOrderBarScrolledPast = false;
+  mockEffectiveMinSpend = null;
 });
 
 describe('DistributorNav', () => {
@@ -79,5 +92,38 @@ describe('DistributorNav', () => {
     render(<DistributorNav distributorSlug="winos" />);
     fireEvent.click(screen.getByLabelText(/Cart/));
     expect(mockPush).toHaveBeenCalledWith('/winos/checkout');
+  });
+
+  it('does not show the minimum order bar when not scrolled past', () => {
+    mockMinOrderBarScrolledPast = false;
+    mockEffectiveMinSpend = 150;
+    mockSubtotal = 30;
+    const { container } = render(<DistributorNav distributorSlug="winos" />);
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('shows the minimum order bar once scrolled past and the minimum is not yet met', () => {
+    mockMinOrderBarScrolledPast = true;
+    mockEffectiveMinSpend = 150;
+    mockSubtotal = 30;
+    const { container } = render(<DistributorNav distributorSlug="winos" />);
+    expect(container.querySelector('[aria-hidden="false"]')).not.toBeNull();
+    expect(screen.getByText('Add £120.00 more to reach the £150.00 minimum order')).toBeTruthy();
+  });
+
+  it('hides the minimum order bar once the minimum is met, even when scrolled past', () => {
+    mockMinOrderBarScrolledPast = true;
+    mockEffectiveMinSpend = 150;
+    mockSubtotal = 150;
+    const { container } = render(<DistributorNav distributorSlug="winos" />);
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('hides the minimum order bar when there is no minimum set, even when scrolled past', () => {
+    mockMinOrderBarScrolledPast = true;
+    mockEffectiveMinSpend = null;
+    mockSubtotal = 30;
+    const { container } = render(<DistributorNav distributorSlug="winos" />);
+    expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
   });
 });

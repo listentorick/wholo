@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useDistributor, connectCtaKind } from '@/lib/distributor-context';
 import { useCart } from '@/lib/cart-context';
@@ -20,12 +20,34 @@ export function TruckIcon() {
   );
 }
 
+// Sticky DistributorHeader (h-14 = 56px) + DistributorNav's single-row height (~48px)
+// with its border. Shrinking the observed root by this much means "scrolled past"
+// fires when the bar disappears behind the sticky stack, not just past the literal
+// viewport edge.
+const STICKY_STACK_HEIGHT_PX = 104;
+
 export function DistributorPageHeader({ distributorSlug }: { distributorSlug: string }) {
-  const { distributor, relationshipStatus, effectiveMinSpend, requestAccess } = useDistributor();
+  const { distributor, relationshipStatus, effectiveMinSpend, requestAccess, setMinOrderBarScrolledPast } =
+    useDistributor();
   const { subtotal } = useCart();
   const { accessToken, orderAsMode } = useAuth();
   const deliveryParts = useDeliveryParts(distributorSlug, accessToken, { refreshKey: orderAsMode });
   const [showConfirm, setShowConfirm] = useState(false);
+  const minOrderBarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = minOrderBarRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setMinOrderBarScrolledPast(!entry.isIntersecting),
+      { rootMargin: `-${STICKY_STACK_HEIGHT_PX}px 0px 0px 0px`, threshold: 0 },
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      setMinOrderBarScrolledPast(false);
+    };
+  }, [setMinOrderBarScrolledPast]);
 
   const ctaKind = connectCtaKind(relationshipStatus);
 
@@ -47,7 +69,9 @@ export function DistributorPageHeader({ distributorSlug }: { distributorSlug: st
         </div>
       )}
 
-      <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="compact" />
+      <div ref={minOrderBarRef}>
+        <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="compact" />
+      </div>
 
       {ctaKind === 'connect' && (
         <div className="mt-3">

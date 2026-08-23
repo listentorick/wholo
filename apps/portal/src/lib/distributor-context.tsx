@@ -30,6 +30,8 @@ interface DistributorContextValue {
   distributor: DistributorInfo | null;
   bannerScrolledPast: boolean;
   setBannerScrolledPast: (past: boolean) => void;
+  minOrderBarScrolledPast: boolean;
+  setMinOrderBarScrolledPast: (past: boolean) => void;
   relationshipStatus: RelationshipStatus | null;
   relationshipMinSpend: number | null;
   effectiveMinSpend: number | null;
@@ -41,6 +43,8 @@ const DistributorContext = createContext<DistributorContextValue>({
   distributor: null,
   bannerScrolledPast: false,
   setBannerScrolledPast: () => {},
+  minOrderBarScrolledPast: false,
+  setMinOrderBarScrolledPast: () => {},
   relationshipStatus: null,
   relationshipMinSpend: null,
   effectiveMinSpend: null,
@@ -52,6 +56,7 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
   const { user, accessToken, orderAsMode, orderAsCustomerId } = useAuth();
   const [distributor, setDistributor] = useState<DistributorInfo | null>(null);
   const [bannerScrolledPast, setBannerScrolledPastState] = useState(false);
+  const [minOrderBarScrolledPast, setMinOrderBarScrolledPastState] = useState(false);
   const [relationshipStatus, setRelationshipStatus] = useState<RelationshipStatus | null>(null);
   const [relationshipMinSpend, setRelationshipMinSpend] = useState<number | null>(null);
 
@@ -84,6 +89,7 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
     relationshipStatus != null ? (relationshipMinSpend ?? distributor?.minimumOrderSpend ?? null) : null;
 
   const setBannerScrolledPast = useCallback((past: boolean) => setBannerScrolledPastState(past), []);
+  const setMinOrderBarScrolledPast = useCallback((past: boolean) => setMinOrderBarScrolledPastState(past), []);
 
   const requestAccess = useCallback(
     async (recentContact: boolean) => {
@@ -100,6 +106,8 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
         distributor,
         bannerScrolledPast,
         setBannerScrolledPast,
+        minOrderBarScrolledPast,
+        setMinOrderBarScrolledPast,
         relationshipStatus,
         relationshipMinSpend,
         effectiveMinSpend,

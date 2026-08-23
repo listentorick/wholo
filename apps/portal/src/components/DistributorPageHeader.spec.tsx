@@ -35,6 +35,9 @@ import { deliveryApi } from '@wholo/api-client';
 
 const slug = 'fine-wines-co';
 const requestAccess = vi.fn().mockResolvedValue(undefined);
+const setMinOrderBarScrolledPast = vi.fn();
+const mockObserve = vi.fn();
+const mockDisconnect = vi.fn();
 
 function mockDistributorReturn(overrides: Record<string, unknown> = {}) {
   vi.mocked(useDistributor).mockReturnValue({
@@ -44,6 +47,8 @@ function mockDistributorReturn(overrides: Record<string, unknown> = {}) {
     effectiveMinSpend: null,
     bannerScrolledPast: false,
     setBannerScrolledPast: vi.fn(),
+    minOrderBarScrolledPast: false,
+    setMinOrderBarScrolledPast,
     requestAccess,
     refetchRelationship: vi.fn(),
     ...overrides,
@@ -57,6 +62,12 @@ beforeEach(() => {
   vi.mocked(useAuth).mockReturnValue({ accessToken: 'test-token' } as any);
   vi.mocked(useCart).mockReturnValue({ subtotal: 0 } as any);
   vi.mocked(deliveryApi.getAvailableDates).mockResolvedValue({ dates: [], profileId: null });
+  const MockIntersectionObserver = vi.fn(() => ({
+    observe: mockObserve,
+    disconnect: mockDisconnect,
+    unobserve: vi.fn(),
+  }));
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -165,5 +176,18 @@ describe('DistributorPageHeader', () => {
     mockDistributorReturn({ relationshipStatus: 'ACTIVE', effectiveMinSpend: null });
     render(<DistributorPageHeader distributorSlug={slug} />);
     expect(screen.queryByText(/minimum order/)).toBeNull();
+  });
+
+  it('registers an IntersectionObserver on the minimum order bar on mount', () => {
+    render(<DistributorPageHeader distributorSlug={slug} />);
+    expect(mockObserve).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnects the observer and resets scrolled-past state on unmount', () => {
+    const { unmount } = render(<DistributorPageHeader distributorSlug={slug} />);
+    setMinOrderBarScrolledPast.mockClear();
+    unmount();
+    expect(mockDisconnect).toHaveBeenCalledTimes(1);
+    expect(setMinOrderBarScrolledPast).toHaveBeenCalledWith(false);
   });
 });
