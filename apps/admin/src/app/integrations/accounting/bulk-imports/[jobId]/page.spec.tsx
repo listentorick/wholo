@@ -18,6 +18,10 @@ vi.mock('@wholo/admin-api-client', () => ({
     getContactBulkImportJob: vi.fn(),
     countContactsNeedingAttention: vi.fn().mockResolvedValue({ count: 0 }),
   },
+  // Sidebar (rendered by AdminLayout on every page) fetches this on mount.
+  adminOrdersApi: {
+    countOrdersNeedingAttention: vi.fn().mockResolvedValue({ count: 0 }),
+  },
 }));
 
 const authState: Record<string, unknown> = {

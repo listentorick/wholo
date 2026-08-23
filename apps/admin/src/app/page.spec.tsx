@@ -17,9 +17,12 @@ vi.mock('@wholo/admin-api-client', () => ({
     productRankings: vi.fn(),
     actionItems: vi.fn(),
   },
-  // Sidebar (rendered by AdminLayout on every page) fetches this on mount.
+  // Sidebar (rendered by AdminLayout on every page) fetches these on mount.
   adminAccountingApi: {
     countContactsNeedingAttention: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  adminOrdersApi: {
+    countOrdersNeedingAttention: vi.fn().mockResolvedValue({ count: 0 }),
   },
 }));
 
