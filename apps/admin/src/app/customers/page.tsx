@@ -16,6 +16,8 @@ import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { PriceListDrawer } from '@/components/customers/PriceListDrawer';
@@ -102,20 +104,106 @@ function CustomersEmptyState({ hasFilters, onClearFilters }: { hasFilters: boole
   );
 }
 
-// ─── Customer row ──────────────────────────────────────────────────────────────
+// ─── Customer chips (catalogues / price list / delivery profile) ──────────────
 
-function CustomerRow({ customer }: { customer: Customer }) {
-  const [activeDrawer, setActiveDrawer] = useState<
-    | { type: 'pricelist'; id: string }
-    | { type: 'catalogue'; id: string }
-    | { type: 'delivery-profile'; id: string }
-    | null
-  >(null);
+type DrawerTarget =
+  | { type: 'pricelist'; id: string }
+  | { type: 'catalogue'; id: string }
+  | { type: 'delivery-profile'; id: string };
 
-  const href = `/customers/${customer.id}`;
+const CHIP_CLASSNAME =
+  'inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors';
+
+// Each usage site (desktop row, mobile card) mounts its own independent
+// instance of this — same "self-contained, instantiated twice" pattern as
+// QuickActions/ProductRowActions — since only one layout is ever visible at
+// a time, they never need to share state.
+function CustomerChipsCell({ customer, layout }: { customer: Customer; layout: 'table' | 'card' }) {
+  const [activeDrawer, setActiveDrawer] = useState<DrawerTarget | null>(null);
+
+  const catalogues =
+    customer.catalogues.length === 0 ? (
+      <span className="text-sm text-muted">—</span>
+    ) : (
+      <span className="flex flex-wrap gap-1">
+        {customer.catalogues.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'catalogue', id: c.id }); }}
+            className={CHIP_CLASSNAME}
+          >
+            {c.name} →
+          </button>
+        ))}
+      </span>
+    );
+
+  const priceList = customer.priceList ? (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'pricelist', id: customer.priceList!.id }); }}
+      className={CHIP_CLASSNAME}
+    >
+      {customer.priceList.name} →
+    </button>
+  ) : (
+    <span className="text-sm text-muted">—</span>
+  );
+
+  const deliveryProfile = customer.deliveryProfile ? (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'delivery-profile', id: customer.deliveryProfile!.id }); }}
+      className={CHIP_CLASSNAME}
+    >
+      {customer.deliveryProfile.name} →
+    </button>
+  ) : (
+    <span className="text-sm text-muted">—</span>
+  );
+
+  const drawers = (
+    <>
+      {activeDrawer?.type === 'pricelist' && (
+        <PriceListDrawer priceListId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+      )}
+      {activeDrawer?.type === 'catalogue' && (
+        <CatalogueDrawer catalogueId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+      )}
+      {activeDrawer?.type === 'delivery-profile' && (
+        <DeliveryProfileDrawer deliveryProfileId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
+      )}
+    </>
+  );
+
+  if (layout === 'card') {
+    return (
+      <>
+        <MobileCardField label="Catalogues" value={catalogues} />
+        <MobileCardField label="Price List" value={priceList} />
+        <MobileCardField label="Delivery Profile" value={deliveryProfile} />
+        {drawers}
+      </>
+    );
+  }
 
   return (
     <>
+      <td className="py-3 px-4">{catalogues}</td>
+      <td className="py-3 px-4">{priceList}</td>
+      <td className="py-3 px-4">{deliveryProfile}</td>
+      {drawers}
+    </>
+  );
+}
+
+// ─── Customer row ──────────────────────────────────────────────────────────────
+
+function CustomerRow({ customer }: { customer: Customer }) {
+  const href = `/customers/${customer.id}`;
+
+  return (
     <ListRow>
       <td className="py-3 pl-5 pr-4">
         <ListCellLink href={href}>
@@ -130,69 +218,16 @@ function CustomerRow({ customer }: { customer: Customer }) {
       <td className="py-3 px-4 text-sm text-muted">
         <ListCellLink href={href}>{customer.accountNumber ?? '—'}</ListCellLink>
       </td>
-      <td className="py-3 px-4 max-md:pr-5 text-sm text-muted">
+      <td className="py-3 px-4 text-sm text-muted">
         <ListCellLink href={href}>{customer.organisation.phone ?? '—'}</ListCellLink>
       </td>
-      <td className="py-3 px-4 hidden md:table-cell">
-        {customer.catalogues.length === 0 ? (
-          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
-        ) : (
-          <div className="flex flex-wrap gap-1">
-            {customer.catalogues.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'catalogue', id: c.id }); }}
-                className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
-              >
-                {c.name} →
-              </button>
-            ))}
-          </div>
-        )}
-      </td>
-      <td className="py-3 px-4 hidden md:table-cell">
-        {customer.priceList ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'pricelist', id: customer.priceList!.id }); }}
-            className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
-          >
-            {customer.priceList.name} →
-          </button>
-        ) : (
-          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
-        )}
-      </td>
-      <td className="py-3 px-4 hidden md:table-cell">
-        {customer.deliveryProfile ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setActiveDrawer({ type: 'delivery-profile', id: customer.deliveryProfile!.id }); }}
-            className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-text hover:border-primary hover:text-primary transition-colors"
-          >
-            {customer.deliveryProfile.name} →
-          </button>
-        ) : (
-          <ListCellLink href={href} className="text-sm text-muted">—</ListCellLink>
-        )}
-      </td>
-      <td className="py-3 pl-4 pr-5 hidden md:table-cell">
+      <CustomerChipsCell customer={customer} layout="table" />
+      <td className="py-3 pl-4 pr-5">
         <ListCellLink href={href}>
           <CustomerStatusBadge status={customer.status} />
         </ListCellLink>
       </td>
     </ListRow>
-    {activeDrawer?.type === 'pricelist' && (
-      <PriceListDrawer priceListId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
-    )}
-    {activeDrawer?.type === 'catalogue' && (
-      <CatalogueDrawer catalogueId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
-    )}
-    {activeDrawer?.type === 'delivery-profile' && (
-      <DeliveryProfileDrawer deliveryProfileId={activeDrawer.id} onClose={() => setActiveDrawer(null)} />
-    )}
-    </>
   );
 }
 
@@ -322,24 +357,49 @@ export default function CustomersPage() {
         <CustomersEmptyState hasFilters={filters.length > 0} onClearFilters={() => setFilters([])} />
       ) : (
         <ListTableShell>
-          <table className="w-full text-left">
-            <thead className="border-b border-border bg-[#fafafa]">
-              <tr>
-                <ListTh>Customer</ListTh>
-                <ListTh>Account #</ListTh>
-                <ListTh className="max-md:pr-5">Phone</ListTh>
-                <ListTh className="hidden md:table-cell">Catalogues</ListTh>
-                <ListTh className="hidden md:table-cell">Price List</ListTh>
-                <ListTh className="hidden md:table-cell">Delivery Profile</ListTh>
-                <ListTh className="hidden md:table-cell">Status</ListTh>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((customer) => (
-                <CustomerRow key={customer.id} customer={customer} />
-              ))}
-            </tbody>
-          </table>
+          <MobileCardList
+            items={customers}
+            getId={(customer) => customer.id}
+            getLabel={(customer) => customer.organisation.name}
+            entityLabelPlural="customers"
+            renderPrimary={(customer) => customer.organisation.name}
+            renderSecondary={(customer) => customer.organisation.email ?? '—'}
+            renderStatus={(customer) => <CustomerStatusBadge status={customer.status} />}
+            renderMeta={(customer) => (
+              <span className="text-xs text-muted">
+                {customer.accountNumber ?? '—'} · {customer.organisation.phone ?? '—'}
+              </span>
+            )}
+            renderExpanded={(customer) => (
+              <>
+                <CustomerChipsCell customer={customer} layout="card" />
+                <Link href={`/customers/${customer.id}`} className="block text-sm font-medium text-primary hover:underline">
+                  View customer →
+                </Link>
+              </>
+            )}
+          />
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead className="border-b border-border bg-[#fafafa]">
+                <tr>
+                  <ListTh>Customer</ListTh>
+                  <ListTh>Account #</ListTh>
+                  <ListTh>Phone</ListTh>
+                  <ListTh>Catalogues</ListTh>
+                  <ListTh>Price List</ListTh>
+                  <ListTh>Delivery Profile</ListTh>
+                  <ListTh>Status</ListTh>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer) => (
+                  <CustomerRow key={customer.id} customer={customer} />
+                ))}
+              </tbody>
+            </table>
+          </div>
           <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
         </ListTableShell>
       )}

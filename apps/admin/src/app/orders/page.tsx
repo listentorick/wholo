@@ -12,7 +12,10 @@ import { ListTh } from '@/components/list/ListTh';
 import { ListPagination } from '@/components/list/ListPagination';
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
+import { ListSpinner } from '@/components/list/ListSpinner';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
@@ -115,23 +118,6 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
       <path d="M8 3l3.5 5h-7L8 3z" fill="currentColor" opacity={active && dir === 'asc' ? 1 : 0.35} />
       <path d="M8 13l-3.5-5h7L8 13z" fill="currentColor" opacity={active && dir === 'desc' ? 1 : 0.35} />
     </svg>
-  );
-}
-
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function SkeletonRow() {
-  return (
-    <tr className="border-b border-border">
-      {[80, 120, 64, 72, 80, 80].map((w, i) => (
-        <td key={i} className="py-3.5 px-4">
-          <div className="h-3.5 animate-pulse rounded bg-border" style={{ width: w }} />
-        </td>
-      ))}
-      <td className="py-3.5 px-4">
-        <div className="h-3.5 w-16 animate-pulse rounded bg-border" />
-      </td>
-    </tr>
   );
 }
 
@@ -317,20 +303,7 @@ export default function OrdersPage() {
       </div>
 
       {isLoading ? (
-        <ListTableShell>
-          <table className="w-full text-left">
-            <thead className="border-b border-border bg-[#fafafa]">
-              <tr>
-                {['Order', 'Customer', 'Status', 'Total', 'Delivery Date', 'Submitted', 'Actions'].map((h) => (
-                  <ListTh key={h}>{h}</ListTh>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[0, 1, 2, 3].map((i) => <SkeletonRow key={i} />)}
-            </tbody>
-          </table>
-        </ListTableShell>
+        <ListSpinner />
       ) : error ? (
         <ListErrorBanner message={error} />
       ) : orders.length === 0 ? (
@@ -360,74 +333,102 @@ export default function OrdersPage() {
         />
       ) : (
         <ListTableShell>
-          <table className="w-full text-left">
-            <thead className="border-b border-border bg-[#fafafa]">
-              <tr>
-                <ListTh>Order</ListTh>
-                <ListTh>Customer</ListTh>
-                <ListTh>Status</ListTh>
-                <ListTh>Total</ListTh>
-                <ListTh>
-                  <button type="button" onClick={handleToggleDeliveryDateSort} className="flex items-center hover:text-text transition-colors">
-                    Delivery Date
-                    <SortIcon active={sortBy === 'requestedDeliveryDate'} dir={sortBy === 'requestedDeliveryDate' ? sortOrder : 'asc'} />
-                  </button>
-                </ListTh>
-                <ListTh>Submitted</ListTh>
-                <ListTh>Actions</ListTh>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors"
-                >
-                  <td className="py-3 pl-5 pr-4">
-                    <Link href={`/orders/${order.id}`} className="block">
-                      <span className="font-medium text-sm text-text group-hover:text-primary transition-colors">
-                        {order.orderNumber}
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="py-3 px-4">
-                    <Link href={`/orders/${order.id}`} className="block text-sm text-text">
-                      {order.traderCustomerName}
-                    </Link>
-                  </td>
-                  <td className="py-3 px-4">
-                    <Link href={`/orders/${order.id}`} className="block">
-                      <OrderStatusBadge status={order.status} />
-                    </Link>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-text">
-                    <Link href={`/orders/${order.id}`} className="block">
-                      £{parseFloat(order.totalAmount).toFixed(2)}
-                    </Link>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-muted">
-                    <Link href={`/orders/${order.id}`} className="block">
-                      {fmtDateStr(order.requestedDeliveryDate)}
-                    </Link>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-muted">
-                    <Link href={`/orders/${order.id}`} className="block">
-                      {fmtDateStr(order.submittedAt)}
-                    </Link>
-                  </td>
-                  <td className="py-3 pl-4 pr-5">
-                    {order.status === OrderStatus.SUBMITTED && accessToken ? (
-                      <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
-                    ) : (
-                      <Link href={`/orders/${order.id}`} className="text-xs text-muted hover:text-text transition-colors">
-                        View
-                      </Link>
-                    )}
-                  </td>
+          <MobileCardList
+            items={orders}
+            getId={(order) => order.id}
+            getLabel={(order) => order.orderNumber}
+            entityLabelPlural="orders"
+            renderPrimary={(order) => order.orderNumber}
+            renderSecondary={(order) => order.traderCustomerName}
+            renderStatus={(order) => <OrderStatusBadge status={order.status} />}
+            renderMeta={(order) => (
+              <span className="text-xs text-muted">
+                £{parseFloat(order.totalAmount).toFixed(2)} · Due {fmtDateStr(order.requestedDeliveryDate)}
+              </span>
+            )}
+            renderExpanded={(order) => (
+              <>
+                <MobileCardField label="Submitted" value={fmtDateStr(order.submittedAt)} />
+                {order.status === OrderStatus.SUBMITTED && accessToken && (
+                  <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
+                )}
+                <Link href={`/orders/${order.id}`} className="block text-sm font-medium text-primary hover:underline">
+                  View order →
+                </Link>
+              </>
+            )}
+          />
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead className="border-b border-border bg-[#fafafa]">
+                <tr>
+                  <ListTh>Order</ListTh>
+                  <ListTh>Customer</ListTh>
+                  <ListTh>Status</ListTh>
+                  <ListTh>Total</ListTh>
+                  <ListTh>
+                    <button type="button" onClick={handleToggleDeliveryDateSort} className="flex items-center hover:text-text transition-colors">
+                      Delivery Date
+                      <SortIcon active={sortBy === 'requestedDeliveryDate'} dir={sortBy === 'requestedDeliveryDate' ? sortOrder : 'asc'} />
+                    </button>
+                  </ListTh>
+                  <ListTh>Submitted</ListTh>
+                  <ListTh>Actions</ListTh>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="group border-b border-border last:border-0 hover:bg-[#fafafa] transition-colors"
+                  >
+                    <td className="py-3 pl-5 pr-4">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        <span className="font-medium text-sm text-text group-hover:text-primary transition-colors">
+                          {order.orderNumber}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link href={`/orders/${order.id}`} className="block text-sm text-text">
+                        {order.traderCustomerName}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        <OrderStatusBadge status={order.status} />
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-text">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        £{parseFloat(order.totalAmount).toFixed(2)}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        {fmtDateStr(order.requestedDeliveryDate)}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        {fmtDateStr(order.submittedAt)}
+                      </Link>
+                    </td>
+                    <td className="py-3 pl-4 pr-5">
+                      {order.status === OrderStatus.SUBMITTED && accessToken ? (
+                        <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
+                      ) : (
+                        <Link href={`/orders/${order.id}`} className="text-xs text-muted hover:text-text transition-colors">
+                          View
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
         </ListTableShell>
       )}

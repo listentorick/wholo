@@ -16,6 +16,8 @@ import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
+import { MobileCardList } from '@/components/list/MobileCardList';
+import { MobileCardField } from '@/components/list/MobileCardField';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { adminProductsApi, adminProductTypesApi, adminSuppliersApi } from '@wholo/admin-api-client';
@@ -33,6 +35,14 @@ const STATUS_META: Record<ProductStatus, { label: string; tone: StatusTone }> = 
 function ProductStatusBadge({ status }: { status: ProductStatus }) {
   const meta = STATUS_META[status] ?? STATUS_META[ProductStatus.DRAFT];
   return <StatusBadge label={meta.label} tone={meta.tone} />;
+}
+
+// ─── Tax status ───────────────────────────────────────────────────────────────
+
+function renderTaxCell(product: Product) {
+  if (!product.taxType) return <StatusBadge label="No tax type" tone="yellow" />;
+  if (product.taxType.isDefault) return <StatusBadge label="Needs review" tone="yellow" />;
+  return <span className="text-sm text-muted">{product.taxType.name}</span>;
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
@@ -124,17 +134,7 @@ function ProductRow({ product }: { product: Product }) {
         <ListCellLink href={href}>{product.supplier?.name ?? '—'}</ListCellLink>
       </td>
       <td className="py-3 pl-4 pr-5">
-        <ListCellLink href={href}>
-          {product.taxType ? (
-            product.taxType.isDefault ? (
-              <StatusBadge label="Needs review" tone="yellow" />
-            ) : (
-              <span className="text-sm text-muted">{product.taxType.name}</span>
-            )
-          ) : (
-            <StatusBadge label="No tax type" tone="yellow" />
-          )}
-        </ListCellLink>
+        <ListCellLink href={href}>{renderTaxCell(product)}</ListCellLink>
       </td>
     </ListRow>
   );
@@ -254,22 +254,45 @@ export default function ProductsPage() {
         <ProductsEmptyState hasFilters={filters.length > 0} onClearFilters={() => setFilters([])} />
       ) : (
         <ListTableShell>
-          <table className="w-full text-left">
-            <thead className="border-b border-border bg-[#fafafa]">
-              <tr>
-                <ListTh>Product</ListTh>
-                <ListTh>Status</ListTh>
-                <ListTh>Type</ListTh>
-                <ListTh>Supplier</ListTh>
-                <ListTh>Tax</ListTh>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <ProductRow key={product.id} product={product} />
-              ))}
-            </tbody>
-          </table>
+          <MobileCardList
+            items={products}
+            getId={(product) => product.id}
+            getLabel={(product) => product.name}
+            entityLabelPlural="products"
+            renderPrimary={(product) => product.name}
+            renderSecondary={(product) => (product.sku ? `SKU: ${product.sku}` : '—')}
+            renderStatus={(product) => <ProductStatusBadge status={product.status} />}
+            renderMeta={(product) => (!product.taxType || product.taxType.isDefault ? renderTaxCell(product) : null)}
+            renderExpanded={(product) => (
+              <>
+                <MobileCardField label="Type" value={product.productType?.name ?? '—'} />
+                <MobileCardField label="Supplier" value={product.supplier?.name ?? '—'} />
+                <MobileCardField label="Tax" value={renderTaxCell(product)} />
+                <Link href={`/products/${product.id}/edit`} className="block text-sm font-medium text-primary hover:underline">
+                  View product →
+                </Link>
+              </>
+            )}
+          />
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left">
+              <thead className="border-b border-border bg-[#fafafa]">
+                <tr>
+                  <ListTh>Product</ListTh>
+                  <ListTh>Status</ListTh>
+                  <ListTh>Type</ListTh>
+                  <ListTh>Supplier</ListTh>
+                  <ListTh>Tax</ListTh>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((product) => (
+                  <ProductRow key={product.id} product={product} />
+                ))}
+              </tbody>
+            </table>
+          </div>
           <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
         </ListTableShell>
       )}
