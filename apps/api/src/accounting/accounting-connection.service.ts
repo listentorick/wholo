@@ -436,7 +436,7 @@ export class AccountingConnectionService {
       }),
       this.prisma.organisation.findUnique({ where: { id: distributorId }, select: { name: true } }),
     ]);
-    const adminUrl = this.config.get<string>('ADMIN_URL', 'http://localhost:3020');
+    const adminUrl = this.config.getOrThrow<string>('ADMIN_URL');
 
     await Promise.all(
       admins.map((admin) =>

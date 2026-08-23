@@ -111,7 +111,7 @@ export class MailService {
     // Served from the admin app's public folder (apps/admin/public/logos),
     // same asset used in-app — not baked in, so it stays correct if the logo
     // is ever swapped without a mail service redeploy.
-    const adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3020');
+    const adminUrl = config.getOrThrow<string>('ADMIN_URL');
     // Icon-only mark, paired with real live text (not baked into the image)
     // in the invite email's header — mirrors the admin app's own sidebar
     // chrome lockup (apps/admin/src/components/Sidebar.tsx), not a new

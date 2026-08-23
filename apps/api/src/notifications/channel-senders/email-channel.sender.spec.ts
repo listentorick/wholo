@@ -49,6 +49,7 @@ describe('EmailChannelSender', () => {
 
     const config = {
       get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+      getOrThrow: jest.fn((key: string) => (key === 'ADMIN_URL' ? 'http://localhost:3020' : 'http://localhost:3010')),
     } as unknown as ConfigService;
 
     sender = new EmailChannelSender(mail, config);

@@ -24,6 +24,13 @@ postgresql:
 redis:
   storageSize: 1Gi
 
+# Single source of truth for the two browser-facing URLs: admin-api's
+# order-as magic link, apps/api's email links, and Keycloak's realm client
+# redirect URIs/web origins all read these.
+global:
+  portalUrl: "https://portal.<domain>"
+  adminUrl: "https://admin.<domain>"
+
 api:
   image:
     repository: ghcr.io/listentorick/wholo/api
@@ -33,8 +40,6 @@ api:
     type: ClusterIP
   seedJob:
     enabled: false          # never seed demo data into live
-  portalUrl: "https://portal.<domain>"
-  adminUrl: "https://admin.<domain>"
   smtp:
     from: "notifications@<domain>"
     inviteFrom: "noreply@<domain>"
@@ -96,8 +101,6 @@ keycloak:
   hostnamePort: ""          # unused when hostname is a full URL
   proxyHeaders: xforwarded  # TLS terminates upstream (WAF); headers forwarded
   seedUsers: false          # demo users must never reach a public auth server
-  adminClientUrl: "https://admin.<domain>"
-  portalClientUrl: "https://portal.<domain>"
 
 ingress:
   enabled: true

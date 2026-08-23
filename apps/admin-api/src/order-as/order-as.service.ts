@@ -10,7 +10,7 @@ export class OrderAsService {
     private api: ApiClientService,
     config: ConfigService,
   ) {
-    this.portalUrl = config.get<string>('PORTAL_URL', 'http://localhost:3010');
+    this.portalUrl = config.getOrThrow<string>('PORTAL_URL');
   }
 
   async createSession(distributorId: string, tradeRelationshipId: string, token: string) {

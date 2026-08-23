@@ -13,8 +13,8 @@ data:
   R2_ACCOUNT_ID: {{ .Values.api.r2.accountId | quote }}
   R2_BUCKET_NAME: {{ .Values.api.r2.bucketName | quote }}
   R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}
-  PORTAL_URL: {{ .Values.api.portalUrl | quote }}
-  ADMIN_URL: {{ .Values.api.adminUrl | quote }}
+  PORTAL_URL: {{ .Values.global.portalUrl | quote }}
+  ADMIN_URL: {{ .Values.global.adminUrl | quote }}
   XERO_CLIENT_ID: {{ .Values.api.xero.clientId | quote }}
   XERO_REDIRECT_URI: {{ .Values.api.xero.redirectUri | quote }}
   SMTP_HOST: {{ .Values.api.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}

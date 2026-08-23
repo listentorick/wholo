@@ -340,7 +340,7 @@ export class AdminCustomersService {
     const target = email || rel.customer.email;
     if (!target) throw new BadRequestException('Customer has no email address');
 
-    const portalUrl = this.config.get<string>('PORTAL_URL', 'http://localhost:3010');
+    const portalUrl = this.config.getOrThrow<string>('PORTAL_URL');
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const inviteUrl = `${portalUrl}/accept-invite?token=${token}`;
@@ -460,7 +460,7 @@ export class AdminCustomersService {
     const portalUrl =
       to === TradeRelationshipStatus.SUSPENDED || !rel.distributor.slug
         ? null
-        : `${this.config.get<string>('PORTAL_URL', 'http://localhost:3010')}/${rel.distributor.slug}`;
+        : `${this.config.getOrThrow<string>('PORTAL_URL')}/${rel.distributor.slug}`;
 
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.tradeRelationship.updateMany({

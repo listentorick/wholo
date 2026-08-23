@@ -48,7 +48,10 @@ const mockRegistry = { get: jest.fn() };
 const mockRefreshLock = { tryAcquire: jest.fn() };
 const mockAdminNotifications = { notifyOrganisationAdmins: jest.fn() };
 const mockMail = { sendAccountingConnectionNeedsReconnect: jest.fn() };
-const mockConfig = { get: jest.fn((_key: string, fallback: string) => fallback) };
+const mockConfig = {
+  get: jest.fn((_key: string, fallback: string) => fallback),
+  getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
+};
 
 const makeTokenSet = (overrides = {}) => ({
   accessToken: 'access-token',

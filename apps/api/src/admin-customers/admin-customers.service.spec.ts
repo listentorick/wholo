@@ -31,7 +31,10 @@ const mockPrisma = {
   $transaction: jest.fn(),
 };
 
-const mockConfig = { get: jest.fn().mockReturnValue('http://portal.test') };
+const mockConfig = {
+  get: jest.fn().mockReturnValue('http://portal.test'),
+  getOrThrow: jest.fn().mockReturnValue('http://portal.test'),
+};
 const mockOutbox = { writeEvent: jest.fn().mockResolvedValue({}) };
 
 const makeOrg = (overrides = {}) => ({

@@ -75,6 +75,7 @@ describe('MailService — order emails', () => {
 
     const config = {
       get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     service = new MailService(config);
@@ -292,6 +293,7 @@ describe('MailService — trade-relationship emails', () => {
 
     const config = {
       get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     service = new MailService(config);
@@ -394,6 +396,7 @@ describe('MailService — accounting connection emails', () => {
 
     const config = {
       get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     service = new MailService(config);
@@ -438,6 +441,7 @@ describe('MailService — invite from-address', () => {
         if (key === 'SMTP_INVITE_FROM') return 'noreply@stocdup.com';
         return defaultValue;
       }),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     const service = new MailService(config);
@@ -452,6 +456,7 @@ describe('MailService — invite from-address', () => {
         if (key === 'SMTP_FROM') return 'noreply@wholo.com.au';
         return defaultValue;
       }),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     const service = new MailService(config);
@@ -485,6 +490,7 @@ describe('MailService — invite email', () => {
 
     const config = {
       get: jest.fn((key: string, defaultValue?: unknown) => defaultValue),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
 
     service = new MailService(config);
@@ -570,6 +576,7 @@ describe('MailService — invite email', () => {
       get: jest.fn((key: string, defaultValue?: unknown) =>
         key === 'SMTP_SUPPORT_EMAIL' ? 'help@stocdup.com' : defaultValue,
       ),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
     } as unknown as ConfigService;
     const supportService = new MailService(config);
 

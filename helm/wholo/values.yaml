@@ -2,6 +2,15 @@
 # local dev, where images are built straight into the Docker Desktop daemon.
 imagePullSecrets: []
 
+# Browser-facing base URLs for the portal/admin apps — the single source
+# of truth for every consumer that builds a link a browser follows: email
+# links (apps/api), the order-as magic link (admin-api), and Keycloak's
+# realm client redirect URIs/web origins. Must be reachable from a
+# recipient's/user's browser — never point either at internal service DNS.
+global:
+  portalUrl: "http://localhost:3010"
+  adminUrl: "http://localhost:3020"
+
 postgresql:
   # TimescaleDB-enabled Postgres 16 image (same major version as the prior
   # postgres:16-alpine — existing PVC data is binary-compatible, only the
@@ -65,10 +74,6 @@ api:
     publicBaseUrl: ""
     accessKeyId: ""
     secretAccessKey: ""
-  # Both must be reachable from a recipient's browser (used in email links) —
-  # do not point either at internal service DNS.
-  portalUrl: "http://localhost:3010"
-  adminUrl: "http://localhost:3020"
   # Defaults target the in-cluster MailHog; override for a real provider.
   # user/password empty = no SMTP auth (MailHog default).
   smtp:
@@ -191,11 +196,6 @@ keycloak:
   hostnamePort: "8080"
   # Set to "xforwarded" when running behind a TLS-terminating proxy (Traefik).
   proxyHeaders: ""
-  # Base URLs the browser uses to reach the admin/portal apps; drive the
-  # realm clients' redirect URIs and web origins. Realm import only happens
-  # on first boot — changing these later requires the Keycloak console.
-  adminClientUrl: "http://localhost:3020"
-  portalClientUrl: "http://localhost:3010"
   # SMTP settings for realm emails (verification, reset). Empty defaults
   # preserve the in-cluster MailHog behavior (plain, unauthenticated, port 1025).
   smtpHost: ""

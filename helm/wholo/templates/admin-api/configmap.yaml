@@ -11,3 +11,4 @@ data:
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
   NEXT_APP_DIR: "/app/admin"
+  PORTAL_URL: {{ .Values.global.portalUrl | quote }}

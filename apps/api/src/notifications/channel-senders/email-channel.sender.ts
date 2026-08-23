@@ -16,8 +16,8 @@ export class EmailChannelSender implements ChannelSender {
     private readonly mail: MailService,
     config: ConfigService,
   ) {
-    this.adminUrl = config.get<string>('ADMIN_URL', 'http://localhost:3020');
-    this.portalUrl = config.get<string>('PORTAL_URL', 'http://localhost:3010');
+    this.adminUrl = config.getOrThrow<string>('ADMIN_URL');
+    this.portalUrl = config.getOrThrow<string>('PORTAL_URL');
   }
 
   async send(delivery: NotificationDelivery, notification: Notification): Promise<void> {
