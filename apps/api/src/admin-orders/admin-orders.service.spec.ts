@@ -169,6 +169,25 @@ describe('AdminOrdersService', () => {
     });
   });
 
+  // ── countNeedsAttention ───────────────────────────────────────────────────────
+
+  describe('countNeedsAttention', () => {
+    it('counts SUBMITTED orders for the distributor', async () => {
+      mockPrisma.order.count.mockResolvedValue(3);
+
+      await expect(service.countNeedsAttention('dist-1')).resolves.toBe(3);
+
+      expect(mockPrisma.order.count).toHaveBeenCalledWith({
+        where: { distributorId: 'dist-1', status: OrderStatus.SUBMITTED },
+      });
+    });
+
+    it('returns 0 when there are no submitted orders', async () => {
+      mockPrisma.order.count.mockResolvedValue(0);
+      await expect(service.countNeedsAttention('dist-1')).resolves.toBe(0);
+    });
+  });
+
   // ── getOrder ────────────────────────────────────────────────────────────────
 
   describe('getOrder', () => {

@@ -45,6 +45,12 @@ export class AdminOrdersController {
     return this.service.listOrders(distributorId, query);
   }
 
+  @Get('orders/needs-attention-count')
+  @ApiOperation({ summary: 'Count of orders awaiting acceptance (SUBMITTED)' })
+  async countNeedsAttention(@Param('distributorId') distributorId: string) {
+    return { count: await this.service.countNeedsAttention(distributorId) };
+  }
+
   @Get('orders/:id')
   @ApiOperation({ summary: 'Get a single order' })
   @ApiOkResponse({ description: 'Order detail' })

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { adminAccountingApi } from '@wholo/admin-api-client';
+import { adminAccountingApi, adminOrdersApi } from '@wholo/admin-api-client';
 
 interface NavItem {
   label: string;
@@ -11,135 +11,183 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
   {
-    label: 'Dashboard',
-    href: '/',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
-    ),
+    label: 'Overview',
+    items: [
+      {
+        label: 'Dashboard',
+        href: '/',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    label: 'Orders',
-    href: '/orders',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <rect x="4" y="3" width="16" height="18" rx="2" />
-        <line x1="8" y1="8" x2="16" y2="8" />
-        <line x1="8" y1="12" x2="16" y2="12" />
-        <line x1="8" y1="16" x2="12" y2="16" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Products',
-    href: '/products',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
-        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-        <line x1="12" y1="22.08" x2="12" y2="12" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Catalogues',
-    href: '/catalogues',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-        <line x1="9" y1="7" x2="15" y2="7" />
-        <line x1="9" y1="11" x2="15" y2="11" />
-        <line x1="9" y1="15" x2="12" y2="15" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Price lists',
-    href: '/pricelists',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-        <line x1="7" y1="7" x2="7.01" y2="7" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Tax types',
-    href: '/tax-types',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <line x1="19" y1="5" x2="5" y2="19" />
-        <circle cx="6.5" cy="6.5" r="2.5" />
-        <circle cx="17.5" cy="17.5" r="2.5" />
-      </svg>
-    ),
+    label: 'Operations',
+    items: [
+      {
+        label: 'Orders',
+        href: '/orders',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <line x1="8" y1="8" x2="16" y2="8" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+            <line x1="8" y1="16" x2="12" y2="16" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Delivery Runs',
+        href: '/delivery-runs',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <rect x="1" y="6" width="15" height="12" rx="1.5" />
+            <path d="M16 10h3.5L22 13.5V18h-2" />
+            <circle cx="6.5" cy="19" r="1.75" />
+            <circle cx="17.5" cy="19" r="1.75" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
     label: 'Customers',
-    href: '/customers',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 00-3-3.87" />
-        <path d="M16 3.13a4 4 0 010 7.75" />
-      </svg>
-    ),
+    items: [
+      {
+        label: 'Customers',
+        href: '/customers',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87" />
+            <path d="M16 3.13a4 4 0 010 7.75" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    label: 'Delivery Profiles',
-    href: '/delivery-profiles',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <circle cx="12" cy="12" r="9" />
-        <polyline points="12 7 12 12 15 15" />
-        <line x1="3.05" y1="12" x2="1" y2="12" />
-        <line x1="23" y1="12" x2="20.95" y2="12" />
-      </svg>
-    ),
+    label: 'Catalogue & Pricing',
+    items: [
+      {
+        label: 'Products',
+        href: '/products',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+            <line x1="12" y1="22.08" x2="12" y2="12" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Catalogues',
+        href: '/catalogues',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+            <line x1="9" y1="7" x2="15" y2="7" />
+            <line x1="9" y1="11" x2="15" y2="11" />
+            <line x1="9" y1="15" x2="12" y2="15" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Price lists',
+        href: '/pricelists',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+            <line x1="7" y1="7" x2="7.01" y2="7" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Tax types',
+        href: '/tax-types',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <line x1="19" y1="5" x2="5" y2="19" />
+            <circle cx="6.5" cy="6.5" r="2.5" />
+            <circle cx="17.5" cy="17.5" r="2.5" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    label: 'Delivery Routes',
-    href: '/delivery-routes',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <circle cx="6" cy="19" r="2.5" />
-        <circle cx="18" cy="5" r="2.5" />
-        <path d="M8.2 17.7L15.8 6.3" />
-        <path d="M8.5 19h6a3 3 0 003-3v-1a3 3 0 00-3-3h-1" />
-      </svg>
-    ),
+    label: 'Delivery Setup',
+    items: [
+      {
+        label: 'Delivery Routes',
+        href: '/delivery-routes',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <circle cx="6" cy="19" r="2.5" />
+            <circle cx="18" cy="5" r="2.5" />
+            <path d="M8.2 17.7L15.8 6.3" />
+            <path d="M8.5 19h6a3 3 0 003-3v-1a3 3 0 00-3-3h-1" />
+          </svg>
+        ),
+      },
+      {
+        label: 'Delivery Profiles',
+        href: '/delivery-profiles',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15 15" />
+            <line x1="3.05" y1="12" x2="1" y2="12" />
+            <line x1="23" y1="12" x2="20.95" y2="12" />
+          </svg>
+        ),
+      },
+    ],
   },
   {
-    label: 'Delivery Runs',
-    href: '/delivery-runs',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <rect x="1" y="6" width="15" height="12" rx="1.5" />
-        <path d="M16 10h3.5L22 13.5V18h-2" />
-        <circle cx="6.5" cy="19" r="1.75" />
-        <circle cx="17.5" cy="19" r="1.75" />
-      </svg>
-    ),
-  },
-  {
-    label: 'Integrations',
-    href: '/integrations',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
-        <path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4" />
-        <rect x="9" y="9" width="6" height="6" rx="1" />
-      </svg>
-    ),
+    label: 'System',
+    items: [
+      {
+        label: 'Integrations',
+        href: '/integrations',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4" />
+            <rect x="9" y="9" width="6" height="6" rx="1" />
+          </svg>
+        ),
+      },
+    ],
   },
 ];
+
+function CountBadge({ count, compact = false }: { count: number; compact?: boolean }) {
+  return (
+    <span
+      className={[
+        'ml-auto inline-flex shrink-0 items-center justify-center rounded-full bg-accent/20 font-semibold text-accent',
+        compact ? 'px-1.5 py-[1px] text-[10px]' : 'px-1.5 py-0.5 text-[11px]',
+      ].join(' ')}
+    >
+      {count}
+    </span>
+  );
+}
 
 interface SidebarProps {
   onClose: () => void;
@@ -149,15 +197,19 @@ interface SidebarProps {
 
 export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
   const pathname = usePathname();
-  const [accountingNeedsAttention, setAccountingNeedsAttention] = useState(0);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!token) return;
-    // Best-effort — returns 0 (no badge) when there's no accounting
-    // connection at all, so this is safe to call unconditionally.
+    // Best-effort, no polling — each returns 0 (no badge) when there's
+    // nothing to flag, so these are safe to call unconditionally.
     adminAccountingApi
       .countContactsNeedingAttention(token)
-      .then((res) => setAccountingNeedsAttention(res.count))
+      .then((res) => setCounts((c) => ({ ...c, '/integrations': res.count })))
+      .catch(() => {});
+    adminOrdersApi
+      .countOrdersNeedingAttention(token)
+      .then((res) => setCounts((c) => ({ ...c, '/orders': res.count })))
       .catch(() => {});
   }, [token]);
 
@@ -184,37 +236,47 @@ export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
         </button>
       </div>
 
-      {/* Nav items */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <ul className="space-y-0.5">
-          {navItems.map((item) => {
-            const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={onClose}
-                  className={[
-                    'flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-sidebar-accent/20 text-sidebar-accent'
-                      : 'text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
-                  ].join(' ')}
-                >
-                  <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
-                  {item.label}
-                  {item.href === '/integrations' && accountingNeedsAttention > 0 ? (
-                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-                      {accountingNeedsAttention}
-                    </span>
-                  ) : (
-                    active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      {/* Nav groups */}
+      <nav className="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4">
+        {navGroups.map((group, groupIndex) => {
+          const groupCount = group.items.reduce((sum, item) => sum + (counts[item.href] ?? 0), 0);
+          return (
+            <div key={group.label} className={groupIndex === 0 ? '' : 'mt-5'}>
+              <div className="flex items-center px-3 pb-1.5">
+                <span className="text-[11px] font-medium text-sidebar-fg/40">{group.label}</span>
+                {groupCount > 0 && <CountBadge count={groupCount} compact />}
+              </div>
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                  const count = counts[item.href] ?? 0;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        className={[
+                          'flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors',
+                          active
+                            ? 'bg-sidebar-accent/20 text-sidebar-accent'
+                            : 'text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
+                        ].join(' ')}
+                      >
+                        <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
+                        {item.label}
+                        {count > 0 ? (
+                          <CountBadge count={count} />
+                        ) : (
+                          active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
+                        )}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
       {/* Bottom section */}

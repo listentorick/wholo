@@ -979,6 +979,10 @@ export interface AccountingContactNeedsAttentionCountResponse {
   count: number;
 }
 
+export interface OrderNeedsAttentionCountResponse {
+  count: number;
+}
+
 export interface ImportAccountingContactRequest {
   name?: string;
   legalName?: string;

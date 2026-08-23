@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
   AuditLogEntry,
   AuditLogQueryParams,
+  OrderNeedsAttentionCountResponse,
 } from '@wholo/types';
 import { apiFetch } from './base';
 
@@ -29,6 +30,10 @@ export const adminOrdersApi = {
 
   getOrder(orderId: string, token: string): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}`, { token });
+  },
+
+  countOrdersNeedingAttention(token: string): Promise<OrderNeedsAttentionCountResponse> {
+    return apiFetch<OrderNeedsAttentionCountResponse>('/api/v1/orders/needs-attention-count', { token });
   },
 
   getOrderAuditLog(

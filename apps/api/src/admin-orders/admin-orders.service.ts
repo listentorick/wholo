@@ -245,6 +245,10 @@ export class AdminOrdersService {
     };
   }
 
+  countNeedsAttention(distributorId: string) {
+    return this.prisma.order.count({ where: { distributorId, status: OrderStatus.SUBMITTED } });
+  }
+
   async getOrder(orderId: string, distributorId: string) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, distributorId },

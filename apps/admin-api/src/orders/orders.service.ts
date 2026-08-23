@@ -26,6 +26,10 @@ export class OrdersService {
     return this.api.get(`/admin/distributors/${distributorId}/orders${qs ? `?${qs}` : ''}`, token);
   }
 
+  countNeedsAttention(distributorId: string, token: string) {
+    return this.api.get(`/admin/distributors/${distributorId}/orders/needs-attention-count`, token);
+  }
+
   getOrder(orderId: string, distributorId: string, token: string) {
     return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}`, token);
   }

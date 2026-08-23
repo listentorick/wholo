@@ -19,6 +19,12 @@ export class OrdersController {
     return this.ordersService.listOrders(organisationId, query, token);
   }
 
+  @Get('needs-attention-count')
+  countNeedsAttention(@Req() req: Request) {
+    const { organisationId, token } = req['user'] as { organisationId: string; token: string };
+    return this.ordersService.countNeedsAttention(organisationId, token);
+  }
+
   @Get(':id')
   getOrder(@Param('id') id: string, @Req() req: Request) {
     const { organisationId, token } = req['user'] as { organisationId: string; token: string };

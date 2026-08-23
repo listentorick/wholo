@@ -2,12 +2,14 @@ import { Test } from '@nestjs/testing';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 
-// Only the new/changed acceptOrder path is covered here — the rest of this
-// controller (listOrders, getOrder, getOrderAuditLog, rejectOrder,
-// cancelOrder) is a pre-existing gap with no spec coverage, out of scope for
-// this change (see docs/tax-types-pbi-plan.md Phase 5 notes).
+// Only the new/changed acceptOrder and countNeedsAttention paths are covered
+// here — the rest of this controller (listOrders, getOrder,
+// getOrderAuditLog, rejectOrder, cancelOrder) is a pre-existing gap with no
+// spec coverage, out of scope for this change (see
+// docs/tax-types-pbi-plan.md Phase 5 notes).
 const mockService = {
   acceptOrder: jest.fn(),
+  countNeedsAttention: jest.fn(),
 };
 
 function mockRequest() {
@@ -47,6 +49,17 @@ describe('OrdersController (BFF)', () => {
       await controller.acceptOrder('order-1', {}, mockRequest());
 
       expect(mockService.acceptOrder).toHaveBeenCalledWith('order-1', 'dist-1', {}, 'token-1');
+    });
+  });
+
+  describe('countNeedsAttention', () => {
+    it('resolves organisationId/token from the request and delegates to the service', async () => {
+      mockService.countNeedsAttention.mockResolvedValue({ count: 3 });
+
+      const result = await controller.countNeedsAttention(mockRequest());
+
+      expect(mockService.countNeedsAttention).toHaveBeenCalledWith('dist-1', 'token-1');
+      expect(result).toEqual({ count: 3 });
     });
   });
 });
