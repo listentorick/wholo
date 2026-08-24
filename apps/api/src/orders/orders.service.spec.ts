@@ -183,6 +183,79 @@ describe('OrdersService — delivery date revalidation', () => {
     ).resolves.toBeDefined();
   });
 
+  it('defaults order currency from the distributor settings', async () => {
+    (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
+    (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
+      defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
+    });
+    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship());
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ nextval: BigInt(1) }]);
+    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(
+      makeDistributor({ distributorSettings: { currencyCode: 'USD' } }),
+    );
+    const orderCreate = jest.fn().mockResolvedValue({
+      id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID,
+      placedByUserId: USER_ID, status: OrderStatus.SUBMITTED, currency: 'USD',
+      subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '20.00' },
+      billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null, customerReference: null,
+      notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT,
+      submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null,
+      rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null, cancellationReason: null,
+      createdAt: new Date(), updatedAt: new Date(), customer: { id: CUSTOMER_ID, name: 'Test Customer' }, invoiceExports: [], lines: [],
+    });
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        order: { create: orderCreate },
+        orderLine: { createMany: jest.fn().mockResolvedValue({}) },
+        cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
+        cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+        orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
+        outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
+      }),
+    );
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(orderCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ currency: 'USD' }) }),
+    );
+  });
+
+  it('falls back to GBP when the distributor has no settings row', async () => {
+    setupHappyPath(); // makeDistributor() defaults distributorSettings: null
+    let capturedData: Record<string, unknown> | undefined;
+    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        order: {
+          create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+            capturedData = data;
+            return Promise.resolve({
+              id: 'order-1', orderNumber: 'ORD-2024-00001', distributorId: DISTRIBUTOR_ID, traderCustomerId: CUSTOMER_ID,
+              placedByUserId: USER_ID, status: OrderStatus.SUBMITTED, currency: 'GBP',
+              subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '20.00' },
+              billingAddressSnapshot: null, deliveryAddressSnapshot: null, requestedDeliveryDate: null, customerReference: null,
+              notes: null, acceptanceModeSnapshot: OrderAcceptanceMode.MANUAL, acceptanceModeSourceSnapshot: AcceptanceModeSource.DISTRIBUTOR_DEFAULT,
+              submittedAt: new Date(), acceptedAt: null, acceptedByActorType: null, acceptedByUserId: null, rejectedAt: null,
+              rejectedByUserId: null, rejectionReason: null, cancelledAt: null, cancelledByUserId: null, cancellationReason: null,
+              createdAt: new Date(), updatedAt: new Date(), customer: { id: CUSTOMER_ID, name: 'Test Customer' }, invoiceExports: [], lines: [],
+            });
+          }),
+        },
+        orderLine: { createMany: jest.fn().mockResolvedValue({}) },
+        cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
+        cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+        orderAsSession: { deleteMany: jest.fn().mockResolvedValue({}) },
+        outbox: { writeEvent: jest.fn().mockResolvedValue({}) },
+        user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
+      }),
+    );
+
+    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+    expect(capturedData?.currency).toBe('GBP');
+  });
+
   it('throws ForbiddenException without loading the cart when there is no trade relationship at all', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
     (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);

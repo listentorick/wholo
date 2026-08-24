@@ -16,6 +16,7 @@ const baseSettings: DistributorSettings = {
   addressPostcode: null,
   addressCountry: null,
   timezone: 'UTC',
+  currencyCode: 'GBP',
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { adminProductsApi } from '@wholo/admin-api-client';
 import type { Product } from '@wholo/types';
+import { formatMoney } from '@wholo/types';
+import { useAuth } from '@/lib/auth-context';
 
 interface ProductTransferPanelProps {
   token: string;
@@ -28,6 +30,8 @@ function XIcon({ className }: { className?: string }) {
 }
 
 export function ProductTransferPanel({ token, currentProductIds, onProductIdsChange, disabled }: ProductTransferPanelProps) {
+  const { user } = useAuth();
+  const currencyCode = user?.organisationCurrencyCode ?? 'GBP';
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [leftSearch, setLeftSearch] = useState('');
@@ -155,7 +159,7 @@ export function ProductTransferPanel({ token, currentProductIds, onProductIdsCha
                     </div>
                     <div className="shrink-0 text-right">
                       {p.price ? (
-                        <span className="text-xs text-text">${parseFloat(p.price).toFixed(2)}</span>
+                        <span className="text-xs text-text">{formatMoney(p.price, currencyCode)}</span>
                       ) : (
                         <span className="text-xs text-muted italic">POA</span>
                       )}
@@ -234,7 +238,7 @@ export function ProductTransferPanel({ token, currentProductIds, onProductIdsCha
                   </div>
                   <div className="shrink-0 text-right mr-1">
                     {p.price ? (
-                      <span className="text-xs text-text">${parseFloat(p.price).toFixed(2)}</span>
+                      <span className="text-xs text-text">{formatMoney(p.price, currencyCode)}</span>
                     ) : (
                       <span className="text-xs text-muted italic">POA</span>
                     )}

@@ -123,7 +123,7 @@ describe('ProductDetailPage', () => {
     render(<ProductDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/\$10\.00 per box/)).toBeTruthy();
+      expect(screen.getByText(/£10\.00 per box/)).toBeTruthy();
     });
   });
 
@@ -131,7 +131,7 @@ describe('ProductDetailPage', () => {
     render(<ProductDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/~\$10\.00/)).toBeTruthy();
+      expect(screen.getByText(/~£10\.00/)).toBeTruthy();
     });
   });
 
@@ -144,8 +144,21 @@ describe('ProductDetailPage', () => {
     render(<ProductDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/\$8\.50 per box/)).toBeTruthy();
-      expect(screen.queryByText(/~\$8\.50/)).toBeNull();
+      expect(screen.getByText(/£8\.50 per box/)).toBeTruthy();
+      expect(screen.queryByText(/~£8\.50/)).toBeNull();
+    });
+  });
+
+  it('renders the price in the distributor currency', async () => {
+    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({
+      relationshipStatus: 'ACTIVE',
+      distributor: { currencyCode: 'USD' },
+    });
+
+    render(<ProductDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/~\$10\.00 per box/)).toBeTruthy();
     });
   });
 

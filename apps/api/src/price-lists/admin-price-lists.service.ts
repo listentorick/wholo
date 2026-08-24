@@ -97,7 +97,7 @@ export class AdminPriceListsService {
         distributorId,
         name: dto.name,
         description: dto.description,
-        currency: dto.currency ?? 'GBP',
+        currency: dto.currency ?? (await this.resolveCurrencyCode(distributorId)),
       },
       include: priceListWithRulesInclude,
     });
@@ -146,7 +146,7 @@ export class AdminPriceListsService {
   }
 
   async createRule(priceListId: string, distributorId: string, dto: CreatePriceListRuleDto) {
-    await this.assertOwnership(priceListId, distributorId);
+    const priceList = await this.assertOwnership(priceListId, distributorId);
 
     if (dto.selectorType === PriceListRuleSelectorType.PRODUCT && !dto.productId) {
       throw new BadRequestException('productId is required for PRODUCT selector rules');
@@ -189,7 +189,11 @@ export class AdminPriceListsService {
         discountPercentage: dto.discountPercentage ? new Prisma.Decimal(dto.discountPercentage) : null,
         discountBaseType: dto.discountBaseType ?? null,
         basePriceListId: dto.basePriceListId ?? null,
-        currency: dto.currency ?? 'GBP',
+        // Inherits the owning price list's currency by default, rather than
+        // independently re-deriving the distributor's current default — a
+        // rule should match the list it belongs to even if the distributor's
+        // default currency changes later.
+        currency: dto.currency ?? priceList.currency,
         sortOrder: dto.sortOrder ?? 0,
       },
       select: ruleSelect,
@@ -283,8 +287,17 @@ export class AdminPriceListsService {
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   private async assertOwnership(id: string, distributorId: string) {
-    const pl = await this.prisma.priceList.findUnique({ where: { id }, select: { distributorId: true } });
+    const pl = await this.prisma.priceList.findUnique({ where: { id }, select: { distributorId: true, currency: true } });
     if (!pl || pl.distributorId !== distributorId) throw new NotFoundException('Price list not found');
+    return pl;
+  }
+
+  private async resolveCurrencyCode(distributorId: string): Promise<string> {
+    const settings = await this.prisma.distributorSettings.findUnique({
+      where: { distributorId },
+      select: { currencyCode: true },
+    });
+    return settings?.currencyCode ?? 'GBP';
   }
 
   private async assertRuleOwnership(ruleId: string, priceListId: string, distributorId: string) {

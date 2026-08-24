@@ -11,7 +11,7 @@ const mockUser = {
     {
       role: 'DISTRIBUTOR_ADMIN',
       organisationId: 'org-1',
-      organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR' },
+      organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR', distributorSettings: { currencyCode: 'GBP' } },
     },
   ],
 };
@@ -48,6 +48,7 @@ describe('AuthService', () => {
         organisationId: 'org-1',
         organisationName: 'Vine & Co',
         organisationType: 'DISTRIBUTOR',
+        organisationCurrencyCode: 'GBP',
       });
     });
 
@@ -84,6 +85,7 @@ describe('AuthService', () => {
         organisationId: 'org-2',
         organisationType: 'TRADE_CUSTOMER',
       });
+      expect(result?.organisationCurrencyCode).toBeUndefined();
     });
 
     it('prefers a DISTRIBUTOR membership over a TRADE_CUSTOMER one regardless of array order', async () => {

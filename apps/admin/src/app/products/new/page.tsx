@@ -10,7 +10,7 @@ import type { CreateProductRequest } from '@wholo/types';
 
 export default function NewProductPage() {
   const { isLoading } = useRequireAuth();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const router = useRouter();
 
   if (isLoading) {
@@ -32,6 +32,7 @@ export default function NewProductPage() {
       <ProductForm
         mode="create"
         token={accessToken ?? ''}
+        currencyCode={user?.organisationCurrencyCode ?? 'GBP'}
         onSubmit={handleSubmit}
       />
     </AdminLayout>

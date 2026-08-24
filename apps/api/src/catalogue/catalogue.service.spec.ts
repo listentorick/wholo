@@ -164,6 +164,22 @@ describe('CatalogueService', () => {
         where: { distributorId: DISTRIBUTOR_ID, status: 'ACTIVE' },
       });
     });
+
+    it('returns currencyCode from distributor settings', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({
+        ...baseDistributor,
+        slug: DISTRIBUTOR_SLUG,
+        distributorSettings: { currencyCode: 'USD' },
+      });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.currencyCode).toBe('USD');
+    });
+
+    it('falls back to GBP when the distributor has no settings row', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.currencyCode).toBe('GBP');
+    });
   });
 
   describe('getProducts', () => {

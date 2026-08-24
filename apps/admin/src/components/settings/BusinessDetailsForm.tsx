@@ -5,11 +5,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@wholo/types';
+import { getCurrencySymbol } from '@wholo/types';
 import { FormCard, FieldLabel, FieldError, TextInput, SelectInput, SaveButton, SaveBanner } from '@/components/form';
 
 // Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
 // commonly-selected IANA identifier — add it back explicitly.
 const IANA_TIMEZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC'];
+
+// A raw ISO code (e.g. "AUD") isn't self-explanatory the way a timezone
+// identifier is — label each option with its symbol and name so it's
+// recognizable at a glance.
+const CURRENCY_NAMES = new Intl.DisplayNames(undefined, { type: 'currency' });
+const CURRENCY_OPTIONS = Intl.supportedValuesOf('currency')
+  .map((code) => ({ code, label: `${code} — ${getCurrencySymbol(code)} ${CURRENCY_NAMES.of(code)}` }))
+  .sort((a, b) => a.code.localeCompare(b.code));
 
 const schema = z.object({
   name: z.string().min(1, 'Business name is required'),
@@ -23,6 +32,7 @@ const schema = z.object({
   addressPostcode: z.string().optional(),
   addressCountry: z.string().optional(),
   timezone: z.string().min(1, 'Timezone is required'),
+  currencyCode: z.string().min(1, 'Currency is required'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -50,6 +60,7 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
       addressPostcode: settings.addressPostcode ?? '',
       addressCountry: settings.addressCountry ?? '',
       timezone: settings.timezone,
+      currencyCode: settings.currencyCode,
     },
   });
 
@@ -69,6 +80,7 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
         addressPostcode: data.addressPostcode || undefined,
         addressCountry: data.addressCountry || undefined,
         timezone: data.timezone,
+        currencyCode: data.currencyCode,
       });
       setSuccess(true);
     } catch {
@@ -145,18 +157,32 @@ export function BusinessDetailsForm({ settings, onSave }: Props) {
             </div>
 
             <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trading calendar</p>
-              <div>
-                <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
-                <SelectInput id="timezone" {...register('timezone')}>
-                  {IANA_TIMEZONES.map((tz) => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                </SelectInput>
-                <FieldError message={errors.timezone?.message} />
-                <p className="mt-1.5 text-xs text-muted">
-                  Defines your trading day, week and month boundaries — used throughout order and sales reporting.
-                </p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Trading settings</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <FieldLabel htmlFor="timezone">Timezone</FieldLabel>
+                  <SelectInput id="timezone" {...register('timezone')}>
+                    {IANA_TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </SelectInput>
+                  <FieldError message={errors.timezone?.message} />
+                  <p className="mt-1.5 text-xs text-muted">
+                    Defines your trading day, week and month boundaries — used throughout order and sales reporting.
+                  </p>
+                </div>
+                <div>
+                  <FieldLabel htmlFor="currencyCode">Currency</FieldLabel>
+                  <SelectInput id="currencyCode" {...register('currencyCode')}>
+                    {CURRENCY_OPTIONS.map(({ code, label }) => (
+                      <option key={code} value={code}>{label}</option>
+                    ))}
+                  </SelectInput>
+                  <FieldError message={errors.currencyCode?.message} />
+                  <p className="mt-1.5 text-xs text-muted">
+                    Used to display prices throughout orders, pricing and the customer portal.
+                  </p>
+                </div>
               </div>
             </div>
 

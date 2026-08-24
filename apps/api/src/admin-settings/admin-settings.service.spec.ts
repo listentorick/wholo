@@ -31,6 +31,7 @@ const mockOrg = {
 const mockSettings = {
   distributorId: 'dist-1',
   timezone: 'UTC',
+  currencyCode: 'GBP',
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
@@ -74,6 +75,7 @@ describe('AdminSettingsService', () => {
         addressPostcode: '2010',
         addressCountry: 'Australia',
         timezone: 'UTC',
+        currencyCode: 'GBP',
         defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
         marketplaceVisible: false,
         marketplaceDescription: null,
@@ -228,6 +230,28 @@ describe('AdminSettingsService', () => {
 
       const result = await service.find('dist-1');
       expect(result.timezone).toBe('Europe/London');
+    });
+
+    it('upserts currencyCode as a settings field, not an org field', async () => {
+      await service.update('dist-1', { currencyCode: 'USD' });
+
+      expect(mockPrisma.organisation.update).not.toHaveBeenCalled();
+      expect(mockPrisma.distributorSettings.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ currencyCode: 'USD' }),
+          update: expect.objectContaining({ currencyCode: 'USD' }),
+        }),
+      );
+    });
+
+    it('includes currencyCode in find() result', async () => {
+      mockPrisma.distributorSettings.upsert.mockResolvedValue({
+        ...mockSettings,
+        currencyCode: 'USD',
+      });
+
+      const result = await service.find('dist-1');
+      expect(result.currencyCode).toBe('USD');
     });
   });
 });

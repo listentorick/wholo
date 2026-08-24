@@ -6,16 +6,22 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useCart } from '@/lib/cart-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
-import { TradeRelationshipStatus, type CatalogueProductDetail } from '@wholo/types';
+import { TradeRelationshipStatus, formatMoney, type CatalogueProductDetail } from '@wholo/types';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 
-function formatPrice(price: string | null, resolvedPrice: string | null, productTypeName?: string | null): string {
+function formatPrice(
+  price: string | null,
+  resolvedPrice: string | null,
+  currencyCode: string,
+  productTypeName?: string | null,
+): string {
   const raw = resolvedPrice ?? price;
   if (!raw) return 'Price on request';
   const unit = productTypeName ?? 'item';
-  const prefix = resolvedPrice ? '$' : '~$';
-  return `${prefix}${parseFloat(raw).toFixed(2)} per ${unit} · excl. VAT`;
+  const amount = formatMoney(raw, currencyCode);
+  const prefixed = resolvedPrice ? amount : `~${amount}`;
+  return `${prefixed} per ${unit} · excl. VAT`;
 }
 
 export default function ProductDetailPage() {
@@ -28,7 +34,8 @@ export default function ProductDetailPage() {
     pathname ?? `/${distributorSlug}/products/${productId}`,
   );
   const { quantities, savingItems, adjustQty } = useCart();
-  const { relationshipStatus } = useDistributor();
+  const { relationshipStatus, distributor } = useDistributor();
+  const currencyCode = distributor?.currencyCode ?? 'GBP';
 
   const [product, setProduct] = useState<CatalogueProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -170,7 +177,7 @@ export default function ProductDetailPage() {
             </span>
 
             <span style={{ fontSize: 13, color: '#9CA3AF', flexShrink: 0 }}>
-              {formatPrice(product.price, product.resolvedPrice, product.productType?.name)}
+              {formatPrice(product.price, product.resolvedPrice, currencyCode, product.productType?.name)}
             </span>
           </div>
 

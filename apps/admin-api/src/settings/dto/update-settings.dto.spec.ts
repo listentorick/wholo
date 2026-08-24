@@ -27,4 +27,21 @@ describe('UpdateSettingsDto', () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].property).toBe('timezone');
   });
+
+  it('accepts a valid ISO 4217 currency code', async () => {
+    const dto = plainToInstance(UpdateSettingsDto, { currencyCode: 'USD' });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an invalid currency code', async () => {
+    const dto = plainToInstance(UpdateSettingsDto, { currencyCode: 'NOT_A_CODE' });
+
+    const errors = await validate(dto);
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].property).toBe('currencyCode');
+  });
 });

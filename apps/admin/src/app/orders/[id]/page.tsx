@@ -14,7 +14,7 @@ import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportB
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { Order, OrderLine, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
-import { OrderStatus, AcceptedByActorType, ActorType } from '@wholo/types';
+import { OrderStatus, AcceptedByActorType, ActorType, formatMoney } from '@wholo/types';
 import { CLASSIFICATION_LABELS } from '@/lib/tax-classification-labels';
 
 // ─── Tax label ──────────────────────────────────────────────────────────────
@@ -52,8 +52,8 @@ function fmtDateTime(iso: string | null | undefined) {
   });
 }
 
-function fmtAmt(amount: string) {
-  return `£${parseFloat(amount).toFixed(2)}`;
+function fmtAmt(amount: string, currency: string) {
+  return formatMoney(amount, currency);
 }
 
 // Date-only strings (e.g. requestedDeliveryDate = "2026-08-09") parse as UTC midnight,
@@ -516,11 +516,11 @@ export default function OrderDetailPage() {
                       <p className="text-xs text-muted">{line.unitOfMeasureSnapshot}</p>
                     )}
                     <p className="mt-0.5 text-xs text-muted">
-                      {line.skuSnapshot ?? '—'} · {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot)}
+                      {line.skuSnapshot ?? '—'} · {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot, order.currency)}
                     </p>
                     <p className="mt-0.5 text-xs text-muted">Tax: {taxLabel(line)}</p>
                   </div>
-                  <p className="flex-shrink-0 text-sm font-semibold tabular-nums text-text">{fmtAmt(line.totalAmount)}</p>
+                  <p className="flex-shrink-0 text-sm font-semibold tabular-nums text-text">{fmtAmt(line.totalAmount, order.currency)}</p>
                 </li>
               ))}
             </ul>
@@ -549,9 +549,9 @@ export default function OrderDetailPage() {
                       </td>
                       <td className="py-3 px-4 text-sm text-muted">{line.skuSnapshot ?? '—'}</td>
                       <td className="py-3 px-4 text-sm text-text text-right">{line.quantityOrdered}</td>
-                      <td className="py-3 px-4 text-sm text-text text-right">{fmtAmt(line.unitPriceSnapshot)}</td>
+                      <td className="py-3 px-4 text-sm text-text text-right">{fmtAmt(line.unitPriceSnapshot, order.currency)}</td>
                       <td className="py-3 px-4 text-sm text-muted">{taxLabel(line)}</td>
-                      <td className="py-3 pl-4 pr-5 text-sm font-medium text-text text-right">{fmtAmt(line.totalAmount)}</td>
+                      <td className="py-3 pl-4 pr-5 text-sm font-medium text-text text-right">{fmtAmt(line.totalAmount, order.currency)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -562,15 +562,15 @@ export default function OrderDetailPage() {
               <div className="flex flex-col items-end gap-1.5">
                 <div className="flex w-48 justify-between text-sm text-muted">
                   <span>Subtotal</span>
-                  <span>{fmtAmt(order.subtotalAmount)}</span>
+                  <span>{fmtAmt(order.subtotalAmount, order.currency)}</span>
                 </div>
                 <div className="flex w-48 justify-between text-sm text-muted">
                   <span>Tax</span>
-                  <span>{fmtAmt(order.taxAmount)}</span>
+                  <span>{fmtAmt(order.taxAmount, order.currency)}</span>
                 </div>
                 <div className="mt-1 flex w-48 justify-between border-t border-border pt-2">
                   <span className="text-sm font-semibold text-text">Total</span>
-                  <span className="text-sm font-semibold text-text">{fmtAmt(order.totalAmount)}</span>
+                  <span className="text-sm font-semibold text-text">{fmtAmt(order.totalAmount, order.currency)}</span>
                 </div>
               </div>
             </div>

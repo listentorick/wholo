@@ -736,6 +736,10 @@ model DistributorSettings {
   // day/week/month boundaries for analytics period comparisons — see the
   // wholesaler homepage dashboard PRD, §4.1.
   timezone                   String              @default("UTC")
+  // ISO 4217 currency code (e.g. "GBP") — this distributor's single trading
+  // currency. Order/PriceList/PriceListRule snapshot it at creation time
+  // (ADR-032) rather than referencing it live.
+  currencyCode               String              @default("GBP")
   // Look-ahead window (days) for surfacing "another delivery to the same
   // address" review suggestions on the Delivery Runs board. Reviewable
   // suggestion only — orders are never auto-moved/merged. No settings UI

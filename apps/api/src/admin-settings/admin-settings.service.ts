@@ -29,6 +29,7 @@ export class AdminSettingsService {
       addressPostcode: org.addressPostcode,
       addressCountry: org.addressCountry,
       timezone: settings.timezone,
+      currencyCode: settings.currencyCode,
       defaultOrderAcceptanceMode: settings.defaultOrderAcceptanceMode,
       marketplaceVisible: settings.marketplaceVisible,
       marketplaceDescription: settings.marketplaceDescription,

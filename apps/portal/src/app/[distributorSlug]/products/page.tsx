@@ -9,13 +9,13 @@ import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
-import { TradeRelationshipStatus, type CatalogueProduct, type CatalogueProductsResponse } from '@wholo/types';
+import { TradeRelationshipStatus, formatMoney, type CatalogueProduct, type CatalogueProductsResponse } from '@wholo/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
-function formatPrice(price: string | null): string {
+function formatPrice(price: string | null, currencyCode: string): string {
   if (price === null) return 'Price on request';
-  return `$${parseFloat(price).toFixed(2)} per item · excl. VAT`;
+  return `${formatMoney(price, currencyCode)} per item · excl. VAT`;
 }
 
 export default function CataloguePage() {
@@ -25,7 +25,8 @@ export default function CataloguePage() {
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { quantities, savingItems, adjustQty } = useCart();
-  const { relationshipStatus } = useDistributor();
+  const { relationshipStatus, distributor } = useDistributor();
+  const currencyCode = distributor?.currencyCode ?? 'GBP';
 
   const [catalogue, setCatalogue] = useState<CatalogueProductsResponse | null>(null);
   const [fetchLoading, setFetchLoading] = useState(true);
@@ -202,7 +203,7 @@ export default function CataloguePage() {
                       <span className="text-[11px] text-[#C4B5A8] leading-none">{product.sku}</span>
                     )}
                     <span className="text-xs text-[#9CA3AF] mt-0.5">
-                      {formatPrice(product.resolvedPrice ?? product.price)}
+                      {formatPrice(product.resolvedPrice ?? product.price, currencyCode)}
                     </span>
 
                     {relationshipStatus === TradeRelationshipStatus.ACTIVE && (

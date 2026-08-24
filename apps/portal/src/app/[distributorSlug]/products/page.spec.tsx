@@ -121,6 +121,19 @@ describe('CataloguePage', () => {
       expect(screen.getByText('Egg tarts')).toBeTruthy();
       expect(screen.getByText('Custard buns')).toBeTruthy();
       expect(screen.getByText('SKU-prod-1')).toBeTruthy();
+      expect(screen.getAllByText('£10.00 per item · excl. VAT')).toHaveLength(2);
+    });
+  });
+
+  it('renders prices in the distributor currency', async () => {
+    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({
+      relationshipStatus: 'ACTIVE',
+      distributor: { currencyCode: 'USD' },
+    });
+
+    render(<CataloguePage />);
+
+    await waitFor(() => {
       expect(screen.getAllByText('$10.00 per item · excl. VAT')).toHaveLength(2);
     });
   });

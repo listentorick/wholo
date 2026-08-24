@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType } from '@wholo/types';
+import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType, formatMoney, getCurrencySymbol } from '@wholo/types';
 import type { ProductType, Supplier, TaxType, Product, CreateProductRequest, ProductPricingEntry, PriceListSummary } from '@wholo/types';
 import { adminProductTypesApi, adminSuppliersApi, adminPriceListsApi, adminTaxTypesApi } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput, SelectInput } from '@/components/form';
@@ -167,7 +167,9 @@ function NewPricingRow({ priceLists, productId, onSave, onCancel, token }: NewPr
       <td className="py-2 px-2">
         {valueType === PriceListRuleValueType.FIXED_PRICE ? (
           <div className="flex items-center gap-1">
-            <span className="text-xs text-muted">£</span>
+            <span className="text-xs text-muted">
+              {getCurrencySymbol(priceLists.find((p) => p.id === priceListId)?.currency ?? 'GBP')}
+            </span>
             <input type="text" inputMode="decimal" placeholder="0.00" value={unitPrice}
               onChange={(e) => setUnitPrice(e.target.value)} className={`${inputCls} w-24`} disabled={saving} />
           </div>
@@ -293,7 +295,7 @@ function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRow
             />
           ) : (
             <div className="flex items-center gap-1">
-              <span className="text-xs text-muted">£</span>
+              <span className="text-xs text-muted">{getCurrencySymbol(entry.currency)}</span>
               <input type="text" inputMode="decimal" value={unitPrice}
                 onChange={(e) => setUnitPrice(e.target.value)} className={`${inputCls} w-24`} disabled={saving} />
             </div>
@@ -308,7 +310,7 @@ function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRow
             }
           </span>
         ) : (
-          <span className="font-mono text-sm text-text">{entry.currency} {rule.unitPrice}</span>
+          <span className="font-mono text-sm text-text">{formatMoney(rule.unitPrice ?? 0, entry.currency)}</span>
         )}
       </td>
       <td className="py-2.5 px-2">
@@ -443,12 +445,13 @@ function ProductPricingTable({ productId, token }: ProductPricingTableProps) {
 interface ProductFormProps {
   mode: 'create' | 'edit';
   token: string;
+  currencyCode: string;
   initialValues?: Product;
   onSubmit: (data: CreateProductRequest) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
 
-export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: ProductFormProps) {
+export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit, onDelete }: ProductFormProps) {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
@@ -625,7 +628,7 @@ export function ProductForm({ mode, token, initialValues, onSubmit, onDelete }: 
               <div className="max-w-[calc(50%-0.5rem)]">
                 <FieldLabel htmlFor="price">Price</FieldLabel>
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">$</span>
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">{getCurrencySymbol(currencyCode)}</span>
                   <TextInput
                     id="price"
                     type="text"

@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 import { OrderAcceptanceMode } from '@prisma/client';
 import { SLUG_PATTERN } from '../../common/slug';
+import { ISO_CURRENCIES } from '../../common/currency';
 
 // Intl.supportedValuesOf('timeZone') omits 'UTC' even though it's a valid,
 // commonly-selected IANA identifier — add it back explicitly.
@@ -68,6 +69,12 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsIn(IANA_TIMEZONES, { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
   timezone?: string;
+
+  // This distributor's single trading currency — Order/PriceList/PriceListRule
+  // snapshot it at creation time (ADR-032) rather than referencing it live.
+  @IsOptional()
+  @IsIn(ISO_CURRENCIES, { message: 'Must be a valid ISO 4217 currency code (e.g. "GBP")' })
+  currencyCode?: string;
 
   @IsOptional()
   @IsEnum(OrderAcceptanceMode)

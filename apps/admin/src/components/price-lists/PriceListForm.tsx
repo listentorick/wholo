@@ -12,6 +12,8 @@ import {
   PriceListRuleValueType,
   PriceListRuleDiscountBaseType,
   ProductStatus,
+  formatMoney,
+  getCurrencySymbol,
 } from '@wholo/types';
 import { FormCard, FieldLabel, TextInput, Textarea } from '@/components/form';
 import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
@@ -24,7 +26,6 @@ import { StatusBadge } from '@/components/list/StatusBadge';
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  currency: z.string().min(1, 'Currency is required'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -117,12 +118,13 @@ function XIcon({ className }: { className?: string }) {
 
 interface ProductPickerProps {
   token: string;
+  currency: string;
   selectedId: string;
   onSelect: (productId: string) => void;
   disabled?: boolean;
 }
 
-function ProductPicker({ token, selectedId, onSelect, disabled }: ProductPickerProps) {
+function ProductPicker({ token, currency, selectedId, onSelect, disabled }: ProductPickerProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -160,7 +162,7 @@ function ProductPicker({ token, selectedId, onSelect, disabled }: ProductPickerP
               <p className="text-sm font-medium text-text truncate">{selectedProduct.name}</p>
               <p className="text-xs text-muted mt-0.5">
                 {selectedProduct.sku ? `SKU: ${selectedProduct.sku}` : 'No SKU'}
-                {selectedProduct.price ? ` · £${selectedProduct.price}` : ''}
+                {selectedProduct.price ? ` · ${formatMoney(selectedProduct.price, currency)}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -226,7 +228,7 @@ function ProductPicker({ token, selectedId, onSelect, disabled }: ProductPickerP
                 <span className="flex-1 min-w-0">
                   <span className="block text-xs font-medium text-text truncate">{p.name}</span>
                   <span className="text-[11px] text-muted">
-                    {p.sku ? `SKU: ${p.sku}` : 'No SKU'}{p.price ? ` · £${p.price}` : ''}
+                    {p.sku ? `SKU: ${p.sku}` : 'No SKU'}{p.price ? ` · ${formatMoney(p.price, currency)}` : ''}
                   </span>
                 </span>
                 <a
@@ -253,13 +255,14 @@ function ProductPicker({ token, selectedId, onSelect, disabled }: ProductPickerP
 interface RuleDrawerProps {
   state: NonNullable<DrawerState>;
   priceListId: string;
+  currency: string;
   pricelists: PriceListSummary[];
   token: string;
   onSaved: (rule: PriceListRule) => void;
   onClose: () => void;
 }
 
-function RuleDrawer({ state, priceListId, pricelists, token, onSaved, onClose }: RuleDrawerProps) {
+function RuleDrawer({ state, priceListId, currency, pricelists, token, onSaved, onClose }: RuleDrawerProps) {
   const isEdit = state.mode === 'edit';
   const editRule = isEdit ? state.rule : null;
   const isDiscount =
@@ -441,6 +444,7 @@ function RuleDrawer({ state, priceListId, pricelists, token, onSaved, onClose }:
                   <div>
                     <ProductPicker
                       token={token}
+                      currency={currency}
                       selectedId={selectedProductId}
                       onSelect={setSelectedProductId}
                       disabled={saving}
@@ -476,7 +480,7 @@ function RuleDrawer({ state, priceListId, pricelists, token, onSaved, onClose }:
             <div>
               <FieldLabel htmlFor="unitPrice">Unit price</FieldLabel>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-muted">£</span>
+                <span className="text-sm font-medium text-muted">{getCurrencySymbol(currency)}</span>
                 <input
                   id="unitPrice"
                   type="text"
@@ -638,7 +642,7 @@ function RuleRow({ rule, pricelists, onEdit, onToggle, onDelete }: RuleRowProps)
             }
           </span>
         ) : (
-          <span className="font-mono text-sm text-text">{rule.currency} {rule.unitPrice}</span>
+          <span className="font-mono text-sm text-text">{formatMoney(rule.unitPrice ?? 0, rule.currency)}</span>
         )}
       </td>
       <td className="py-2.5 px-2">
@@ -688,9 +692,10 @@ function RuleRow({ rule, pricelists, onEdit, onToggle, onDelete }: RuleRowProps)
 interface RulesTableProps {
   token: string;
   priceListId: string;
+  currency: string;
 }
 
-function RulesTable({ token, priceListId }: RulesTableProps) {
+function RulesTable({ token, priceListId, currency }: RulesTableProps) {
   const [rules, setRules] = useState<PriceListRule[]>([]);
   const [pricelists, setPricelists] = useState<PriceListSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -792,6 +797,7 @@ function RulesTable({ token, priceListId }: RulesTableProps) {
         <RuleDrawer
           state={drawerState}
           priceListId={priceListId}
+          currency={currency}
           pricelists={pricelists}
           token={token}
           onSaved={handleSaved}
@@ -830,7 +836,6 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
     defaultValues: {
       name: initialValues?.name ?? '',
       description: initialValues?.description ?? '',
-      currency: initialValues?.currency ?? 'GBP',
     },
   });
 
@@ -840,7 +845,6 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
       const result = await onSubmit({
         name: data.name,
         description: data.description || undefined,
-        currency: data.currency,
       });
       if (mode === 'create') {
         if (isDrawer) {
@@ -967,24 +971,12 @@ export function PriceListForm({ mode, token, initialValues, onSubmit, onDelete, 
                   {...register('description')}
                 />
               </div>
-              <div>
-                <FieldLabel htmlFor="currency">Currency</FieldLabel>
-                <TextInput
-                  id="currency"
-                  placeholder="GBP"
-                  disabled={disabled || mode === 'edit'}
-                  {...register('currency')}
-                />
-                {mode === 'edit' && (
-                  <p className="mt-1 text-xs text-muted">Currency cannot be changed after creation.</p>
-                )}
-              </div>
             </div>
           </FormCard>
 
           {mode === 'edit' && initialValues && (
             <FormCard title="Pricing rules">
-              <RulesTable token={token} priceListId={initialValues.id} />
+              <RulesTable token={token} priceListId={initialValues.id} currency={initialValues.currency} />
             </FormCard>
           )}
         </DetailPageLayout>

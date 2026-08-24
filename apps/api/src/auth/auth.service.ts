@@ -24,6 +24,7 @@ export class AuthService {
       organisationId: membership?.organisationId,
       organisationName: membership?.organisation?.name,
       organisationType: membership?.organisation?.type,
+      organisationCurrencyCode: membership?.organisation?.distributorSettings?.currencyCode,
     };
   }
 }

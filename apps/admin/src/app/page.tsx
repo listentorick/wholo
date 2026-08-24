@@ -11,6 +11,7 @@ import { OrderTrendChart } from '@/components/dashboard/OrderTrendChart';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
 import { adminAnalyticsApi } from '@wholo/admin-api-client';
+import { getCurrencySymbol } from '@wholo/types';
 import type {
   ActionItemsResponse,
   AnalyticsPeriodKey,
@@ -31,8 +32,9 @@ const PERIOD_LABELS: Record<AnalyticsPeriodKey, string> = {
   custom: 'the previous equivalent period',
 };
 
-function currency(value: number): string {
-  return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
+function makeCurrencyFormatter(currencyCode: string) {
+  return (value: number): string =>
+    `${getCurrencySymbol(currencyCode)}${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 interface DashboardData {
@@ -85,6 +87,8 @@ export default function DashboardPage() {
   }
   if (!user) return null;
 
+  const currencyCode = user.organisationCurrencyCode ?? 'GBP';
+  const currency = makeCurrencyFormatter(currencyCode);
   const comparisonLabel = PERIOD_LABELS[period];
   const actionItemCount = data
     ? data.actionItems.awaitingAcceptance.length + data.actionItems.dueForFulfilment.length + data.actionItems.invoiceFailures.length
@@ -127,7 +131,12 @@ export default function DashboardPage() {
               <p className="mb-4 text-xs text-muted">
                 {data.summary.period.start} – {data.summary.period.end}, compared with {comparisonLabel}
               </p>
-              <OrderTrendChart current={data.trend.current} comparison={data.trend.comparison} comparisonLabel={`vs. ${comparisonLabel}`} />
+              <OrderTrendChart
+                current={data.trend.current}
+                comparison={data.trend.comparison}
+                comparisonLabel={`vs. ${comparisonLabel}`}
+                currencyCode={currencyCode}
+              />
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">

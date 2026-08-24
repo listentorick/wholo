@@ -11,6 +11,7 @@ import { PageShell, PageSpinner } from '@/components/PageShell';
 import { MinimumOrderProgress } from '@/components/MinimumOrderProgress';
 import { ClearCartConfirmationModal } from '@/components/ClearCartConfirmationModal';
 import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
+import { formatMoney } from '@wholo/types';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
 
@@ -23,7 +24,7 @@ export default function CheckoutPage() {
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
   const { orderAsMode, orderAsCustomerId, clearOrderAsSession } = useAuth();
   const { cartLoading, items, quantities, subtotal, taxAmount, taxLabel, total, savingItems, syncItem, refreshCart } = useCart();
-  const { effectiveMinSpend } = useDistributor();
+  const { effectiveMinSpend, distributor } = useDistributor();
 
   const [poOpen, setPoOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
@@ -119,7 +120,7 @@ export default function CheckoutPage() {
   };
 
   const freight = 0;
-  const fmt = (n: number) => `£${n.toFixed(2)}`;
+  const fmt = (n: number) => formatMoney(n, distributor?.currencyCode ?? 'GBP');
   const belowMinimum = effectiveMinSpend != null && subtotal < effectiveMinSpend;
 
   if (authLoading || cartLoading) {

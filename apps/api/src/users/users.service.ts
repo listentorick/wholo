@@ -8,7 +8,11 @@ export class UsersService {
   async findById(id: string) {
     return this.prisma.user.findFirst({
       where: { id, deletedAt: null },
-      include: { memberships: { include: { organisation: true } } },
+      include: {
+        memberships: {
+          include: { organisation: { include: { distributorSettings: { select: { currencyCode: true } } } } },
+        },
+      },
     });
   }
 

@@ -10,7 +10,7 @@ import { PageShell, PageSpinner } from '@/components/PageShell';
 import { TruckIcon } from '@/components/DistributorPageHeader';
 import { RelationshipStatusBadge } from '@/components/RelationshipStatusBadge';
 import { ConnectConfirmationModal } from '@/components/ConnectConfirmationModal';
-import { TradeRelationshipStatus, type DistributorInfo } from '@wholo/types';
+import { TradeRelationshipStatus, formatMoney, type DistributorInfo } from '@wholo/types';
 
 function MapPinIcon() {
   return (
@@ -145,7 +145,7 @@ function KeyInfo({
       {hasStats && (
         <div className="flex gap-6">
           {hasCustomerStat && <StatTile value={String(distributor.customerCount)} label="active customers" />}
-          {hasMinSpendStat && <StatTile value={`£${effectiveMinSpend!.toFixed(2)}`} label="minimum order" />}
+          {hasMinSpendStat && <StatTile value={formatMoney(effectiveMinSpend!, distributor.currencyCode)} label="minimum order" />}
         </div>
       )}
 

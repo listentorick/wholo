@@ -21,7 +21,7 @@ import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-b
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { OrderSummary, OrderListParams } from '@wholo/types';
-import { OrderStatus } from '@wholo/types';
+import { OrderStatus, formatMoney } from '@wholo/types';
 
 // ─── Filter config ────────────────────────────────────────────────────────────
 
@@ -343,7 +343,7 @@ export default function OrdersPage() {
             renderStatus={(order) => <OrderStatusBadge status={order.status} />}
             renderMeta={(order) => (
               <span className="text-xs text-muted">
-                £{parseFloat(order.totalAmount).toFixed(2)} · Due {fmtDateStr(order.requestedDeliveryDate)}
+                {formatMoney(order.totalAmount, order.currency)} · Due {fmtDateStr(order.requestedDeliveryDate)}
               </span>
             )}
             renderExpanded={(order) => (
@@ -402,7 +402,7 @@ export default function OrdersPage() {
                     </td>
                     <td className="py-3 px-4 text-sm text-text">
                       <Link href={`/orders/${order.id}`} className="block">
-                        £{parseFloat(order.totalAmount).toFixed(2)}
+                        {formatMoney(order.totalAmount, order.currency)}
                       </Link>
                     </td>
                     <td className="py-3 px-4 text-sm text-muted">

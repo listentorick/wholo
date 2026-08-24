@@ -40,6 +40,7 @@ const baseDistributor: DistributorInfo = {
   addressPostcode: null,
   addressCountry: null,
   minimumOrderSpend: null,
+  currencyCode: 'GBP',
   customerCount: 0,
 };
 

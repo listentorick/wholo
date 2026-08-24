@@ -16,7 +16,7 @@ vi.mock('echarts/renderers', () => ({ CanvasRenderer: {} }));
 
 describe('OrderTrendChart', () => {
   it('shows a no-data message when there are no points', () => {
-    render(<OrderTrendChart current={[]} comparison={[]} comparisonLabel="vs. previous period" />);
+    render(<OrderTrendChart current={[]} comparison={[]} comparisonLabel="vs. previous period" currencyCode="GBP" />);
     expect(screen.getByText('No data for this period yet.')).toBeInTheDocument();
   });
 
@@ -26,6 +26,7 @@ describe('OrderTrendChart', () => {
         current={[{ date: '2026-03-15', value: 1300, count: 10 }]}
         comparison={[{ date: '2026-02-15', value: 1000, count: 8 }]}
         comparisonLabel="vs. previous period"
+        currencyCode="GBP"
       />,
     );
 
@@ -43,6 +44,7 @@ describe('OrderTrendChart', () => {
         current={[{ date: '2026-03-15', value: 1300, count: 10 }]}
         comparison={[{ date: '2026-02-15', value: 1000, count: 8 }]}
         comparisonLabel="vs. previous period"
+        currencyCode="GBP"
       />,
     );
 
@@ -50,5 +52,20 @@ describe('OrderTrendChart', () => {
     expect(table).toHaveTextContent('2026-03-15');
     expect(table).toHaveTextContent('£1,300');
     expect(table).toHaveTextContent('£1,000');
+  });
+
+  it('renders amounts in the given currency', () => {
+    render(
+      <OrderTrendChart
+        current={[{ date: '2026-03-15', value: 1300, count: 10 }]}
+        comparison={[{ date: '2026-02-15', value: 1000, count: 8 }]}
+        comparisonLabel="vs. previous period"
+        currencyCode="USD"
+      />,
+    );
+
+    const table = screen.getByRole('table');
+    expect(table).toHaveTextContent('$1,300');
+    expect(table).toHaveTextContent('$1,000');
   });
 });

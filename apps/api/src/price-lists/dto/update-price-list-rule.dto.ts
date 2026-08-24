@@ -1,7 +1,8 @@
-import { IsOptional, IsInt, Min, IsDecimal, IsBoolean, IsString, IsEnum } from 'class-validator';
+import { IsOptional, IsInt, Min, IsDecimal, IsBoolean, IsString, IsEnum, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PriceListRuleDiscountBaseType } from '@prisma/client';
 import { ApiProperty } from '@nestjs/swagger';
+import { ISO_CURRENCIES } from '../../common/currency';
 
 export class UpdatePriceListRuleDto {
   @IsOptional()
@@ -29,8 +30,8 @@ export class UpdatePriceListRuleDto {
   @IsOptional()
   basePriceListId?: string;
 
-  @IsString()
   @IsOptional()
+  @IsIn(ISO_CURRENCIES, { message: 'Must be a valid ISO 4217 currency code (e.g. "GBP")' })
   currency?: string;
 
   @IsOptional()

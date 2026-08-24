@@ -8,6 +8,7 @@ import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { ordersApi, ApiError } from '@wholo/api-client';
 import type { AddressSnapshot, Order } from '@wholo/types';
+import { formatMoney } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
@@ -23,8 +24,8 @@ function fmtDate(iso: string | null | undefined) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function fmtAmt(amount: string) {
-  return `£${parseFloat(amount).toFixed(2)}`;
+function fmtAmt(amount: string, currency: string) {
+  return formatMoney(amount, currency);
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -224,12 +225,12 @@ export default function OrderDetailPage() {
                     <p style={{ fontSize: 11, color: '#9CA3AF' }}>SKU: {line.skuSnapshot}</p>
                   )}
                   <p style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
-                    {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot)}
+                    {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot, order.currency)}
                     {line.unitOfMeasureSnapshot ? ` / ${line.unitOfMeasureSnapshot}` : ''}
                   </p>
                 </div>
                 <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', flexShrink: 0 }}>
-                  {fmtAmt(line.totalAmount)}
+                  {fmtAmt(line.totalAmount, order.currency)}
                 </p>
               </div>
             </div>
@@ -239,8 +240,8 @@ export default function OrderDetailPage() {
         {/* Totals */}
         <div className="od-section px-4 py-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.2s' }}>
           {[
-            { label: 'Subtotal', value: fmtAmt(order.subtotalAmount) },
-            { label: order.taxLabel, value: fmtAmt(order.taxAmount) },
+            { label: 'Subtotal', value: fmtAmt(order.subtotalAmount, order.currency) },
+            { label: order.taxLabel, value: fmtAmt(order.taxAmount, order.currency) },
           ].map((row) => (
             <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8 }}>
               <span style={{ fontSize: 13, color: '#6B7280' }}>{row.label}</span>
@@ -252,7 +253,7 @@ export default function OrderDetailPage() {
             paddingTop: 10, marginTop: 2, borderTop: '1px solid #E5E7EB',
           }}>
             <span style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A' }}>Total</span>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A' }}>{fmtAmt(order.totalAmount)}</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A' }}>{fmtAmt(order.totalAmount, order.currency)}</span>
           </div>
         </div>
 

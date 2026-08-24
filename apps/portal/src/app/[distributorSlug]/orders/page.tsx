@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { Hash, Calendar, Truck, FileText, PoundSterling, CircleDot } from 'lucide-react';
+import { Hash, Calendar, Truck, FileText, Banknote, CircleDot } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { ordersApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import type { OrderSummary, OrderStatus, OrderInvoiceSummary } from '@wholo/types';
+import { formatMoney } from '@wholo/types';
 
 const STATUS_BADGE: Record<string, { color: string; bg: string; label: string }> = {
   SUBMITTED:  { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', label: 'Submitted' },
@@ -247,7 +248,7 @@ export default function OrdersPage() {
                     <Th icon={<Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />}>Order Date</Th>
                     <Th icon={<Truck className="h-3.5 w-3.5" strokeWidth={1.5} />}>Delivery Date</Th>
                     <Th icon={<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />}>Invoice</Th>
-                    <Th icon={<PoundSterling className="h-3.5 w-3.5" strokeWidth={1.5} />} align="right">Amount</Th>
+                    <Th icon={<Banknote className="h-3.5 w-3.5" strokeWidth={1.5} />} align="right">Amount</Th>
                     <Th icon={<CircleDot className="h-3.5 w-3.5" strokeWidth={1.5} />}>Status</Th>
                   </tr>
                 </thead>
@@ -274,7 +275,7 @@ export default function OrdersPage() {
                           <InvoiceCell summary={order.invoiceSummary} />
                         </td>
                         <td className="px-4 py-3 text-right" style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A' }}>
-                          £{parseFloat(order.totalAmount).toFixed(2)}
+                          {formatMoney(order.totalAmount, order.currency)}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge status={order.status} />
@@ -317,7 +318,7 @@ export default function OrdersPage() {
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', marginBottom: 6 }}>
-                          £{parseFloat(order.totalAmount).toFixed(2)}
+                          {formatMoney(order.totalAmount, order.currency)}
                         </p>
                         <StatusBadge status={order.status} />
                       </div>

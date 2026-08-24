@@ -16,6 +16,7 @@ const baseSettings: DistributorSettings = {
   addressPostcode: null,
   addressCountry: null,
   timezone: 'UTC',
+  currencyCode: 'GBP',
   defaultOrderAcceptanceMode: OrderAcceptanceMode.MANUAL,
   marketplaceVisible: false,
   marketplaceDescription: null,
@@ -133,6 +134,39 @@ describe('BusinessDetailsForm', () => {
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ timezone: 'Australia/Sydney' }),
+      );
+    });
+  });
+
+  it('renders the configured currency as selected', () => {
+    render(<BusinessDetailsForm settings={{ ...baseSettings, currencyCode: 'USD' }} onSave={onSave} />);
+
+    expect(screen.getByRole('combobox', { name: /currency/i })).toHaveValue('USD');
+  });
+
+  it('submits GBP verbatim when saving without touching the currency field', async () => {
+    render(<BusinessDetailsForm settings={{ ...baseSettings, currencyCode: 'GBP' }} onSave={onSave} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ currencyCode: 'GBP' }),
+      );
+    });
+  });
+
+  it('includes the selected currency on submit', async () => {
+    render(<BusinessDetailsForm settings={baseSettings} onSave={onSave} />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: /currency/i }), {
+      target: { value: 'USD' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ currencyCode: 'USD' }),
       );
     });
   });

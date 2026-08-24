@@ -38,6 +38,7 @@ function makeOrder(overrides: Partial<OrderSummary> = {}): OrderSummary {
     id: 'order-1',
     orderNumber: 'ORD-1001',
     status: OrderStatus.ACCEPTED,
+    currency: 'GBP',
     totalAmount: '123.45',
     traderCustomerName: 'Blackbird Kitchen',
     submittedAt: '2026-08-20T00:00:00.000Z',

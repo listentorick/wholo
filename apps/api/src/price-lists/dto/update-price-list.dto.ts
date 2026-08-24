@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MaxLength, IsIn } from 'class-validator';
+import { ISO_CURRENCIES } from '../../common/currency';
 
 export class UpdatePriceListDto {
   @IsString()
@@ -10,8 +11,8 @@ export class UpdatePriceListDto {
   @IsOptional()
   description?: string;
 
-  @IsString()
   @IsOptional()
+  @IsIn(ISO_CURRENCIES, { message: 'Must be a valid ISO 4217 currency code (e.g. "GBP")' })
   currency?: string;
 
   @IsBoolean()

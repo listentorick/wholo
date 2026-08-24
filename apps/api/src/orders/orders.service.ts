@@ -123,7 +123,7 @@ export class OrdersService {
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
       where: { slug: dto.distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true, distributorSettings: { select: { minimumOrderSpend: true } } },
+      select: { id: true, distributorSettings: { select: { minimumOrderSpend: true, currencyCode: true } } },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
@@ -281,7 +281,7 @@ export class OrdersService {
             isOrderedByDelegate: true,
             delegateAdminUserId: placedByUserId,
           }),
-          currency: 'GBP',
+          currency: distributor.distributorSettings?.currencyCode ?? 'GBP',
           status: isAutoAccept ? OrderStatus.ACCEPTED : OrderStatus.SUBMITTED,
           acceptanceModeSnapshot: mode,
           acceptanceModeSourceSnapshot: source,
@@ -449,7 +449,7 @@ export class OrdersService {
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take,
         select: {
-          id: true, orderNumber: true, status: true, totalAmount: true,
+          id: true, orderNumber: true, status: true, currency: true, totalAmount: true,
           submittedAt: true, acceptedAt: true, rejectedAt: true, cancelledAt: true,
           createdAt: true, requestedDeliveryDate: true,
           customer: { select: { id: true, name: true } },
@@ -475,6 +475,7 @@ export class OrdersService {
         id: o.id,
         orderNumber: o.orderNumber,
         status: o.status,
+        currency: o.currency,
         totalAmount: (o.totalAmount as { toFixed: (n: number) => string }).toFixed(2),
         traderCustomerName: o.customer?.name ?? '',
         submittedAt: o.submittedAt?.toISOString() ?? null,

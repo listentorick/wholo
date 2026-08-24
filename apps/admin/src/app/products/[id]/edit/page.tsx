@@ -11,7 +11,7 @@ import type { Product, UpdateProductRequest } from '@wholo/types';
 
 export default function EditProductPage() {
   const { isLoading: authLoading } = useRequireAuth();
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
 
@@ -63,6 +63,7 @@ export default function EditProductPage() {
       <ProductForm
         mode="edit"
         token={accessToken ?? ''}
+        currencyCode={user?.organisationCurrencyCode ?? 'GBP'}
         initialValues={product}
         onSubmit={handleSubmit}
         onDelete={handleDelete}

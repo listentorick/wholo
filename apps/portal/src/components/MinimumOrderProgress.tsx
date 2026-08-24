@@ -1,3 +1,8 @@
+'use client';
+
+import { formatMoney } from '@wholo/types';
+import { useDistributor } from '@/lib/distributor-context';
+
 export interface MinimumOrderProgressProps {
   subtotal: number;
   minimum: number | null;
@@ -15,6 +20,9 @@ function CheckIcon() {
 }
 
 export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: MinimumOrderProgressProps) {
+  const { distributor } = useDistributor();
+  const currencyCode = distributor?.currencyCode ?? 'GBP';
+
   if (minimum === null || minimum <= 0) return null;
 
   const met = subtotal >= minimum;
@@ -25,7 +33,7 @@ export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: Mi
         <CheckIcon />
         <span>
           {size === 'prominent'
-            ? `You've met the £${minimum.toFixed(2)} minimum order value`
+            ? `You've met the ${formatMoney(minimum, currencyCode)} minimum order value`
             : 'Minimum order value met'}
         </span>
       </div>
@@ -41,7 +49,7 @@ export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: Mi
         <div className="h-full bg-amber transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
       </div>
       <p className="mt-1.5 text-sm text-foreground-tertiary">
-        Add £{remaining.toFixed(2)} more to reach the £{minimum.toFixed(2)} minimum order
+        Add {formatMoney(remaining, currencyCode)} more to reach the {formatMoney(minimum, currencyCode)} minimum order
       </p>
     </div>
   );

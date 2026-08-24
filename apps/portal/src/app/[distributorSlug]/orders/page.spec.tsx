@@ -44,6 +44,7 @@ function makeOrder(overrides: Partial<OrderSummary> = {}): OrderSummary {
     id: 'order-1',
     orderNumber: 'ORD-2026-00001',
     status: OrderStatus.ACCEPTED,
+    currency: 'GBP',
     totalAmount: '42.50',
     traderCustomerName: 'Test Org',
     submittedAt: '2026-07-01T10:00:00.000Z',

@@ -4,6 +4,8 @@ import { IsOptional, IsString, IsEmail, IsBoolean, IsArray, IsDecimal, IsIn, Min
 // commonly-selected IANA identifier — add it back explicitly.
 const IANA_TIMEZONES = [...Intl.supportedValuesOf('timeZone'), 'UTC'];
 
+const ISO_CURRENCIES = Intl.supportedValuesOf('currency');
+
 export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
@@ -49,6 +51,10 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsIn(IANA_TIMEZONES, { message: 'Must be a valid IANA timezone (e.g. "Europe/London")' })
   timezone?: string;
+
+  @IsOptional()
+  @IsIn(ISO_CURRENCIES, { message: 'Must be a valid ISO 4217 currency code (e.g. "GBP")' })
+  currencyCode?: string;
 
   @IsOptional()
   @IsString()

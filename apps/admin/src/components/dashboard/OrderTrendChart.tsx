@@ -6,6 +6,7 @@ import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { OrderTrendPoint } from '@wholo/types';
+import { getCurrencySymbol } from '@wholo/types';
 
 echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
@@ -13,6 +14,7 @@ interface Props {
   current: OrderTrendPoint[];
   comparison: OrderTrendPoint[];
   comparisonLabel: string;
+  currencyCode: string;
 }
 
 // Wholo's own brand pair (Cobalt Blue / Amber) — validated via the dataviz
@@ -30,10 +32,6 @@ const COMPARISON_COLOR = '#F2864D';
 const MUTED_COLOR = '#5B6B7F';
 const TEXT_COLOR = '#0B1D3A';
 const BORDER_COLOR = '#E6ECF2';
-
-function formatCurrency(value: number): string {
-  return `£${value.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
-}
 
 const tickDateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 // The `T00:00:00` suffix keeps parsing anchored to the local calendar day —
@@ -67,9 +65,13 @@ function measureEndLabelWidth(text: string): number {
   }
 }
 
-export function OrderTrendChart({ current, comparison, comparisonLabel }: Props) {
+export function OrderTrendChart({ current, comparison, comparisonLabel, currencyCode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+
+  function formatCurrency(value: number): string {
+    return `${getCurrencySymbol(currencyCode)}${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  }
 
   // Chart lifecycle — init once, resize on container changes, dispose on
   // unmount. Kept separate from the data-driven effect below so resizing
@@ -148,7 +150,7 @@ export function OrderTrendChart({ current, comparison, comparisonLabel }: Props)
         },
       ],
     });
-  }, [current, comparison, comparisonLabel]);
+  }, [current, comparison, comparisonLabel, currencyCode]);
 
   if (current.length === 0) {
     return <p className="text-sm text-muted">No data for this period yet.</p>;

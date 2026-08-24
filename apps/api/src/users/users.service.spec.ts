@@ -47,7 +47,11 @@ describe('UsersService', () => {
       expect(result).toEqual(mockUser);
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: { id: 'user-1', deletedAt: null },
-        include: { memberships: { include: { organisation: true } } },
+        include: {
+          memberships: {
+            include: { organisation: { include: { distributorSettings: { select: { currencyCode: true } } } } },
+          },
+        },
       });
     });
 

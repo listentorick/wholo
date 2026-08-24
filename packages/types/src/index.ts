@@ -1,3 +1,5 @@
+export * from './format-money';
+
 export enum Role {
   PLATFORM_ADMIN = 'PLATFORM_ADMIN',
   DISTRIBUTOR_ADMIN = 'DISTRIBUTOR_ADMIN',
@@ -15,6 +17,8 @@ export interface AuthUser {
   organisationId: string;
   organisationName: string;
   organisationType?: 'DISTRIBUTOR' | 'TRADE_CUSTOMER';
+  /** ISO 4217 currency code, only present for a DISTRIBUTOR-side membership. */
+  organisationCurrencyCode?: string;
 }
 
 export interface LoginRequest {
@@ -256,6 +260,7 @@ export interface OrderSummary {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  currency: string;
   totalAmount: string;
   traderCustomerName: string;
   submittedAt: string | null;
@@ -422,6 +427,7 @@ export interface DistributorInfo {
   addressPostcode: string | null;
   addressCountry: string | null;
   minimumOrderSpend: number | null;
+  currencyCode: string;
   customerCount: number;
 }
 
@@ -847,6 +853,7 @@ export interface DistributorSettings {
   addressPostcode: string | null;
   addressCountry: string | null;
   timezone: string;
+  currencyCode: string;
   defaultOrderAcceptanceMode: OrderAcceptanceMode;
   marketplaceVisible: boolean;
   marketplaceDescription: string | null;
