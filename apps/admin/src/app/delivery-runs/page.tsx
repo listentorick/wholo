@@ -12,8 +12,11 @@ import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { useDeliveryDay } from '@/lib/hooks/use-delivery-day';
 import { applyMove, applyReorder, applyRunUpdate } from '@/lib/optimistic-board-update';
-import { toIso } from '@/lib/date';
+import {
+  toIso, startOfWeek, addDays,
+} from '@/lib/date';
 import { WorkloadStrip } from '@/components/delivery-runs/WorkloadStrip';
+import { DeliveryDateRangeControl } from '@/components/delivery-runs/DeliveryDateRangeControl';
 import { UndatedDeliveriesPanel } from '@/components/delivery-runs/UndatedDeliveriesPanel';
 import { BoardViewToggle, type BoardViewMode } from '@/components/delivery-runs/BoardViewToggle';
 import { DeliveryBoardFilters, type BoardAttentionFilter } from '@/components/delivery-runs/DeliveryBoardFilters';
@@ -42,6 +45,12 @@ export default function DeliveryRunsPage() {
   const { isLoading: authLoading } = useRequireAuth();
   const { accessToken } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => toIso(new Date()));
+  // The week WorkloadStrip and DeliveryDateRangeControl both render — kept
+  // here, not inside WorkloadStrip, so the two stay in sync: picking a date
+  // from the header control's native date picker can land outside the
+  // currently-visible week, and both surfaces need to move together.
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(`${selectedDate}T00:00:00`)));
+  const weekEnd = addDays(weekStart, 6);
   const [viewMode, setViewMode] = useState<BoardViewMode>('board');
   const [attentionFilter, setAttentionFilter] = useState<BoardAttentionFilter>('all');
   const [mutationBanner, setMutationBanner] = useState<string | null>(null);
@@ -172,6 +181,18 @@ export default function DeliveryRunsPage() {
       ?? null;
   }
 
+  // Single entry point for changing the selected day — used by both
+  // WorkloadStrip's day-cell clicks (always inside the current week) and
+  // DeliveryDateRangeControl's date picker (can land anywhere). Only moves
+  // weekStart when the picked date is actually outside the current week —
+  // the equality check keeps ordinary in-week clicks from creating a new
+  // weekStart object and triggering a redundant WorkloadStrip re-fetch.
+  function handleSelectDate(date: string) {
+    setSelectedDate(date);
+    const candidate = startOfWeek(new Date(`${date}T00:00:00`));
+    setWeekStart((prev) => (prev.getTime() === candidate.getTime() ? prev : candidate));
+  }
+
   // Unlike handleMove/handleReorder/handleUpdateRun above, this has no
   // optimistic pre-update — it's a modal-gated action (not drag/drop), so a
   // brief isRefreshing dim is acceptable, and the mutation can move the card
@@ -237,6 +258,12 @@ export default function DeliveryRunsPage() {
           className="mb-4"
           actions={(
             <div className="flex items-center gap-2">
+              <DeliveryDateRangeControl
+                weekStart={weekStart}
+                weekEnd={weekEnd}
+                selectedDate={selectedDate}
+                onSelectDate={handleSelectDate}
+              />
               {/* Filters only actually affect what's rendered when List is the
                   visible view — either viewMode === 'list', or Board is CSS-forced
                   to List below md (see the board/list rendering below). Hide the
@@ -263,7 +290,9 @@ export default function DeliveryRunsPage() {
         <WorkloadStrip
           token={accessToken}
           selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
+          onSelectDate={handleSelectDate}
+          weekStart={weekStart}
+          onWeekStartChange={setWeekStart}
           refreshKey={workloadRefreshKey}
         />
         <UndatedDeliveriesPanel token={accessToken} />

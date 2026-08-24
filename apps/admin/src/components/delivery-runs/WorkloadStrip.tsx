@@ -3,12 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { DeliveryDaySummary } from '@wholo/types';
 import { adminDeliveryRunsApi } from '@wholo/admin-api-client';
-import { toIso } from '@/lib/date';
+import { toIso, addDays } from '@/lib/date';
 
 interface WorkloadStripProps {
   token: string | null | undefined;
   selectedDate: string;
   onSelectDate: (date: string) => void;
+  // The visible Monday-start week — owned by the parent (page.tsx) so it can
+  // stay in sync with the DeliveryDateRangeControl header pill, which shows
+  // the same week's range and can jump it directly via its date picker.
+  weekStart: Date;
+  onWeekStartChange: (next: Date) => void;
   // Bump this (e.g. after a change-delivery-date mutation moves a stop from
   // one day to another) to force a re-fetch of the current week — this
   // component otherwise only reloads on token/week-navigation changes, so a
@@ -16,28 +21,22 @@ interface WorkloadStripProps {
   refreshKey?: number;
 }
 
-function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Monday-start week
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <polyline points={direction === 'left' ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 // Doubles as the date picker (decision #10 in the delivery-planning-pbi-plan
 // decisions log) — replaces a calendar popover with a always-visible 7-day
-// strip showing each day's workload count.
+// strip showing each day's workload count. The month/year the strip is
+// showing is surfaced by the sibling DeliveryDateRangeControl in the page
+// header, not repeated here.
 export function WorkloadStrip({
-  token, selectedDate, onSelectDate, refreshKey,
+  token, selectedDate, onSelectDate, weekStart, onWeekStartChange, refreshKey,
 }: WorkloadStripProps) {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(`${selectedDate}T00:00:00`)));
   const [days, setDays] = useState<DeliveryDaySummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -67,11 +66,11 @@ export function WorkloadStrip({
     <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-white p-2">
       <button
         type="button"
-        onClick={() => setWeekStart((d) => addDays(d, -7))}
-        className="rounded p-1.5 text-muted hover:bg-canvas hover:text-text"
+        onClick={() => onWeekStartChange(addDays(weekStart, -7))}
+        className="rounded-md p-1.5 text-muted hover:bg-canvas hover:text-text"
         aria-label="Previous week"
       >
-        ‹
+        <ChevronIcon direction="left" />
       </button>
       {error ? (
         <p className="flex-1 text-center text-xs text-red-700">Failed to load the workload strip.</p>
@@ -102,11 +101,11 @@ export function WorkloadStrip({
       )}
       <button
         type="button"
-        onClick={() => setWeekStart((d) => addDays(d, 7))}
-        className="rounded p-1.5 text-muted hover:bg-canvas hover:text-text"
+        onClick={() => onWeekStartChange(addDays(weekStart, 7))}
+        className="rounded-md p-1.5 text-muted hover:bg-canvas hover:text-text"
         aria-label="Next week"
       >
-        ›
+        <ChevronIcon direction="right" />
       </button>
     </div>
   );
