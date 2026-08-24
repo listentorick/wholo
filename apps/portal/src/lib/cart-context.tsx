@@ -17,7 +17,6 @@ interface CartContextValue {
   quantities: Record<string, number>;
   inCart: Set<string>;
   savingItems: Set<string>;
-  adjustQty: (productId: string, delta: number) => void;
   syncItem: (productId: string, quantity: number) => Promise<void>;
   refreshCart: () => Promise<void>;
 }
@@ -97,11 +96,6 @@ export function CartProvider({
     [accessToken, relationshipStatus, distributorSlug, reconcile],
   );
 
-  const adjustQty = useCallback((productId: string, delta: number) => {
-    const next = Math.max(0, (quantities[productId] ?? 0) + delta);
-    syncItem(productId, next);
-  }, [quantities, syncItem]);
-
   const refreshCart = useCallback(async () => {
     if (!accessToken) return;
     const cart = await cartApi.getCart(distributorSlug, accessToken);
@@ -122,7 +116,7 @@ export function CartProvider({
   const { taxAmount, total, taxLabel } = serverTotals;
 
   return (
-    <CartContext.Provider value={{ cartLoading, cartCount, subtotal, taxAmount, taxLabel, total, items, quantities, inCart, savingItems, adjustQty, syncItem, refreshCart }}>
+    <CartContext.Provider value={{ cartLoading, cartCount, subtotal, taxAmount, taxLabel, total, items, quantities, inCart, savingItems, syncItem, refreshCart }}>
       {children}
     </CartContext.Provider>
   );

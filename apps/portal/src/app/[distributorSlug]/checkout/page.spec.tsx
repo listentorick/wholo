@@ -26,18 +26,20 @@ vi.mock('@/lib/auth-context', () => ({
 }));
 
 const mockRefreshCart = vi.fn();
+const mockSyncItem = vi.fn();
 let mockTaxLabel = 'VAT';
+let mockQuantities: Record<string, number> = { p1: 1 };
 vi.mock('@/lib/cart-context', () => ({
   useCart: () => ({
     cartLoading: false,
     items: [{ productId: 'p1', quantity: 1, unitPrice: '10.00', taxRatePercentage: '20.00', taxAmount: '2.00', taxTypeName: 'VAT', product: { id: 'p1', name: 'Wine' } }],
-    quantities: { p1: 1 },
+    quantities: mockQuantities,
     subtotal: 10,
     taxAmount: 2,
     taxLabel: mockTaxLabel,
     total: 12,
     savingItems: new Set(),
-    syncItem: vi.fn(),
+    syncItem: mockSyncItem,
     refreshCart: mockRefreshCart,
   }),
 }));
@@ -73,6 +75,7 @@ describe('CheckoutPage — tax row label', () => {
     mockRefreshCart.mockResolvedValue(undefined);
     mockEffectiveMinSpend = null;
     mockTaxLabel = 'VAT';
+    mockQuantities = { p1: 1 };
   });
 
   it('shows the real tax type name from the cart context when every item shares one', () => {
@@ -93,6 +96,7 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     vi.clearAllMocks();
     mockRefreshCart.mockResolvedValue(undefined);
     mockEffectiveMinSpend = null;
+    mockQuantities = { p1: 1 };
   });
 
   it('calls clearOrderAsSession (not refreshCart) when order-as mode is active', async () => {
@@ -127,6 +131,7 @@ describe('CheckoutPage — delivery address', () => {
     mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockGetAvailableDates.mockResolvedValue({ dates: [] });
+    mockQuantities = { p1: 1 };
   });
 
   it('shows the delivery address when one is on file', async () => {
@@ -170,6 +175,7 @@ describe('CheckoutPage — delivery day', () => {
     mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockGetMyDeliveryAddress.mockResolvedValue({ deliveryAddress: null });
+    mockQuantities = { p1: 1 };
   });
 
   it('shows the empty state, not a vanished section, when no delivery dates are available', async () => {
@@ -212,6 +218,7 @@ describe('CheckoutPage — minimum order spend', () => {
     vi.clearAllMocks();
     mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
+    mockQuantities = { p1: 1 };
   });
 
   it('enables Place Order when there is no minimum set', async () => {
@@ -246,5 +253,28 @@ describe('CheckoutPage — minimum order spend', () => {
 
     await new Promise((r) => setTimeout(r, 0));
     expect(mockSubmitOrder).not.toHaveBeenCalled();
+  });
+});
+
+describe('CheckoutPage — quantity stepper', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockOrderAsMode = false;
+    mockEffectiveMinSpend = null;
+    mockQuantities = { p1: 1 };
+  });
+
+  it('calls syncItem with the incremented absolute quantity when the increase button is clicked', async () => {
+    render(<CheckoutPage />);
+
+    fireEvent.click(await screen.findByLabelText('Increase quantity for Wine'));
+
+    expect(mockSyncItem).toHaveBeenCalledWith('p1', 2);
+  });
+
+  it('disables the decrease button at the floor of 1 — removal is the trash icon, not the stepper', async () => {
+    render(<CheckoutPage />);
+
+    expect(await screen.findByLabelText('Decrease quantity for Wine')).toBeDisabled();
   });
 });

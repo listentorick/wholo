@@ -9,6 +9,7 @@ import { useDistributor } from '@/lib/distributor-context';
 import { catalogueApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
+import { QuantityStepper } from '@/components/QuantityStepper';
 import { TradeRelationshipStatus, formatMoney, type CatalogueProduct, type CatalogueProductsResponse } from '@wholo/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -24,7 +25,7 @@ export default function CataloguePage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { quantities, savingItems, adjustQty } = useCart();
+  const { quantities, savingItems, syncItem } = useCart();
   const { relationshipStatus, distributor } = useDistributor();
   const currencyCode = distributor?.currencyCode ?? 'GBP';
 
@@ -84,21 +85,6 @@ export default function CataloguePage() {
         }
 
         .cat-product-row { animation: fadeUp 0.35s ease both; }
-
-        .stepper-btn {
-          width: 30px; height: 30px;
-          border-radius: 50%;
-          border: 1.5px solid #D5D9E0;
-          background: transparent;
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          color: #6B7280;
-          transition: border-color 0.15s, color 0.15s;
-          flex-shrink: 0; padding: 0;
-        }
-        .stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
-        .stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
-        .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .product-img-placeholder {
           background: linear-gradient(145deg, hsl(var(--color-canvas)) 0%, hsl(var(--color-border)) 100%);
@@ -207,37 +193,15 @@ export default function CataloguePage() {
                     </span>
 
                     {relationshipStatus === TradeRelationshipStatus.ACTIVE && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          className="stepper-btn"
-                          aria-label="Decrease quantity"
-                          disabled={saving || !hasPrice || qty <= 0}
-                          onClick={() => adjustQty(product.id, -1)}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                          </svg>
-                        </button>
-
-                        <span
-                          className="text-sm font-medium text-[#1A1A1A] select-none"
-                          style={{ minWidth: 18, textAlign: 'center' }}
-                        >
-                          {qty}
-                        </span>
-
-                        <button
-                          className="stepper-btn"
-                          aria-label="Increase quantity"
-                          disabled={saving || !hasPrice}
-                          onClick={() => adjustQty(product.id, 1)}
-                        >
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5"  y1="12" x2="19" y2="12" />
-                          </svg>
-                        </button>
-                      </div>
+                      <QuantityStepper
+                        value={qty}
+                        min={0}
+                        disabled={!hasPrice}
+                        saving={saving}
+                        itemLabel={product.name}
+                        onChange={(next) => syncItem(product.id, next)}
+                        className="mt-2"
+                      />
                     )}
                   </div>
                 </li>

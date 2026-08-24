@@ -69,7 +69,7 @@ const mockCart = {
   quantities: {},
   savingItems: new Set<string>(),
   cartCount: 0,
-  adjustQty: vi.fn(),
+  syncItem: vi.fn(),
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -207,13 +207,13 @@ describe('CataloguePage', () => {
     });
   });
 
-  it('calls adjustQty when the increase stepper is clicked', async () => {
+  it('calls syncItem with the incremented absolute quantity when the increase stepper is clicked', async () => {
     render(<CataloguePage />);
     await waitFor(() => screen.getByText('Egg tarts'));
 
-    fireEvent.click(screen.getAllByLabelText('Increase quantity')[0]);
+    fireEvent.click(screen.getAllByLabelText(/Increase quantity/)[0]);
 
-    expect(mockCart.adjustQty).toHaveBeenCalledWith('prod-1', 1);
+    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 1);
   });
 
   it('hides stepper when no active trade relationship', async () => {
@@ -222,6 +222,6 @@ describe('CataloguePage', () => {
     render(<CataloguePage />);
     await waitFor(() => screen.getByText('Egg tarts'));
 
-    expect(screen.queryByLabelText('Increase quantity')).toBeNull();
+    expect(screen.queryByLabelText(/Increase quantity/)).toBeNull();
   });
 });

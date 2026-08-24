@@ -28,11 +28,11 @@ import { cartApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { quantities, inCart, adjustQty, subtotal, taxAmount, taxLabel, total } = useCart();
+  const { quantities, inCart, syncItem, subtotal, taxAmount, taxLabel, total } = useCart();
   return (
     <div>
-      <button onClick={() => adjustQty('prod-1', 1)}>increase</button>
-      <button onClick={() => adjustQty('prod-1', -1)}>decrease</button>
+      <button onClick={() => syncItem('prod-1', Math.max(0, (quantities['prod-1'] ?? 0) + 1))}>increase</button>
+      <button onClick={() => syncItem('prod-1', Math.max(0, (quantities['prod-1'] ?? 0) - 1))}>decrease</button>
       <span data-testid="qty">{quantities['prod-1'] ?? ''}</span>
       <span data-testid="in-cart">{inCart.has('prod-1') ? 'yes' : 'no'}</span>
       <span data-testid="subtotal">{subtotal}</span>
@@ -166,7 +166,7 @@ describe('CartProvider taxAmount/total/taxLabel', () => {
   });
 });
 
-describe('CartProvider adjustQty', () => {
+describe('CartProvider syncItem', () => {
   it('persists the adjusted quantity via cartApi.upsertItem for a product not yet in the cart', async () => {
     renderCart();
     await waitFor(() => expect(cartApi.getCart).toHaveBeenCalled());

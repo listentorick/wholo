@@ -65,7 +65,7 @@ const mockCart = {
   inCart: new Set<string>(),
   savingItems: new Set<string>(),
   cartCount: 0,
-  adjustQty: vi.fn(),
+  syncItem: vi.fn(),
 };
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -206,18 +206,18 @@ describe('ProductDetailPage', () => {
     });
   });
 
-  it('calls adjustQty with +1 when increase button is clicked', async () => {
+  it('calls syncItem with the incremented absolute quantity when increase button is clicked', async () => {
     render(<ProductDetailPage />);
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    const increaseBtn = screen.getByLabelText('Increase quantity');
+    const increaseBtn = screen.getByLabelText('Increase quantity for Egg tarts (box of 4)');
     fireEvent.click(increaseBtn);
 
-    expect(mockCart.adjustQty).toHaveBeenCalledWith('prod-1', 1);
+    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 1);
   });
 
-  it('calls adjustQty with -1 when decrease button is clicked', async () => {
+  it('calls syncItem with the decremented absolute quantity when decrease button is clicked', async () => {
     (useCart as ReturnType<typeof vi.fn>).mockReturnValue({
       ...mockCart,
       quantities: { 'prod-1': 3 },
@@ -227,10 +227,10 @@ describe('ProductDetailPage', () => {
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    const decreaseBtn = screen.getByLabelText('Decrease quantity');
+    const decreaseBtn = screen.getByLabelText('Decrease quantity for Egg tarts (box of 4)');
     fireEvent.click(decreaseBtn);
 
-    expect(mockCart.adjustQty).toHaveBeenCalledWith('prod-1', -1);
+    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 2);
   });
 
   it('disables the decrease button at zero quantity', async () => {
@@ -238,7 +238,7 @@ describe('ProductDetailPage', () => {
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    expect(screen.getByLabelText('Decrease quantity')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity for Egg tarts (box of 4)')).toBeDisabled();
   });
 
   it('disables steppers while saving', async () => {
@@ -251,8 +251,8 @@ describe('ProductDetailPage', () => {
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    expect(screen.getByLabelText('Increase quantity')).toBeDisabled();
-    expect(screen.getByLabelText('Decrease quantity')).toBeDisabled();
+    expect(screen.getByLabelText('Increase quantity for Egg tarts (box of 4)')).toBeDisabled();
+    expect(screen.getByLabelText('Decrease quantity for Egg tarts (box of 4)')).toBeDisabled();
   });
 
   it('shows error state when fetch fails', async () => {
@@ -272,7 +272,7 @@ describe('ProductDetailPage', () => {
 
     await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
 
-    expect(screen.queryByLabelText('Increase quantity')).toBeNull();
-    expect(screen.queryByLabelText('Decrease quantity')).toBeNull();
+    expect(screen.queryByLabelText(/Increase quantity/)).toBeNull();
+    expect(screen.queryByLabelText(/Decrease quantity/)).toBeNull();
   });
 });

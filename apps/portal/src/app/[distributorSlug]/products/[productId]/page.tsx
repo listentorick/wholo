@@ -9,6 +9,7 @@ import { catalogueApi } from '@wholo/api-client';
 import { TradeRelationshipStatus, formatMoney, type CatalogueProductDetail } from '@wholo/types';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { QuantityStepper } from '@/components/QuantityStepper';
 
 function formatPrice(
   price: string | null,
@@ -33,7 +34,7 @@ export default function ProductDetailPage() {
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(
     pathname ?? `/${distributorSlug}/products/${productId}`,
   );
-  const { quantities, savingItems, adjustQty } = useCart();
+  const { quantities, savingItems, syncItem } = useCart();
   const { relationshipStatus, distributor } = useDistributor();
   const currencyCode = distributor?.currencyCode ?? 'GBP';
 
@@ -84,21 +85,6 @@ export default function ProductDetailPage() {
         }
 
         .pd-card { animation: pd-fade-up 0.38s ease both; }
-
-        .stepper-btn {
-          width: 30px; height: 30px;
-          border-radius: 50%;
-          border: 1.5px solid #D5D9E0;
-          background: transparent;
-          cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          color: #6B7280;
-          transition: border-color 0.15s, color 0.15s;
-          flex-shrink: 0; padding: 0;
-        }
-        .stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
-        .stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
-        .stepper-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .pd-img-placeholder { position: relative; }
         .pd-img-placeholder::after {
@@ -183,34 +169,15 @@ export default function ProductDetailPage() {
 
           {/* Quantity stepper + add/update */}
           {relationshipStatus === TradeRelationshipStatus.ACTIVE && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <button
-                className="stepper-btn"
-                aria-label="Decrease quantity"
-                disabled={saving || !hasPrice || qty <= 0}
-                onClick={() => adjustQty(productId, -1)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
-
-              <span style={{ minWidth: 22, textAlign: 'center', fontSize: 14, fontWeight: 500, color: '#1A1A1A', userSelect: 'none' }}>
-                {qty}
-              </span>
-
-              <button
-                className="stepper-btn"
-                aria-label="Increase quantity"
-                disabled={saving || !hasPrice}
-                onClick={() => adjustQty(productId, 1)}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 14, height: 14 }}>
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5"  y1="12" x2="19" y2="12" />
-                </svg>
-              </button>
-            </div>
+            <QuantityStepper
+              value={qty}
+              min={0}
+              disabled={!hasPrice}
+              saving={saving}
+              itemLabel={product.name}
+              onChange={(next) => syncItem(productId, next)}
+              className="mb-2"
+            />
           )}
         </div>
 

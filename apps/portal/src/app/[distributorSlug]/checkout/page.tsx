@@ -10,6 +10,7 @@ import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { MinimumOrderProgress } from '@/components/MinimumOrderProgress';
 import { ClearCartConfirmationModal } from '@/components/ClearCartConfirmationModal';
+import { QuantityStepper } from '@/components/QuantityStepper';
 import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
 import { formatMoney } from '@wholo/types';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
@@ -104,12 +105,6 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleAdjust = (productId: string, delta: number) => {
-    const current = quantities[productId] ?? 1;
-    const next = Math.max(1, current + delta);
-    syncItem(productId, next);
-  };
-
   const handleRemove = (productId: string) => {
     syncItem(productId, 0);
   };
@@ -186,21 +181,6 @@ export default function CheckoutPage() {
         @keyframes co-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .co-section { animation: co-fade-up 0.35s ease both; }
-
-        .co-stepper-btn {
-          width: 28px; height: 28px; border-radius: 50%;
-          border: 1.5px solid hsl(var(--color-border)); background: transparent;
-          cursor: pointer; display: flex; align-items: center; justify-content: center;
-          color: hsl(var(--color-muted)); transition: border-color 0.15s, color 0.15s;
-          flex-shrink: 0; padding: 0; font-family: inherit;
-        }
-        .co-stepper-btn:hover  { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); }
-        .co-stepper-btn:active { background: hsl(var(--color-primary-subtle)); }
-        .co-stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-        .co-stepper-btn:focus-visible {
-          outline: none; border-color: hsl(var(--color-primary));
-          box-shadow: 0 0 0 2px hsl(var(--color-primary));
-        }
 
         .co-trash-btn {
           width: 30px; height: 30px; border-radius: 0;
@@ -304,30 +284,13 @@ export default function CheckoutPage() {
                     {item.product.name}
                   </span>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      className="co-stepper-btn"
-                      aria-label="Decrease quantity"
-                      disabled={saving || qty <= 1}
-                      onClick={() => handleAdjust(item.productId, -1)}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 11, height: 11 }}>
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                    </button>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--color-text))', minWidth: 16, textAlign: 'center' }}>
-                      {qty}
-                    </span>
-                    <button
-                      className="co-stepper-btn"
-                      aria-label="Increase quantity"
-                      disabled={saving}
-                      onClick={() => handleAdjust(item.productId, 1)}
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 11, height: 11 }}>
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5"  y1="12" x2="19" y2="12" />
-                      </svg>
-                    </button>
+                    <QuantityStepper
+                      value={qty}
+                      min={1}
+                      saving={saving}
+                      itemLabel={item.product.name}
+                      onChange={(next) => syncItem(item.productId, next)}
+                    />
                     <button
                       className="co-trash-btn"
                       aria-label="Remove item"
