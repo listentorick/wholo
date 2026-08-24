@@ -9,7 +9,7 @@ interface ListPageHeaderProps {
 
 export function ListPageHeader({ title, count, actions, className }: ListPageHeaderProps) {
   return (
-    <div className={`mb-6 flex items-center justify-between ${className ?? ''}`}>
+    <div className={`mb-6 flex flex-wrap items-center justify-between gap-y-2 ${className ?? ''}`}>
       <PageHeading>
         {title}
         {typeof count === 'number' && count > 0 && (

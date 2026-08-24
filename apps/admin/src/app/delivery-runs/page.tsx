@@ -257,7 +257,7 @@ export default function DeliveryRunsPage() {
           title="Delivery Runs"
           className="mb-4"
           actions={(
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <DeliveryDateRangeControl
                 weekStart={weekStart}
                 weekEnd={weekEnd}
