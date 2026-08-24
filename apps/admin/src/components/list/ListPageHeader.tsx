@@ -13,7 +13,7 @@ export function ListPageHeader({ title, count, actions, className }: ListPageHea
       <PageHeading>
         {title}
         {typeof count === 'number' && count > 0 && (
-          <span className="ml-1.5 font-normal text-muted">({count})</span>
+          <span className="ml-1.5 text-[0.75em] font-normal text-muted">({count})</span>
         )}
       </PageHeading>
       {actions}

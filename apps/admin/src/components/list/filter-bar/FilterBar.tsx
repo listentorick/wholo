@@ -74,7 +74,7 @@ export function FilterBar({ fields, filters, onFiltersChange, extraChip, onClear
         <button
           type="button"
           onClick={() => setPopoverTarget((p) => (p === 'add' ? null : 'add'))}
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1 text-xs text-muted hover:border-primary hover:text-primary transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
         >
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-3 w-3">
             <line x1="8" y1="3" x2="8" y2="13" />
