@@ -30,7 +30,8 @@ function relativeTime(iso: string): string {
 
 export function TopBar({ onMenuClick }: TopBarProps) {
   const { user, logoUrl } = useAuth();
-  const { unreadCount, recent, fetchRecent, markRead } = useNotifications();
+  const { unreadCount, recent, isLoadingRecent, recentError, fetchRecent, markRead, markAllRead } =
+    useNotifications();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,8 +42,15 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         setOpen(false);
       }
     }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, []);
 
   function handleToggleOpen() {
@@ -67,7 +75,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
       {/* Hamburger — visible on mobile only */}
       <button
         onClick={onMenuClick}
-        className="flex h-8 w-8 items-center justify-center rounded text-muted hover:text-text lg:hidden"
+        className="flex h-8 w-8 items-center justify-center rounded text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:hidden"
         aria-label="Open menu"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
@@ -82,15 +90,17 @@ export function TopBar({ onMenuClick }: TopBarProps) {
         <div ref={containerRef} className="relative">
           <button
             onClick={handleToggleOpen}
-            className="relative flex h-8 w-8 items-center justify-center rounded text-muted hover:text-text"
+            className="relative flex h-8 w-8 items-center justify-center rounded text-muted outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             aria-label="Notifications"
+            aria-expanded={open}
+            aria-haspopup="true"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4.5 w-4.5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
               <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 01-3.46 0" />
             </svg>
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold leading-none text-accent-fg">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -98,7 +108,23 @@ export function TopBar({ onMenuClick }: TopBarProps) {
 
           {open && (
             <div className="absolute right-0 top-full z-20 mt-2 w-80 rounded-lg border border-border bg-white shadow-lg">
-              {recent.length === 0 ? (
+              {recent.length > 0 && !isLoadingRecent && (
+                <div className="flex items-center justify-between border-b border-border px-4 py-2">
+                  <span className="text-xs font-medium text-muted">Notifications</span>
+                  <button
+                    type="button"
+                    onClick={() => markAllRead()}
+                    className="text-xs font-medium text-primary outline-none hover:text-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+              )}
+              {isLoadingRecent ? (
+                <p className="p-4 text-sm text-muted">Loading…</p>
+              ) : recentError ? (
+                <p className="p-4 text-sm text-muted">Couldn&apos;t load notifications</p>
+              ) : recent.length === 0 ? (
                 <p className="p-4 text-sm text-muted">No notifications yet</p>
               ) : (
                 <ul className="max-h-96 overflow-y-auto">
@@ -107,7 +133,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
                       <button
                         type="button"
                         onClick={() => handleNotificationClick(n.id, n.linkPath)}
-                        className="block w-full px-4 py-3 text-left hover:bg-surface transition-colors"
+                        className="block w-full px-4 py-3 text-left outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                       >
                         <p className={n.readAt ? 'text-sm text-muted' : 'text-sm font-medium text-text'}>{n.title}</p>
                         <p className="mt-0.5 text-xs text-muted">{n.body}</p>
@@ -134,9 +160,11 @@ export function TopBar({ onMenuClick }: TopBarProps) {
                 </span>
               )}
             </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-medium text-text leading-tight">{user.firstName} {user.lastName}</p>
-              <p className="text-xs text-muted leading-tight">{user.organisationName}</p>
+            <div className="hidden min-w-0 sm:block">
+              <p className="truncate text-sm font-medium text-text leading-tight">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="truncate text-xs text-muted leading-tight">{user.organisationName}</p>
             </div>
           </div>
         )}

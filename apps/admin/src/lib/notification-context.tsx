@@ -14,6 +14,7 @@ interface NotificationContextValue {
   unreadCount: number;
   recent: AdminNotification[];
   isLoadingRecent: boolean;
+  recentError: boolean;
   fetchRecent: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   markAllRead: () => Promise<void>;
@@ -26,6 +27,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState<AdminNotification[]>([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+  const [recentError, setRecentError] = useState(false);
   // Ref'd so the poll interval (set up once per accessToken change) always
   // calls with the latest token without needing to be its own effect dep.
   const tokenRef = useRef(accessToken);
@@ -53,11 +55,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const token = tokenRef.current;
     if (!token) return;
     setIsLoadingRecent(true);
+    setRecentError(false);
     try {
       const list = await adminNotificationsApi.list(token);
       setRecent(list);
     } catch {
-      // Non-critical — the dropdown just stays empty/stale if this fails.
+      setRecentError(true);
     } finally {
       setIsLoadingRecent(false);
     }
@@ -98,7 +101,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   return (
-    <NotificationContext.Provider value={{ unreadCount, recent, isLoadingRecent, fetchRecent, markRead, markAllRead }}>
+    <NotificationContext.Provider
+      value={{ unreadCount, recent, isLoadingRecent, recentError, fetchRecent, markRead, markAllRead }}
+    >
       {children}
     </NotificationContext.Provider>
   );

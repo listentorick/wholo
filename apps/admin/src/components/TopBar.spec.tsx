@@ -19,13 +19,19 @@ vi.mock('@/lib/auth-context', () => ({
 const notificationState: {
   unreadCount: number;
   recent: { id: string; title: string; body: string; linkPath: string | null; readAt: string | null; createdAt: string }[];
+  isLoadingRecent: boolean;
+  recentError: boolean;
   fetchRecent: ReturnType<typeof vi.fn>;
   markRead: ReturnType<typeof vi.fn>;
+  markAllRead: ReturnType<typeof vi.fn>;
 } = {
   unreadCount: 0,
   recent: [],
+  isLoadingRecent: false,
+  recentError: false,
   fetchRecent: vi.fn(),
   markRead: vi.fn(),
+  markAllRead: vi.fn(),
 };
 vi.mock('@/lib/notification-context', () => ({
   useNotifications: () => notificationState,
@@ -33,8 +39,11 @@ vi.mock('@/lib/notification-context', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authState.user = { firstName: 'Jane', lastName: 'Doe', organisationName: 'Blackbird Wines' };
   notificationState.unreadCount = 0;
   notificationState.recent = [];
+  notificationState.isLoadingRecent = false;
+  notificationState.recentError = false;
 });
 
 describe('TopBar', () => {
@@ -106,5 +115,96 @@ describe('TopBar', () => {
 
     await user.click(screen.getByText('outside'));
     await waitFor(() => expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument());
+  });
+
+  it('closes the dropdown on Escape', async () => {
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+    expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument());
+  });
+
+  it('toggles aria-expanded on the bell button and always exposes aria-haspopup', async () => {
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    const bell = screen.getByLabelText('Notifications');
+    expect(bell).toHaveAttribute('aria-expanded', 'false');
+    expect(bell).toHaveAttribute('aria-haspopup', 'true');
+
+    await user.click(bell);
+    expect(bell).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('shows a loading state instead of the empty state while fetching', async () => {
+    notificationState.isLoadingRecent = true;
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument();
+  });
+
+  it('shows an error state when the fetch failed', async () => {
+    notificationState.recentError = true;
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+
+    expect(screen.getByText("Couldn't load notifications")).toBeInTheDocument();
+  });
+
+  it('prefers the loading state over the error state when both are set', async () => {
+    notificationState.isLoadingRecent = true;
+    notificationState.recentError = true;
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load notifications")).not.toBeInTheDocument();
+  });
+
+  it('marks all read without closing the dropdown or navigating', async () => {
+    notificationState.recent = [
+      { id: 'n1', title: 'Bulk import complete', body: '5 of 5 imported', linkPath: '/x', readAt: null, createdAt: new Date().toISOString() },
+    ];
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+    await user.click(screen.getByText('Mark all read'));
+
+    expect(notificationState.markAllRead).toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText('Bulk import complete')).toBeInTheDocument();
+  });
+
+  it('hides "Mark all read" when there are no notifications', async () => {
+    const user = userEvent.setup();
+    render(<TopBar onMenuClick={() => {}} />);
+
+    await user.click(screen.getByLabelText('Notifications'));
+
+    expect(screen.queryByText('Mark all read')).not.toBeInTheDocument();
+  });
+
+  it('truncates a long organisation name instead of wrapping it', () => {
+    authState.user = {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      organisationName: 'A Very Long Wholesale Distribution Company Name That Would Otherwise Wrap',
+    };
+    render(<TopBar onMenuClick={() => {}} />);
+
+    expect(screen.getByText(authState.user.organisationName)).toHaveClass('truncate');
   });
 });
