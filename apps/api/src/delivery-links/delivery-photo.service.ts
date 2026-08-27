@@ -7,6 +7,12 @@ import { AssetTypeConfig } from '../asset-images/asset-images.types';
 
 const MAX_PHOTOS_PER_DELIVERY = 10;
 
+// Delivery proof photos can contain PII (people, premises, parcel labels), so
+// they live in a private bucket and are only ever handed out as short-lived
+// presigned URLs — long enough to view a delivery once, short enough that a
+// copied link stops working quickly.
+const PHOTO_URL_TTL_SECONDS = 900;
+
 // Reuses the shared sharp pipeline (ImageProcessingService.process) for MIME /
 // size / dimension validation + webp variant generation. keyTemplate is unused
 // here — this service resolves R2 keys itself.
@@ -66,7 +72,7 @@ export class DeliveryPhotoService {
       [...processed.variants.entries()].map(async ([name, variant]) => {
         const key = `distributors/${order.distributorId}/deliveries/${order.id}/${photoId}/${name}.webp`;
         variantKeys[name] = key;
-        await this.r2.upload(key, variant.buffer, 'image/webp');
+        await this.r2.upload(key, variant.buffer, 'image/webp', this.r2.deliveryBucket);
       }),
     );
 
@@ -84,7 +90,10 @@ export class DeliveryPhotoService {
       },
     });
 
-    return { id: photoId, thumbnailUrl: this.r2.getPublicUrl(variantKeys.thumb) };
+    return {
+      id: photoId,
+      thumbnailUrl: await this.r2.presignGetUrl(variantKeys.thumb, PHOTO_URL_TTL_SECONDS, this.r2.deliveryBucket),
+    };
   }
 
   async deletePhoto(order: OrderContext, photoId: string): Promise<void> {
@@ -106,7 +115,7 @@ export class DeliveryPhotoService {
     const keys = Object.values(photo.variants as Record<string, string>).filter(
       (key) => typeof key === 'string' && key.startsWith(prefix),
     );
-    await Promise.all(keys.map((key) => this.r2.delete(key)));
+    await Promise.all(keys.map((key) => this.r2.delete(key, this.r2.deliveryBucket)));
     await this.prisma.orderDeliveryPhoto.delete({ where: { id: photo.id } });
   }
 }

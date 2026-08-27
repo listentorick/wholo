@@ -21,10 +21,12 @@
     "clsx": "^2.1.1",
     "echarts": "^6.1.0",
     "keycloak-js": "^26.2.4",
+    "maplibre-gl": "^6.6.0",
     "next": "^15.1.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.2",
+    "signature_pad": "^5.1.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {

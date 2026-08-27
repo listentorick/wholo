@@ -329,6 +329,88 @@ export interface AuditLogQueryParams {
   cursor?: string;
 }
 
+// ─── Delivery proof of delivery ──────────────────────────────────────────────
+// The recorded outcome of a driver delivery (Driver Delivery App). Captured via
+// the public QR flow, surfaced read-only to distributor admins. String values
+// mirror the Prisma enums in apps/api/prisma/schema.prisma exactly.
+
+export enum DeliveryOutcomeType {
+  DELIVERED = 'DELIVERED',
+  UNABLE_TO_DELIVER = 'UNABLE_TO_DELIVER',
+}
+
+export enum DeliveryDropMethod {
+  HANDED_TO_PERSON = 'HANDED_TO_PERSON',
+  LEFT_IN_SAFE_LOCATION = 'LEFT_IN_SAFE_LOCATION',
+}
+
+export enum UnableToDeliverReason {
+  CUSTOMER_CLOSED = 'CUSTOMER_CLOSED',
+  CUSTOMER_REFUSED = 'CUSTOMER_REFUSED',
+  UNABLE_TO_ACCESS_PREMISES = 'UNABLE_TO_ACCESS_PREMISES',
+  INCORRECT_ADDRESS = 'INCORRECT_ADDRESS',
+  OTHER = 'OTHER',
+}
+
+// signature_pad stroke-vector blob, stored verbatim — never a raster image.
+// width/height are the capture-time canvas CSS pixel size, needed to replay the
+// strokes faithfully.
+export interface DeliverySignatureData {
+  format: 'signature_pad';
+  version: number;
+  width: number;
+  height: number;
+  strokes: unknown[];
+}
+
+export interface DeliveryProofPhoto {
+  id: string;
+  // Short-lived presigned R2 URLs (private bucket). Expire ~15 min after the
+  // outcome is fetched — re-fetch the outcome to refresh them.
+  url: string;
+  thumbnailUrl: string;
+  width: number | null;
+  height: number | null;
+  capturedAt: string | null;
+  sortOrder: number;
+}
+
+export interface DeliveryOutcomeLocation {
+  // false when the driver's device gave no fix (permission denied / timeout /
+  // no API) — coords are then null.
+  available: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyM: number | null;
+  capturedAt: string | null;
+}
+
+export interface DeliveryOutcomeDetail {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  orderStatus: OrderStatus;
+  customerName: string;
+  driverName: string | null;
+  runName: string | null;
+  runDeliveryDate: string | null;
+  outcome: DeliveryOutcomeType;
+  recipientName: string | null;
+  deliveryNotes: string | null;
+  unableReason: UnableToDeliverReason | null;
+  unableReasonNote: string | null;
+  dropMethod: DeliveryDropMethod | null;
+  signature: DeliverySignatureData | null;
+  // Device-reported capture time (advisory) vs authoritative server time.
+  deviceCapturedAt: string | null;
+  serverRecordedAt: string;
+  location: DeliveryOutcomeLocation;
+  submittedViaQrToken: boolean;
+  correctedAt: string | null;
+  correctedByName: string | null;
+  photos: DeliveryProofPhoto[];
+}
+
 // ─── Products ────────────────────────────────────────────────────────────────
 
 export enum ProductStatus {

@@ -5,6 +5,7 @@ import { AdminOrdersService } from './admin-orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 
 const mockPrisma = {
   order: {
@@ -19,11 +20,16 @@ const mockPrisma = {
   taxType: { findMany: jest.fn() },
   user: { findUnique: jest.fn() },
   auditLog: { findMany: jest.fn(), count: jest.fn() },
+  deliveryRunOrder: { findFirst: jest.fn() },
   $transaction: jest.fn(),
 };
 
 const mockOutbox = { writeEvent: jest.fn() };
 const mockAudit = { record: jest.fn() };
+const mockR2 = {
+  deliveryBucket: 'wholo-deliveries',
+  presignGetUrl: jest.fn((key: string) => Promise.resolve(`https://signed.example/${key}?sig=x`)),
+};
 
 const makeOrder = (overrides = {}) => ({
   id: 'order-1',
@@ -72,6 +78,7 @@ describe('AdminOrdersService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: mockOutbox },
         { provide: AuditService, useValue: mockAudit },
+        { provide: R2StorageService, useValue: mockR2 },
       ],
     }).compile();
     service = module.get(AdminOrdersService);
@@ -328,6 +335,161 @@ describe('AdminOrdersService', () => {
       await expect(
         service.getOrderAuditLog('order-1', 'dist-1', { cursor: 'not-valid-base64url-json' }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ── getDeliveryOutcome ─────────────────────────────────────────────────────
+
+  describe('getDeliveryOutcome', () => {
+    const baseOutcome = {
+      id: 'outcome-1',
+      outcome: 'DELIVERED',
+      recipientName: 'Jane Doe',
+      notes: 'Left with front desk',
+      unableReason: null,
+      unableReasonNote: null,
+      dropMethod: 'HANDED_TO_PERSON',
+      signature: { format: 'signature_pad', version: 5, width: 300, height: 150, strokes: [[{ x: 1, y: 2 }]] },
+      capturedAt: new Date('2026-08-28T14:30:00.000Z'),
+      latitude: 51.51,
+      longitude: -0.12,
+      locationAccuracyM: 12,
+      locationCapturedAt: new Date('2026-08-28T14:29:00.000Z'),
+      locationUnavailable: false,
+      recordedAt: new Date('2026-08-28T14:32:00.000Z'),
+      submittedViaQrToken: true,
+      correctedAt: null,
+      correctedByUserId: null,
+      photos: [
+        {
+          id: 'photo-2',
+          variants: { full: 'k/2/full.webp', thumb: 'k/2/thumb.webp' },
+          sourceWidth: 1600,
+          sourceHeight: 1200,
+          capturedAt: new Date('2026-08-28T14:31:00.000Z'),
+          sortOrder: 1,
+        },
+        {
+          id: 'photo-1',
+          variants: { full: 'k/1/full.webp', thumb: 'k/1/thumb.webp' },
+          sourceWidth: null,
+          sourceHeight: null,
+          capturedAt: null,
+          sortOrder: 0,
+        },
+      ],
+    };
+
+    const orderRow = (outcome: unknown) => ({
+      id: 'order-1',
+      orderNumber: 'ORD-2026-00386',
+      status: OrderStatus.DELIVERED,
+      customer: { name: 'Blackbird Kitchen' },
+      deliveryOutcome: outcome,
+    });
+
+    beforeEach(() => {
+      mockPrisma.deliveryRunOrder.findFirst.mockResolvedValue({
+        run: { driverName: 'James Vine', name: 'Tuesday City Run', deliveryDate: new Date('2026-08-28') },
+      });
+    });
+
+    it('projects the outcome, derives driver/run, and presigns both photo variants', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(orderRow(baseOutcome));
+
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+
+      expect(result.orderNumber).toBe('ORD-2026-00386');
+      expect(result.orderStatus).toBe(OrderStatus.DELIVERED);
+      expect(result.customerName).toBe('Blackbird Kitchen');
+      expect(result.driverName).toBe('James Vine');
+      expect(result.runName).toBe('Tuesday City Run');
+      expect(result.runDeliveryDate).toBe('2026-08-28');
+      expect(result.recipientName).toBe('Jane Doe');
+      expect(result.deliveryNotes).toBe('Left with front desk');
+      expect(result.dropMethod).toBe('HANDED_TO_PERSON');
+      expect(result.deviceCapturedAt).toBe('2026-08-28T14:30:00.000Z');
+      expect(result.serverRecordedAt).toBe('2026-08-28T14:32:00.000Z');
+      expect(result.submittedViaQrToken).toBe(true);
+      expect(result.correctedByName).toBeNull();
+      expect(result.location).toEqual({
+        available: true,
+        latitude: 51.51,
+        longitude: -0.12,
+        accuracyM: 12,
+        capturedAt: '2026-08-28T14:29:00.000Z',
+      });
+      // photos returned in query order (service asks Prisma to sort); URLs presigned, keys absent
+      expect(result.photos.map((p) => p.id)).toEqual(['photo-2', 'photo-1']);
+      expect(result.photos[0].url).toBe('https://signed.example/k/2/full.webp?sig=x');
+      expect(result.photos[0].thumbnailUrl).toBe('https://signed.example/k/2/thumb.webp?sig=x');
+      expect(JSON.stringify(result.photos)).not.toContain('.webp"'); // no bare keys, only signed urls
+      expect(mockR2.presignGetUrl).toHaveBeenCalledWith('k/2/full.webp', 900, 'wholo-deliveries');
+    });
+
+    it('passes the signature blob through verbatim', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(orderRow(baseOutcome));
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+      expect(result.signature).toEqual(baseOutcome.signature);
+    });
+
+    it('404s when the order is not this distributor’s', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(null);
+      await expect(service.getDeliveryOutcome('order-1', 'dist-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('404s when the order has no outcome recorded', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(orderRow(null));
+      await expect(service.getDeliveryOutcome('order-1', 'dist-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('returns null driver/run when the order has no active run allocation', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(orderRow(baseOutcome));
+      mockPrisma.deliveryRunOrder.findFirst.mockResolvedValue(null);
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+      expect(result.driverName).toBeNull();
+      expect(result.runName).toBeNull();
+      expect(result.runDeliveryDate).toBeNull();
+    });
+
+    it('maps an unable-to-deliver outcome with no drop method or signature', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...orderRow({
+          ...baseOutcome,
+          outcome: 'UNABLE_TO_DELIVER',
+          dropMethod: null,
+          signature: null,
+          recipientName: null,
+          unableReason: 'CUSTOMER_CLOSED',
+        }),
+        status: OrderStatus.DELIVERY_FAILED,
+      });
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+      expect(result.outcome).toBe('UNABLE_TO_DELIVER');
+      expect(result.orderStatus).toBe(OrderStatus.DELIVERY_FAILED);
+      expect(result.unableReason).toBe('CUSTOMER_CLOSED');
+      expect(result.dropMethod).toBeNull();
+      expect(result.signature).toBeNull();
+    });
+
+    it('reports location unavailable with null coordinates', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(
+        orderRow({ ...baseOutcome, locationUnavailable: true, latitude: null, longitude: null, locationAccuracyM: null }),
+      );
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+      expect(result.location.available).toBe(false);
+      expect(result.location.latitude).toBeNull();
+      expect(result.location.longitude).toBeNull();
+    });
+
+    it('resolves the correcting user’s name when the outcome was corrected', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(
+        orderRow({ ...baseOutcome, correctedAt: new Date('2026-08-29T09:00:00.000Z'), correctedByUserId: 'user-9' }),
+      );
+      mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Alex', lastName: 'Morgan' });
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1');
+      expect(result.correctedAt).toBe('2026-08-29T09:00:00.000Z');
+      expect(result.correctedByName).toBe('Alex Morgan');
     });
   });
 

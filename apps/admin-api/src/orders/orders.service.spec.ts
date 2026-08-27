@@ -39,4 +39,18 @@ describe('OrdersService (BFF)', () => {
       expect(result).toEqual({ count: 3 });
     });
   });
+
+  describe('getDeliveryOutcome', () => {
+    it('gets the delivery-outcome sub-resource for the order, scoped to the distributor', async () => {
+      api.get.mockResolvedValue({ id: 'outcome-1', outcome: 'DELIVERED' });
+
+      const result = await service.getDeliveryOutcome('order-1', 'dist-1', 'token-1');
+
+      expect(api.get).toHaveBeenCalledWith(
+        '/admin/distributors/dist-1/orders/order-1/delivery-outcome',
+        'token-1',
+      );
+      expect(result).toEqual({ id: 'outcome-1', outcome: 'DELIVERED' });
+    });
+  });
 });

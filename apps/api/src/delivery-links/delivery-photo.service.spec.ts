@@ -23,7 +23,7 @@ describe('DeliveryPhotoService', () => {
     orderDeliveryPhoto: { count: jest.Mock; create: jest.Mock; findFirst: jest.Mock; delete: jest.Mock };
   };
   let imageProcessing: { process: jest.Mock };
-  let r2: { upload: jest.Mock; delete: jest.Mock; getPublicUrl: jest.Mock };
+  let r2: { upload: jest.Mock; delete: jest.Mock; presignGetUrl: jest.Mock; deliveryBucket: string };
 
   beforeEach(async () => {
     prisma = {
@@ -39,7 +39,8 @@ describe('DeliveryPhotoService', () => {
     r2 = {
       upload: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
-      getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
+      presignGetUrl: jest.fn((key: string) => Promise.resolve(`https://signed.example.com/${key}?sig=x`)),
+      deliveryBucket: 'wholo-deliveries',
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -55,11 +56,16 @@ describe('DeliveryPhotoService', () => {
   });
 
   describe('uploadPhoto', () => {
-    it('processes, uploads each variant to R2, stores keys (not URLs), and returns the thumb URL', async () => {
+    it('processes, uploads each variant to the private delivery bucket, stores keys (not URLs), and returns a presigned thumb URL', async () => {
       const result = await service.uploadPhoto(order, Buffer.from('img'), 'image/jpeg', 1234);
 
       expect(r2.upload).toHaveBeenCalledTimes(2);
-      expect(r2.upload).toHaveBeenCalledWith(expect.stringContaining('/full.webp'), processed.variants.get('full')!.buffer, 'image/webp');
+      expect(r2.upload).toHaveBeenCalledWith(
+        expect.stringContaining('/full.webp'),
+        processed.variants.get('full')!.buffer,
+        'image/webp',
+        'wholo-deliveries',
+      );
 
       const created = prisma.orderDeliveryPhoto.create.mock.calls[0][0].data;
       expect(created.orderId).toBe('order-1');
@@ -68,7 +74,8 @@ describe('DeliveryPhotoService', () => {
       expect(created.variants.full).not.toContain('https://');
       expect(created.sourceSizeBytes).toBe(1234);
 
-      expect(result.thumbnailUrl).toBe(`https://cdn.example.com/${created.variants.thumb}`);
+      expect(r2.presignGetUrl).toHaveBeenCalledWith(created.variants.thumb, 900, 'wholo-deliveries');
+      expect(result.thumbnailUrl).toBe(`https://signed.example.com/${created.variants.thumb}?sig=x`);
       expect(result.id).toBe(created.id);
     });
 
@@ -92,8 +99,8 @@ describe('DeliveryPhotoService', () => {
 
       await service.deletePhoto(order, 'ph-1');
 
-      expect(r2.delete).toHaveBeenCalledWith(full);
-      expect(r2.delete).toHaveBeenCalledWith(thumb);
+      expect(r2.delete).toHaveBeenCalledWith(full, 'wholo-deliveries');
+      expect(r2.delete).toHaveBeenCalledWith(thumb, 'wholo-deliveries');
       expect(prisma.orderDeliveryPhoto.delete).toHaveBeenCalledWith({ where: { id: 'ph-1' } });
     });
 

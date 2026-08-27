@@ -17,6 +17,14 @@ vi.mock('@/components/AdminLayout', () => ({
   AdminLayout: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+// The drawer has its own spec — stub it here so this test only asserts which
+// order it opens for.
+vi.mock('@/components/orders/ProofOfDeliveryDrawer', () => ({
+  ProofOfDeliveryDrawer: ({ orderId, orderNumber }: { orderId: string; orderNumber: string }) => (
+    <div data-testid="proof-drawer">{orderId}:{orderNumber}</div>
+  ),
+}));
+
 const mockListOrders = vi.fn();
 const mockAcceptOrder = vi.fn();
 const mockRejectOrder = vi.fn();
@@ -75,6 +83,29 @@ describe('OrdersPage', () => {
       expect(table.getByText('£123.45')).toBeInTheDocument();
       expect(table.getByText('24 Aug 2026')).toBeInTheDocument();
     });
+
+    it('shows a "Proof" action for a delivered order and opens the drawer', async () => {
+      mockListOrders.mockResolvedValue({
+        data: [makeOrder({ status: OrderStatus.DELIVERY_FAILED })],
+        pagination: { nextCursor: null, hasMore: false, total: 1 },
+      });
+
+      render(<OrdersPage />);
+      const table = within(await screen.findByRole('table'));
+
+      expect(table.queryByRole('link', { name: 'View' })).not.toBeInTheDocument();
+      await userEvent.click(table.getByRole('button', { name: 'Proof' }));
+
+      expect(screen.getByTestId('proof-drawer')).toHaveTextContent('order-1:ORD-1001');
+    });
+
+    it('shows a plain "View" link for a non-terminal order', async () => {
+      render(<OrdersPage />);
+      const table = within(await screen.findByRole('table'));
+
+      expect(table.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/orders/order-1');
+      expect(table.queryByRole('button', { name: 'Proof' })).not.toBeInTheDocument();
+    });
   });
 
   describe('mobile card list', () => {
@@ -100,6 +131,21 @@ describe('OrdersPage', () => {
       expect(list.getByText('20 Aug 2026')).toBeInTheDocument();
       expect(list.getByRole('link', { name: /View order/ })).toHaveAttribute('href', '/orders/order-1');
       expect(list.queryByText('Accept')).not.toBeInTheDocument();
+    });
+
+    it('opens the proof drawer from the expanded card for a delivered order', async () => {
+      mockListOrders.mockResolvedValue({
+        data: [makeOrder({ status: OrderStatus.DELIVERED })],
+        pagination: { nextCursor: null, hasMore: false, total: 1 },
+      });
+
+      render(<OrdersPage />);
+      const list = within(await screen.findByRole('list'));
+
+      await userEvent.click(list.getByRole('button', { name: /ORD-1001/ }));
+      await userEvent.click(list.getByRole('button', { name: 'Proof of delivery' }));
+
+      expect(screen.getByTestId('proof-drawer')).toHaveTextContent('order-1:ORD-1001');
     });
 
     it('shows Accept/Reject for a submitted order and accepts it', async () => {

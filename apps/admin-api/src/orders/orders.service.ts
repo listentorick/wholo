@@ -45,6 +45,10 @@ export class OrdersService {
     );
   }
 
+  getDeliveryOutcome(orderId: string, distributorId: string, token: string) {
+    return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}/delivery-outcome`, token);
+  }
+
   acceptOrder(orderId: string, distributorId: string, dto: AcceptOrderDto, token: string) {
     return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/accept`, token, dto);
   }

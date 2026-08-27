@@ -13,17 +13,31 @@ import {
   AccountingConnectionStatus,
   AccountingProvider,
   AccountingTaxTypeMatchMethod,
+  DeliveryAllocationSource,
+  DeliveryDropMethod,
+  DeliveryOutcomeType,
   OrganisationType,
   OrderStatus,
   OrderLineStatus,
   Prisma,
   Role,
   TaxClassification,
+  UnableToDeliverReason,
 } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { R2StorageService } from '../src/asset-images/r2-storage.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+
+const mockR2 = {
+  deliveryBucket: 'test-delivery-bucket',
+  upload: jest.fn().mockResolvedValue(undefined),
+  delete: jest.fn().mockResolvedValue(undefined),
+  download: jest.fn().mockResolvedValue(Buffer.from('webp')),
+  getPublicUrl: jest.fn((k: string) => `https://cdn.example/${k}`),
+  presignGetUrl: jest.fn((k: string) => Promise.resolve(`https://signed.example/${k}?sig=x`)),
+};
 
 const DIST_A = 'test-orders-dist-a';
 const DIST_B = 'test-orders-dist-b';
@@ -39,7 +53,10 @@ describe('Admin Orders (integration)', () => {
   beforeAll(async () => {
     jwtServer = await startJwtTestServer();
 
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(R2StorageService)
+      .useValue(mockR2)
+      .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -81,6 +98,10 @@ describe('Admin Orders (integration)', () => {
   afterAll(async () => {
     await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'Order', aggregateId: { in: await prisma.order.findMany({ where: { distributorId: { in: [DIST_A, DIST_B] } }, select: { id: true } }).then((rows) => rows.map((r) => r.id)) } } });
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.orderDeliveryPhoto.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.orderDeliveryOutcome.deleteMany({ where: { order: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.deliveryRunOrder.deleteMany({ where: { run: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.deliveryRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.taxTypeAccountingMapping.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -106,6 +127,10 @@ describe('Admin Orders (integration)', () => {
       },
     });
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.orderDeliveryPhoto.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.orderDeliveryOutcome.deleteMany({ where: { order: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.deliveryRunOrder.deleteMany({ where: { run: { distributorId: { in: [DIST_A, DIST_B] } } } });
+    await prisma.deliveryRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.taxTypeAccountingMapping.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -250,6 +275,150 @@ describe('Admin Orders (integration)', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
+    });
+  });
+
+  // ── GET /admin/distributors/:distributorId/orders/:id/delivery-outcome ─────
+
+  describe('GET /api/v1/admin/distributors/:distributorId/orders/:id/delivery-outcome', () => {
+    const createOutcome = async (
+      distributorId: string,
+      opts: {
+        failed?: boolean;
+        withRun?: boolean;
+        withPhoto?: boolean;
+        locationUnavailable?: boolean;
+        signature?: Prisma.InputJsonValue;
+        unableReason?: UnableToDeliverReason;
+      } = {},
+    ) => {
+      const delivered = !opts.failed;
+      const order = await createOrder(
+        distributorId,
+        delivered ? OrderStatus.DELIVERED : OrderStatus.DELIVERY_FAILED,
+      );
+
+      const outcome = await prisma.orderDeliveryOutcome.create({
+        data: {
+          orderId: order.id,
+          outcome: delivered ? DeliveryOutcomeType.DELIVERED : DeliveryOutcomeType.UNABLE_TO_DELIVER,
+          recipientName: delivered ? 'Jane Doe' : null,
+          dropMethod: delivered ? DeliveryDropMethod.HANDED_TO_PERSON : null,
+          signature: opts.signature,
+          unableReason: delivered ? null : (opts.unableReason ?? UnableToDeliverReason.CUSTOMER_CLOSED),
+          latitude: opts.locationUnavailable ? null : 51.51,
+          longitude: opts.locationUnavailable ? null : -0.12,
+          locationAccuracyM: opts.locationUnavailable ? null : 12,
+          locationUnavailable: opts.locationUnavailable ?? false,
+        },
+      });
+
+      if (opts.withPhoto) {
+        await prisma.orderDeliveryPhoto.create({
+          data: {
+            orderId: order.id,
+            distributorId,
+            outcomeId: outcome.id,
+            variants: { full: `distributors/${distributorId}/deliveries/${order.id}/p/full.webp`, thumb: `distributors/${distributorId}/deliveries/${order.id}/p/thumb.webp` },
+            sourceMimeType: 'image/jpeg',
+            sourceSizeBytes: 1000,
+            sortOrder: 0,
+          },
+        });
+      }
+
+      if (opts.withRun) {
+        const run = await prisma.deliveryRun.create({
+          data: { distributorId, deliveryDate: new Date('2026-08-28'), name: 'Tuesday Run', driverName: 'James Vine' },
+        });
+        await prisma.deliveryRunOrder.create({
+          data: { runId: run.id, orderId: order.id, allocationSource: DeliveryAllocationSource.MANUAL },
+        });
+      }
+
+      return order;
+    };
+
+    it('returns the recorded outcome with derived driver/run and presigned photo URLs', async () => {
+      const order = await createOutcome(DIST_A, { withRun: true, withPhoto: true });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.outcome).toBe('DELIVERED');
+      expect(res.body.recipientName).toBe('Jane Doe');
+      expect(res.body.driverName).toBe('James Vine');
+      expect(res.body.runName).toBe('Tuesday Run');
+      expect(res.body.runDeliveryDate).toBe('2026-08-28');
+      expect(res.body.location).toMatchObject({ available: true, latitude: 51.51, longitude: -0.12 });
+      expect(res.body.photos).toHaveLength(1);
+      expect(res.body.photos[0].url).toMatch(/^https:\/\/signed\.example\//);
+      // no raw R2 keys leak in the response
+      expect(JSON.stringify(res.body)).not.toContain('deliveries/');
+    });
+
+    it('returns 404 when the order belongs to a different distributor', async () => {
+      const orderB = await createOutcome(DIST_B, {});
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 404 when the order has no recorded outcome', async () => {
+      const order = await createOrder(DIST_A, OrderStatus.DELIVERED);
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 403 when the caller has no membership of the path distributor', async () => {
+      const orderB = await createOutcome(DIST_B, {});
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('maps an unable-to-deliver outcome and reports location unavailable', async () => {
+      const order = await createOutcome(DIST_A, {
+        failed: true,
+        locationUnavailable: true,
+        unableReason: UnableToDeliverReason.INCORRECT_ADDRESS,
+      });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.outcome).toBe('UNABLE_TO_DELIVER');
+      expect(res.body.orderStatus).toBe('DELIVERY_FAILED');
+      expect(res.body.unableReason).toBe('INCORRECT_ADDRESS');
+      expect(res.body.dropMethod).toBeNull();
+      expect(res.body.location.available).toBe(false);
+      expect(res.body.location.latitude).toBeNull();
+    });
+
+    it('passes the signature blob through unchanged', async () => {
+      const signature = { format: 'signature_pad', version: 5, width: 300, height: 150, strokes: [[{ x: 1, y: 2, time: 0 }]] };
+      const order = await createOutcome(DIST_A, { signature });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.signature).toEqual(signature);
     });
   });
 

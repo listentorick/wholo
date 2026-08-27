@@ -19,6 +19,7 @@ import { MobileCardField } from '@/components/list/MobileCardField';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
+import { ProofOfDeliveryDrawer } from '@/components/orders/ProofOfDeliveryDrawer';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { OrderSummary, OrderListParams } from '@wholo/types';
 import { OrderStatus, formatMoney } from '@wholo/types';
@@ -112,6 +113,12 @@ const STATUS_META: Record<OrderStatus, { label: string; tone: StatusTone }> = {
 function OrderStatusBadge({ status }: { status: OrderStatus }) {
   const meta = STATUS_META[status] ?? { label: status, tone: 'gray' as const };
   return <StatusBadge label={meta.label} tone={meta.tone} />;
+}
+
+// Any order with a recorded delivery outcome — status is outcome-driven, so it's
+// a reliable proxy for "a proof-of-delivery row exists".
+function hasProof(status: OrderStatus) {
+  return status === OrderStatus.DELIVERED || status === OrderStatus.DELIVERY_FAILED;
 }
 
 // ─── Sort icon ────────────────────────────────────────────────────────────────
@@ -212,6 +219,7 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<ActiveFilter[]>([]);
   const [sortBy, setSortBy] = useState<'createdAt' | 'requestedDeliveryDate'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [proofOrder, setProofOrder] = useState<{ id: string; orderNumber: string } | null>(null);
 
   const buildParams = useCallback(
     (cursor: string | undefined) => buildApiParams(filters, sortBy, sortOrder, cursor),
@@ -356,6 +364,15 @@ export default function OrdersPage() {
                 {order.status === OrderStatus.SUBMITTED && accessToken && (
                   <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
                 )}
+                {hasProof(order.status) && (
+                  <button
+                    type="button"
+                    onClick={() => setProofOrder({ id: order.id, orderNumber: order.orderNumber })}
+                    className="block text-left text-sm font-medium text-primary hover:underline"
+                  >
+                    Proof of delivery
+                  </button>
+                )}
                 <Link href={`/orders/${order.id}`} className="block text-sm font-medium text-primary hover:underline">
                   View order →
                 </Link>
@@ -422,6 +439,14 @@ export default function OrdersPage() {
                     <td className="py-3 pl-4 pr-5">
                       {order.status === OrderStatus.SUBMITTED && accessToken ? (
                         <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
+                      ) : hasProof(order.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => setProofOrder({ id: order.id, orderNumber: order.orderNumber })}
+                          className="text-xs text-primary hover:underline transition-colors"
+                        >
+                          Proof
+                        </button>
                       ) : (
                         <Link href={`/orders/${order.id}`} className="text-xs text-muted hover:text-text transition-colors">
                           View
@@ -435,6 +460,14 @@ export default function OrdersPage() {
           </div>
           <ListPagination hasMore={hasMore} isLoadingMore={isLoadingMore} onLoadMore={loadMore} />
         </ListTableShell>
+      )}
+
+      {proofOrder && (
+        <ProofOfDeliveryDrawer
+          orderId={proofOrder.id}
+          orderNumber={proofOrder.orderNumber}
+          onClose={() => setProofOrder(null)}
+        />
       )}
     </AdminLayout>
   );

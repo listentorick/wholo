@@ -12,6 +12,7 @@ data:
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
   R2_ACCOUNT_ID: {{ .Values.api.r2.accountId | quote }}
   R2_BUCKET_NAME: {{ .Values.api.r2.bucketName | quote }}
+  R2_DELIVERY_BUCKET_NAME: {{ .Values.api.r2.deliveryBucketName | quote }}
   R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}
   PORTAL_URL: {{ .Values.global.portalUrl | quote }}
   ADMIN_URL: {{ .Values.global.adminUrl | quote }}

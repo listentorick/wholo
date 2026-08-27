@@ -32,7 +32,10 @@ const ADMIN_USER = 'test-dlink-admin';
 const mockR2 = {
   upload: jest.fn().mockResolvedValue(undefined),
   delete: jest.fn().mockResolvedValue(undefined),
+  download: jest.fn().mockResolvedValue(Buffer.from('webp-bytes')),
   getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
+  presignGetUrl: jest.fn((key: string) => Promise.resolve(`https://signed.example.com/${key}?sig=x`)),
+  deliveryBucket: 'test-delivery-bucket',
 };
 
 describe('Delivery links (integration)', () => {

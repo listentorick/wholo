@@ -13,11 +13,22 @@ import {
   ActorType,
   Prisma,
 } from '@prisma/client';
+import type {
+  DeliveryOutcomeDetail,
+  DeliveryProofPhoto,
+  DeliverySignatureData,
+} from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
+import { R2StorageService } from '../asset-images/r2-storage.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
+
+// Delivery proof photos live in a private bucket; hand admins short-lived
+// presigned URLs so the browser loads bytes straight from R2 (nothing streams
+// through the API) while access stays scoped and expiring.
+const PROOF_PHOTO_URL_TTL_SECONDS = 900;
 
 interface CursorPayload {
   sortBy: 'createdAt' | 'requestedDeliveryDate';
@@ -111,6 +122,7 @@ export class AdminOrdersService {
     private prisma: PrismaService,
     private outbox: OutboxService,
     private audit: AuditService,
+    private r2: R2StorageService,
   ) {}
 
   async listOrders(distributorId: string, query: OrderQueryDto) {
@@ -324,6 +336,96 @@ export class AdminOrdersService {
         createdAt: entry.createdAt.toISOString(),
       })),
       pagination: { nextCursor, hasMore, total },
+    };
+  }
+
+  // Read-only projection of the recorded delivery outcome for the admin
+  // "Proof of delivery" view (Driver Delivery App, PRD §18). Pure read — no
+  // audit/outbox. 404s when the order isn't this distributor's, or has no
+  // outcome recorded yet.
+  async getDeliveryOutcome(orderId: string, distributorId: string): Promise<DeliveryOutcomeDetail> {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, distributorId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        customer: { select: { name: true } },
+        deliveryOutcome: { include: { photos: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] } } },
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const outcome = order.deliveryOutcome;
+    if (!outcome) throw new NotFoundException('No delivery outcome recorded for this order');
+
+    // Driver / run come from the order's current run allocation (DeliveryRun
+    // .driverName is free text — no driver directory exists yet).
+    const allocation = await this.prisma.deliveryRunOrder.findFirst({
+      where: { activeOrderId: orderId },
+      select: { run: { select: { driverName: true, name: true, deliveryDate: true } } },
+    });
+
+    let correctedByName: string | null = null;
+    if (outcome.correctedByUserId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: outcome.correctedByUserId },
+        select: { firstName: true, lastName: true },
+      });
+      correctedByName = user ? `${user.firstName} ${user.lastName}` : null;
+    }
+
+    const photos: DeliveryProofPhoto[] = await Promise.all(
+      outcome.photos.map(async (photo) => {
+        const variants = photo.variants as Record<string, string>;
+        const [url, thumbnailUrl] = await Promise.all([
+          this.r2.presignGetUrl(variants.full, PROOF_PHOTO_URL_TTL_SECONDS, this.r2.deliveryBucket),
+          this.r2.presignGetUrl(variants.thumb, PROOF_PHOTO_URL_TTL_SECONDS, this.r2.deliveryBucket),
+        ]);
+        return {
+          id: photo.id,
+          url,
+          thumbnailUrl,
+          width: photo.sourceWidth,
+          height: photo.sourceHeight,
+          capturedAt: photo.capturedAt?.toISOString() ?? null,
+          sortOrder: photo.sortOrder,
+        };
+      }),
+    );
+
+    const locationAvailable =
+      !outcome.locationUnavailable && outcome.latitude != null && outcome.longitude != null;
+
+    return {
+      id: outcome.id,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      orderStatus: order.status as DeliveryOutcomeDetail['orderStatus'],
+      customerName: order.customer?.name ?? '',
+      driverName: allocation?.run.driverName ?? null,
+      runName: allocation?.run.name ?? null,
+      runDeliveryDate: allocation?.run.deliveryDate?.toISOString().slice(0, 10) ?? null,
+      outcome: outcome.outcome as DeliveryOutcomeDetail['outcome'],
+      recipientName: outcome.recipientName ?? null,
+      deliveryNotes: outcome.notes ?? null,
+      unableReason: (outcome.unableReason as DeliveryOutcomeDetail['unableReason']) ?? null,
+      unableReasonNote: outcome.unableReasonNote ?? null,
+      dropMethod: (outcome.dropMethod as DeliveryOutcomeDetail['dropMethod']) ?? null,
+      signature: (outcome.signature as DeliverySignatureData | null) ?? null,
+      deviceCapturedAt: outcome.capturedAt?.toISOString() ?? null,
+      serverRecordedAt: outcome.recordedAt.toISOString(),
+      location: {
+        available: locationAvailable,
+        latitude: locationAvailable ? outcome.latitude : null,
+        longitude: locationAvailable ? outcome.longitude : null,
+        accuracyM: locationAvailable ? outcome.locationAccuracyM : null,
+        capturedAt: outcome.locationCapturedAt?.toISOString() ?? null,
+      },
+      submittedViaQrToken: outcome.submittedViaQrToken,
+      correctedAt: outcome.correctedAt?.toISOString() ?? null,
+      correctedByName,
+      photos,
     };
   }
 

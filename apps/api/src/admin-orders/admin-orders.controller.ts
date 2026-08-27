@@ -74,6 +74,21 @@ export class AdminOrdersController {
     return this.service.getOrderAuditLog(id, distributorId, query);
   }
 
+  // Sibling of orders/:id/audit-log. New endpoints shouldn't extend the
+  // admin/... namespace (see CLAUDE.md), but the admin/distributors/:distributorId
+  // /orders/:id/... family is grandfathered and this is a consistent addition —
+  // a standalone controller + guard + BFF module for one read isn't warranted.
+  @Get('orders/:id/delivery-outcome')
+  @ApiOperation({ summary: "Get an order's recorded proof of delivery (driver outcome)" })
+  @ApiOkResponse({ description: 'Delivery outcome detail with presigned proof-photo URLs' })
+  @ApiNotFoundResponse({ description: 'Order not found, wrong distributor, or no outcome recorded' })
+  getDeliveryOutcome(
+    @Param('distributorId') distributorId: string,
+    @Param('id') id: string,
+  ) {
+    return this.service.getDeliveryOutcome(id, distributorId);
+  }
+
   @Post('orders/:id/accept')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept a submitted order' })

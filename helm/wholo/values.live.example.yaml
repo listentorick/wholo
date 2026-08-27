@@ -30,6 +30,9 @@ redis:
 global:
   portalUrl: "https://portal.<domain>"
   adminUrl: "https://admin.<domain>"
+  # Driver PWA host — apps/api builds QR delivery URLs from this. Must match
+  # ingress.hosts.driver below.
+  driverUrl: "https://driver.<domain>"
 
 api:
   image:
@@ -46,6 +49,7 @@ api:
   r2:
     accountId: "CHANGE_ME"
     bucketName: "CHANGE_ME"
+    deliveryBucketName: "CHANGE_ME"
     publicBaseUrl: "CHANGE_ME"
     accessKeyId: "CHANGE_ME"
     secretAccessKey: "CHANGE_ME"
@@ -114,6 +118,9 @@ ingress:
     portal: portal.<domain>
     admin: admin.<domain>
     auth: auth.<domain>
+    # Driver PWA (QR delivery flow + authenticated manifest). Must match
+    # global.driverUrl so apps/api mints QR delivery URLs on this host.
+    driver: driver.<domain>
     # apps/api is deliberately not exposed publicly — BFFs reach it via
     # cluster DNS. Only add an api host (plus its DNS A record) if external
     # webhooks ever need it:

@@ -37,6 +37,12 @@ export class OrdersController {
     return this.ordersService.getOrderAuditLog(id, organisationId, query, token);
   }
 
+  @Get(':id/delivery-outcome')
+  getDeliveryOutcome(@Param('id') id: string, @Req() req: Request) {
+    const { organisationId, token } = req['user'] as { organisationId: string; token: string };
+    return this.ordersService.getDeliveryOutcome(id, organisationId, token);
+  }
+
   @Post(':id/accept')
   acceptOrder(@Param('id') id: string, @Body() dto: AcceptOrderDto, @Req() req: Request) {
     const { organisationId, token } = req['user'] as { organisationId: string; token: string };

@@ -9,6 +9,7 @@ import type {
   AuditLogEntry,
   AuditLogQueryParams,
   OrderNeedsAttentionCountResponse,
+  DeliveryOutcomeDetail,
 } from '@wholo/types';
 import { apiFetch } from './base';
 
@@ -47,6 +48,13 @@ export const adminOrdersApi = {
     return apiFetch<PaginatedResponse<AuditLogEntry>>(`/api/v1/orders/${orderId}/audit-log?${qs.toString()}`, {
       token,
     });
+  },
+
+  // Recorded proof of delivery for a DELIVERED / DELIVERY_FAILED order.
+  // photos[].url / thumbnailUrl are short-lived presigned R2 URLs — re-call
+  // this to refresh them if the drawer stays open past their TTL.
+  getDeliveryOutcome(orderId: string, token: string): Promise<DeliveryOutcomeDetail> {
+    return apiFetch<DeliveryOutcomeDetail>(`/api/v1/orders/${orderId}/delivery-outcome`, { token });
   },
 
   acceptOrder(orderId: string, token: string, body?: AcceptOrderRequest): Promise<Order> {
