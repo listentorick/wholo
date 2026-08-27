@@ -7,6 +7,7 @@ import { StepActions } from './StepActions';
 
 interface ConfirmDeliverySignatureProps {
   order: DeliveryLinkOrder;
+  recipientName: string;
   onAccept: (signature: SignatureStrokeData, capturedAt: string) => void;
   submitting: boolean;
   error: string | null;
@@ -16,7 +17,7 @@ interface ConfirmDeliverySignatureProps {
 // recipient reads the summary, signs, and taps "Accept delivery". There is no
 // separate driver review screen for this path — this screen is the review, and
 // the caption below the button carries the irreversibility warning (PRD §12).
-export function ConfirmDeliverySignature({ order, onAccept, submitting, error }: ConfirmDeliverySignatureProps) {
+export function ConfirmDeliverySignature({ order, recipientName, onAccept, submitting, error }: ConfirmDeliverySignatureProps) {
   const padRef = useRef<SignaturePadHandle>(null);
   const [empty, setEmpty] = useState(true);
 
@@ -29,9 +30,14 @@ export function ConfirmDeliverySignature({ order, onAccept, submitting, error }:
         <h1 className="mt-1 text-xl font-semibold text-foreground">Confirm delivery</h1>
       </div>
 
-      <p className="text-sm text-foreground-secondary">
-        By signing below, I confirm that I have received this order for {order.customerName}.
-      </p>
+      <div>
+        <p className="text-sm font-medium text-foreground">
+          Signing as {recipientName} on behalf of {order.customerName}
+        </p>
+        <p className="mt-1 text-sm text-foreground-secondary">
+          By signing below, I confirm this order has been received.
+        </p>
+      </div>
 
       <SignaturePad ref={padRef} onChange={setEmpty} ariaLabel="Signature" />
 

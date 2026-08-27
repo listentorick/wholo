@@ -11,8 +11,18 @@ vi.mock('@/lib/delivery-api', async () => {
     ...actual,
     getDeliveryOrder: vi.fn(),
     submitDeliveryOutcome: vi.fn(),
+    uploadDeliveryPhoto: vi.fn(),
+    deleteDeliveryPhoto: vi.fn(),
   };
 });
+
+vi.mock('@/lib/geolocation', () => ({
+  captureDeviceLocation: vi.fn().mockResolvedValue({ latitude: 53.7, longitude: -1.8, accuracyM: 8, capturedAt: '2026-08-27T10:00:00.000Z' }),
+}));
+
+vi.mock('@/lib/image', () => ({
+  compressImage: vi.fn((file: File) => Promise.resolve(file)),
+}));
 
 // The real SignaturePad needs a canvas 2D context jsdom doesn't provide. Stand
 // in a button that toggles the "not empty" state and hands back fixed strokes.
@@ -57,8 +67,16 @@ function setHash(hash: string) {
   window.location.hash = hash;
 }
 
+// jsdom has no object-URL support
+if (!URL.createObjectURL) {
+  URL.createObjectURL = () => 'blob:preview';
+  URL.revokeObjectURL = () => {};
+}
+
 beforeEach(() => {
-  vi.resetAllMocks();
+  // clear (not reset) so the module-factory mock implementations for
+  // geolocation / image / delivery-api survive between tests.
+  vi.clearAllMocks();
 });
 
 describe('DeliveryPage', () => {
@@ -99,17 +117,25 @@ describe('DeliveryPage', () => {
     expect(screen.queryByRole('button', { name: 'Deliver' })).not.toBeInTheDocument(); // not the selector
   });
 
-  it('walks the full handed-to-a-person flow through to submission', async () => {
+  it('walks the full handed-to-a-person flow (photo + location) through to submission', async () => {
     setHash('#order-1.sig');
     vi.mocked(deliveryApi.getDeliveryOrder).mockResolvedValue(pendingOrder);
     vi.mocked(deliveryApi.submitDeliveryOutcome).mockResolvedValue(submittedOrder);
+    vi.mocked(deliveryApi.uploadDeliveryPhoto).mockResolvedValue({ id: 'srv-photo-1', thumbnailUrl: 'https://cdn/x' });
 
     render(<DeliveryPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Deliver' }));
     await userEvent.click(screen.getByRole('radio', { name: /handed to a person/i }));
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
     await userEvent.type(screen.getByLabelText('Recipient name'), 'Alex Morgan');
+    await userEvent.upload(
+      screen.getByLabelText('Add delivery photo'),
+      new File(['x'], 'shot.jpg', { type: 'image/jpeg' }),
+    );
+    await waitFor(() => expect(deliveryApi.uploadDeliveryPhoto).toHaveBeenCalledWith('order-1.sig', expect.any(Blob)));
+
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await userEvent.click(screen.getByRole('button', { name: 'Add signature stroke' }));
     await userEvent.click(screen.getByRole('button', { name: 'Accept delivery' }));
@@ -123,6 +149,8 @@ describe('DeliveryPage', () => {
           recipientName: 'Alex Morgan',
           signature: expect.objectContaining({ format: 'signature_pad' }),
           capturedAt: expect.any(String),
+          photoIds: ['srv-photo-1'],
+          location: expect.objectContaining({ latitude: 53.7, longitude: -1.8 }),
         }),
       ),
     );

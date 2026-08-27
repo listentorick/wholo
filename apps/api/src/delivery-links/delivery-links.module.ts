@@ -5,6 +5,7 @@ import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { DeliveryLinksController } from './delivery-links.controller';
 import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryPhotoService } from './delivery-photo.service';
 import { DeliveryTokenSigner } from './delivery-token.signer';
 
 @Module({
@@ -19,7 +20,7 @@ import { DeliveryTokenSigner } from './delivery-token.signer';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
   ],
   controllers: [DeliveryLinksController],
-  providers: [DeliveryLinksService, DeliveryTokenSigner],
+  providers: [DeliveryLinksService, DeliveryPhotoService, DeliveryTokenSigner],
   // DeliveryTokenSigner is exported so ManifestService (DeliveryRunsModule)
   // can sign the same durable URL it prints on the manifest — see
   // manifest.service.ts.

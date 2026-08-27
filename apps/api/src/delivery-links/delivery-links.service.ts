@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { DeliveryTokenSigner } from './delivery-token.signer';
+import { DeliveryPhotoService, DeliveryPhotoDto } from './delivery-photo.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
 import { parseAddress } from '../delivery-runs/manifest/manifest-data.service';
 import { DeliveryLinkOrderDto } from './delivery-link.types';
@@ -64,7 +65,18 @@ export class DeliveryLinksService {
     private audit: AuditService,
     private outbox: OutboxService,
     private signer: DeliveryTokenSigner,
+    private deliveryPhoto: DeliveryPhotoService,
   ) {}
+
+  async uploadPhoto(rawToken: string, file: Express.Multer.File): Promise<DeliveryPhotoDto> {
+    const order = await this.resolveOrder(rawToken);
+    return this.deliveryPhoto.uploadPhoto(order, file.buffer, file.mimetype, file.size);
+  }
+
+  async deletePhoto(rawToken: string, photoId: string): Promise<void> {
+    const order = await this.resolveOrder(rawToken);
+    return this.deliveryPhoto.deletePhoto(order, photoId);
+  }
 
   async getOrder(rawToken: string): Promise<DeliveryLinkOrderDto> {
     const order = await this.resolveOrder(rawToken);
@@ -95,6 +107,10 @@ export class DeliveryLinksService {
       throw new UnprocessableEntityException('signature payload is too large');
     }
 
+    const photoIds = dto.photoIds ?? [];
+    const loc = dto.location;
+    const locationUnavailable = loc?.unavailable ?? false;
+
     const driverName = await this.getDriverName(order.id);
     const isDelivered = dto.outcome === DeliveryOutcomeType.DELIVERED;
     const newStatus = isDelivered ? OrderStatus.DELIVERED : OrderStatus.DELIVERY_FAILED;
@@ -112,8 +128,26 @@ export class DeliveryLinksService {
             dropMethod: dto.dropMethod,
             signature: dto.signature ? (dto.signature as unknown as Prisma.InputJsonValue) : undefined,
             capturedAt: dto.capturedAt ? new Date(dto.capturedAt) : undefined,
+            latitude: locationUnavailable ? null : (loc?.latitude ?? null),
+            longitude: locationUnavailable ? null : (loc?.longitude ?? null),
+            locationAccuracyM: locationUnavailable ? null : (loc?.accuracyM ?? null),
+            locationCapturedAt: locationUnavailable || !loc?.capturedAt ? null : new Date(loc.capturedAt),
+            locationUnavailable,
           },
         });
+
+        // Link the eagerly-uploaded proof photos. A count mismatch means a
+        // supplied id isn't an unlinked photo for this order — reject rather
+        // than silently drop it.
+        if (photoIds.length > 0) {
+          const { count } = await tx.orderDeliveryPhoto.updateMany({
+            where: { id: { in: photoIds }, orderId: order.id, outcomeId: null },
+            data: { outcomeId: created.id },
+          });
+          if (count !== photoIds.length) {
+            throw new UnprocessableEntityException('one or more photos are not attached to this delivery');
+          }
+        }
         // Audit trail is the real safeguard against misuse here (see the
         // plan's Context section) — not something the token scheme itself
         // needs to prevent. Written in the same transaction as the create,
@@ -126,7 +160,13 @@ export class DeliveryLinksService {
           action: 'DELIVERY_OUTCOME_RECORDED',
           actorType: ActorType.SYSTEM, // no authenticated actor exists on this path
           summary: `Delivery outcome recorded via QR link: ${dto.outcome}`,
-          changes: { outcome: dto.outcome, dropMethod: dto.dropMethod ?? null, submittedViaQrToken: true },
+          changes: {
+            outcome: dto.outcome,
+            dropMethod: dto.dropMethod ?? null,
+            photoCount: photoIds.length,
+            locationCaptured: !locationUnavailable && loc?.latitude != null,
+            submittedViaQrToken: true,
+          },
         });
 
         // Order status transition + notification, same transaction as the
@@ -154,7 +194,10 @@ export class DeliveryLinksService {
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         // Lost a race, or a genuine retry — a second row was never actually created.
-        const existing = await this.prisma.orderDeliveryOutcome.findUniqueOrThrow({ where: { orderId: order.id } });
+        const existing = await this.prisma.orderDeliveryOutcome.findUniqueOrThrow({
+          where: { orderId: order.id },
+          include: { photos: { select: { id: true } } },
+        });
         if (this.matchesExisting(existing, dto)) return this.toReadOnlyDto(order, existing, driverName); // idempotent retry
         throw new ConflictException('This delivery has already been recorded');
       }
@@ -181,7 +224,15 @@ export class DeliveryLinksService {
     return order;
   }
 
-  private matchesExisting(existing: OrderDeliveryOutcome, dto: SubmitOutcomeDto): boolean {
+  private matchesExisting(
+    existing: OrderDeliveryOutcome & { photos: { id: string }[] },
+    dto: SubmitOutcomeDto,
+  ): boolean {
+    const loc = dto.location;
+    const locUnavailable = loc?.unavailable ?? false;
+    const dtoPhotoIds = [...(dto.photoIds ?? [])].sort();
+    const existingPhotoIds = existing.photos.map((p) => p.id).sort();
+
     return (
       existing.outcome === dto.outcome
       && (existing.recipientName ?? null) === (dto.recipientName ?? null)
@@ -195,6 +246,13 @@ export class DeliveryLinksService {
       // plain JSON.stringify would spuriously flag two identical signatures as
       // a conflict under a concurrent retry.
       && canonicalJson(existing.signature ?? null) === canonicalJson(dto.signature ?? null)
+      && existing.locationUnavailable === locUnavailable
+      && (existing.latitude ?? null) === (locUnavailable ? null : (loc?.latitude ?? null))
+      && (existing.longitude ?? null) === (locUnavailable ? null : (loc?.longitude ?? null))
+      && (existing.locationAccuracyM ?? null) === (locUnavailable ? null : (loc?.accuracyM ?? null))
+      && (existing.locationCapturedAt?.toISOString() ?? null)
+        === (locUnavailable || !loc?.capturedAt ? null : new Date(loc.capturedAt).toISOString())
+      && canonicalJson(dtoPhotoIds) === canonicalJson(existingPhotoIds)
     );
   }
 

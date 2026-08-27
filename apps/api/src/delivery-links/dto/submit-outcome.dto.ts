@@ -3,15 +3,20 @@ import {
   ArrayMaxSize,
   Equals,
   IsArray,
+  IsBoolean,
   IsEnum,
   IsISO8601,
   IsInt,
+  IsLatitude,
+  IsLongitude,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -48,6 +53,37 @@ export class SignatureDto {
   @IsArray()
   @ArrayMaxSize(2000)
   strokes: unknown[];
+}
+
+// Structured device location captured once during the delivery (PRD §11) —
+// never from photo EXIF. `unavailable: true` records that no fix was obtained;
+// coords are then ignored.
+export class DeviceLocationDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  unavailable?: boolean;
+
+  @ApiPropertyOptional()
+  @ValidateIf((o: DeviceLocationDto) => !o.unavailable)
+  @IsLatitude()
+  latitude?: number;
+
+  @ApiPropertyOptional()
+  @ValidateIf((o: DeviceLocationDto) => !o.unavailable)
+  @IsLongitude()
+  longitude?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  accuracyM?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsISO8601()
+  capturedAt?: string;
 }
 
 // Only DELIVERED and UNABLE_TO_DELIVER are accepted this round — Increment 2/3
@@ -101,4 +137,20 @@ export class SubmitOutcomeDto {
   @IsOptional()
   @IsISO8601()
   capturedAt?: string;
+
+  // Ids of delivery-proof photos already uploaded via POST /delivery-links/photos
+  // for this order. Linked to the outcome on submit. Optional — photos never gate.
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @IsString({ each: true })
+  photoIds?: string[];
+
+  @ApiPropertyOptional({ type: DeviceLocationDto })
+  @IsOptional()
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DeviceLocationDto)
+  location?: DeviceLocationDto;
 }

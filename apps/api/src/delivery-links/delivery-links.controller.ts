@@ -1,8 +1,25 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DeliveryLinksService } from './delivery-links.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
+
+const MAX_PHOTO_BYTES = 12_000_000;
 
 // The first controller in apps/api with no JwtAuthGuard/DistributorAccessGuard
 // at all — deliberately public. The X-Delivery-Token header is the sole
@@ -26,5 +43,26 @@ export class DeliveryLinksController {
   @ApiOperation({ summary: 'Record a delivery outcome — single-use per order, idempotent on retry' })
   submitOutcome(@Headers('x-delivery-token') token: string | undefined, @Body() dto: SubmitOutcomeDto) {
     return this.deliveryLinksService.submitOutcome(token ?? '', dto);
+  }
+
+  @Post('photos')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload a delivery-proof photo (before the outcome is submitted)' })
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_PHOTO_BYTES } }))
+  uploadPhoto(@Headers('x-delivery-token') token: string | undefined, @UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No photo provided');
+    return this.deliveryLinksService.uploadPhoto(token ?? '', file);
+  }
+
+  @Delete('photos/:photoId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Remove a delivery-proof photo (only while the delivery is unrecorded)' })
+  deletePhoto(
+    @Headers('x-delivery-token') token: string | undefined,
+    // Photo ids are server-minted UUIDs — reject anything else before it
+    // reaches the DB (no path-ish strings, no injection surface).
+    @Param('photoId', new ParseUUIDPipe()) photoId: string,
+  ) {
+    return this.deliveryLinksService.deletePhoto(token ?? '', photoId);
   }
 }

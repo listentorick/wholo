@@ -16,22 +16,40 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { OrderStatus, OrganisationType, Prisma } from '@prisma/client';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const sharp: typeof import('sharp').default = require('sharp');
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { DeliveryTokenSigner } from '../src/delivery-links/delivery-token.signer';
+import { R2StorageService } from '../src/asset-images/r2-storage.service';
 
 const DIST = 'test-dlink-dist';
 const CUSTOMER = 'test-dlink-customer';
 const ADMIN_USER = 'test-dlink-admin';
 
+// R2 is stubbed — no real Cloudflare calls.
+const mockR2 = {
+  upload: jest.fn().mockResolvedValue(undefined),
+  delete: jest.fn().mockResolvedValue(undefined),
+  getPublicUrl: jest.fn((key: string) => `https://cdn.example.com/${key}`),
+};
+
 describe('Delivery links (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let signer: DeliveryTokenSigner;
+  let png: Buffer;
 
   beforeAll(async () => {
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    png = await sharp({ create: { width: 400, height: 300, channels: 3, background: { r: 90, g: 120, b: 150 } } })
+      .png()
+      .toBuffer();
+
+    const module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(R2StorageService)
+      .useValue(mockR2)
+      .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -61,10 +79,14 @@ describe('Delivery links (integration)', () => {
   });
 
   afterEach(async () => {
+    mockR2.upload.mockClear();
+    mockR2.delete.mockClear();
+
     const orders = await prisma.order.findMany({ where: { distributorId: DIST }, select: { id: true } });
     const orderIds = orders.map((o) => o.id);
 
     await prisma.auditLog.deleteMany({ where: { distributorId: DIST } });
+    await prisma.orderDeliveryPhoto.deleteMany({ where: { orderId: { in: orderIds } } });
     await prisma.orderDeliveryOutcome.deleteMany({ where: { order: { distributorId: DIST } } });
     // Notification has a real FK to Order — NotificationDelivery, then
     // Notification, must go before the order itself.
@@ -132,6 +154,15 @@ describe('Delivery links (integration)', () => {
     .post('/api/v1/delivery-links/outcome')
     .set('X-Delivery-Token', token)
     .send(body);
+
+  const uploadPhoto = (token: string) => request(app.getHttpServer())
+    .post('/api/v1/delivery-links/photos')
+    .set('X-Delivery-Token', token)
+    .attach('photo', png, { filename: 'shot.png', contentType: 'image/png' });
+
+  const deletePhoto = (token: string, photoId: string) => request(app.getHttpServer())
+    .delete(`/api/v1/delivery-links/photos/${photoId}`)
+    .set('X-Delivery-Token', token);
 
   it('resolves a token to only its own order — never leaks another order via the same request', async () => {
     const orderA = await createOrder();
@@ -276,5 +307,87 @@ describe('Delivery links (integration)', () => {
 
     expect((await getOrder(token)).status).toBe(410);
     expect((await submitOutcome(token, { outcome: 'DELIVERED' })).status).toBe(410);
+  });
+
+  describe('delivery-proof photos', () => {
+    it('uploads a photo to R2 under the order-scoped prefix and links it to the outcome on submit — never exposing it', async () => {
+      const order = await createOrder();
+      const token = signer.sign(order.id);
+
+      const up = await uploadPhoto(token);
+      expect(up.status).toBe(201);
+      expect(mockR2.upload).toHaveBeenCalledTimes(2); // full + thumb
+
+      const row = await prisma.orderDeliveryPhoto.findUniqueOrThrow({ where: { id: up.body.id } });
+      expect(row.outcomeId).toBeNull();
+      const keys = row.variants as Record<string, string>;
+      expect(keys.full).toMatch(new RegExp(`^distributors/${DIST}/deliveries/${order.id}/[0-9a-f-]+/full\\.webp$`));
+
+      const submitted = await submitOutcome(token, {
+        ...HANDED_TO_PERSON,
+        photoIds: [up.body.id],
+        location: { latitude: 53.72, longitude: -1.86, accuracyM: 9, capturedAt: '2026-08-27T10:00:00.000Z' },
+      });
+      expect(submitted.status).toBe(200);
+
+      const linked = await prisma.orderDeliveryPhoto.findUniqueOrThrow({ where: { id: up.body.id } });
+      const outcome = await prisma.orderDeliveryOutcome.findUniqueOrThrow({ where: { orderId: order.id } });
+      expect(linked.outcomeId).toBe(outcome.id);
+      expect(outcome.latitude).toBe(53.72);
+      expect(outcome.locationCapturedAt?.toISOString()).toBe('2026-08-27T10:00:00.000Z');
+
+      const view = await getOrder(token);
+      expect(view.body.state).toBe('SUBMITTED');
+      expect(JSON.stringify(view.body)).not.toContain('deliveries/');
+      expect(JSON.stringify(view.body)).not.toContain('53.72');
+    });
+
+    it('records "location unavailable" with null coordinates', async () => {
+      const order = await createOrder();
+      const token = signer.sign(order.id);
+      await submitOutcome(token, { ...HANDED_TO_PERSON, location: { unavailable: true } });
+
+      const outcome = await prisma.orderDeliveryOutcome.findUniqueOrThrow({ where: { orderId: order.id } });
+      expect(outcome.locationUnavailable).toBe(true);
+      expect(outcome.latitude).toBeNull();
+    });
+
+    it('deletes an unlinked photo (row + both R2 objects) but 409s one already linked to a recorded outcome', async () => {
+      const order = await createOrder();
+      const token = signer.sign(order.id);
+
+      const a = (await uploadPhoto(token)).body.id;
+      const b = (await uploadPhoto(token)).body.id;
+
+      expect((await deletePhoto(token, a)).status).toBe(204);
+      expect(mockR2.delete).toHaveBeenCalledTimes(2);
+      expect(await prisma.orderDeliveryPhoto.findUnique({ where: { id: a } })).toBeNull();
+
+      await submitOutcome(token, { ...HANDED_TO_PERSON, photoIds: [b] });
+      expect((await deletePhoto(token, b)).status).toBe(409);
+    });
+
+    it('rejects a non-UUID photo id with 400 (server-minted ids only — no arbitrary strings reach the DB)', async () => {
+      const order = await createOrder();
+      const token = signer.sign(order.id);
+      expect((await deletePhoto(token, 'not-a-real-uuid')).status).toBe(400);
+      expect((await deletePhoto(token, '....branding')).status).toBe(400);
+    });
+
+    it('410s a photo upload once the delivery outcome is recorded', async () => {
+      const order = await createOrder();
+      const token = signer.sign(order.id);
+      await submitOutcome(token, HANDED_TO_PERSON);
+      expect((await uploadPhoto(token)).status).toBe(410);
+    });
+
+    it('a token cannot delete another order\'s photo', async () => {
+      const orderA = await createOrder();
+      const orderB = await createOrder();
+      const photoA = (await uploadPhoto(signer.sign(orderA.id))).body.id;
+
+      expect((await deletePhoto(signer.sign(orderB.id), photoA)).status).toBe(404);
+      expect(await prisma.orderDeliveryPhoto.findUnique({ where: { id: photoA } })).not.toBeNull();
+    });
   });
 });

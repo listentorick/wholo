@@ -1,17 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { DeliveryOrderSummary } from '@/components/delivery/DeliveryOrderSummary';
 import { OutcomeSelector } from '@/components/delivery/OutcomeSelector';
 import { DeliveryMethodSelector } from '@/components/delivery/DeliveryMethodSelector';
 import { ProofOfDeliveryForm } from '@/components/delivery/ProofOfDeliveryForm';
+import { PhotoItem } from '@/components/delivery/DeliveryPhotos';
 import { ConfirmDeliverySignature } from '@/components/delivery/ConfirmDeliverySignature';
 import { UnableToDeliverForm } from '@/components/delivery/UnableToDeliverForm';
 import { ReviewStep } from '@/components/delivery/ReviewStep';
 import { DeliveryConfirmation } from '@/components/delivery/DeliveryConfirmation';
-import { DeliveryLinkError, getDeliveryOrder, submitDeliveryOutcome } from '@/lib/delivery-api';
-import { DeliveryLinkOrder, DeliveryOutcomeType, SignatureStrokeData, SubmitOutcomeRequest } from '@/types/delivery';
+import {
+  DeliveryLinkError,
+  deleteDeliveryPhoto,
+  getDeliveryOrder,
+  submitDeliveryOutcome,
+  uploadDeliveryPhoto,
+} from '@/lib/delivery-api';
+import { compressImage } from '@/lib/image';
+import { captureDeviceLocation } from '@/lib/geolocation';
+import {
+  DeviceLocation,
+  DeliveryLinkOrder,
+  DeliveryOutcomeType,
+  SignatureStrokeData,
+  SubmitOutcomeRequest,
+} from '@/types/delivery';
 
 // No [token] dynamic segment — the token lives in the URL fragment
 // (window.location.hash), which the browser never sends to any server. See
@@ -25,12 +40,21 @@ type Step =
   | 'unable-form'
   | 'review';
 
+// The page's working copy of a photo — the DeliveryPhotos component only reads
+// the PhotoItem fields; `blob` is kept here for retry.
+type WorkingPhoto = PhotoItem & { blob: Blob };
+
+let photoSeq = 0;
+
 export default function DeliveryPage() {
   const [token, setToken] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'unavailable' | 'ready'>('loading');
   const [order, setOrder] = useState<DeliveryLinkOrder | null>(null);
   const [step, setStep] = useState<Step>('outcome-select');
   const [recipientName, setRecipientName] = useState('');
+  const [photos, setPhotos] = useState<WorkingPhoto[]>([]);
+  const [location, setLocation] = useState<DeviceLocation | null>(null);
+  const locationRequested = useRef(false);
   const [pendingOutcome, setPendingOutcome] = useState<SubmitOutcomeRequest | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -54,6 +78,59 @@ export default function DeliveryPage() {
     setStep(outcome === 'DELIVERED' ? 'delivery-method' : 'unable-form');
   }
 
+  const captureLocationOnce = useCallback(() => {
+    if (locationRequested.current) return;
+    locationRequested.current = true;
+    void captureDeviceLocation().then(setLocation);
+  }, []);
+
+  const uploadPhoto = useCallback(
+    async (clientId: string, blob: Blob) => {
+      if (!token) return;
+      setPhotos((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, status: 'uploading' } : p)));
+      try {
+        const { id } = await uploadDeliveryPhoto(token, blob);
+        setPhotos((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, status: 'done', photoId: id } : p)));
+      } catch {
+        setPhotos((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, status: 'error' } : p)));
+      }
+    },
+    [token],
+  );
+
+  const addPhoto = useCallback(
+    async (file: File) => {
+      const clientId = `p${photoSeq++}`;
+      const blob = await compressImage(file);
+      const previewUrl = URL.createObjectURL(blob);
+      setPhotos((prev) => [...prev, { clientId, previewUrl, status: 'uploading', blob }]);
+      void uploadPhoto(clientId, blob);
+    },
+    [uploadPhoto],
+  );
+
+  const removePhoto = useCallback(
+    (clientId: string) => {
+      setPhotos((prev) => {
+        const photo = prev.find((p) => p.clientId === clientId);
+        if (photo) {
+          URL.revokeObjectURL(photo.previewUrl);
+          if (photo.photoId && token) void deleteDeliveryPhoto(token, photo.photoId).catch(() => {});
+        }
+        return prev.filter((p) => p.clientId !== clientId);
+      });
+    },
+    [token],
+  );
+
+  const retryPhoto = useCallback(
+    (clientId: string) => {
+      const photo = photos.find((p) => p.clientId === clientId);
+      if (photo) void uploadPhoto(clientId, photo.blob);
+    },
+    [photos, uploadPhoto],
+  );
+
   async function submit(outcome: SubmitOutcomeRequest) {
     if (!token) return;
     setSubmitting(true);
@@ -69,12 +146,15 @@ export default function DeliveryPage() {
   }
 
   function acceptDelivery(signature: SignatureStrokeData, capturedAt: string) {
+    const photoIds = photos.filter((p) => p.status === 'done' && p.photoId).map((p) => p.photoId!);
     void submit({
       outcome: 'DELIVERED',
       dropMethod: 'HANDED_TO_PERSON',
       recipientName,
       signature,
       capturedAt,
+      ...(photoIds.length > 0 && { photoIds }),
+      ...(location && { location }),
     });
   }
 
@@ -127,6 +207,11 @@ export default function DeliveryPage() {
 
       {step === 'proof-of-delivery' && (
         <ProofOfDeliveryForm
+          photos={photos}
+          onAddPhoto={addPhoto}
+          onRemovePhoto={removePhoto}
+          onRetryPhoto={retryPhoto}
+          onEnter={captureLocationOnce}
           onBack={() => setStep('delivery-method')}
           onContinue={(name) => {
             setRecipientName(name);
@@ -138,6 +223,7 @@ export default function DeliveryPage() {
       {step === 'confirm-delivery' && (
         <ConfirmDeliverySignature
           order={order}
+          recipientName={recipientName}
           onAccept={acceptDelivery}
           submitting={submitting}
           error={submitError}

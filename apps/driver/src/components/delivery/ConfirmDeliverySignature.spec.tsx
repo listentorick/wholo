@@ -30,16 +30,17 @@ const order: DeliveryLinkOrder = {
 };
 
 describe('ConfirmDeliverySignature', () => {
-  it('shows the order number and a confirmation sentence naming the customer', () => {
-    render(<ConfirmDeliverySignature order={order} onAccept={vi.fn()} submitting={false} error={null} />);
+  it('shows the order number and attests the recipient signs on the customer’s behalf', () => {
+    render(<ConfirmDeliverySignature order={order} recipientName="Alex Morgan" onAccept={vi.fn()} submitting={false} error={null} />);
 
     expect(screen.getByText(/Order ORD-2026-00330/i)).toBeInTheDocument();
-    expect(screen.getByText(/I have received this order for Blackbird Kitchen/i)).toBeInTheDocument();
+    expect(screen.getByText(/Signing as Alex Morgan on behalf of Blackbird Kitchen/i)).toBeInTheDocument();
+    expect(screen.getByText(/I confirm this order has been received/i)).toBeInTheDocument();
   });
 
   it('keeps Accept delivery disabled until the pad reports a signature, then hands back strokes + an ISO timestamp', async () => {
     const onAccept = vi.fn();
-    render(<ConfirmDeliverySignature order={order} onAccept={onAccept} submitting={false} error={null} />);
+    render(<ConfirmDeliverySignature order={order} recipientName="Alex Morgan" onAccept={onAccept} submitting={false} error={null} />);
 
     const accept = screen.getByRole('button', { name: 'Accept delivery' });
     expect(accept).toBeDisabled();
@@ -55,7 +56,7 @@ describe('ConfirmDeliverySignature', () => {
   });
 
   it('re-disables Accept delivery after Clear signature', async () => {
-    render(<ConfirmDeliverySignature order={order} onAccept={vi.fn()} submitting={false} error={null} />);
+    render(<ConfirmDeliverySignature order={order} recipientName="Alex Morgan" onAccept={vi.fn()} submitting={false} error={null} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Draw stroke' }));
     expect(screen.getByRole('button', { name: 'Accept delivery' })).toBeEnabled();
@@ -66,7 +67,7 @@ describe('ConfirmDeliverySignature', () => {
 
   it('renders the error prop and shows the irreversibility caption', () => {
     render(
-      <ConfirmDeliverySignature order={order} onAccept={vi.fn()} submitting={false} error="Already recorded" />,
+      <ConfirmDeliverySignature order={order} recipientName="Alex Morgan" onAccept={vi.fn()} submitting={false} error="Already recorded" />,
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent('Already recorded');

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, GoneException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { DeliveryDropMethod, DeliveryOutcomeType, OrderStatus, Prisma, UnableToDeliverReason } from '@prisma/client';
 import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryPhotoService } from './delivery-photo.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -50,7 +51,8 @@ describe('DeliveryLinksService', () => {
   let service: DeliveryLinksService;
   let prisma: {
     order: { findUnique: jest.Mock; update: jest.Mock };
-    orderDeliveryOutcome: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock };
+    orderDeliveryOutcome: { findUnique: jest.Mock; findUniqueOrThrow: jest.Mock; create: jest.Mock };
+    orderDeliveryPhoto: { updateMany: jest.Mock };
     deliveryRunOrder: { findFirst: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -61,7 +63,12 @@ describe('DeliveryLinksService', () => {
   beforeEach(async () => {
     prisma = {
       order: { findUnique: jest.fn().mockResolvedValue(order), update: jest.fn() },
-      orderDeliveryOutcome: { findUnique: jest.fn().mockResolvedValue(null), findUniqueOrThrow: jest.fn() },
+      orderDeliveryOutcome: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findUniqueOrThrow: jest.fn(),
+        create: jest.fn().mockResolvedValue({ id: 'outcome-1', outcome: DeliveryOutcomeType.DELIVERED, recordedAt: new Date() }),
+      },
+      orderDeliveryPhoto: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
       deliveryRunOrder: { findFirst: jest.fn().mockResolvedValue({ run: { driverName: 'Alex Turner' } }) },
       $transaction: jest.fn(async (fn) => fn(prisma)),
     };
@@ -76,14 +83,32 @@ describe('DeliveryLinksService', () => {
         { provide: AuditService, useValue: audit },
         { provide: OutboxService, useValue: outbox },
         { provide: DeliveryTokenSigner, useValue: signer },
+        { provide: DeliveryPhotoService, useValue: { uploadPhoto: jest.fn(), deletePhoto: jest.fn() } },
       ],
     }).compile();
 
     service = module.get(DeliveryLinksService);
-    // orderDeliveryOutcome.create is invoked through the mocked $transaction,
-    // which passes `prisma` itself as `tx` — add the missing method used
-    // inside submitOutcome.
-    (prisma as unknown as { orderDeliveryOutcome: { create: jest.Mock } }).orderDeliveryOutcome.create = jest.fn();
+  });
+
+  // matchesExisting now reads location + linked-photo fields; a stored row needs
+  // them present or an idempotent retry is spuriously treated as a conflict.
+  const storedRow = (over: Record<string, unknown> = {}) => ({
+    outcome: DeliveryOutcomeType.DELIVERED,
+    dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
+    recipientName: 'Sam Taylor',
+    notes: null,
+    unableReason: null,
+    unableReasonNote: null,
+    signature,
+    capturedAt: new Date(capturedAt),
+    latitude: null,
+    longitude: null,
+    locationAccuracyM: null,
+    locationCapturedAt: null,
+    locationUnavailable: false,
+    photos: [],
+    recordedAt: new Date(),
+    ...over,
   });
 
   describe('getOrder', () => {
@@ -260,55 +285,100 @@ describe('DeliveryLinksService', () => {
     });
 
     it('is idempotent: retrying with the same body after a race returns the existing outcome instead of erroring', async () => {
-      (prisma as any).orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
-      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue({
-        outcome: DeliveryOutcomeType.DELIVERED,
-        dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
-        recipientName: 'Sam Taylor',
-        notes: null,
-        unableReason: null,
-        unableReasonNote: null,
-        signature,
-        capturedAt: new Date(capturedAt),
-        recordedAt: new Date(),
-      });
+      prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
+      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(storedRow());
 
       const result = await service.submitOutcome('order-1.sig', deliveredDto as any);
       expect(result.state).toBe('SUBMITTED');
     });
 
     it('rejects a second submission with a different body as a conflict', async () => {
-      (prisma as any).orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
-      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue({
-        outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER,
-        dropMethod: null,
-        recipientName: null,
-        notes: null,
-        unableReason: UnableToDeliverReason.CUSTOMER_REFUSED,
-        unableReasonNote: null,
-        signature: null,
-        capturedAt: null,
-        recordedAt: new Date(),
-      });
+      prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
+      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(
+        storedRow({
+          outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER,
+          dropMethod: null,
+          recipientName: null,
+          unableReason: UnableToDeliverReason.CUSTOMER_REFUSED,
+          signature: null,
+          capturedAt: null,
+        }),
+      );
 
       await expect(service.submitOutcome('order-1.sig', deliveredDto as any)).rejects.toThrow(ConflictException);
     });
 
     it('rejects a retry that changes only the signature as a conflict', async () => {
-      (prisma as any).orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
-      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue({
-        outcome: DeliveryOutcomeType.DELIVERED,
-        dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
-        recipientName: 'Sam Taylor',
-        notes: null,
-        unableReason: null,
-        unableReasonNote: null,
-        signature: { ...signature, strokes: [{ points: [{ x: 9, y: 9, time: 1, pressure: 0.1 }] }] },
-        capturedAt: new Date(capturedAt),
-        recordedAt: new Date(),
-      });
+      prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
+      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(
+        storedRow({ signature: { ...signature, strokes: [{ points: [{ x: 9, y: 9, time: 1, pressure: 0.1 }] }] } }),
+      );
 
       await expect(service.submitOutcome('order-1.sig', deliveredDto as any)).rejects.toThrow(ConflictException);
+    });
+
+    it('links supplied photos to the outcome and persists device location', async () => {
+      prisma.orderDeliveryPhoto.updateMany.mockResolvedValue({ count: 2 });
+      const dto = {
+        ...deliveredDto,
+        photoIds: ['ph-1', 'ph-2'],
+        location: { latitude: 53.7, longitude: -1.8, accuracyM: 8, capturedAt: '2026-08-27T10:00:00.000Z' },
+      };
+
+      await service.submitOutcome('order-1.sig', dto as any);
+
+      expect(prisma.orderDeliveryOutcome.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            latitude: 53.7,
+            longitude: -1.8,
+            locationAccuracyM: 8,
+            locationCapturedAt: new Date('2026-08-27T10:00:00.000Z'),
+            locationUnavailable: false,
+          }),
+        }),
+      );
+      expect(prisma.orderDeliveryPhoto.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['ph-1', 'ph-2'] }, orderId: 'order-1', outcomeId: null },
+        data: { outcomeId: 'outcome-1' },
+      });
+    });
+
+    it('stores null coordinates when location was unavailable', async () => {
+      await service.submitOutcome('order-1.sig', { ...deliveredDto, location: { unavailable: true } } as any);
+
+      expect(prisma.orderDeliveryOutcome.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ latitude: null, longitude: null, locationUnavailable: true }),
+        }),
+      );
+    });
+
+    it('rejects the outcome when a supplied photo is not an unlinked photo for this order', async () => {
+      prisma.orderDeliveryPhoto.updateMany.mockResolvedValue({ count: 1 });
+      await expect(
+        service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(prisma.order.update).not.toHaveBeenCalled();
+    });
+
+    it('idempotent retry matches on the same photo set and location', async () => {
+      prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
+      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(
+        storedRow({ photos: [{ id: 'ph-2' }, { id: 'ph-1' }] }),
+      );
+
+      const result = await service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any);
+      expect(result.state).toBe('SUBMITTED');
+    });
+
+    it('rejects a retry that changes only the photo set as a conflict', async () => {
+      prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
+      prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(storedRow({ photos: [{ id: 'ph-1' }] }));
+
+      await expect(
+        service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
+      ).rejects.toThrow(ConflictException);
     });
   });
 });

@@ -31,6 +31,18 @@ export interface SignatureStrokeData {
   strokes: unknown[];
 }
 
+// A delivery-proof photo already uploaded to the server for this order.
+export interface DeliveryPhoto {
+  id: string;
+  thumbnailUrl: string;
+}
+
+// Structured device location captured once during the delivery (PRD §11).
+// `unavailable` means no fix was obtained (permission refused / timeout / no API).
+export type DeviceLocation =
+  | { unavailable: true }
+  | { unavailable?: false; latitude: number; longitude: number; accuracyM?: number; capturedAt?: string };
+
 export type UnableToDeliverReason =
   | 'CUSTOMER_CLOSED'
   | 'CUSTOMER_REFUSED'
@@ -63,6 +75,8 @@ export interface SubmitOutcomeRequest {
   dropMethod?: DeliveryDropMethod;
   signature?: SignatureStrokeData;
   capturedAt?: string;
+  photoIds?: string[];
+  location?: DeviceLocation;
 }
 
 export const UNABLE_TO_DELIVER_REASONS: { value: UnableToDeliverReason; label: string }[] = [

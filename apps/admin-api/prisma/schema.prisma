@@ -606,6 +606,7 @@ model Order {
   invoiceExports    AccountingInvoiceExport[]
   deliveryRunOrders DeliveryRunOrder[]
   deliveryOutcome   OrderDeliveryOutcome?
+  deliveryPhotos    OrderDeliveryPhoto[]
 
   @@index([distributorId, status])
   @@index([traderCustomerId, status])
@@ -1738,6 +1739,16 @@ model OrderDeliveryOutcome {
   // PRD §11 requires both. Client-supplied, therefore advisory.
   capturedAt DateTime?
 
+  // Structured device location captured once during the delivery (PRD §11) —
+  // never read from photo EXIF. All-null coords with locationUnavailable = true
+  // records that no fix was obtained (permission refused / timeout / no API).
+  // Client-supplied, advisory. Never exposed on the public QR confirmation.
+  latitude            Float?
+  longitude           Float?
+  locationAccuracyM   Float?
+  locationCapturedAt  DateTime?
+  locationUnavailable Boolean   @default(false)
+
   recordedAt          DateTime @default(now())
   // Distributor visibility requires showing "whether the result was
   // submitted using unauthenticated QR access" — always true this round,
@@ -1754,9 +1765,38 @@ model OrderDeliveryOutcome {
   correctedAt       DateTime?
   correctedByUserId String?
 
-  order Order @relation(fields: [orderId], references: [id])
+  order  Order                @relation(fields: [orderId], references: [id])
+  photos OrderDeliveryPhoto[]
 
   @@map("order_delivery_outcomes")
+}
+
+// Delivery-proof photographs (PRD §9.1/§11). Uploaded eagerly and individually
+// via the public delivery-link endpoint while the delivery is still PENDING,
+// then linked to the outcome (outcomeId) when it is submitted. Optional — photo
+// capture is never a gate (PRD §25). Bytes live in R2; this row holds only the
+// keys, following AssetImage / ADR-038. Not exposed on the public QR
+// confirmation (PRD §13).
+model OrderDeliveryPhoto {
+  id            String  @id @default(cuid())
+  orderId       String
+  distributorId String // denormalised — R2 key namespacing + future tenant queries
+  outcomeId     String? // null until the outcome is submitted
+
+  variants        Json // { full: "<r2Key>", thumb: "<r2Key>" } — keys, not URLs
+  sourceMimeType  String
+  sourceSizeBytes Int
+  sourceWidth     Int?
+  sourceHeight    Int?
+  capturedAt      DateTime? // device-reported photo time, advisory
+  sortOrder       Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  order   Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  outcome OrderDeliveryOutcome? @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("order_delivery_photos")
 }
 
 // ─── Order-as (order on behalf of customer) ──────────────────────────────────

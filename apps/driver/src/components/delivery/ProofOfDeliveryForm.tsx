@@ -1,20 +1,38 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StepActions } from './StepActions';
+import { DeliveryPhotos, PhotoItem } from './DeliveryPhotos';
 
 interface ProofOfDeliveryFormProps {
+  photos: PhotoItem[];
+  onAddPhoto: (file: File) => void;
+  onRemovePhoto: (clientId: string) => void;
+  onRetryPhoto: (clientId: string) => void;
+  onEnter: () => void;
   onContinue: (recipientName: string) => void;
   onBack: () => void;
 }
 
-// Screen 2 of the handed-to-a-person flow (screenshots/delivery_2.png).
-// Recipient name only for now — the mock's "Delivery photos" section is a
-// later increment (no camera capture surface in this app yet), so it is
-// omitted rather than shown as a disabled stub.
-export function ProofOfDeliveryForm({ onContinue, onBack }: ProofOfDeliveryFormProps) {
+// Screen 2 of the handed-to-a-person flow (screenshots/delivery_2.png):
+// recipient name + optional delivery photos. Device location is captured once
+// on entry (via onEnter) and held by the page, not gathered here.
+export function ProofOfDeliveryForm({
+  photos,
+  onAddPhoto,
+  onRemovePhoto,
+  onRetryPhoto,
+  onEnter,
+  onContinue,
+  onBack,
+}: ProofOfDeliveryFormProps) {
   const [recipientName, setRecipientName] = useState('');
   const trimmed = recipientName.trim();
+  const uploading = photos.some((p) => p.status === 'uploading');
+
+  useEffect(() => {
+    onEnter();
+  }, [onEnter]);
 
   return (
     <form
@@ -40,7 +58,17 @@ export function ProofOfDeliveryForm({ onContinue, onBack }: ProofOfDeliveryFormP
         />
       </div>
 
+      <DeliveryPhotos
+        photos={photos}
+        onAdd={onAddPhoto}
+        onRemove={onRemovePhoto}
+        onRetry={onRetryPhoto}
+      />
+
       <StepActions>
+        {uploading && (
+          <p className="text-center text-xs text-foreground-tertiary">A photo is still uploading…</p>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
