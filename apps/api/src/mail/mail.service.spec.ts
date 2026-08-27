@@ -2,6 +2,9 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import {
   MailService,
+  OrderDeliveredToDistributorParams,
+  OrderDeliveryFailedEmailParams,
+  OrderDeliveryFailedToDistributorParams,
   OrderStatusEmailParams,
   SendAccountingReconnectParams,
   SendInviteParams,
@@ -34,6 +37,51 @@ function orderPlacedDistributorParams(
     customerReference: null,
     lineItemCount: null,
     orderLines: null,
+    ...overrides,
+  };
+}
+
+function orderDeliveredDistributorParams(
+  overrides: Partial<OrderDeliveredToDistributorParams> = {},
+): OrderDeliveredToDistributorParams {
+  return {
+    distributorName: 'Vinos Direct',
+    orderNumber: 'ORD-2026-00042',
+    orderUrl: 'http://localhost:3020/orders/order-1',
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    customerName: 'The Wine Bar',
+    driverName: 'Alex Turner',
+    ...overrides,
+  };
+}
+
+function orderDeliveryFailedParams(overrides: Partial<OrderDeliveryFailedEmailParams> = {}): OrderDeliveryFailedEmailParams {
+  return {
+    distributorName: 'Vinos Direct',
+    orderNumber: 'ORD-2026-00042',
+    orderUrl: 'http://localhost:3010/vinos-direct/orders/order-1',
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    unableReason: 'CUSTOMER_REFUSED',
+    ...overrides,
+  };
+}
+
+function orderDeliveryFailedDistributorParams(
+  overrides: Partial<OrderDeliveryFailedToDistributorParams> = {},
+): OrderDeliveryFailedToDistributorParams {
+  return {
+    distributorName: 'Vinos Direct',
+    orderNumber: 'ORD-2026-00042',
+    orderUrl: 'http://localhost:3020/orders/order-1',
+    distributorLogoUrl: null,
+    distributorEmail: null,
+    distributorPhone: null,
+    customerName: 'The Wine Bar',
+    unableReason: 'CUSTOMER_REFUSED',
     ...overrides,
   };
 }
@@ -249,6 +297,64 @@ describe('MailService — order emails', () => {
 
       const mail = sendMail.mock.calls[0][0];
       expect(mail.html).not.toContain('View order');
+    });
+  });
+
+  describe('sendOrderDeliveredToCustomer', () => {
+    it('sends a delivered email identifying the distributor and order number', async () => {
+      await service.sendOrderDeliveredToCustomer('buyer@customer.example', orderStatusParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.subject).toBe('Your order with Vinos Direct has been delivered');
+      expect(mail.text).toContain('ORD-2026-00042');
+      expect(mail.html).toContain('http://localhost:3010/vinos-direct/orders/order-1');
+    });
+  });
+
+  describe('sendOrderDeliveredToDistributor', () => {
+    it('names the customer, order number, order link and driver', async () => {
+      await service.sendOrderDeliveredToDistributor('ops@dist.example', orderDeliveredDistributorParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.subject).toBe('Order ORD-2026-00042 delivered');
+      expect(mail.text).toContain('The Wine Bar');
+      expect(mail.text).toContain('Alex Turner');
+      expect(mail.html).toContain('http://localhost:3020/orders/order-1');
+    });
+
+    it('omits the driver line when no driver is known', async () => {
+      await service.sendOrderDeliveredToDistributor('ops@dist.example', orderDeliveredDistributorParams({ driverName: null }));
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.html).not.toContain('Driver:');
+    });
+  });
+
+  describe('sendOrderDeliveryFailedToCustomer', () => {
+    it('sends a plain-language, non-blaming reason to the customer', async () => {
+      await service.sendOrderDeliveryFailedToCustomer('buyer@customer.example', orderDeliveryFailedParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.subject).toBe("We couldn't deliver your order from Vinos Direct");
+      expect(mail.html).toContain('declined at the door');
+      expect(mail.html).not.toContain('CUSTOMER_REFUSED');
+    });
+
+    it('omits the reason line when none is provided', async () => {
+      await service.sendOrderDeliveryFailedToCustomer('buyer@customer.example', orderDeliveryFailedParams({ unableReason: null }));
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.text).not.toContain('null');
+    });
+  });
+
+  describe('sendOrderDeliveryFailedToDistributor', () => {
+    it('sends the operational reason label to the distributor', async () => {
+      await service.sendOrderDeliveryFailedToDistributor('ops@dist.example', orderDeliveryFailedDistributorParams());
+
+      const mail = sendMail.mock.calls[0][0];
+      expect(mail.subject).toBe('Order ORD-2026-00042 could not be delivered');
+      expect(mail.html).toContain('the customer refused delivery');
     });
   });
 

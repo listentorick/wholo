@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import '../styles/theme.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply font-sans text-foreground bg-white;
+    -webkit-font-smoothing: antialiased;
+    /* Column fill so PageShell's flex-1 reaches the viewport and screens can
+       anchor a sticky action bar to the bottom of the device. */
+    display: flex;
+    flex-direction: column;
+  }
+}

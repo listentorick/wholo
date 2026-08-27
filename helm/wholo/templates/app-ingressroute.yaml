@@ -60,4 +60,35 @@ spec:
         - name: {{ include "wholo.fullname" . }}-admin-api
           port: {{ .Values.adminApi.service.port }}
 {{- end }}
+{{- if .Values.ingress.hosts.driver }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-driver
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.tls | ternary "websecure" "web" }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
+  routes:
+    {{- if .Values.healthAccess.enabled }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.driver }}`) && PathPrefix(`/api/v1/health`)
+      middlewares:
+        - name: {{ include "wholo.fullname" . }}-health-allowlist
+      services:
+        - name: {{ include "wholo.fullname" . }}-driver-api
+          port: {{ .Values.driverApi.service.port }}
+    {{- end }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.driver }}`) && PathPrefix(`/`)
+      services:
+        - name: {{ include "wholo.fullname" . }}-driver-api
+          port: {{ .Values.driverApi.service.port }}
+{{- end }}
 {{- end }}

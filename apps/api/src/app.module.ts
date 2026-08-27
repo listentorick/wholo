@@ -19,6 +19,7 @@ import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.mo
 import { DeliveryAvailabilityModule } from './delivery-availability/delivery-availability.module';
 import { DeliveryRoutesModule } from './delivery-routes/delivery-routes.module';
 import { DeliveryRunsModule } from './delivery-runs/delivery-runs.module';
+import { DeliveryLinksModule } from './delivery-links/delivery-links.module';
 import { OrderAsModule } from './order-as/order-as.module';
 import { MailModule } from './mail/mail.module';
 import { PortalInvitationsModule } from './portal-invitations/portal-invitations.module';
@@ -55,6 +56,7 @@ import './asset-images/branding-asset-types';
     DeliveryAvailabilityModule,
     DeliveryRoutesModule,
     DeliveryRunsModule,
+    DeliveryLinksModule,
     OrderAsModule,
     MailModule,
     PortalInvitationsModule,

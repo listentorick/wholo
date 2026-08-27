@@ -80,7 +80,18 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       this.logger.warn(`Order ${orderId} not found — skipping invoice export`);
       return;
     }
-    if (order.status !== OrderStatus.ACCEPTED && order.status !== OrderStatus.COMPLETED) {
+    // Invoices go out on ACCEPTED; ACCEPTED/COMPLETED were the only
+    // eligible statuses before DELIVERED/DELIVERY_FAILED existed. An order
+    // reaching either of those has since moved past ACCEPTED in its
+    // lifecycle, so a retry (the only way this check is reached after
+    // ACCEPTED) must still succeed rather than getting silently skipped.
+    const invoiceEligibleStatuses: OrderStatus[] = [
+      OrderStatus.ACCEPTED,
+      OrderStatus.COMPLETED,
+      OrderStatus.DELIVERED,
+      OrderStatus.DELIVERY_FAILED,
+    ];
+    if (!invoiceEligibleStatuses.includes(order.status)) {
       this.logger.log(`Order ${orderId} is ${order.status}, not invoiceable — skipping invoice export`);
       return;
     }

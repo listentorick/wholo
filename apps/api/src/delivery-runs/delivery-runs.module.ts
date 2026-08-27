@@ -3,6 +3,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { AuditModule } from '../audit/audit.module';
 import { DeliveryRunAllocationModule } from '../delivery-run-allocation/delivery-run-allocation.module';
+import { DeliveryLinksModule } from '../delivery-links/delivery-links.module';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { DeliveryDaysController } from './delivery-days.controller';
 import { DeliveryRunsController } from './delivery-runs.controller';
@@ -17,6 +18,9 @@ import { ManifestService } from './manifest/manifest.service';
     // Plain (queue-free) module — reuses DeliveryRunAllocationService's
     // findOrCreateRun synchronously from the change-delivery-date action.
     DeliveryRunAllocationModule,
+    // For DeliveryTokenSigner — ManifestService signs the same durable
+    // delivery URL the public delivery-links endpoints verify.
+    DeliveryLinksModule,
     // AssetImagesModule is @Global() (see apps/api/src/asset-images) — its
     // exported R2StorageService/ImageProcessingService are injectable into
     // ManifestLogoService without importing it here.

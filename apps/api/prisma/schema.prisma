@@ -63,6 +63,8 @@ enum OrderStatus {
   REJECTED
   CANCELLED
   COMPLETED
+  DELIVERED
+  DELIVERY_FAILED
 }
 
 enum OrderLineStatus {
@@ -108,6 +110,8 @@ enum NotificationType {
   TRADE_RELATIONSHIP_SUSPENDED
   TRADE_RELATIONSHIP_UNSUSPENDED
   TRADE_RELATIONSHIP_ACTIVATED
+  ORDER_DELIVERED
+  ORDER_DELIVERY_FAILED
 }
 
 enum NotificationChannel {
@@ -601,6 +605,7 @@ model Order {
   notifications     Notification[]
   invoiceExports    AccountingInvoiceExport[]
   deliveryRunOrders DeliveryRunOrder[]
+  deliveryOutcome   OrderDeliveryOutcome?
 
   @@index([distributorId, status])
   @@index([traderCustomerId, status])
@@ -1665,6 +1670,93 @@ model DeliveryRunOrder {
   @@index([runId, deliverySequence])
   @@index([orderId])
   @@map("delivery_run_order")
+}
+
+// ─── Driver delivery links (Increment 2 — online QR delivery) ────────────────
+//
+// The QR/URL a driver opens is a stateless signed pointer to Order.id
+// (DeliveryTokenSigner, apps/api/src/delivery-links) — never minted, stored,
+// or expired. It is durable, not single-use: it must keep resolving to the
+// same pending-delivery view indefinitely (a driver can't obtain a
+// replacement QR code in the field) for as long as no row below exists for
+// that order. Only the *outcome write* is single-use — enforced by the
+// @unique on orderId below, not by any property of the token itself.
+
+enum DeliveryOutcomeType {
+  DELIVERED
+  UNABLE_TO_DELIVER
+  // PARTIALLY_DELIVERED reserved — appended by a future increment without a
+  // destructive migration, matching DeliveryRunOrderStatus's existing
+  // "reserved for later" comment style.
+}
+
+enum UnableToDeliverReason {
+  CUSTOMER_CLOSED
+  CUSTOMER_REFUSED
+  UNABLE_TO_ACCESS_PREMISES
+  INCORRECT_ADDRESS
+  OTHER
+}
+
+enum DeliveryDropMethod {
+  HANDED_TO_PERSON
+  LEFT_IN_SAFE_LOCATION
+  // Delivered-outcome sub-classification (PRD §9.1 / §10). LEFT_IN_SAFE_LOCATION
+  // and its "where it was left" / photo-proof detail columns are built by a
+  // later increment — appended here without a destructive migration.
+}
+
+model OrderDeliveryOutcome {
+  id      String @id @default(cuid())
+  orderId String @unique
+
+  outcome DeliveryOutcomeType
+
+  // Delivered-only, both optional — never blocking submission (PRD 9.1)
+  recipientName String?
+  notes         String?
+
+  // Unable-to-deliver-only
+  unableReason     UnableToDeliverReason?
+  unableReasonNote String? // required by service-layer validation only when reason = OTHER
+
+  // Delivered-only: how the order changed hands. Null for UNABLE_TO_DELIVER and
+  // for rows created before this column existed. Required by service-layer
+  // validation when outcome = DELIVERED.
+  dropMethod DeliveryDropMethod?
+
+  // Handed-to-person proof: signature_pad stroke groups (pad.toData()) stored
+  // verbatim as a stroke-vector blob — never a raster image. Shape:
+  //   { format: 'signature_pad', version, width, height, strokes: [...] }
+  // width/height are the capture-time canvas CSS pixel size, needed to replay
+  // the strokes faithfully later. Never exposed on the public QR confirmation
+  // (PRD §13/§23). Required by service-layer validation when
+  // dropMethod = HANDED_TO_PERSON.
+  signature Json?
+
+  // Device-reported capture time, distinct from recordedAt (server time) —
+  // PRD §11 requires both. Client-supplied, therefore advisory.
+  capturedAt DateTime?
+
+  recordedAt          DateTime @default(now())
+  // Distributor visibility requires showing "whether the result was
+  // submitted using unauthenticated QR access" — always true this round,
+  // the only submission path that exists; reserved as a real column so a
+  // future authenticated initial-submission path wouldn't need a migration.
+  submittedViaQrToken Boolean  @default(true)
+
+  // Reserved for Increment 4 (authenticated driver self-correction) —
+  // nullable and unpopulated by this PBI, which only ever creates this row
+  // once via the anonymous endpoint and never updates it. A future
+  // authenticated endpoint sets these when a driver corrects their own
+  // previously submitted outcome. Correction is never possible through the
+  // anonymous QR link itself — only through authenticated driver login.
+  correctedAt       DateTime?
+  correctedByUserId String?
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("order_delivery_outcomes")
 }
 
 // ─── Order-as (order on behalf of customer) ──────────────────────────────────

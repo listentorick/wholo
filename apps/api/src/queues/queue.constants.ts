@@ -34,6 +34,8 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   OrderAccepted: [ACCOUNTING_INVOICE_EXPORT_QUEUE, ANALYTICS_FACTS_QUEUE, DELIVERY_RUN_ALLOCATION_QUEUE],
   OrderRejected: [ANALYTICS_FACTS_QUEUE],
   OrderCancelled: [ANALYTICS_FACTS_QUEUE],
+  OrderDelivered: [NOTIFICATIONS_QUEUE],
+  OrderDeliveryFailed: [NOTIFICATIONS_QUEUE],
   // Manual "retry export" — same uniform-outbox rationale as the sync events;
   // business idempotency lives in the AccountingInvoiceExport row, so a
   // deliberate retry (new outbox event id = new jobId) is never deduped away.

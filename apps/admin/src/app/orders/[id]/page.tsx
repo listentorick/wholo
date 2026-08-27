@@ -31,11 +31,13 @@ function taxLabel(line: OrderLine): string {
 // ─── Status config ─────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  [OrderStatus.SUBMITTED]:  { label: 'Pending',   bg: '#fef3ec', text: '#d97036', border: '#fddcbe' },
-  [OrderStatus.ACCEPTED]:   { label: 'Accepted',  bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
-  [OrderStatus.REJECTED]:   { label: 'Rejected',  bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
-  [OrderStatus.CANCELLED]:  { label: 'Cancelled', bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
-  [OrderStatus.COMPLETED]:  { label: 'Completed', bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' },
+  [OrderStatus.SUBMITTED]:        { label: 'Pending',        bg: '#fef3ec', text: '#d97036', border: '#fddcbe' },
+  [OrderStatus.ACCEPTED]:         { label: 'Accepted',       bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
+  [OrderStatus.REJECTED]:         { label: 'Rejected',       bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
+  [OrderStatus.CANCELLED]:        { label: 'Cancelled',      bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
+  [OrderStatus.COMPLETED]:        { label: 'Completed',      bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' },
+  [OrderStatus.DELIVERED]:        { label: 'Delivered',      bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' },
+  [OrderStatus.DELIVERY_FAILED]:  { label: 'Delivery failed', bg: '#fee2e2', text: '#b91c1c', border: '#fecaca' },
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

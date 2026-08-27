@@ -31,6 +31,8 @@ const STATUS_OPTIONS = [
   { value: OrderStatus.REJECTED, label: 'Rejected' },
   { value: OrderStatus.CANCELLED, label: 'Cancelled' },
   { value: OrderStatus.COMPLETED, label: 'Completed' },
+  { value: OrderStatus.DELIVERED, label: 'Delivered' },
+  { value: OrderStatus.DELIVERY_FAILED, label: 'Delivery failed' },
 ];
 
 function fmtDateStr(iso: string | null | undefined) {
@@ -103,6 +105,8 @@ const STATUS_META: Record<OrderStatus, { label: string; tone: StatusTone }> = {
   [OrderStatus.REJECTED]: { label: 'Rejected', tone: 'red' },
   [OrderStatus.CANCELLED]: { label: 'Cancelled', tone: 'gray' },
   [OrderStatus.COMPLETED]: { label: 'Completed', tone: 'blue' },
+  [OrderStatus.DELIVERED]: { label: 'Delivered', tone: 'green' },
+  [OrderStatus.DELIVERY_FAILED]: { label: 'Delivery failed', tone: 'red' },
 };
 
 function OrderStatusBadge({ status }: { status: OrderStatus }) {

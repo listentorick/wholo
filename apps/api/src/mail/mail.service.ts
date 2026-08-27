@@ -41,6 +41,21 @@ export interface OrderStatusEmailParams {
   distributorPhone: string | null;
 }
 
+// Delivered-to-customer reuses OrderStatusEmailParams exactly — same shape,
+// no driver name (the customer doesn't need to know who delivered it).
+export interface OrderDeliveredToDistributorParams extends OrderStatusEmailParams {
+  customerName: string;
+  driverName: string | null;
+}
+
+export interface OrderDeliveryFailedEmailParams extends OrderStatusEmailParams {
+  unableReason: string | null;
+}
+
+export interface OrderDeliveryFailedToDistributorParams extends OrderDeliveryFailedEmailParams {
+  customerName: string;
+}
+
 export interface OrderLineItem {
   productName: string;
   sku: string | null;
@@ -343,6 +358,158 @@ export class MailService {
     });
 
     await this.send(to, subject, text, html, 'order-confirmed customer');
+  }
+
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-delivered-customer.mjml.
+  async sendOrderDeliveredToCustomer(to: string, params: OrderStatusEmailParams): Promise<void> {
+    const { distributorName, orderNumber, orderUrl, distributorLogoUrl, distributorEmail, distributorPhone } = params;
+    const subject = `Your order with ${headerSafe(distributorName)} has been delivered`;
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+
+    const text = [
+      `Good news — your order from ${distributorName} has been delivered.`,
+      ``,
+      `Order number: ${orderNumber}`,
+      ...(orderUrl ? ['', `View your order:`, orderUrl] : []),
+      ``,
+      ...(distributorContactLine
+        ? [`Questions about your account, products or pricing? Contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('order-delivered-customer', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      orderNumber: esc(orderNumber),
+      orderUrl: orderUrl ? esc(orderUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `Good news — <strong>${esc(distributorName)}</strong> has delivered your order.`,
+      identityRowGap: '8',
+      identityBorderColor: '#E6ECF2',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
+
+    await this.send(to, subject, text, html, 'order-delivered customer');
+  }
+
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-delivered-distributor.mjml.
+  async sendOrderDeliveredToDistributor(to: string, params: OrderDeliveredToDistributorParams): Promise<void> {
+    const { customerName, orderNumber, orderUrl, driverName } = params;
+    const subject = `Order ${headerSafe(orderNumber)} delivered`;
+
+    const text = [
+      `Order ${orderNumber} for ${customerName} has been marked as delivered.`,
+      ...(driverName ? [``, `Driver: ${driverName}`] : []),
+      ``,
+      `View order:`,
+      orderUrl,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('order-delivered-distributor', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      customerName: esc(customerName),
+      orderNumber: esc(orderNumber),
+      orderUrl: esc(orderUrl ?? ''),
+      driverName: driverName ? esc(driverName) : '',
+    });
+
+    await this.send(to, subject, text, html, 'order-delivered distributor');
+  }
+
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-delivery-failed-customer.mjml.
+  async sendOrderDeliveryFailedToCustomer(to: string, params: OrderDeliveryFailedEmailParams): Promise<void> {
+    const { distributorName, orderNumber, orderUrl, distributorLogoUrl, distributorEmail, distributorPhone, unableReason } = params;
+    const subject = `We couldn't deliver your order from ${headerSafe(distributorName)}`;
+    const distributorContactLine = [distributorEmail, distributorPhone].filter((v): v is string => !!v).join(' or ');
+    const reasonLine = this.describeUnableReason(unableReason, 'customer');
+
+    const text = [
+      `${distributorName} was unable to deliver your order.`,
+      ...(reasonLine ? ['', reasonLine] : []),
+      ``,
+      `Order number: ${orderNumber}`,
+      ...(orderUrl ? ['', `View your order:`, orderUrl] : []),
+      ``,
+      ...(distributorContactLine
+        ? [`To arrange redelivery, contact ${distributorName} at ${distributorContactLine}.`, ``]
+        : []),
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+      ``,
+      `Stocdup provides the online ordering service used by ${distributorName}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('order-delivery-failed-customer', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      orderNumber: esc(orderNumber),
+      orderUrl: orderUrl ? esc(orderUrl) : '',
+      distributorLogoUrl: distributorLogoUrl ? esc(distributorLogoUrl) : '',
+      identityText: `<strong>${esc(distributorName)}</strong> was unable to deliver your order.`,
+      identityRowGap: '8',
+      identityBorderColor: '#E6ECF2',
+      reasonLine: reasonLine ? esc(reasonLine) : '',
+      distributorContactLine: esc(distributorContactLine),
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
+
+    await this.send(to, subject, text, html, 'order-delivery-failed customer');
+  }
+
+  // Built from a real MJML template matching the portal's design system —
+  // see apps/api/src/mail/templates/order-delivery-failed-distributor.mjml.
+  async sendOrderDeliveryFailedToDistributor(to: string, params: OrderDeliveryFailedToDistributorParams): Promise<void> {
+    const { customerName, orderNumber, orderUrl, unableReason } = params;
+    const subject = `Order ${headerSafe(orderNumber)} could not be delivered`;
+    const reasonLine = this.describeUnableReason(unableReason, 'distributor');
+
+    const text = [
+      `Order ${orderNumber} for ${customerName} could not be delivered.`,
+      ...(reasonLine ? ['', reasonLine] : []),
+      ``,
+      `View order:`,
+      orderUrl,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('order-delivery-failed-distributor', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      customerName: esc(customerName),
+      orderNumber: esc(orderNumber),
+      orderUrl: esc(orderUrl ?? ''),
+      reasonLine: reasonLine ? esc(reasonLine) : '',
+    });
+
+    await this.send(to, subject, text, html, 'order-delivery-failed distributor');
+  }
+
+  // Shared plain-language rendering of UnableToDeliverReason, written once
+  // for both failed-delivery templates rather than duplicated. Distributor
+  // copy is operational/direct; customer copy is softened (never blames the
+  // customer to their own face for e.g. CUSTOMER_REFUSED).
+  private describeUnableReason(reason: string | null, audience: 'customer' | 'distributor'): string | null {
+    if (!reason) return null;
+    const distributorLabels: Record<string, string> = {
+      CUSTOMER_CLOSED: 'Reason: the customer was closed.',
+      CUSTOMER_REFUSED: 'Reason: the customer refused delivery.',
+      UNABLE_TO_ACCESS_PREMISES: 'Reason: the driver was unable to access the premises.',
+      INCORRECT_ADDRESS: 'Reason: the delivery address was incorrect.',
+      OTHER: 'Reason: see delivery notes.',
+    };
+    const customerLabels: Record<string, string> = {
+      CUSTOMER_CLOSED: 'The premises were closed at the time of delivery.',
+      CUSTOMER_REFUSED: 'The delivery was declined at the door.',
+      UNABLE_TO_ACCESS_PREMISES: 'The driver was unable to access the premises.',
+      INCORRECT_ADDRESS: 'The delivery address on file appears to be incorrect.',
+      OTHER: 'See below, or contact the distributor for details.',
+    };
+    const labels = audience === 'distributor' ? distributorLabels : customerLabels;
+    return labels[reason] ?? null;
   }
 
   // Built from a real MJML template matching the portal's design system —

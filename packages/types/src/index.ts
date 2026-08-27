@@ -127,6 +127,8 @@ export enum OrderStatus {
   REJECTED = 'REJECTED',
   CANCELLED = 'CANCELLED',
   COMPLETED = 'COMPLETED',
+  DELIVERED = 'DELIVERED',
+  DELIVERY_FAILED = 'DELIVERY_FAILED',
 }
 
 export enum OrderLineStatus {

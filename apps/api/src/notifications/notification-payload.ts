@@ -49,6 +49,41 @@ export interface CustomerInviteNotificationPayload {
   expiresAt: string;
 }
 
+// Snapshot stored on Notification.payload for ORDER_DELIVERED / ORDER_DELIVERY_FAILED.
+// Deliberately minimal, same shape discipline as OrderSubmittedEventPayload —
+// recipients are resolved live by DeliveryOutcomeNotificationService from the
+// IDs here, not carried as a snapshot (unlike distributorLogoUrl elsewhere,
+// which genuinely needs to survive a retry unchanged).
+export interface OrderDeliveryOutcomeEventPayload {
+  orderId: string;
+  distributorId: string;
+  traderCustomerId: string;
+  placedByUserId: string;
+  isOrderedByDelegate: boolean;
+  orderNumber: string;
+  driverName: string | null;
+  recordedAt: string;
+  // Only meaningful for ORDER_DELIVERY_FAILED — null for a Delivered outcome.
+  unableReason: string | null;
+}
+
+// Snapshot stored on Notification.payload for both ORDER_DELIVERED and
+// ORDER_DELIVERY_FAILED — everything the channel senders need to render
+// without querying back to the order.
+export interface DeliveryOutcomeNotificationPayload {
+  orderId: string;
+  orderNumber: string;
+  distributorName: string;
+  distributorEmail: string | null;
+  distributorPhone: string | null;
+  distributorLogoUrl: string | null;
+  distributorSlug: string | null;
+  customerName: string;
+  driverName: string | null;
+  recordedAt: string;
+  unableReason: string | null;
+}
+
 // Snapshot stored on Notification.payload for the five trade-relationship
 // status-transition events (request accepted/declined, suspended, unsuspended,
 // activated). portalUrl is null for SUSPENDED — there's nothing to browse

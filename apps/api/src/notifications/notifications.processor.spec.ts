@@ -1,5 +1,6 @@
 import { Job } from 'bullmq';
 import { CustomerInviteNotificationService } from './customer-invite-notification.service';
+import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
 import { NotificationsProcessor, OutboxEventJobData } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
 import { TradeRelationshipNotificationService } from './trade-relationship-notification.service';
@@ -22,6 +23,7 @@ describe('NotificationsProcessor', () => {
     handleTradeRelationshipUnsuspended: jest.Mock;
     handleTradeRelationshipActivated: jest.Mock;
   };
+  let deliveryOutcome: { handleOrderDelivered: jest.Mock; handleOrderDeliveryFailed: jest.Mock };
 
   beforeEach(() => {
     orderPlaced = { handleOrderSubmitted: jest.fn().mockResolvedValue(undefined) };
@@ -33,10 +35,15 @@ describe('NotificationsProcessor', () => {
       handleTradeRelationshipUnsuspended: jest.fn().mockResolvedValue(undefined),
       handleTradeRelationshipActivated: jest.fn().mockResolvedValue(undefined),
     };
+    deliveryOutcome = {
+      handleOrderDelivered: jest.fn().mockResolvedValue(undefined),
+      handleOrderDeliveryFailed: jest.fn().mockResolvedValue(undefined),
+    };
     processor = new NotificationsProcessor(
       orderPlaced as unknown as OrderPlacedNotificationService,
       customerInvite as unknown as CustomerInviteNotificationService,
       tradeRelationship as unknown as TradeRelationshipNotificationService,
+      deliveryOutcome as unknown as DeliveryOutcomeNotificationService,
     );
   });
 
@@ -65,6 +72,20 @@ describe('NotificationsProcessor', () => {
     await processor.process(makeJob(jobName, payload));
 
     expect(tradeRelationship[handlerName]).toHaveBeenCalledWith(payload, 'evt-1');
+  });
+
+  it('routes OrderDelivered jobs to the delivery-outcome handler', async () => {
+    const payload = { orderId: 'order-1', orderNumber: 'ORD-2026-00042' };
+    await processor.process(makeJob('OrderDelivered', payload));
+
+    expect(deliveryOutcome.handleOrderDelivered).toHaveBeenCalledWith(payload);
+  });
+
+  it('routes OrderDeliveryFailed jobs to the delivery-outcome handler', async () => {
+    const payload = { orderId: 'order-1', orderNumber: 'ORD-2026-00042', unableReason: 'CUSTOMER_REFUSED' };
+    await processor.process(makeJob('OrderDeliveryFailed', payload));
+
+    expect(deliveryOutcome.handleOrderDeliveryFailed).toHaveBeenCalledWith(payload);
   });
 
   it('completes without a handler for unknown event types (no endless retry)', async () => {

@@ -1,0 +1,68 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: a failed delivery is a negative event, but this design system
+  never reaches for alarm-red on a routine (if unwelcome) status email —
+  trade-relationship-request-declined.mjml sets that precedent with a plain
+  white section, no colored band at all. Matched here: white, not a red or
+  amber band, so this reads as "here's what happened and what to do next",
+  not an urgent warning.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited from order-confirmed.mjml's
+  chrome (header/footer, identity-row) but the neutral-white band choice
+  from trade-relationship-request-declined.mjml.
+  STORY: a customer whose delivery didn't happen knows why (in general
+  terms — reasonLine), has the order number, and knows to contact the
+  distributor to sort it out.
+  FIRST VIEWPORT: header, one white band — headline, distributor identity +
+  "unable to deliver" sentence, reason line, order number, optional "View
+  order" CTA — then footer.
+  FORM: extends the established world; direction was already set.
+  FINISH: verified via a real MJML render/screenshot + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>We couldn't deliver your order from {{distributorName}}</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+  <mj-style>
+    @media only screen and (max-width:480px) {
+      .distributor-byline-logo {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 23px !important;
+      }
+    }
+  </mj-style>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#FFFFFF" padding="32px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Unable to deliver
+      </mj-text>
+      {{> identity-row}}
+      {{#if reasonLine}}
+      <mj-text color="#5B6B7F" padding-bottom="8px">
+        {{reasonLine}}
+      </mj-text>
+      {{/if}}
+      <mj-text color="#5B6B7F" padding-bottom="24px">
+        Order number <strong style="color:#0B1D3A;">{{orderNumber}}</strong>.
+      </mj-text>
+      {{#if orderUrl}}
+      <mj-button href="{{orderUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0" inner-padding="14px 32px" align="center">
+        View order
+      </mj-button>
+      {{/if}}
+    </mj-column>
+  </mj-section>
+
+  {{> footer}}
+
+</mj-body>
+</mjml>

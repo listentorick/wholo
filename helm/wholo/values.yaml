@@ -10,6 +10,7 @@ imagePullSecrets: []
 global:
   portalUrl: "http://localhost:3010"
   adminUrl: "http://localhost:3020"
+  driverUrl: "http://localhost:3030"
 
 postgresql:
   # TimescaleDB-enabled Postgres 16 image (same major version as the prior
@@ -100,6 +101,10 @@ api:
   # 32-byte key, base64-encoded (e.g. `openssl rand -base64 32`) — encrypts
   # stored accounting OAuth tokens at rest.
   accountingTokenEncryptionKey: ""
+  # 32-byte key, base64-encoded (e.g. `openssl rand -base64 32`) — HMAC-signs
+  # driver delivery-link tokens (see ADR-059). Rotating it invalidates every
+  # outstanding, unsubmitted delivery link at once.
+  deliveryTokenSigningKey: ""
   # Seeds demo data on every install/upgrade. Must be disabled in live.
   seedJob:
     enabled: true
@@ -126,6 +131,24 @@ portalApi:
   service:
     type: LoadBalancer
     port: 3010
+  resources:
+    requests:
+      memory: "384Mi"
+      cpu: "100m"
+    limits:
+      memory: "768Mi"
+      cpu: "500m"
+  centralApiUrl: "http://wholo-api:3001"
+
+driverApi:
+  image:
+    repository: wholo/driver-api
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3030
   resources:
     requests:
       memory: "384Mi"
@@ -231,6 +254,7 @@ ingress:
   hosts:
     portal: ""
     admin: ""
+    driver: ""
     api: ""
     auth: ""
     # Internal-only host for health checks (admin-api/portal-api/apps-api),

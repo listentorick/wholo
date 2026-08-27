@@ -45,6 +45,10 @@ describe('EmailChannelSender', () => {
       sendTradeRelationshipSuspended: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipUnsuspended: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipActivated: jest.fn().mockResolvedValue(undefined),
+      sendOrderDeliveredToCustomer: jest.fn().mockResolvedValue(undefined),
+      sendOrderDeliveredToDistributor: jest.fn().mockResolvedValue(undefined),
+      sendOrderDeliveryFailedToCustomer: jest.fn().mockResolvedValue(undefined),
+      sendOrderDeliveryFailedToDistributor: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<MailService>;
 
     const config = {
@@ -112,6 +116,81 @@ describe('EmailChannelSender', () => {
       'buyer@winebar.example',
       expect.objectContaining({ orderUrl: null }),
     );
+  });
+
+  const deliveryOutcomePayload = {
+    orderId: 'order-1',
+    orderNumber: 'ORD-2026-00042',
+    distributorName: 'Vinos Direct',
+    distributorEmail: 'orders@vinos.example',
+    distributorPhone: '(03) 9123 4567',
+    distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
+    distributorSlug: 'vinos-direct',
+    customerName: 'The Wine Bar',
+    driverName: 'Alex Turner',
+    recordedAt: '2026-08-26T09:00:00.000Z',
+    unableReason: null as string | null,
+  };
+
+  function makeDeliveryOutcomeNotification(type: NotificationType, overrides: Partial<typeof deliveryOutcomePayload> = {}): Notification {
+    return { type, payload: { ...deliveryOutcomePayload, ...overrides } } as unknown as Notification;
+  }
+
+  it('sends the delivered email to the customer with a portal order link, no driver name', async () => {
+    await sender.send(
+      makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'),
+      makeDeliveryOutcomeNotification(NotificationType.ORDER_DELIVERED),
+    );
+
+    expect(mail.sendOrderDeliveredToCustomer).toHaveBeenCalledWith('buyer@winebar.example', {
+      distributorName: 'Vinos Direct',
+      distributorEmail: 'orders@vinos.example',
+      distributorPhone: '(03) 9123 4567',
+      distributorLogoUrl: 'https://cdn.stocdup.com/logo.png',
+      orderNumber: 'ORD-2026-00042',
+      orderUrl: 'http://localhost:3010/vinos-direct/orders/order-1',
+    });
+    expect(mail.sendOrderDeliveredToDistributor).not.toHaveBeenCalled();
+  });
+
+  it('sends the delivered email to the distributor with an admin order link and the driver name', async () => {
+    await sender.send(
+      makeDelivery(NotificationAudience.DISTRIBUTOR, 'ops@vinos.example'),
+      makeDeliveryOutcomeNotification(NotificationType.ORDER_DELIVERED),
+    );
+
+    expect(mail.sendOrderDeliveredToDistributor).toHaveBeenCalledWith('ops@vinos.example', expect.objectContaining({
+      customerName: 'The Wine Bar',
+      orderNumber: 'ORD-2026-00042',
+      orderUrl: 'http://localhost:3020/orders/order-1',
+      driverName: 'Alex Turner',
+    }));
+  });
+
+  it('sends the delivery-failed email to the customer, carrying the unable reason', async () => {
+    await sender.send(
+      makeDelivery(NotificationAudience.CUSTOMER, 'buyer@winebar.example'),
+      makeDeliveryOutcomeNotification(NotificationType.ORDER_DELIVERY_FAILED, { unableReason: 'CUSTOMER_REFUSED' }),
+    );
+
+    expect(mail.sendOrderDeliveryFailedToCustomer).toHaveBeenCalledWith('buyer@winebar.example', expect.objectContaining({
+      orderNumber: 'ORD-2026-00042',
+      unableReason: 'CUSTOMER_REFUSED',
+    }));
+    expect(mail.sendOrderDeliveredToCustomer).not.toHaveBeenCalled();
+  });
+
+  it('sends the delivery-failed email to the distributor, carrying the unable reason', async () => {
+    await sender.send(
+      makeDelivery(NotificationAudience.DISTRIBUTOR, 'ops@vinos.example'),
+      makeDeliveryOutcomeNotification(NotificationType.ORDER_DELIVERY_FAILED, { unableReason: 'INCORRECT_ADDRESS' }),
+    );
+
+    expect(mail.sendOrderDeliveryFailedToDistributor).toHaveBeenCalledWith('ops@vinos.example', expect.objectContaining({
+      customerName: 'The Wine Bar',
+      orderUrl: 'http://localhost:3020/orders/order-1',
+      unableReason: 'INCORRECT_ADDRESS',
+    }));
   });
 
   it('sends the invite email for CUSTOMER_INVITE_SENT notifications', async () => {

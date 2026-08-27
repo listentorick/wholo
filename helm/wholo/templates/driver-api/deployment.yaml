@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-driver-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-driver-api
+spec:
+  replicas: {{ .Values.driverApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-driver-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-driver-api
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: driver-api
+          image: {{ .Values.driverApi.image.repository }}:{{ .Values.driverApi.image.tag }}
+          imagePullPolicy: {{ .Values.driverApi.image.pullPolicy }}
+          ports:
+            - containerPort: 3030
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-driver-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-driver-api
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3030
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 3030
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.driverApi.resources | nindent 12 }}

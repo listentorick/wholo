@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-driver-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-driver-api
+spec:
+  type: {{ .Values.driverApi.service.type }}
+  selector:
+    app: {{ include "wholo.fullname" . }}-driver-api
+  ports:
+    - name: http
+      port: {{ .Values.driverApi.service.port }}
+      targetPort: 3030

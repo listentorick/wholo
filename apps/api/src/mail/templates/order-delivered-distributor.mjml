@@ -1,0 +1,55 @@
+<mjml>
+<!--
+  IMPECCABLE DIRECTION CONTRACT
+  THESIS: same shape as order-placed-distributor.mjml's hero (Cobalt-light
+  band, "this matters, it's settled" treatment) but without the product
+  list — a delivery confirmation doesn't need the order re-itemised, just
+  confirmation it happened and who did it. No identity-row: same reasoning
+  as order-placed-distributor.mjml, the recipient IS the distributor, no
+  "other party" logo to show.
+  OWN-WORLD: apps/portal/DESIGN.md, inherited exactly — same header/
+  distributor-footer chrome, hard 0px corners, Cobalt reserved for the CTA.
+  STORY: distributor ops staff glancing at their inbox know immediately
+  which order was delivered and who delivered it, without opening admin.
+  FIRST VIEWPORT: header, one Cobalt-light hero — "Order delivered"
+  headline, customer+order-number sentence, driver name (if known),
+  "View order" — then distributor-footer.
+  FORM: extends the established world onto the same Operate-mode audience
+  as order-placed-distributor.mjml.
+  FINISH: verified via a real MJML render/screenshot + a real MailHog send.
+-->
+<mj-head>
+  <mj-title>Order {{orderNumber}} delivered</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#E6EEFF" padding="32px 32px 32px" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Order delivered
+      </mj-text>
+      <mj-text color="#0B1D3A" padding-bottom="20px">
+        Order <strong>{{orderNumber}}</strong> for <strong>{{customerName}}</strong> has been marked as delivered.
+      </mj-text>
+      {{#if driverName}}
+      <mj-text padding-bottom="20px">
+        <span style="color:#5B6B7F;">Driver:</span> <strong style="color:#0B1D3A;">{{driverName}}</strong>
+      </mj-text>
+      {{/if}}
+      <mj-button href="{{orderUrl}}" background-color="#1565FF" color="#FFFFFF" font-size="15px"
+        font-weight="600" border-radius="0" padding="0" inner-padding="14px 32px" align="center">
+        View order
+      </mj-button>
+    </mj-column>
+  </mj-section>
+
+  {{> distributor-footer}}
+
+</mj-body>
+</mjml>

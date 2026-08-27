@@ -15,6 +15,7 @@ data:
   R2_PUBLIC_BASE_URL: {{ .Values.api.r2.publicBaseUrl | quote }}
   PORTAL_URL: {{ .Values.global.portalUrl | quote }}
   ADMIN_URL: {{ .Values.global.adminUrl | quote }}
+  DRIVER_APP_URL: {{ .Values.global.driverUrl | quote }}
   XERO_CLIENT_ID: {{ .Values.api.xero.clientId | quote }}
   XERO_REDIRECT_URI: {{ .Values.api.xero.redirectUri | quote }}
   SMTP_HOST: {{ .Values.api.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}

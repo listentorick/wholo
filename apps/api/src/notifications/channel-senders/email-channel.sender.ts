@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
-import { CustomerInviteNotificationPayload, OrderPlacedNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
+import { CustomerInviteNotificationPayload, DeliveryOutcomeNotificationPayload, OrderPlacedNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
 import { ChannelSender } from './channel-sender.interface';
 
 @Injectable()
@@ -66,6 +66,51 @@ export class EmailChannelSender implements ChannelSender {
           break;
         default:
           await this.mail.sendTradeRelationshipActivated(delivery.recipient, params);
+      }
+      return;
+    }
+
+    if (notification.type === NotificationType.ORDER_DELIVERED || notification.type === NotificationType.ORDER_DELIVERY_FAILED) {
+      const deliveryPayload = notification.payload as unknown as DeliveryOutcomeNotificationPayload;
+      const orderUrl = deliveryPayload.distributorSlug
+        ? `${this.portalUrl}/${deliveryPayload.distributorSlug}/orders/${deliveryPayload.orderId}`
+        : null;
+      const common = {
+        distributorName: deliveryPayload.distributorName,
+        distributorEmail: deliveryPayload.distributorEmail,
+        distributorPhone: deliveryPayload.distributorPhone,
+        distributorLogoUrl: deliveryPayload.distributorLogoUrl,
+        orderNumber: deliveryPayload.orderNumber,
+      };
+      const isDistributor = delivery.audience === NotificationAudience.DISTRIBUTOR;
+
+      if (notification.type === NotificationType.ORDER_DELIVERED) {
+        if (isDistributor) {
+          await this.mail.sendOrderDeliveredToDistributor(delivery.recipient, {
+            ...common,
+            orderUrl: `${this.adminUrl}/orders/${deliveryPayload.orderId}`,
+            customerName: deliveryPayload.customerName,
+            driverName: deliveryPayload.driverName,
+          });
+        } else {
+          await this.mail.sendOrderDeliveredToCustomer(delivery.recipient, { ...common, orderUrl });
+        }
+        return;
+      }
+
+      if (isDistributor) {
+        await this.mail.sendOrderDeliveryFailedToDistributor(delivery.recipient, {
+          ...common,
+          orderUrl: `${this.adminUrl}/orders/${deliveryPayload.orderId}`,
+          customerName: deliveryPayload.customerName,
+          unableReason: deliveryPayload.unableReason,
+        });
+      } else {
+        await this.mail.sendOrderDeliveryFailedToCustomer(delivery.recipient, {
+          ...common,
+          orderUrl,
+          unableReason: deliveryPayload.unableReason,
+        });
       }
       return;
     }

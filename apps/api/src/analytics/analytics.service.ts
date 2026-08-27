@@ -6,8 +6,12 @@ import { PeriodKey, PeriodRange, resolvePeriod } from './period';
 import { PeriodQueryDto } from './dto/period-query.dto';
 
 // Qualifying order per the PRD's working definition (§4.1, D-01): submitted,
-// accepted or completed. Rejected/cancelled orders never count.
-const QUALIFYING_STATUSES = Prisma.sql`('SUBMITTED', 'ACCEPTED', 'COMPLETED')`;
+// accepted or completed. Rejected/cancelled orders never count. Delivered/
+// delivery-failed also qualify — revenue recognition shouldn't hinge on
+// delivery outcome, a fulfilment concern, not a sales one; an order that was
+// legitimately accepted doesn't stop counting just because it later moved
+// past ACCEPTED in its lifecycle.
+const QUALIFYING_STATUSES = Prisma.sql`('SUBMITTED', 'ACCEPTED', 'COMPLETED', 'DELIVERED', 'DELIVERY_FAILED')`;
 
 export interface PeriodResponse {
   key: PeriodKey;

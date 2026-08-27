@@ -6,6 +6,7 @@ import { NOTIFICATION_DELIVERY_QUEUE, NOTIFICATIONS_QUEUE } from '../queues/queu
 import { CHANNEL_SENDERS } from './channel-senders/channel-sender.interface';
 import { EmailChannelSender } from './channel-senders/email-channel.sender';
 import { CustomerInviteNotificationService } from './customer-invite-notification.service';
+import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationsProcessor } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
@@ -36,6 +37,7 @@ import { TradeRelationshipNotificationService } from './trade-relationship-notif
     OrderPlacedNotificationService,
     CustomerInviteNotificationService,
     TradeRelationshipNotificationService,
+    DeliveryOutcomeNotificationService,
     NotificationsProcessor,
     NotificationDeliveryProcessor,
     EmailChannelSender,
@@ -45,6 +47,6 @@ import { TradeRelationshipNotificationService } from './trade-relationship-notif
       inject: [EmailChannelSender],
     },
   ],
-  exports: [OrderPlacedNotificationService, CustomerInviteNotificationService, TradeRelationshipNotificationService],
+  exports: [OrderPlacedNotificationService, CustomerInviteNotificationService, TradeRelationshipNotificationService, DeliveryOutcomeNotificationService],
 })
 export class NotificationsModule {}

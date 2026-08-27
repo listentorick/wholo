@@ -3,6 +3,8 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
 import { CustomerInviteNotificationService, CustomerInviteSentEventPayload } from './customer-invite-notification.service';
+import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
+import { OrderDeliveryOutcomeEventPayload } from './notification-payload';
 import { OrderPlacedNotificationService, OrderSubmittedEventPayload } from './order-placed-notification.service';
 import { TradeRelationshipEventPayload, TradeRelationshipNotificationService } from './trade-relationship-notification.service';
 
@@ -24,6 +26,7 @@ export class NotificationsProcessor extends WorkerHost {
     private readonly orderPlaced: OrderPlacedNotificationService,
     private readonly customerInvite: CustomerInviteNotificationService,
     private readonly tradeRelationship: TradeRelationshipNotificationService,
+    private readonly deliveryOutcome: DeliveryOutcomeNotificationService,
   ) {
     super();
   }
@@ -55,6 +58,14 @@ export class NotificationsProcessor extends WorkerHost {
     }
     if (job.name === 'TradeRelationshipActivated') {
       await this.tradeRelationship.handleTradeRelationshipActivated(job.data.payload as TradeRelationshipEventPayload, job.data.eventId);
+      return;
+    }
+    if (job.name === 'OrderDelivered') {
+      await this.deliveryOutcome.handleOrderDelivered(job.data.payload as OrderDeliveryOutcomeEventPayload);
+      return;
+    }
+    if (job.name === 'OrderDeliveryFailed') {
+      await this.deliveryOutcome.handleOrderDeliveryFailed(job.data.payload as OrderDeliveryOutcomeEventPayload);
       return;
     }
     this.logger.warn(`No notification handler for event type '${job.name}' (event ${job.data.eventId}); ignoring`);

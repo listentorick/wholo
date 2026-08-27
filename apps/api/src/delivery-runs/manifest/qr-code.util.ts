@@ -1,11 +1,11 @@
 import * as QRCode from 'qrcode';
 
-// Encodes the plain-text Stocdup order number — not a URL or token. The
-// digital-delivery destination this QR will eventually point to is out of
-// scope for the driver-manifest PBI; when that workflow is built, this is
-// the one place that needs to change.
-export async function generateOrderQrPng(orderNumber: string): Promise<Buffer> {
-  return QRCode.toBuffer(orderNumber, {
+// Encodes the driver delivery URL for this order (a durable, HMAC-signed
+// pointer to Order.id — see DeliveryTokenSigner). The same URL is produced
+// every time for the same order, so reprinting a manifest reproduces an
+// identical QR code.
+export async function generateOrderQrPng(deliveryUrl: string): Promise<Buffer> {
+  return QRCode.toBuffer(deliveryUrl, {
     type: 'png',
     errorCorrectionLevel: 'M',
     margin: 4,
