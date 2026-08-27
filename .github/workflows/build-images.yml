@@ -57,6 +57,12 @@ jobs:
               NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL || 'http://localhost:8080' }}
               NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM || 'wholo' }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-admin
+          # Driver PWA is baked into driver-api. No NEXT_PUBLIC_* build args —
+          # the driver app has no login yet (see apps/driver-api/Dockerfile).
+          - name: driver-api
+            dockerfile: apps/driver-api/Dockerfile
+            context: .
+            build-args: ""
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
             context: apps/keycloak

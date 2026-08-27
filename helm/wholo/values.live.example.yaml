@@ -80,6 +80,15 @@ adminApi:
   service:
     type: ClusterIP
 
+driverApi:
+  image:
+    repository: ghcr.io/listentorick/wholo/driver-api
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    # Fronted by the Traefik ingress (ingress.hosts.driver), like portal/admin.
+    type: ClusterIP
+
 mailhog:
   service:
     # The MailHog UI has no auth — keep it off the internet. View it with:
