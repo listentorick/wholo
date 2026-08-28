@@ -180,6 +180,22 @@ describe('CatalogueService', () => {
       const result = await service.getDistributor(DISTRIBUTOR_SLUG);
       expect(result.currencyCode).toBe('GBP');
     });
+
+    it('returns processingDays from distributor settings', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({
+        ...baseDistributor,
+        slug: DISTRIBUTOR_SLUG,
+        distributorSettings: { processingDays: [1, 3, 5] },
+      });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.processingDays).toEqual([1, 3, 5]);
+    });
+
+    it('falls back to Mon–Fri processingDays when the distributor has no settings row', async () => {
+      mockPrisma.organisation.findFirst.mockResolvedValue({ ...baseDistributor, slug: DISTRIBUTOR_SLUG });
+      const result = await service.getDistributor(DISTRIBUTOR_SLUG);
+      expect(result.processingDays).toEqual([1, 2, 3, 4, 5]);
+    });
   });
 
   describe('getProducts', () => {

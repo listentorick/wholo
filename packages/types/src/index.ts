@@ -513,6 +513,8 @@ export interface DistributorInfo {
   minimumOrderSpend: number | null;
   currencyCode: string;
   customerCount: number;
+  /** Weekdays the distributor processes orders (0=Sun … 6=Sat). Defaults to Mon–Fri. */
+  processingDays: number[];
 }
 
 export interface PortalDistributorSummary {

@@ -33,10 +33,16 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
         }
         .anim-banner { animation: scaleIn 0.5s ease both 0.1s; }
 
-        .home-banner { width: 100%; height: 38vh; min-height: 180px; position: relative; }
+        .home-banner { width: 100%; height: 38vh; min-height: 180px; position: relative; margin-bottom: 0; }
+        .home-banner.has-logo { margin-bottom: 44px; }
         @media (min-width: 481px)  { .home-banner { max-height: 260px; } }
         @media (min-width: 768px)  { .home-banner { height: 42vh; max-height: 360px; } }
-        @media (min-width: 1024px) { .home-banner { height: 30vh; max-height: 420px; } }
+        @media (min-width: 1024px) {
+          .home-banner { height: 30vh; max-height: 420px; }
+          /* Desktop: the logo moves into the About us card; match the card gap. */
+          .home-banner, .home-banner.has-logo { margin-bottom: 24px; }
+          .logo-circle { display: none; }
+        }
 
         .logo-circle {
           position: absolute;
@@ -57,11 +63,11 @@ export function BrandingBanner({ logoUrl, bannerUrl, dominantColor, onScrolledPa
         }
       `}</style>
 
-      {/* margin-bottom reserves space for the logo circle hanging below the banner */}
+      {/* `has-logo` reserves space for the logo circle hanging below the banner (mobile);
+          on desktop (≥1024px) the logo moves into the About us card — see the <style> block. */}
       <div
         ref={bannerRef}
-        className="home-banner anim-banner"
-        style={{ marginBottom: logoUrl ? 44 : undefined }}
+        className={`home-banner anim-banner${logoUrl ? ' has-logo' : ''}`}
       >
         {/* Base gradient layer — always present */}
         <div

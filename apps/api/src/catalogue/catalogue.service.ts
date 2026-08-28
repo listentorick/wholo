@@ -53,7 +53,7 @@ export class CatalogueService {
         addressState: true,
         addressPostcode: true,
         addressCountry: true,
-        distributorSettings: { select: { tagline: true, aboutText: true, minimumOrderSpend: true, currencyCode: true } },
+        distributorSettings: { select: { tagline: true, aboutText: true, minimumOrderSpend: true, currencyCode: true, processingDays: true } },
       },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
@@ -88,6 +88,7 @@ export class CatalogueService {
         ? parseFloat(distributor.distributorSettings.minimumOrderSpend.toString())
         : null,
       currencyCode: distributor.distributorSettings?.currencyCode ?? 'GBP',
+      processingDays: distributor.distributorSettings?.processingDays ?? [1, 2, 3, 4, 5],
       logoUrl: logoImage
         ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
         : null,
