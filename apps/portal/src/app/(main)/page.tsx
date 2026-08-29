@@ -43,7 +43,7 @@ export default function HomePage() {
 
   return (
     <>
-      <PageShell width="reading" padding="none" className="px-4 md:px-8 py-8">
+      <PageShell width="full">
 
         {/* Greeting */}
         <div className="mb-8">
@@ -57,12 +57,12 @@ export default function HomePage() {
           <h2 className="text-base font-semibold text-foreground mb-4">My Suppliers</h2>
 
           {/* Search */}
-          <SearchInput value={query} onChange={setQuery} placeholder="Search suppliers…" className="mb-4" />
+          <SearchInput value={query} onChange={setQuery} placeholder="Search suppliers…" className="mb-4 max-w-sm" />
 
           {/* Cards */}
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((n) => (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1600px]:grid-cols-4">
+              {[1, 2, 3, 4].map((n) => (
                 <div key={n} className="h-24 bg-surface-hover animate-pulse" />
               ))}
             </div>
@@ -83,7 +83,7 @@ export default function HomePage() {
               )}
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1600px]:grid-cols-4">
               {filtered.map((d) => (
                 <DistributorCard
                   key={d.id}
