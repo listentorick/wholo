@@ -3,7 +3,7 @@ import { PROOF_STRIP } from '@/content';
 export function ProofStrip() {
   return (
     <div className="border-b border-border bg-white">
-      <div className="mx-auto flex max-w-wrap flex-wrap items-center gap-x-10 gap-y-3.5 px-6 py-6 sm:px-8 lg:px-12">
+      <div className="mx-auto flex max-w-wrap flex-wrap items-center gap-x-7 gap-y-3 px-6 py-6 sm:px-8 lg:px-12">
         <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-muted">
           {PROOF_STRIP.label}
         </span>

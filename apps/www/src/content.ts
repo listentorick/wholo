@@ -41,14 +41,15 @@ export const HERO: Record<
 };
 
 export const HERO_CREDIBILITY =
-  'A working product, built with an active UK distributor.';
+  'Ordering, customer pricing, accounting and proof of delivery, in one place.';
 
 export const PROOF_STRIP = {
-  label: 'What exists today',
+  label: 'One platform',
   items: [
-    'A live, working product',
-    'Built with an active UK distributor',
-    'Founder-led, onboarding distributors selectively',
+    'Digital trade ordering',
+    'Customer catalogues and pricing',
+    'Delivery and proof of delivery',
+    'Connected to your accounting',
   ],
 } as const;
 
@@ -183,8 +184,8 @@ export const CONNECTED_FLOW = {
 
 export const EVIDENCE = {
   eyebrow: 'The product',
-  heading: 'Built alongside a working distributor.',
-  lead: 'Every screen here comes from how an active distributor runs ordering, customers, accounting and delivery, day in and day out.',
+  heading: 'Built for how UK wholesale actually runs.',
+  lead: 'Every screen maps to a real job in a distribution business: take the order, apply the right price, get it delivered, keep the books straight.',
   shots: [
     { tab: 'Stocdup · Orders', caption: 'Orders.', line: 'Bring orders into one manageable workflow.', label: 'Add product screenshot: orders' },
     { tab: 'Stocdup · Delivery runs', caption: 'Delivery runs.', line: 'Organise deliveries and keep the evidence.', label: 'Add product screenshot: delivery runs' },
@@ -247,7 +248,7 @@ export const FAQ = {
     },
     {
       q: 'Is Stocdup available now?',
-      a: "Yes. Stocdup is a working product, built with an active distributor. We're onboarding suitable distributors selectively rather than opening general sign-up.",
+      a: "We're onboarding distributors selectively at the moment rather than opening general sign-up. Register your interest and we'll be in touch about getting you set up.",
     },
     {
       q: 'Does it replace my accounting software?',
@@ -271,7 +272,7 @@ export const FAQ = {
     },
     {
       q: 'What happens after I register?',
-      a: "We'll get in touch to understand your needs, show you the product where it's a fit, and talk about pilot or early-access opportunities.",
+      a: "We'll get in touch to understand your needs, show you the platform, and talk about getting you set up.",
     },
   ],
 } as const;
@@ -282,8 +283,8 @@ export const REGISTER = {
   lead: "If Stocdup looks like a fit, we'll be in touch to understand your needs and show you the product. No sales pipeline, no obligation.",
   whatHappens: [
     'A short conversation about how you run orders and deliveries today',
-    'A walkthrough of the working product',
-    "Pilot and early-access options, if it's a fit",
+    'A walkthrough of the platform',
+    "Early access, if it's a fit",
   ],
   roles: [
     'Founder / owner',
@@ -310,8 +311,8 @@ export const CONFIRMATION = {
   stepsLabel: 'What happens next',
   steps: [
     'A short conversation about how you run orders and deliveries today',
-    "A walkthrough of the working product, where it's a fit",
-    'A conversation about pilot or early-access options',
+    'A walkthrough of the platform, tailored to how you work',
+    'A plan for getting you set up',
   ],
 } as const;
 
