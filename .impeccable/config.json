@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-30T22:16:13.003Z",
+        "reason": "Inter is the documented, platform-wide Stocdup brand typeface (brand-identity.md, apps/portal + apps/admin DESIGN.md); the /design brief mandates Inter-only. Marketing site must match."
+      }
+    ]
+  }
+}

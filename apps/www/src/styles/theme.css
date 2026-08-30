@@ -1,0 +1,35 @@
+/* Stocdup marketing site — design tokens.
+   Shared brand core with apps/portal + apps/admin (Deep Navy / Cobalt / Amber,
+   Inter). To rebrand: replace values on :root only. */
+
+:root {
+  /* Brand / CTA */
+  --color-primary:        220 100% 54%;  /* Cobalt Blue #1565FF */
+  --color-primary-fg:     0 0% 100%;
+  --color-primary-hover:  221 89% 44%;   /* Cobalt, darkened  #0d4fd6 */
+
+  /* Ink + surfaces */
+  --color-navy:           217 68% 14%;   /* Deep Navy #0B1D3A — primary ink + dark bands */
+  --color-navy-2:         217 60% 18%;   /* raised navy #12294a */
+  --color-text:           217 68% 14%;   /* body ink on light */
+  --color-surface:        0 0% 100%;     /* card / panel white */
+  --color-canvas:         216 24% 96%;   /* Pale Stone #F2F4F7 — alternating band */
+  --color-offwhite:       210 25% 98%;   /* Warm Off White #FAFBFC */
+  --color-border:         210 32% 93%;   /* Light Blue Grey #E6ECF2 — hairline */
+  --color-muted:          213 17% 43%;   /* Slate Blue #5B6B7F — secondary text */
+
+  /* Accent — attention, never clickable */
+  --color-accent:         21 86% 63%;    /* Amber #F2864D */
+  --color-accent-fg:      217 68% 14%;   /* navy text on amber fills */
+
+  /* Decorative highlight (non-interactive) */
+  --color-sky:            215 90% 70%;   /* Sky Blue #6EA8F7 */
+
+  /* Text shades used on the navy bands */
+  --color-on-navy:        0 0% 100%;
+  --color-on-navy-muted:  219 30% 76%;   /* #AEBAD0 */
+  --color-on-navy-dim:    218 20% 64%;   /* #8E9DB8 */
+  --color-on-navy-soft:   217 33% 83%;   /* #C7D0E0 */
+
+  --color-success:        142 71% 45%;   /* #16A34A */
+}

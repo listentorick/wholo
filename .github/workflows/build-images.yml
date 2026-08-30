@@ -63,6 +63,12 @@ jobs:
             dockerfile: apps/driver-api/Dockerfile
             context: .
             build-args: ""
+          # Public marketing site — standalone Next.js, no BFF. No NEXT_PUBLIC_*
+          # build args (site URL is injected at runtime via the ConfigMap).
+          - name: www
+            dockerfile: apps/www/Dockerfile
+            context: .
+            build-args: ""
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
             context: apps/keycloak

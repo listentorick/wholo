@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-www
+  labels:
+    app: {{ include "wholo.fullname" . }}-www
+spec:
+  replicas: {{ .Values.www.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-www
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-www
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: www
+          image: {{ .Values.www.image.repository }}:{{ .Values.www.image.tag }}
+          imagePullPolicy: {{ .Values.www.image.pullPolicy }}
+          ports:
+            - containerPort: 3040
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-www
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-www
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3040
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3040
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.www.resources | nindent 12 }}

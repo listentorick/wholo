@@ -177,6 +177,37 @@ adminApi:
       cpu: "500m"
   centralApiUrl: "http://wholo-api:3001"
 
+# Public marketing site (www.stocdup.com). Standalone Next.js, no BFF, no
+# calls to apps/api. Only outbound dependency is SMTP for the register form.
+www:
+  image:
+    repository: wholo/www
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3040
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "384Mi"
+      cpu: "500m"
+  # Browser-facing canonical URL — absolute links in metadata/OG/sitemap.
+  siteUrl: "http://localhost:3040"
+  # Register-form email. Empty host/port/secure fall back to the in-cluster
+  # MailHog (plain, unauthenticated, 1025). Set a real provider in live.
+  smtp:
+    host: ""
+    port: ""
+    secure: ""
+    user: ""
+    password: ""
+    from: "leads@stocdup.com"
+    leadsTo: "leads@stocdup.com"
+
 mailhog:
   image: mailhog/mailhog:v1.0.1
   service:
@@ -256,6 +287,7 @@ ingress:
     portal: ""
     admin: ""
     driver: ""
+    www: ""
     api: ""
     auth: ""
     # Internal-only host for health checks (admin-api/portal-api/apps-api),

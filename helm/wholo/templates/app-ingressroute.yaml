@@ -91,4 +91,27 @@ spec:
         - name: {{ include "wholo.fullname" . }}-driver-api
           port: {{ .Values.driverApi.service.port }}
 {{- end }}
+{{- if .Values.ingress.hosts.www }}
+---
+# Public marketing site — fully public, no health allowlist.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-www
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.tls | ternary "websecure" "web" }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.www }}`) && PathPrefix(`/`)
+      services:
+        - name: {{ include "wholo.fullname" . }}-www
+          port: {{ .Values.www.service.port }}
+{{- end }}
 {{- end }}

@@ -1,0 +1,44 @@
+{
+  "name": "@wholo/www",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3040",
+    "build": "next build",
+    "start": "next start -p 3040",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.1",
+    "clsx": "^2.1.1",
+    "gsap": "^3.12.5",
+    "lenis": "^1.1.18",
+    "motion": "^11.15.0",
+    "next": "^15.1.4",
+    "nodemailer": "^9.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.2",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/node": "^22.10.7",
+    "@types/nodemailer": "^8.0.1",
+    "@types/react": "^19.0.4",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "jsdom": "^26.1.0",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.3"
+  }
+}

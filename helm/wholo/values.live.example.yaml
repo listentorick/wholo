@@ -89,6 +89,26 @@ driverApi:
     # Fronted by the Traefik ingress (ingress.hosts.driver), like portal/admin.
     type: ClusterIP
 
+www:
+  image:
+    repository: ghcr.io/listentorick/wholo/www
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+  siteUrl: "https://www.<domain>"
+  # Register-form email — same provider as api.smtp (PurelyMail), ideally a
+  # dedicated sending address. Real password goes in the gitignored
+  # values.live.yaml, not here.
+  smtp:
+    host: "smtp.purelymail.com"
+    port: "587"
+    secure: "false"
+    user: "CHANGE_ME"
+    password: "CHANGE_ME"
+    from: "leads@<domain>"
+    leadsTo: "CHANGE_ME@<domain>"
+
 mailhog:
   service:
     # The MailHog UI has no auth — keep it off the internet. View it with:
@@ -127,6 +147,10 @@ ingress:
     portal: portal.<domain>
     admin: admin.<domain>
     auth: auth.<domain>
+    # Public marketing site. The bare apex (<domain>) is handled by a
+    # Cloudflare Redirect Rule -> https://www.<domain>; the cluster only
+    # serves www. (`*.<domain>` Origin CA cert covers www, not the apex.)
+    www: www.<domain>
     # Driver PWA (QR delivery flow + authenticated manifest). Must match
     # global.driverUrl so apps/api mints QR delivery URLs on this host.
     driver: driver.<domain>

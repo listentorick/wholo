@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-www
+  labels:
+    app: {{ include "wholo.fullname" . }}-www
+data:
+  NODE_ENV: "production"
+  PORT: "3040"
+  # Next's standalone server binds HOSTNAME; must be 0.0.0.0 inside the pod.
+  HOSTNAME: "0.0.0.0"
+  NEXT_PUBLIC_SITE_URL: {{ .Values.www.siteUrl | quote }}
+  # SMTP host/port for the register form (non-secret). See templates/www/secret.yaml
+  # for credentials + recipient. Empty host falls back to the in-cluster MailHog.
+  WWW_SMTP_HOST: {{ .Values.www.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}
+  WWW_SMTP_PORT: {{ .Values.www.smtp.port | default "1025" | quote }}
+  WWW_SMTP_SECURE: {{ .Values.www.smtp.secure | default "false" | quote }}
+  LEADS_FROM: {{ .Values.www.smtp.from | quote }}
