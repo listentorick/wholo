@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../../'),
   reactStrictMode: true,
   poweredByHeader: false,
+  // Keep nodemailer out of the bundle — it's a runtime Node dependency.
+  serverExternalPackages: ['nodemailer'],
 };
 
 export default nextConfig;

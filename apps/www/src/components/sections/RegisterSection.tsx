@@ -3,7 +3,7 @@ import { Section } from '../layout/Section';
 import { Eyebrow } from '../ui/Eyebrow';
 import { DisplayHeading } from '../ui/DisplayHeading';
 import { Icon } from '../ui/Icon';
-import { RegisterForm } from '../register/RegisterForm';
+import { RegisterFormLazy } from '../register/RegisterFormLazy';
 
 export function RegisterSection() {
   return (
@@ -25,7 +25,7 @@ export function RegisterSection() {
           </ul>
         </div>
 
-        <RegisterForm />
+        <RegisterFormLazy />
       </div>
     </Section>
   );
