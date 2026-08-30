@@ -3,6 +3,7 @@ import { Section } from '../layout/Section';
 import { SectionHeader } from '../ui/SectionHeader';
 import { SectionCta } from '../ui/SectionCta';
 import { Card } from '../ui/Card';
+import { Reveal } from '../motion/Reveal';
 
 export function UkNativeSection() {
   return (
@@ -12,13 +13,15 @@ export function UkNativeSection() {
         heading={UK_NATIVE.heading}
         lead={UK_NATIVE.lead}
       />
-      <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {UK_NATIVE.points.map((point) => (
-          <Card key={point} as="li" className="p-[22px]">
-            <p className="text-[14.5px] font-semibold text-navy">{point}</p>
-          </Card>
-        ))}
-      </ul>
+      <Reveal className="mt-12" y={16}>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {UK_NATIVE.points.map((point) => (
+            <Card key={point} as="li" className="p-[22px]">
+              <p className="text-[14.5px] font-semibold text-navy">{point}</p>
+            </Card>
+          ))}
+        </ul>
+      </Reveal>
       <p className="mt-6 text-[14px] text-muted">{UK_NATIVE.closer}</p>
       <SectionCta section="uk-native" />
     </Section>

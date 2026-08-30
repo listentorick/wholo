@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import './globals.css';
+import { MotionProvider } from '@/components/motion/MotionProvider';
 
 const inter = localFont({
   src: './fonts/InterVariable.woff2',
@@ -72,7 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        {children}
+        <MotionProvider>{children}</MotionProvider>
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger -- static, trusted, first-party structured data

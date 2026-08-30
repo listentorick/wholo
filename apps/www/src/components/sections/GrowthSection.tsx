@@ -6,6 +6,7 @@ import { Card } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
 import { Bullet } from '../ui/Bullet';
 import { ScreenshotFrame } from '../ui/ScreenshotFrame';
+import { Reveal } from '../motion/Reveal';
 
 export function GrowthSection() {
   return (
@@ -16,9 +17,9 @@ export function GrowthSection() {
         lead={GROWTH.lead}
       />
 
-      <div className="mt-12 grid gap-5 md:grid-cols-3">
+      <Reveal className="mt-12 grid gap-5 md:grid-cols-3" stagger={0.09}>
         {GROWTH.cards.map((card) => (
-          <Card key={card.title} className="flex flex-col gap-3">
+          <Card key={card.title} className="flex h-full flex-col gap-3">
             <Icon name={card.icon as IconName} className="text-primary" />
             <p className="text-[19px] font-bold leading-tight tracking-[-0.02em] text-navy">
               {card.title}
@@ -26,9 +27,9 @@ export function GrowthSection() {
             <p className="text-[16px] text-muted">{card.body}</p>
           </Card>
         ))}
-      </div>
+      </Reveal>
 
-      <div className="mt-14 grid items-center gap-12 md:grid-cols-2">
+      <Reveal className="mt-14 grid items-center gap-12 md:grid-cols-2">
         <ScreenshotFrame
           tab="Stocdup · Customer"
           label={GROWTH.screenshotLabel}
@@ -45,7 +46,7 @@ export function GrowthSection() {
           </ul>
           <p className="text-[14px] text-muted">{GROWTH.controlNote}</p>
         </div>
-      </div>
+      </Reveal>
 
       <SectionCta section="growth" />
     </Section>

@@ -1,11 +1,10 @@
 import { cn } from '@/lib/cn';
 
-interface DisplayHeadingProps {
+type DisplayHeadingProps = {
   children: React.ReactNode;
   as?: 'h1' | 'h2' | 'h3';
   className?: string;
-  id?: string;
-}
+} & React.HTMLAttributes<HTMLHeadingElement>;
 
 /**
  * Section heading — the Choco-style display treatment: uppercase Inter 800,
@@ -15,15 +14,15 @@ export function DisplayHeading({
   children,
   as: Tag = 'h2',
   className,
-  id,
+  ...rest
 }: DisplayHeadingProps) {
   return (
     <Tag
-      id={id}
       className={cn(
         'text-balance break-words font-extrabold uppercase leading-[1.01] tracking-display text-[clamp(1.95rem,1.2rem+3vw,3.1875rem)]',
         className,
       )}
+      {...rest}
     >
       {children}
     </Tag>

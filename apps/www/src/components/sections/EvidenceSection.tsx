@@ -3,6 +3,7 @@ import { Section } from '../layout/Section';
 import { SectionHeader } from '../ui/SectionHeader';
 import { SectionCta } from '../ui/SectionCta';
 import { ScreenshotFrame } from '../ui/ScreenshotFrame';
+import { Reveal } from '../motion/Reveal';
 
 export function EvidenceSection() {
   return (
@@ -12,7 +13,7 @@ export function EvidenceSection() {
         heading={EVIDENCE.heading}
         lead={EVIDENCE.lead}
       />
-      <div className="mt-12 grid gap-10 md:grid-cols-2">
+      <Reveal className="mt-12 grid gap-10 md:grid-cols-2" stagger={0.12}>
         {EVIDENCE.shots.map((shot, i) => (
           <div key={shot.tab} className="flex flex-col gap-3.5">
             <ScreenshotFrame
@@ -25,7 +26,7 @@ export function EvidenceSection() {
             </p>
           </div>
         ))}
-      </div>
+      </Reveal>
       <SectionCta section="evidence" />
     </Section>
   );

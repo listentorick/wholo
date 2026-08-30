@@ -57,7 +57,7 @@ export function ScreenshotFrame({
 
       {variant === 'hero' ? (
         <div className="grid min-h-[300px] grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[118px_minmax(0,1fr)]">
-          <div className="flex flex-col gap-[11px] bg-navy p-4">
+          <div data-shot-sidebar className="flex flex-col gap-[11px] bg-navy p-4">
             <span className="h-[9px] w-full rounded-[3px] bg-white/30" />
             <span className="h-[9px] w-full rounded-[3px] bg-white/[0.13]" />
             <span className="h-[9px] w-3/4 rounded-[3px] bg-white/[0.13]" />
@@ -66,7 +66,7 @@ export function ScreenshotFrame({
           </div>
           <div className="flex min-w-0 flex-col gap-[13px] bg-canvas p-5">
             {['38%', '52%', '30%', '46%', '40%'].map((w, i) => (
-              <div key={w} className="flex items-center justify-between gap-3">
+              <div key={w} data-shot-row className="flex items-center justify-between gap-3">
                 <Ln w={w} />
                 <span
                   className="h-[11px] w-[52px] shrink-0 rounded-[3px]"

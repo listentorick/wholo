@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/cn';
 import { NAV_LINKS } from '@/content';
 import { Wordmark } from './Wordmark';
 import { Cta } from '../ui/Cta';
@@ -8,6 +9,7 @@ import { Icon } from '../ui/Icon';
 
 export function Nav() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
@@ -16,9 +18,26 @@ export function Nav() {
     };
   }, [open]);
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-wrap items-center justify-between gap-3 px-4 sm:px-8 lg:h-[84px] lg:px-12">
+    <header
+      className={cn(
+        'sticky top-0 z-40 border-b bg-white/95 backdrop-blur-sm transition-[box-shadow,border-color] duration-300',
+        scrolled ? 'border-border shadow-[0_10px_30px_-18px_rgba(11,29,58,0.28)]' : 'border-transparent',
+      )}
+    >
+      <div
+        className={cn(
+          'mx-auto flex max-w-wrap items-center justify-between gap-3 px-4 transition-[height] duration-300 sm:px-8 lg:px-12',
+          scrolled ? 'h-14 lg:h-[68px]' : 'h-16 lg:h-[84px]',
+        )}
+      >
         <a
           href="#top"
           aria-label="Stocdup, back to top"

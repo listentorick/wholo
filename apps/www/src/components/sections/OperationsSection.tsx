@@ -3,6 +3,7 @@ import { Section } from '../layout/Section';
 import { SectionHeader } from '../ui/SectionHeader';
 import { SectionCta } from '../ui/SectionCta';
 import { Icon, type IconName } from '../ui/Icon';
+import { Reveal } from '../motion/Reveal';
 
 export function OperationsSection() {
   return (
@@ -13,7 +14,7 @@ export function OperationsSection() {
         lead={OPERATIONS.lead}
       />
 
-      <div className="mt-11 flex flex-col">
+      <Reveal className="mt-11 flex flex-col" stagger={0.12}>
         {OPERATIONS.rows.map((row, i) => (
           <div
             key={row.title}
@@ -42,7 +43,7 @@ export function OperationsSection() {
             </div>
           </div>
         ))}
-      </div>
+      </Reveal>
 
       <SectionCta section="operations" />
     </Section>

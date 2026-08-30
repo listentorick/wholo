@@ -3,11 +3,12 @@ import { Section } from '../layout/Section';
 import { Eyebrow } from '../ui/Eyebrow';
 import { DisplayHeading } from '../ui/DisplayHeading';
 import { SectionCta } from '../ui/SectionCta';
+import { Reveal } from '../motion/Reveal';
 
 export function FounderSection() {
   return (
     <Section band="stone">
-      <div className="flex max-w-[760px] flex-col gap-[18px]">
+      <Reveal className="flex max-w-[760px] flex-col gap-[18px]" stagger={0.08}>
         <Eyebrow>{FOUNDER.eyebrow}</Eyebrow>
         <DisplayHeading className="text-navy">{FOUNDER.heading}</DisplayHeading>
         {FOUNDER.paragraphs.map((p) => (
@@ -16,7 +17,7 @@ export function FounderSection() {
           </p>
         ))}
         <p className="text-[14px] text-muted">{FOUNDER.signoff}</p>
-      </div>
+      </Reveal>
       <SectionCta section="founder" />
     </Section>
   );

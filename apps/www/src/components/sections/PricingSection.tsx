@@ -5,11 +5,12 @@ import { DisplayHeading } from '../ui/DisplayHeading';
 import { Card } from '../ui/Card';
 import { Cta } from '../ui/Cta';
 import { Bullet } from '../ui/Bullet';
+import { Reveal } from '../motion/Reveal';
 
 export function PricingSection() {
   return (
     <Section band="white">
-      <div className="grid items-center gap-14 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+      <Reveal className="grid items-center gap-14 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <Eyebrow>{PRICING.eyebrow}</Eyebrow>
           <DisplayHeading className="text-navy">{PRICING.heading}</DisplayHeading>
@@ -32,7 +33,7 @@ export function PricingSection() {
           </ul>
           <p className="mt-1 text-[13px] text-muted">{PRICING.disclaimer}</p>
         </Card>
-      </div>
+      </Reveal>
     </Section>
   );
 }

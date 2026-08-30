@@ -1,6 +1,7 @@
 import { cn } from '@/lib/cn';
 import { Eyebrow } from './Eyebrow';
 import { DisplayHeading } from './DisplayHeading';
+import { Reveal } from '../motion/Reveal';
 
 interface SectionHeaderProps {
   eyebrow: string;
@@ -22,7 +23,7 @@ export function SectionHeader({
   maxWidthLead = true,
 }: SectionHeaderProps) {
   return (
-    <div className={cn('flex max-w-[760px] flex-col gap-4', className)}>
+    <Reveal className={cn('flex max-w-[760px] flex-col gap-4', className)}>
       <Eyebrow onDark={onDark}>{eyebrow}</Eyebrow>
       <DisplayHeading id={headingId} className={onDark ? 'text-white' : 'text-navy'}>
         {heading}
@@ -38,6 +39,6 @@ export function SectionHeader({
           {lead}
         </p>
       )}
-    </div>
+    </Reveal>
   );
 }

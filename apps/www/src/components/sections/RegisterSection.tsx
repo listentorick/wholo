@@ -4,12 +4,13 @@ import { Eyebrow } from '../ui/Eyebrow';
 import { DisplayHeading } from '../ui/DisplayHeading';
 import { Icon } from '../ui/Icon';
 import { RegisterFormLazy } from '../register/RegisterFormLazy';
+import { Reveal } from '../motion/Reveal';
 
 export function RegisterSection() {
   return (
     <Section band="navy" id="register">
       <div className="grid items-start gap-14 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16">
-        <div className="flex flex-col gap-4">
+        <Reveal className="flex flex-col gap-4">
           <Eyebrow onDark>{REGISTER.eyebrow}</Eyebrow>
           <DisplayHeading className="text-white text-[clamp(1.9rem,1.3rem+2.5vw,2.75rem)]">
             {REGISTER.heading}
@@ -23,7 +24,7 @@ export function RegisterSection() {
               </li>
             ))}
           </ul>
-        </div>
+        </Reveal>
 
         <RegisterFormLazy />
       </div>
