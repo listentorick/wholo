@@ -44,13 +44,7 @@ export const HERO_CREDIBILITY =
   'Ordering, customer pricing, accounting and proof of delivery, in one place.';
 
 export const PROOF_STRIP = {
-  label: 'One platform',
-  items: [
-    'Digital trade ordering',
-    'Customer catalogues and pricing',
-    'Delivery and proof of delivery',
-    'Connected to your accounting',
-  ],
+  line: 'For the independent UK drinks and food wholesalers that enterprise platforms overlook.',
 } as const;
 
 export const PROBLEM = {
