@@ -208,6 +208,41 @@ www:
     from: "leads@stocdup.com"
     leadsTo: "leads@stocdup.com"
 
+# Self-hosted analytics for the marketing site. Off by default (local dev has
+# no need for ClickHouse); the www app's analytics is a no-op when absent.
+# Enable in values.live.yaml. Dashboard is ClusterIP-only:
+#   kubectl -n wholo port-forward svc/wholo-plausible 8000:8000
+plausible:
+  enabled: false
+  # Pin an exact release; verify against ghcr.io/plausible/community-edition tags.
+  image: ghcr.io/plausible/community-edition:v3.0.1
+  # Database on the shared Postgres (events go to ClickHouse, not here).
+  databaseName: plausible
+  baseUrl: "https://www.stocdup.com"
+  disableRegistration: "invite_only"
+  # openssl rand -base64 64  /  openssl rand -base64 32  — set in values.live.yaml.
+  secretKeyBase: ""
+  totpVaultKey: ""
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "50m"
+    limits:
+      memory: "700Mi"
+      cpu: "500m"
+
+clickhouse:
+  image: clickhouse/clickhouse-server:24.12-alpine
+  storageSize: 3Gi
+  storageClass: ""
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "100m"
+    limits:
+      memory: "1500Mi"
+      cpu: "1000m"
+
 mailhog:
   image: mailhog/mailhog:v1.0.1
   service:

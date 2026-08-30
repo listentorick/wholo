@@ -1,0 +1,64 @@
+{{- if .Values.plausible.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-clickhouse
+  labels:
+    app: {{ include "wholo.fullname" . }}-clickhouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-clickhouse
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-clickhouse
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: clickhouse
+          image: {{ .Values.clickhouse.image }}
+          ports:
+            - containerPort: 8123
+          # Event store for Plausible only — the default user has no password
+          # and the service is ClusterIP with no ingress.
+          env:
+            - name: CLICKHOUSE_DB
+              value: plausible_events_db
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: logging
+              mountPath: /etc/clickhouse-server/config.d/logging.xml
+              subPath: logging.xml
+            - name: logging
+              mountPath: /etc/clickhouse-server/users.d/logging.xml
+              subPath: user-logging.xml
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.clickhouse.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "wholo.fullname" . }}-clickhouse
+        - name: logging
+          configMap:
+            name: {{ include "wholo.fullname" . }}-clickhouse
+{{- end }}

@@ -109,6 +109,14 @@ www:
     from: "leads@<domain>"
     leadsTo: "CHANGE_ME@<domain>"
 
+# Self-hosted analytics for www. Dashboard: kubectl -n wholo port-forward
+# svc/wholo-plausible 8000:8000 (register the first user, then it's invite-only).
+plausible:
+  enabled: true
+  baseUrl: "https://www.<domain>"
+  secretKeyBase: "CHANGE_ME_openssl_rand_base64_64"
+  totpVaultKey: "CHANGE_ME_openssl_rand_base64_32"
+
 mailhog:
   service:
     # The MailHog UI has no auth — keep it off the internet. View it with:

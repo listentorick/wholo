@@ -63,12 +63,16 @@ jobs:
             dockerfile: apps/driver-api/Dockerfile
             context: .
             build-args: ""
-          # Public marketing site — standalone Next.js, no BFF. No NEXT_PUBLIC_*
-          # build args (site URL is injected at runtime via the ConfigMap).
+          # Public marketing site — standalone Next.js, no BFF. Site URL is
+          # injected at runtime via the ConfigMap; analytics + A/B are baked
+          # into the static build (repo Variables, blank => off for local).
           - name: www
             dockerfile: apps/www/Dockerfile
             context: .
-            build-args: ""
+            build-args: |
+              PLAUSIBLE_ENABLED=${{ vars.WWW_PLAUSIBLE_ENABLED }}
+              PLAUSIBLE_DOMAIN=${{ vars.WWW_PLAUSIBLE_DOMAIN || 'stocdup.com' }}
+              EXPERIMENT_HERO_VARIANTS=${{ vars.WWW_EXPERIMENT_HERO_VARIANTS }}
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
             context: apps/keycloak

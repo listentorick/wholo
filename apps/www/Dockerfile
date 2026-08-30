@@ -17,6 +17,14 @@ RUN pnpm install --frozen-lockfile
 # Build
 COPY apps/www ./apps/www
 ENV NEXT_TELEMETRY_DISABLED=1
+# Baked into the static build: whether to load the (proxied) Plausible script,
+# and which hero A/B variants are live. Empty in local :local builds.
+ARG PLAUSIBLE_ENABLED=
+ARG PLAUSIBLE_DOMAIN=stocdup.com
+ARG EXPERIMENT_HERO_VARIANTS=
+ENV PLAUSIBLE_ENABLED=${PLAUSIBLE_ENABLED}
+ENV PLAUSIBLE_DOMAIN=${PLAUSIBLE_DOMAIN}
+ENV EXPERIMENT_HERO_VARIANTS=${EXPERIMENT_HERO_VARIANTS}
 RUN pnpm --filter @wholo/www build
 
 FROM node:20-alpine AS runner

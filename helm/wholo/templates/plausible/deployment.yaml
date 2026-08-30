@@ -1,0 +1,58 @@
+{{- if .Values.plausible.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-plausible
+  labels:
+    app: {{ include "wholo.fullname" . }}-plausible
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-plausible
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-plausible
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      initContainers:
+        - name: migrate
+          image: {{ .Values.plausible.image }}
+          command: ["sh", "-c", "/entrypoint.sh db createdb || true; /entrypoint.sh db migrate"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-plausible
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-plausible
+      containers:
+        - name: plausible
+          image: {{ .Values.plausible.image }}
+          command: ["/entrypoint.sh", "run"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-plausible
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-plausible
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 25
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.plausible.resources | nindent 12 }}
+{{- end }}

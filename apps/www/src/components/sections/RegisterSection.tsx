@@ -6,7 +6,7 @@ import { Icon } from '../ui/Icon';
 import { RegisterFormLazy } from '../register/RegisterFormLazy';
 import { Reveal } from '../motion/Reveal';
 
-export function RegisterSection() {
+export function RegisterSection({ variant = 'default' }: { variant?: string }) {
   return (
     <Section band="navy" id="register">
       <div className="grid items-start gap-14 md:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16">
@@ -26,7 +26,7 @@ export function RegisterSection() {
           </ul>
         </Reveal>
 
-        <RegisterFormLazy />
+        <RegisterFormLazy variant={variant} />
       </div>
     </Section>
   );

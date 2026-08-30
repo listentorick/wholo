@@ -1,0 +1,17 @@
+{{- if .Values.plausible.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-plausible
+  labels:
+    app: {{ include "wholo.fullname" . }}-plausible
+data:
+  # Public origin Plausible believes it is served from. The www app proxies
+  # /js/script.js + /api/event to this service, so events are first-party on
+  # the marketing domain; the dashboard is reached via `kubectl port-forward`.
+  BASE_URL: {{ .Values.plausible.baseUrl | quote }}
+  HTTP_PORT: "8000"
+  LISTEN_IP: "0.0.0.0"
+  DISABLE_REGISTRATION: {{ .Values.plausible.disableRegistration | quote }}
+  ENABLE_EMAIL_VERIFICATION: "false"
+{{- end }}

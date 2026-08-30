@@ -1,0 +1,17 @@
+{{- if .Values.plausible.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wholo.fullname" . }}-clickhouse
+  labels:
+    app: {{ include "wholo.fullname" . }}-clickhouse
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.clickhouse.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.clickhouse.storageSize }}
+{{- end }}

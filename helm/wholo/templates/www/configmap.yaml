@@ -10,6 +10,8 @@ data:
   # Next's standalone server binds HOSTNAME; must be 0.0.0.0 inside the pod.
   HOSTNAME: "0.0.0.0"
   NEXT_PUBLIC_SITE_URL: {{ .Values.www.siteUrl | quote }}
+  # In-cluster Plausible service the /js/script.js + /api/event rewrites proxy to.
+  PLAUSIBLE_INTERNAL_URL: {{ printf "http://%s-plausible:8000" (include "wholo.fullname" .) | quote }}
   # SMTP host/port for the register form (non-secret). See templates/www/secret.yaml
   # for credentials + recipient. Empty host falls back to the in-cluster MailHog.
   WWW_SMTP_HOST: {{ .Values.www.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}

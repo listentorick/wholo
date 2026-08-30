@@ -1,0 +1,16 @@
+{{- if .Values.plausible.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-plausible
+  labels:
+    app: {{ include "wholo.fullname" . }}-plausible
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "wholo.fullname" . }}-plausible
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+{{- end }}
