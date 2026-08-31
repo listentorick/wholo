@@ -43,10 +43,6 @@ export const HERO: Record<
 export const HERO_CREDIBILITY =
   'Ordering, customer pricing, accounting and proof of delivery, in one place.';
 
-export const PROOF_STRIP = {
-  line: 'For the independent UK drinks and food wholesalers that enterprise platforms overlook.',
-} as const;
-
 export const PROBLEM = {
   eyebrow: 'The day-to-day',
   heading: 'Wholesale is complicated enough.',

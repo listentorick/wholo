@@ -2,7 +2,6 @@ import { cookies } from 'next/headers';
 import { Nav } from '@/components/layout/Nav';
 import { Footer } from '@/components/layout/Footer';
 import { Hero } from '@/components/sections/Hero';
-import { ProofStrip } from '@/components/sections/ProofStrip';
 import { ProblemSection } from '@/components/sections/ProblemSection';
 import { GrowthSection } from '@/components/sections/GrowthSection';
 import { OperationsSection } from '@/components/sections/OperationsSection';
@@ -40,7 +39,6 @@ export default async function HomePage() {
       <Nav />
       <main id="main">
         <Hero variant={variant} />
-        <ProofStrip />
         <ProblemSection />
         <GrowthSection />
         <OperationsSection />
