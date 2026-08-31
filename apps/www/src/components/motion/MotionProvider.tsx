@@ -1,7 +1,6 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { MotionConfig } from 'motion/react';
 
 const MotionOKContext = createContext(true);
 
@@ -78,8 +77,6 @@ export function MotionProvider({ children }: { children: React.ReactNode }) {
   }, [motionOK]);
 
   return (
-    <MotionOKContext.Provider value={motionOK}>
-      <MotionConfig reducedMotion="user">{children}</MotionConfig>
-    </MotionOKContext.Provider>
+    <MotionOKContext.Provider value={motionOK}>{children}</MotionOKContext.Provider>
   );
 }

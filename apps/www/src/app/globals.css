@@ -35,6 +35,61 @@
   }
 }
 
+@layer components {
+  /* Reveal — CSS entrance driven by <Reveal> (components/motion/Reveal.tsx). */
+  :root {
+    --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  [data-reveal='hidden']:not([data-reveal-stagger]) {
+    opacity: 0;
+    transform: translate(var(--reveal-x, 0), var(--reveal-y, 22px));
+    filter: blur(6px);
+  }
+  [data-reveal='shown']:not([data-reveal-stagger]) {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition:
+      opacity 0.6s var(--reveal-ease) var(--reveal-delay, 0s),
+      transform 0.6s var(--reveal-ease) var(--reveal-delay, 0s),
+      filter 0.6s var(--reveal-ease) var(--reveal-delay, 0s);
+  }
+
+  [data-reveal='hidden'][data-reveal-stagger] > * {
+    opacity: 0;
+    transform: translate(var(--reveal-x, 0), var(--reveal-y, 22px));
+    filter: blur(6px);
+  }
+  [data-reveal='shown'][data-reveal-stagger] > * {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition:
+      opacity 0.55s var(--reveal-ease),
+      transform 0.55s var(--reveal-ease),
+      filter 0.55s var(--reveal-ease);
+  }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(1) { transition-delay: calc(var(--reveal-delay, 0s) + 0 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(2) { transition-delay: calc(var(--reveal-delay, 0s) + 1 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(3) { transition-delay: calc(var(--reveal-delay, 0s) + 2 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(4) { transition-delay: calc(var(--reveal-delay, 0s) + 3 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(5) { transition-delay: calc(var(--reveal-delay, 0s) + 4 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(6) { transition-delay: calc(var(--reveal-delay, 0s) + 5 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(7) { transition-delay: calc(var(--reveal-delay, 0s) + 6 * var(--reveal-stagger, 0.08s)); }
+  [data-reveal='shown'][data-reveal-stagger] > *:nth-child(n + 8) { transition-delay: calc(var(--reveal-delay, 0s) + 7 * var(--reveal-stagger, 0.08s)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal] > * {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

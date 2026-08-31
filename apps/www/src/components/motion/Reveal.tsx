@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, type Variants } from 'motion/react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/cn';
 import { useMotionOK } from './MotionProvider';
 
@@ -12,17 +12,21 @@ interface RevealProps {
   /** horizontal travel in px */
   x?: number;
   delay?: number;
-  /** stagger direct children instead of animating as one block */
+  /** stagger direct children (seconds between each) */
   stagger?: number;
-  as?: 'div' | 'li' | 'section';
+  as?: 'div' | 'li' | 'section' | 'ul';
 }
 
-const ease = [0.22, 1, 0.36, 1] as const;
+type Phase = 'ssr' | 'hidden' | 'shown';
 
 /**
- * In-view entrance: fade + rise + a whisper of blur. When motion is off
- * (reduced-motion / touch) it renders its children plainly — no hidden
- * initial state, no wrapper animation.
+ * In-view entrance: fade + rise + a whisper of blur, done with a CSS
+ * transition + one IntersectionObserver (no animation library).
+ *
+ * - Server render and no-JS: children are visible, unstyled.
+ * - Motion off (reduced-motion / touch): visible immediately.
+ * - Above the fold on load: shown at once, no reveal (avoids a flash).
+ * - Below the fold: hidden, then transitions in when scrolled to.
  */
 export function Reveal({
   children,
@@ -31,56 +35,53 @@ export function Reveal({
   x = 0,
   delay = 0,
   stagger,
-  as = 'div',
+  as: Tag = 'div',
 }: RevealProps) {
   const motionOK = useMotionOK();
+  const ref = useRef<HTMLElement>(null);
+  const [phase, setPhase] = useState<Phase>('ssr');
 
-  if (!motionOK) {
-    const Tag = as;
-    return <Tag className={className}>{children}</Tag>;
-  }
-
-  const MotionTag = motion[as];
-
-  if (stagger) {
-    const container: Variants = {
-      hidden: {},
-      show: { transition: { staggerChildren: stagger, delayChildren: delay } },
-    };
-    const item: Variants = {
-      hidden: { opacity: 0, y, x, filter: 'blur(6px)' },
-      show: { opacity: 1, y: 0, x: 0, filter: 'blur(0px)', transition: { duration: 0.6, ease } },
-    };
-    return (
-      <MotionTag
-        className={className}
-        variants={container}
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, margin: '0px 0px -12% 0px' }}
-      >
-        {Array.isArray(children) ? (
-          children.map((child, i) => (
-            <motion.div key={i} variants={item}>
-              {child}
-            </motion.div>
-          ))
-        ) : (
-          <motion.div variants={item}>{children}</motion.div>
-        )}
-      </MotionTag>
+  useEffect(() => {
+    const el = ref.current;
+    if (!motionOK || !el) {
+      setPhase('shown');
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight * 0.9) {
+      setPhase('shown');
+      return;
+    }
+    setPhase('hidden');
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setPhase('shown');
+          io.disconnect();
+        }
+      },
+      { rootMargin: '0px 0px -12% 0px' },
     );
-  }
+    io.observe(el);
+    return () => io.disconnect();
+  }, [motionOK]);
+
+  const style = {
+    '--reveal-x': `${x}px`,
+    '--reveal-y': `${y}px`,
+    '--reveal-delay': `${delay}s`,
+    '--reveal-stagger': stagger ? `${stagger}s` : undefined,
+  } as React.CSSProperties;
 
   return (
-    <MotionTag
+    <Tag
+      ref={ref as React.Ref<never>}
+      data-reveal={phase === 'ssr' ? undefined : phase}
+      data-reveal-stagger={stagger ? '' : undefined}
       className={cn(className)}
-      initial={{ opacity: 0, y, x, filter: 'blur(6px)' }}
-      whileInView={{ opacity: 1, y: 0, x: 0, filter: 'blur(0px)' }}
-      viewport={{ once: true, margin: '0px 0px -12% 0px' }}
-      transition={{ duration: 0.6, ease, delay }}
+      style={style}
     >
       {children}
-    </MotionTag>
+    </Tag>
   );
 }
