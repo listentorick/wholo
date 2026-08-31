@@ -15,6 +15,7 @@ flowchart LR
     B["Browser<br/>(trade customer / admin staff)"]
 
     subgraph edge ["Traefik ingress — host routing (TLS terminated upstream on live)"]
+        WWW("www.&lt;domain&gt;")
         P("portal.&lt;domain&gt;")
         A("admin.&lt;domain&gt;")
         AU("auth.&lt;domain&gt;")
@@ -22,6 +23,7 @@ flowchart LR
     end
 
     subgraph cluster ["k3s cluster — internal HTTP, service DNS"]
+        WW["wholo-www :3040<br/>marketing site (no BFF)"]
         PA["wholo-portal-api :3010<br/>portal frontend + BFF"]
         AA["wholo-admin-api :3020<br/>admin frontend + BFF"]
         KC["wholo-keycloak :8080"]
@@ -30,10 +32,13 @@ flowchart LR
         PG[("wholo-postgresql :5432")]
         RD[("wholo-redis :6379")]
         MH["wholo-mailhog :1025 smtp / :8025 ui"]
+        PL["wholo-plausible :8000<br/>analytics (no ingress)"]
+        CH[("wholo-clickhouse :8123<br/>analytics events")]
     end
 
     R2[("Cloudflare R2<br/>public assets")]
 
+    B -->|"pages, POST /api/register, /js/script.js, /api/event"| WWW --> WW
     B -->|"pages + /api/v1/* (same origin)"| P --> PA
     B -->|"pages + /api/v1/* (same origin)"| A --> AA
     B -->|"login redirect, PKCE, tokens"| AU --> KC
@@ -53,6 +58,10 @@ flowchart LR
     W -->|"SMTP"| MH
     KC -->|"keycloak DB"| PG
     KC -.->|"realm emails"| MH
+    WW -->|"PLAUSIBLE_INTERNAL_URL (proxy /js/script.js + /api/event)"| PL
+    WW -->|"SMTP (lead emails)"| MH
+    PL -->|"plausible app DB"| PG
+    PL --> CH
 ```
 
 Solid arrows = request traffic; dotted = auxiliary (JWKS fetches, images, mail).
@@ -61,6 +70,7 @@ Solid arrows = request traffic; dotted = auxiliary (JWKS fetches, images, mail).
 
 | Subdomain | Routes to (service) | Who calls it | Purpose |
 |---|---|---|---|
+| `www.<domain>` | `wholo-www:3040` | Anyone (public marketing site) | Distributor landing page; `POST /api/register` (lead → email); first-party proxy of `/js/script.js` + `/api/event` to Plausible. Bare apex `<domain>` is a **Cloudflare Redirect Rule → `www.<domain>`** (the origin cert is `*.<domain>`, which does not cover the apex) |
 | `portal.<domain>` | `wholo-portal-api:3010` | Trade customers' browsers | Portal pages + its BFF endpoints (`/api/v1/*`, same origin) |
 | `admin.<domain>` | `wholo-admin-api:3020` | Distributor staff browsers | Admin pages + its BFF endpoints |
 | `auth.<domain>` | `wholo-keycloak:8080` | Browsers (redirects from both frontends) | Keycloak login page, PKCE flow, token endpoint |
@@ -73,6 +83,9 @@ outside the cluster.
 
 | From | To | Config key | Purpose |
 |---|---|---|---|
+| www | `http://wholo-plausible:8000` | `PLAUSIBLE_INTERNAL_URL` | Next rewrites proxy `/js/script.js` + `/api/event` so analytics is served first-party; Plausible has no ingress |
+| www | `wholo-mailhog:1025` (live: `smtp.purelymail.com:587`) | `WWW_SMTP_*` | Register-interest lead emails (own nodemailer, not `apps/api`'s mail module) |
+| plausible | `wholo-postgresql:5432`, `wholo-clickhouse:8123` | `DATABASE_URL`, `CLICKHOUSE_DATABASE_URL` | Its own `plausible` app DB (Postgres) + the `plausible_events_db` event store (ClickHouse) |
 | portal-api | `http://wholo-api:3001` | `CENTRAL_API_URL` | All domain logic (BFF proxies, ADR-026/044) |
 | admin-api | `http://wholo-api:3001` | `CENTRAL_API_URL` | Same, with JWT relay (ADR-046) |
 | api, portal-api, admin-api | `http://wholo-keycloak:8080` | `KEYCLOAK_URL` | JWKS fetch to validate browser JWTs |

@@ -37,6 +37,7 @@ Three primary actor types:
 | `apps/portal-api` | 3003 | BFF for customer portal — proxies to apps/api |
 | `apps/admin` | 3020 | Admin Next.js frontend |
 | `apps/portal` | 3010 | Customer portal Next.js frontend |
+| `apps/www` | 3040 | Public marketing site (`www.stocdup.com`) — standalone Next.js, no BFF, no DB. See [ADR-060](docs/adrs/ADR-060-marketing-site.md) |
 
 **Auth architecture**: `apps/api` is the single auth authority. BFFs proxy login to apps/api and forward the issued JWT. BFFs validate inbound JWTs locally using a shared `JWT_SECRET`. Future: dedicated auth service + client credentials for BFF→API calls.
 
@@ -72,6 +73,7 @@ Unit tests are **required** for all new code. Every service method, controller, 
 | `apps/admin-api` | Jest + `@nestjs/testing` | `pnpm --filter @wholo/admin-api test` |
 | `apps/admin` | Vitest + Testing Library | `pnpm --filter @wholo/admin test` |
 | `apps/portal` | Vitest + Testing Library | `pnpm --filter @wholo/portal test` |
+| `apps/www` | Vitest + Testing Library | `pnpm --filter @wholo/www test` |
 
 ### Running all tests
 
@@ -164,6 +166,7 @@ kubectl rollout restart deployment/wholo-<service>
 
 - The image tag must be `wholo/<service>:local` — **slash**, not hyphen. The Helm chart references that exact name; a hyphenated tag (`wholo-<service>:local`) silently builds an image the pods never see, and the old code keeps running.
 - `portal-api` and `admin-api` bake their Next.js frontend (`portal`/`admin` respectively) into the same image at build time — rebuild `portal-api`/`admin-api` (not `portal`/`admin`) to pick up frontend-only changes.
+- `www` (the marketing site) is its own standalone image `wholo/www:local` with no BFF — build and restart it directly. It needs Plausible only when analytics is being tested (`plausible.enabled` in `values.local.yaml`); the register form posts to in-cluster MailHog locally. See [ADR-060](docs/adrs/ADR-060-marketing-site.md).
 
 #### Local URLs
 
@@ -173,6 +176,7 @@ Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `loca
 |---|---|
 | Admin app (frontend + BFF) | `http://localhost:3020` |
 | Portal app (frontend + BFF) | `http://localhost:3010` |
+| Marketing site (`apps/www`) | `http://localhost:3040` |
 | API (central domain API) | `http://localhost:3001` |
 | Keycloak | `http://localhost:8080` |
 | MailHog UI | `http://localhost:30825` |
@@ -197,7 +201,7 @@ To use it:
 
 Full runbook, one-time setup, and troubleshooting: `docs/deployment/live-k3s.md` (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:
 
-1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
+1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
 2. Bump the `sha-` tags in `helm/wholo/values.live.yaml` (gitignored, not committed) to the new sha.
 3. Deploy: `pnpm helm:install:live` (`helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml`).
 

@@ -19,16 +19,29 @@ Topology and rationale: [ADR-048](../adrs/ADR-048-live-environment-k3s.md).
 
    These are baked into the portal/admin JS bundles at image build time, so
    they must be set **before** the images you intend to deploy are built.
+   - Marketing site (`apps/www`) build args, also baked at image build time
+     (all optional — omit to ship analytics off and a single hero):
+     - `WWW_PLAUSIBLE_ENABLED` = `1` to load the analytics script
+     - `WWW_PLAUSIBLE_DOMAIN` = `<domain>` (the Plausible site name; defaults
+       to `stocdup.com`)
+     - `WWW_EXPERIMENT_HERO_VARIANTS` = e.g. `growth,operations` to turn on
+       the hero A/B split (blank ⇒ `/` stays static, single hero)
 2. Push to `master` (or run the `build-images` workflow manually) and confirm
-   the four packages appear: `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,keycloak}`.
+   the five packages appear:
+   `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,keycloak,www}`.
 
 ## One-time cluster setup
 
 1. **DNS / Cloudflare** — zone on Cloudflare (nameservers delegated from the
-   registrar). A records for `portal.`, `admin.`, `auth.<domain>` →
+   registrar). A records for `www.`, `portal.`, `admin.`, `auth.<domain>` →
    the WAF's public IP, all **Proxied** (`apps/api` gets no public host —
    BFFs reach it over cluster DNS). Cloudflare settings: SSL/TLS mode
    **Full (strict)**, **Always Use HTTPS** on.
+   - The bare apex `<domain>` is **not** served by the cluster (the WAF's
+     Cloudflare Origin CA cert is `*.<domain>`, which does not cover the
+     apex). Add a proxied A record for `<domain>` (any address — Cloudflare
+     never connects to it) plus a **Redirect Rule**: *When incoming host
+     equals `<domain>` → 301 to `https://www.<domain>${uri.path}`*.
 
 2. **WAF appliance** (in front of the cluster; terminates TLS) — install a
    Cloudflare **Origin CA certificate** (dashboard: SSL/TLS → Origin Server →
@@ -138,6 +151,51 @@ MailHog is still deployed (ClusterIP-only, ClusterIP ⇒ no public exposure)
 as a fallback/local-dev parity fixture, but nothing points at it in live
 anymore. UI: `kubectl -n wholo port-forward svc/wholo-mailhog 8025:8025`.
 
+The marketing site's register-interest form sends its own mail (own
+`nodemailer`, not `apps/api`'s module) via `www.smtp.*` in values.live.yaml —
+same PurelyMail account, ideally a dedicated `leads@stocdup.com` sender, to
+`www.leadsTo`. See below.
+
+## Marketing site + analytics (ADR-060)
+
+`apps/www` (`www.<domain>`) is a standalone Next.js site — no BFF, no DB. Its
+only backends are SMTP (lead emails) and a self-hosted Plausible it proxies
+first-party.
+
+**values.live.yaml** needs a `www:` block and a `plausible:` block (see
+`values.live.example.yaml`):
+
+- `www.image.tag` — bump the `sha-` tag alongside the others each promote.
+- `www.siteUrl: https://www.<domain>`.
+- `www.smtp.*` — the lead-email transport (`www.smtp.from` is the sender,
+  `www.smtp.leadsTo` the internal recipient; real password in the gitignored
+  values.live.yaml).
+- `ingress.hosts.www: www.<domain>` — renders the Traefik IngressRoute.
+- `plausible.enabled: true`, `plausible.baseUrl: https://www.<domain>`.
+- `plausible.secretKeyBase` (`openssl rand -base64 64`) and
+  `plausible.totpVaultKey` (`openssl rand -base64 32`) — generate once, keep
+  stable (rotating them invalidates sessions / 2FA).
+
+Enabling `plausible` also brings up `wholo-clickhouse` (its event store, a
+PVC on node-local storage — same backup caveat as Postgres). Plausible's app
+DB is a separate `plausible` database on the shared Postgres, created by the
+deployment's `migrate` initContainer.
+
+**Analytics only records anything if the `www` image was built with
+`WWW_PLAUSIBLE_ENABLED=1`** (see GitHub setup above) — the Helm flag just
+runs the server.
+
+**Plausible dashboard** (no ingress — reach it by port-forward):
+
+```bash
+kubectl -n wholo port-forward svc/wholo-plausible 8000:8000
+# browse http://localhost:8000 — first visit creates the admin user
+# (registration is invite-only after that: plausible.disableRegistration)
+```
+
+Add the site (`<domain>`, matching `WWW_PLAUSIBLE_DOMAIN`) in the dashboard
+on first run.
+
 ## Backups
 
 A nightly CronJob (`postgresql.backup.enabled`) runs `pg_dumpall` (captures
@@ -170,6 +228,11 @@ push to R2) is a recommended follow-up.
 3. Browse `https://admin.<domain>` → redirected to `auth.<domain>` → log in →
    redirected back (proves baked NEXT_PUBLIC URL, realm redirect URIs, and
    JWKS validation agree). Repeat for the portal.
+   - `https://www.<domain>/` serves the landing page; `https://<domain>/`
+     301s to it. Submit the register form → the lead email reaches
+     `www.smtp.leadsTo`. If analytics is on, a pageview appears in the
+     port-forwarded Plausible dashboard (and `curl -sI https://www.<domain>/js/script.js`
+     → 200 from the first-party proxy).
 4. Trigger any email flow; confirm it lands in MailHog with `https://` links.
 5. `kubectl -n wholo logs deploy/wholo-worker` — queue consumers up, exactly
    1 replica (ADR-047: the outbox relay must be the only publisher).
