@@ -141,96 +141,94 @@ export default function ProductDetailPage() {
         title={product.name}
       />
 
-      <PageShell width="full" padding="none">
-        <div className="flex-1 bg-canvas px-4 py-4 md:px-8 md:py-8">
-          <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-4 md:gap-5">
+      <PageShell width="full">
+        <div className="flex w-full flex-col gap-4 md:gap-5">
 
-            {/* Image + ordering panel */}
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-7">
-              <div className="pd-card w-full md:w-[420px] md:flex-shrink-0">
-                <ImageBox src={product.imageUrl} alt={product.name} />
-              </div>
-
-              <div
-                className="pd-card w-full rounded-lg border border-border bg-surface p-5 shadow-sm md:min-w-0 md:flex-1"
-                style={{ animationDelay: '0.05s' }}
-              >
-                {product.productType?.name && (
-                  <Eyebrow className="mb-3">{product.productType.name}</Eyebrow>
-                )}
-                <h1 className="text-xl font-bold leading-snug tracking-[-0.02em] text-navy">
-                  {product.name}
-                </h1>
-                {product.sku && (
-                  <p className="mt-2 text-xs font-medium tracking-[0.02em] text-[#C4B5A8]">{product.sku}</p>
-                )}
-                <p className="mt-3.5 text-base font-medium text-foreground">
-                  {formatPrice(product.price, product.resolvedPrice, currencyCode, product.productType?.name)}
-                </p>
-
-                <div className="my-5 h-px bg-border" />
-
-                {isActive ? (
-                  <>
-                    <p className="mb-2.5 text-xs font-medium tracking-[0.02em] text-muted">Quantity</p>
-                    <QuantityStepper
-                      value={qty}
-                      min={0}
-                      disabled={!hasPrice}
-                      saving={saving}
-                      itemLabel={product.name}
-                      onChange={(next) => syncItem(productId, next)}
-                    />
-                    {qty > 0 && (
-                      <p className="mt-3 text-xs text-muted">
-                        In your basket:{' '}
-                        <strong className="font-semibold text-foreground">
-                          {qty} · {formatMoney(qty * unitPrice, currencyCode)}
-                        </strong>
-                        . Change the quantity to update it.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted">
-                    Request access to this supplier to see your pricing and place orders.
-                  </p>
-                )}
-              </div>
+          {/* Image + ordering panel */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-7">
+            <div className="pd-card w-full md:w-[420px] md:flex-shrink-0">
+              <ImageBox src={product.imageUrl} alt={product.name} />
             </div>
 
-            {/* About the product */}
-            <div className="pd-card rounded-lg border border-border bg-surface p-5 shadow-sm" style={{ animationDelay: '0.1s' }}>
-              <Eyebrow className="mb-2.5">About the product</Eyebrow>
-              <p className="max-w-[74ch] text-sm leading-relaxed text-foreground">
-                {product.description ?? 'No description available.'}
+            <div
+              className="pd-card w-full rounded-lg border border-border bg-surface p-5 shadow-sm md:min-w-0 md:flex-1"
+              style={{ animationDelay: '0.05s' }}
+            >
+              {product.productType?.name && (
+                <Eyebrow className="mb-3">{product.productType.name}</Eyebrow>
+              )}
+              <h1 className="text-xl font-bold leading-snug tracking-[-0.02em] text-navy">
+                {product.name}
+              </h1>
+              {product.sku && (
+                <p className="mt-2 text-xs font-medium tracking-[0.02em] text-[#C4B5A8]">{product.sku}</p>
+              )}
+              <p className="mt-3.5 text-base font-medium text-foreground">
+                {formatPrice(product.price, product.resolvedPrice, currencyCode, product.productType?.name)}
               </p>
-            </div>
 
-            {/* More from this distributor */}
-            {related.length > 0 && (
-              <div className="pd-card rounded-lg border border-border bg-surface p-5 shadow-sm" style={{ animationDelay: '0.15s' }}>
-                <Eyebrow className="mb-4">More from {distributor?.name ?? 'this supplier'}</Eyebrow>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {related.map((r) => (
-                    <Link
-                      key={r.id}
-                      href={`/${distributorSlug}/products/${r.id}`}
-                      className="group flex min-w-0 flex-col"
-                    >
-                      <ImageBox src={r.thumbnailUrl ?? null} alt={r.name} />
-                      <p className="mt-2 truncate text-sm font-medium text-foreground transition-colors group-hover:text-accent">
-                        {r.name}
-                      </p>
-                      <p className="mt-0.5 text-xs text-foreground-tertiary">
-                        {shortPrice(r.price, r.resolvedPrice, currencyCode)}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
+              <div className="my-5 h-px bg-border" />
+
+              {isActive ? (
+                <>
+                  <p className="mb-2.5 text-xs font-medium tracking-[0.02em] text-muted">Quantity</p>
+                  <QuantityStepper
+                    value={qty}
+                    min={0}
+                    disabled={!hasPrice}
+                    saving={saving}
+                    itemLabel={product.name}
+                    onChange={(next) => syncItem(productId, next)}
+                  />
+                  {qty > 0 && (
+                    <p className="mt-3 text-xs text-muted">
+                      In your basket:{' '}
+                      <strong className="font-semibold text-foreground">
+                        {qty} · {formatMoney(qty * unitPrice, currencyCode)}
+                      </strong>
+                      . Change the quantity to update it.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted">
+                  Request access to this supplier to see your pricing and place orders.
+                </p>
+              )}
+            </div>
           </div>
+
+          {/* About the product */}
+          <div className="pd-card rounded-lg border border-border bg-surface p-5 shadow-sm" style={{ animationDelay: '0.1s' }}>
+            <Eyebrow className="mb-2.5">About the product</Eyebrow>
+            <p className="max-w-[74ch] text-sm leading-relaxed text-foreground">
+              {product.description ?? 'No description available.'}
+            </p>
+          </div>
+
+          {/* More from this distributor */}
+          {related.length > 0 && (
+            <div className="pd-card rounded-lg border border-border bg-surface p-5 shadow-sm" style={{ animationDelay: '0.15s' }}>
+              <Eyebrow className="mb-4">More from {distributor?.name ?? 'this supplier'}</Eyebrow>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {related.map((r) => (
+                  <Link
+                    key={r.id}
+                    href={`/${distributorSlug}/products/${r.id}`}
+                    className="group flex min-w-0 flex-col"
+                  >
+                    <ImageBox src={r.thumbnailUrl ?? null} alt={r.name} />
+                    <p className="mt-2 truncate text-sm font-medium text-foreground transition-colors group-hover:text-accent">
+                      {r.name}
+                    </p>
+                    <p className="mt-0.5 text-xs text-foreground-tertiary">
+                      {shortPrice(r.price, r.resolvedPrice, currencyCode)}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </PageShell>
     </>

@@ -4,13 +4,17 @@ import clsx from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 const widthClasses = {
-  /** 480px commerce shell — checkout, order detail, product detail */
+  /** 480px centred column — narrow forms / single-column flows */
   narrow: 'max-w-[480px] mx-auto',
-  /** reading column — home */
+  /** reading column — prose-led pages */
   reading: 'max-w-3xl mx-auto',
-  /** wide column — about */
+  /** wide column — prose-led pages that need more room */
   wide: 'max-w-4xl mx-auto',
-  /** no cap — settings */
+  /**
+   * No cap — the standard for every top-level distributor page (home,
+   * catalogue, product detail, orders, order detail, checkout). Content fills
+   * the space beside the sidebar; the page manages its own internal grid.
+   */
   full: '',
 } as const;
 
@@ -27,10 +31,16 @@ interface PageShellProps {
 }
 
 /**
- * Base page container for all portal screens. Owns the flex-column fill
- * (so short pages stretch to the viewport and document scroll behaves the
- * same everywhere), the centered max-width shell, and standard padding.
- * Full-width chrome (PageSubHeader, sticky tab bars) must stay outside it.
+ * The single page-container primitive for every portal screen. Owns the
+ * flex-column fill (so short pages stretch to the viewport and document scroll
+ * behaves the same everywhere), the optional centred max-width, and the standard
+ * 20px page padding.
+ *
+ * The contract for top-level distributor pages: pass `width="full"` and keep the
+ * default padding — never `padding="none"` with hand-rolled `px-*` / `mx-auto` /
+ * `max-w-*` wrappers inside. That opt-out is what made every page look bespoke;
+ * `padding="none"` now exists only for the `center` loading/error states.
+ * Full-width chrome (PageSubHeader, sticky tab bars) stays outside the shell.
  */
 export function PageShell({
   children,

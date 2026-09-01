@@ -44,6 +44,15 @@ describe('PageShell', () => {
     expect(shell).not.toHaveClass('mx-auto');
   });
 
+  it('is the standard page container: width="full" fills the width with the 20px gutter', () => {
+    // The contract every top-level distributor page follows — no bespoke gutters.
+    const { container } = render(<PageShell width="full">x</PageShell>);
+    const shell = shellOf(container);
+    expect(shell).toHaveClass('w-full', 'flex-1', 'p-5');
+    expect(shell.className).not.toMatch(/max-w-/);
+    expect(shell).not.toHaveClass('mx-auto');
+  });
+
   it('omits padding when padding="none"', () => {
     const { container } = render(<PageShell padding="none">x</PageShell>);
     expect(shellOf(container)).not.toHaveClass('p-5');

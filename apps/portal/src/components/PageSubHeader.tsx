@@ -11,7 +11,7 @@ interface Props {
 export function PageSubHeader({ backLabel, backHref, title }: Props) {
   const router = useRouter();
   return (
-    <div className="w-full border-b border-[#E5E7EB] flex items-center justify-between px-4 py-2.5 flex-shrink-0 bg-white">
+    <div className="w-full border-b border-border flex items-center justify-between px-5 py-2.5 flex-shrink-0 bg-white">
       <button
         className="flex items-center gap-1 text-xs text-[#9CA3AF] tracking-wide"
         onClick={() => router.push(backHref)}

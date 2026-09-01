@@ -328,7 +328,7 @@ export default function DistributorHomePage() {
   );
 
   return (
-    <PageShell width="full" padding="none" className="px-5 pb-8">
+    <PageShell width="full">
       <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] min-[1440px]:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
 
         {hasAbout && (

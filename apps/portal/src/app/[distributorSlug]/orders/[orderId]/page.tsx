@@ -12,12 +12,15 @@ import type { AddressSnapshot, Order } from '@wholo/types';
 import { formatMoney } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
 
+/** White 8px card — matches the checkout / product-detail restyle language. */
+const CARD = 'od-section rounded-lg border border-border bg-surface p-5 shadow-sm';
+
 const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
   SUBMITTED: { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', border: 'hsl(var(--color-accent-border))', label: 'Awaiting Confirmation' },
-  ACCEPTED:  { color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0', label: 'Confirmed'             },
-  REJECTED:  { color: '#DC2626', bg: '#FEE2E2', border: '#FECACA', label: 'Rejected'               },
-  CANCELLED: { color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB', label: 'Cancelled'              },
-  COMPLETED: { color: '#2563EB', bg: '#DBEAFE', border: '#BFDBFE', label: 'Completed'              },
+  ACCEPTED:  { color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0', label: 'Confirmed'   },
+  REJECTED:  { color: '#DC2626', bg: '#FEE2E2', border: '#FECACA', label: 'Rejected'    },
+  CANCELLED: { color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB', label: 'Cancelled'   },
+  COMPLETED: { color: '#2563EB', bg: '#DBEAFE', border: '#BFDBFE', label: 'Completed'   },
 };
 
 function fmtDate(iso: string | null | undefined) {
@@ -29,8 +32,13 @@ function fmtAmt(amount: string, currency: string) {
   return formatMoney(amount, currency);
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <Eyebrow className="mx-4 mb-2 mt-3">{children}</Eyebrow>;
+/** Uppercase micro-label for the PO Ref / Notes rows in the order header. */
+function MetaLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="min-w-[80px] text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-tertiary">
+      {children}
+    </span>
+  );
 }
 
 export default function OrderDetailPage() {
@@ -86,7 +94,7 @@ export default function OrderDetailPage() {
       <>
         <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title="Order" />
         <PageShell center className="px-6 text-center">
-          <p style={{ fontSize: 13, color: '#9CA3AF' }}>{error ?? 'Order not found'}</p>
+          <p className="text-sm text-foreground-tertiary">{error ?? 'Order not found'}</p>
         </PageShell>
       </>
     );
@@ -126,77 +134,66 @@ export default function OrderDetailPage() {
 
       <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title={order.orderNumber} />
 
-      <PageShell padding="none" className="pb-12" width="full">
-        {/* Status banner */}
-        <div
-          className="od-section mx-4 mt-4 mb-1 rounded"
-          style={{
-            animationDelay: '0.05s',
-            background: sc.bg,
-            border: `1px solid ${sc.border}`,
-            padding: '14px 16px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-              textTransform: 'uppercase', color: sc.color,
-            }}>
-              {sc.label}
-            </span>
-          </div>
-          <p style={{ fontSize: 13, color: sc.color, opacity: 0.85 }}>
-            {order.status === 'SUBMITTED' && 'Awaiting confirmation from the distributor'}
-            {order.status === 'ACCEPTED' && `Confirmed on ${fmtDate(order.acceptedAt)}`}
-            {order.status === 'REJECTED' && (
-              <>Rejected on {fmtDate(order.rejectedAt)}{order.rejectionReason ? ` — ${order.rejectionReason}` : ''}</>
-            )}
-            {order.status === 'CANCELLED' && (
-              <>Cancelled on {fmtDate(order.cancelledAt)}{order.cancellationReason ? ` — ${order.cancellationReason}` : ''}</>
-            )}
-          </p>
-        </div>
+      <PageShell width="full">
+        <div className="flex w-full flex-col gap-4 md:gap-5">
 
-        {/* Order header */}
-        <div className="od-section border-b border-[#E5E7EB] px-4 py-4" style={{ animationDelay: '0.1s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <p style={{ fontSize: 18, fontWeight: 600, color: '#1A1A1A', letterSpacing: '-0.01em' }}>
-                {order.orderNumber}
-              </p>
-              <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 3 }}>
-                Placed {fmtDate(order.submittedAt ?? order.createdAt)}
-              </p>
-            </div>
-          </div>
-          {(order.customerReference || order.notes) && (
-            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {order.customerReference && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 80 }}>PO Ref</span>
-                  <span style={{ fontSize: 13, color: '#1A1A1A' }}>{order.customerReference}</span>
-                </div>
-              )}
-              {order.notes && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 80 }}>Notes</span>
-                  <span style={{ fontSize: 13, color: '#1A1A1A' }}>{order.notes}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Order lines */}
-        <SectionLabel>Products</SectionLabel>
-        <div className="od-section border-b border-[#E5E7EB]" style={{ animationDelay: '0.15s' }}>
-          {order.lines.map((line, i) => (
-            <div
-              key={line.id}
-              className="px-4 py-3"
-              style={{ borderBottom: i < order.lines.length - 1 ? '1px solid #F3F4F6' : 'none' }}
+          {/* Status banner */}
+          <div
+            className="od-section rounded-lg border px-4 py-3.5"
+            style={{ animationDelay: '0.05s', background: sc.bg, borderColor: sc.border }}
+          >
+            <p
+              className="text-[10px] font-bold uppercase tracking-[0.1em]"
+              style={{ color: sc.color }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+              {sc.label}
+            </p>
+            <p className="mt-1 text-[13px]" style={{ color: sc.color, opacity: 0.85 }}>
+              {order.status === 'SUBMITTED' && 'Awaiting confirmation from the distributor'}
+              {order.status === 'ACCEPTED' && `Confirmed on ${fmtDate(order.acceptedAt)}`}
+              {order.status === 'REJECTED' && (
+                <>Rejected on {fmtDate(order.rejectedAt)}{order.rejectionReason ? ` — ${order.rejectionReason}` : ''}</>
+              )}
+              {order.status === 'CANCELLED' && (
+                <>Cancelled on {fmtDate(order.cancelledAt)}{order.cancellationReason ? ` — ${order.cancellationReason}` : ''}</>
+              )}
+            </p>
+          </div>
+
+          {/* Order header */}
+          <div className={CARD} style={{ animationDelay: '0.1s' }}>
+            <Eyebrow className="mb-3">Order</Eyebrow>
+            <p className="text-lg font-semibold tracking-[-0.01em] text-foreground">{order.orderNumber}</p>
+            <p className="mt-1 text-xs text-muted">Placed {fmtDate(order.submittedAt ?? order.createdAt)}</p>
+
+            {(order.customerReference || order.notes) && (
+              <div className="mt-4 flex flex-col gap-1.5">
+                {order.customerReference && (
+                  <div className="flex items-baseline gap-2">
+                    <MetaLabel>PO Ref</MetaLabel>
+                    <span className="text-[13px] text-foreground">{order.customerReference}</span>
+                  </div>
+                )}
+                {order.notes && (
+                  <div className="flex items-baseline gap-2">
+                    <MetaLabel>Notes</MetaLabel>
+                    <span className="text-[13px] text-foreground">{order.notes}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Order lines */}
+          <div className={CARD} style={{ animationDelay: '0.15s' }}>
+            <Eyebrow className="mb-3">Products</Eyebrow>
+            {order.lines.map((line, i) => (
+              <div
+                key={line.id}
+                className={`flex items-start justify-between gap-3 py-3.5 first:pt-0 ${
+                  i < order.lines.length - 1 ? 'border-b border-border' : 'pb-0'
+                }`}
+              >
                 {line.productThumbnailUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -210,128 +207,94 @@ export default function OrderDetailPage() {
                 ) : (
                   <div className="od-img-placeholder h-14 w-14 rounded" aria-hidden="true" />
                 )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', marginBottom: 2 }}>
-                    {line.productNameSnapshot}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-foreground">{line.productNameSnapshot}</p>
                   {line.skuSnapshot && (
-                    <p style={{ fontSize: 11, color: '#9CA3AF' }}>SKU: {line.skuSnapshot}</p>
+                    <p className="mt-0.5 text-[11px] text-foreground-tertiary">SKU: {line.skuSnapshot}</p>
                   )}
-                  <p style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                  <p className="mt-1 text-xs text-foreground-tertiary">
                     {line.quantityOrdered} × {fmtAmt(line.unitPriceSnapshot, order.currency)}
                     {line.unitOfMeasureSnapshot ? ` / ${line.unitOfMeasureSnapshot}` : ''}
                   </p>
                 </div>
-                <p style={{ fontSize: 14, fontWeight: 500, color: '#1A1A1A', flexShrink: 0 }}>
+                <p className="flex-shrink-0 text-sm font-medium text-foreground">
                   {fmtAmt(line.totalAmount, order.currency)}
                 </p>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Totals */}
-        <div className="od-section px-4 py-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.2s' }}>
-          {[
-            { label: 'Subtotal', value: fmtAmt(order.subtotalAmount, order.currency) },
-            { label: order.taxLabel, value: fmtAmt(order.taxAmount, order.currency) },
-          ].map((row) => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8 }}>
-              <span style={{ fontSize: 13, color: '#6B7280' }}>{row.label}</span>
-              <span style={{ fontSize: 13, color: '#6B7280' }}>{row.value}</span>
-            </div>
-          ))}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            paddingTop: 10, marginTop: 2, borderTop: '1px solid #E5E7EB',
-          }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A' }}>Total</span>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#1A1A1A' }}>{fmtAmt(order.totalAmount, order.currency)}</span>
+            ))}
           </div>
-        </div>
 
-        {/* Delivery */}
-        {(order.requestedDeliveryDate || delivAddrText) && (
-          <>
-            <SectionLabel>Delivery</SectionLabel>
-            <div className="od-section px-4 pb-4 border-b border-[#E5E7EB]" style={{ animationDelay: '0.25s' }}>
+          {/* Totals */}
+          <div className={CARD} style={{ animationDelay: '0.2s' }}>
+            <Eyebrow className="mb-3">Summary</Eyebrow>
+            {[
+              { label: 'Subtotal', value: fmtAmt(order.subtotalAmount, order.currency) },
+              { label: order.taxLabel, value: fmtAmt(order.taxAmount, order.currency) },
+            ].map((row) => (
+              <div key={row.label} className="flex justify-between py-1 text-[13px] text-muted">
+                <span>{row.label}</span>
+                <span>{row.value}</span>
+              </div>
+            ))}
+            <div className="mt-1 flex justify-between border-t border-border pt-2.5 text-[15px] font-semibold text-foreground">
+              <span>Total</span>
+              <span>{fmtAmt(order.totalAmount, order.currency)}</span>
+            </div>
+          </div>
+
+          {/* Delivery */}
+          {(order.requestedDeliveryDate || delivAddrText) && (
+            <div className={CARD} style={{ animationDelay: '0.25s' }}>
+              <Eyebrow className="mb-3">Delivery</Eyebrow>
               {order.requestedDeliveryDate && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: delivAddrText ? 8 : 0 }}>
-                  <Truck className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} style={{ color: '#6B7280' }} />
-                  <p style={{ fontSize: 13, color: '#1A1A1A' }}>
-                    {fmtDate(order.requestedDeliveryDate)}
-                  </p>
+                <div className={`flex items-center gap-2 ${delivAddrText ? 'mb-2' : ''}`}>
+                  <Truck className="h-4 w-4 flex-shrink-0 text-foreground-tertiary" strokeWidth={1.5} />
+                  <p className="text-[13px] text-foreground">{fmtDate(order.requestedDeliveryDate)}</p>
                 </div>
               )}
               {delivAddrText && (
-                <p style={{ fontSize: 13, color: '#1A1A1A', lineHeight: 1.7 }}>
-                  {delivAddrText}
-                </p>
+                <p className="text-[13px] leading-relaxed text-foreground">{delivAddrText}</p>
               )}
             </div>
-          </>
-        )}
+          )}
 
-        {/* Cancel section */}
-        {order.status === 'SUBMITTED' && (
-          <div className="od-section px-4 pt-6 pb-2" style={{ animationDelay: '0.3s' }}>
-            {!cancelConfirm ? (
-              <button
-                onClick={() => setCancelConfirm(true)}
-                style={{
-                  width: '100%', border: 'none', background: 'transparent',
-                  color: '#9CA3AF', padding: '10px 0', fontSize: 13, fontWeight: 400,
-                  cursor: 'pointer', fontFamily: 'inherit', transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#DC2626')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#9CA3AF')}
-              >
-                Cancel Order
-              </button>
-            ) : (
-              <div style={{
-                border: '1.5px solid #FECACA', background: '#FFF5F5',
-                borderRadius: 4, padding: '16px',
-              }}>
-                <p style={{ fontSize: 13, fontWeight: 500, color: '#DC2626', marginBottom: 4 }}>
-                  Cancel this order?
-                </p>
-                <p style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 14 }}>
-                  This cannot be undone.
-                </p>
-                {cancelError && (
-                  <p style={{ fontSize: 12, color: '#DC2626', marginBottom: 10 }}>{cancelError}</p>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={handleCancelConfirm}
-                    disabled={cancelling}
-                    style={{
-                      flex: 1, border: '1.5px solid #DC2626', background: '#DC2626',
-                      color: '#fff', padding: '10px 0', fontSize: 12, fontWeight: 600,
-                      cursor: cancelling ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                      opacity: cancelling ? 0.6 : 1, borderRadius: 2,
-                    }}
-                  >
-                    {cancelling ? 'Cancelling…' : 'Confirm Cancel'}
-                  </button>
-                  <button
-                    onClick={() => { setCancelConfirm(false); setCancelError(null); }}
-                    disabled={cancelling}
-                    style={{
-                      flex: 1, border: '1.5px solid #E5E7EB', background: 'transparent',
-                      color: '#6B7280', padding: '10px 0', fontSize: 12, fontWeight: 500,
-                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 2,
-                    }}
-                  >
-                    Keep Order
-                  </button>
+          {/* Cancel section */}
+          {order.status === 'SUBMITTED' && (
+            <div className="od-section" style={{ animationDelay: '0.3s' }}>
+              {!cancelConfirm ? (
+                <button
+                  onClick={() => setCancelConfirm(true)}
+                  className="w-full py-2.5 text-[13px] text-foreground-tertiary transition-colors hover:text-error"
+                >
+                  Cancel Order
+                </button>
+              ) : (
+                <div className="rounded-lg border-[1.5px] border-error/40 bg-error/5 p-4">
+                  <p className="text-[13px] font-medium text-error">Cancel this order?</p>
+                  <p className="mb-3.5 mt-1 text-xs text-foreground-tertiary">This cannot be undone.</p>
+                  {cancelError && <p className="mb-2.5 text-xs text-error">{cancelError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCancelConfirm}
+                      disabled={cancelling}
+                      className="flex-1 rounded-md border-[1.5px] border-error bg-error px-0 py-2.5 text-xs font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cancelling ? 'Cancelling…' : 'Confirm Cancel'}
+                    </button>
+                    <button
+                      onClick={() => { setCancelConfirm(false); setCancelError(null); }}
+                      disabled={cancelling}
+                      className="flex-1 rounded-md border-[1.5px] border-border bg-transparent px-0 py-2.5 text-xs font-medium text-muted"
+                    >
+                      Keep Order
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
+        </div>
       </PageShell>
     </>
   );
