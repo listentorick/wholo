@@ -25,6 +25,7 @@ vi.mock('@/lib/distributor-context', () => ({
 vi.mock('@wholo/api-client', () => ({
   catalogueApi: {
     getProduct: vi.fn(),
+    getProducts: vi.fn(),
   },
 }));
 
@@ -86,6 +87,16 @@ beforeEach(() => {
   (useCart as ReturnType<typeof vi.fn>).mockReturnValue(mockCart);
   (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
   (catalogueApi.getProduct as ReturnType<typeof vi.fn>).mockResolvedValue(mockProduct);
+  (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue({
+    distributor: { id: 'test-dist', name: 'Test Distributor' },
+    data: [],
+    pagination: { nextCursor: null },
+  });
+});
+
+const relatedProduct = (id: string, name: string) => ({
+  id, name, description: null, sku: null,
+  price: '6.00', resolvedPrice: null, productType: null, thumbnailUrl: null,
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -274,5 +285,37 @@ describe('ProductDetailPage', () => {
 
     expect(screen.queryByLabelText(/Increase quantity/)).toBeNull();
     expect(screen.queryByLabelText(/Decrease quantity/)).toBeNull();
+  });
+
+  it('renders a related-products strip from the distributor catalogue, excluding the current product', async () => {
+    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      distributor: { id: 'test-dist', name: 'Test Distributor' },
+      data: [
+        relatedProduct('prod-1', 'Egg tarts (box of 4)'),
+        relatedProduct('prod-2', 'Pineapple buns'),
+        relatedProduct('prod-3', 'Char siu bao'),
+      ],
+      pagination: { nextCursor: null },
+    });
+
+    render(<ProductDetailPage />);
+
+    expect(await screen.findByText(/More from/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Pineapple buns/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Char siu bao/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Egg tarts/ })).toBeNull();
+  });
+
+  it('hides the related strip when the catalogue returns nothing else', async () => {
+    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue({
+      distributor: { id: 'test-dist', name: 'Test Distributor' },
+      data: [relatedProduct('prod-1', 'Egg tarts (box of 4)')],
+      pagination: { nextCursor: null },
+    });
+
+    render(<ProductDetailPage />);
+
+    await waitFor(() => screen.getByRole('heading', { name: 'Egg tarts (box of 4)' }));
+    expect(screen.queryByText(/More from/)).toBeNull();
   });
 });
