@@ -271,13 +271,9 @@ export default function CheckoutPage() {
                   )}
                 </div>
               )}
-            </div>
-
-            {/* ─────────────── Right: totals, timing, submit ─────────────── */}
-            <div className="flex flex-col gap-4 md:sticky md:top-5 md:self-start">
 
               {/* Delivery day */}
-              <div className={CARD} style={{ animationDelay: '0.14s' }}>
+              <div className={CARD} style={{ animationDelay: '0.12s' }}>
                 <Eyebrow className="mb-3">Delivery day</Eyebrow>
                 {loadingDates ? (
                   <div className="flex justify-center py-2">
@@ -317,9 +313,13 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* ─────────────── Right: totals + submit (anchored) ─────────────── */}
+            <div className="flex flex-col gap-4 md:sticky md:top-[112px] md:self-start">
 
               {/* Order summary */}
-              <div className={CARD} style={{ animationDelay: '0.18s' }}>
+              <div className={CARD} style={{ animationDelay: '0.16s' }}>
                 <Eyebrow className="mb-3">Order summary</Eyebrow>
                 {[
                   { label: 'Subtotal', value: fmt(subtotal) },
