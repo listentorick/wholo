@@ -77,7 +77,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
       <div className="md:hidden flex h-14 items-center gap-2.5 px-5 border-b border-border bg-topbar-bg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
-        <span className="text-base font-bold tracking-tight text-text">
+        <span className="text-base font-extrabold tracking-[-0.045em] text-text">
           stocd<span className="text-primary">up</span>
         </span>
         <button
@@ -107,7 +107,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
-            <span className="text-base font-bold tracking-tight text-text">
+            <span className="text-base font-extrabold tracking-[-0.045em] text-text">
               stocd<span className="text-primary">up</span>
             </span>
             <button

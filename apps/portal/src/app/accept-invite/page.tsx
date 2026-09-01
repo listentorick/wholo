@@ -12,7 +12,7 @@ function StocdupLogo() {
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', marginBottom: '24px' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logos/stocdup-logo-only.png" alt="" style={{ width: '20px', height: '20px', flexShrink: 0 }} />
-      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '18px', fontWeight: 700, letterSpacing: '-0.02em', color: 'hsl(var(--color-text))' }}>
+      <span style={{ fontFamily: 'Inter, system-ui, sans-serif', fontSize: '18px', fontWeight: 800, letterSpacing: '-0.045em', color: 'hsl(var(--color-text))' }}>
         stocd<span style={{ color: 'hsl(var(--color-primary))' }}>up</span>
       </span>
     </div>

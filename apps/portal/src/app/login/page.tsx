@@ -26,8 +26,8 @@ export default function LoginPage() {
         <span
           style={{
             fontSize: '34px',
-            fontWeight: '700',
-            letterSpacing: '-0.03em',
+            fontWeight: '800',
+            letterSpacing: '-0.045em',
             color: 'hsl(var(--color-text))',
             lineHeight: 1,
           }}

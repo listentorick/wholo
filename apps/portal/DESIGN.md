@@ -24,9 +24,9 @@ typography:
   display:
     fontFamily: "Inter, system-ui, sans-serif"
     fontSize: "34px"
-    fontWeight: 700
+    fontWeight: 800
     lineHeight: 1
-    letterSpacing: "-0.03em"
+    letterSpacing: "-0.045em"
   headline:
     fontFamily: "Inter, system-ui, sans-serif"
     fontSize: "24px"
@@ -153,7 +153,7 @@ Grounded, confident neutrals (Deep Navy, Pale Stone, white) carry the page; Coba
 **Character:** Confident and legible at small sizes, since most UI text runs 12–16px on mobile. Weight and letter-spacing do the work of hierarchy; there is no second family for contrast.
 
 ### Hierarchy
-- **Display** (700, 34px, line-height 1, letter-spacing -0.03em): the wordmark lockup only — e.g. the login screen's "stocd**up**" mark, where "up" is set in Cobalt Blue.
+- **Display** (800, 34px, line-height 1, letter-spacing -0.045em): the wordmark lockup only — e.g. the login screen's "stocd**up**" mark, where "up" is set in Cobalt Blue. Weight and tracking match `apps/www`'s `Wordmark.tsx` (`font-extrabold tracking-[-0.045em]`); the portal's Google-Fonts Inter tops out at 700, so 800 renders as 700 until the font is aligned with www's self-hosted InterVariable.
 - **Headline** (600, 24px): page-level greetings and top-level headers (e.g. "Hi, {name}").
 - **Title** (600, 16px): section headers, the distributor name in the header bar, modal titles. Section headers keep this size — the eyebrow kicker above them supplies the lift, not a larger heading.
 - **Body** (400–500, 14px): primary UI copy — nav labels, buttons, list rows, form values. 500-weight ("medium") is used wherever text is interactive or being scanned as a label; plain 400 for secondary read-only copy (emails, phone numbers, timestamps).
@@ -248,7 +248,8 @@ Use the shared `<Button>` component (`variant="primary" | "secondary" | "ghost"`
 - 8px corners (`rounded-lg`), Surface White, `shadow-xl`, centered over a 40%-opacity black backdrop, 24px (`p-6`) padding, stacked full-width action buttons rather than a side-by-side pair.
 
 ### Logo / wordmark
-- The mark is the **hexagon** (`public/logos/stocdup-logo-only.png`, two-tone navy/cobalt; `-white` variant for dark surfaces) — the same mark used on `www.stocdup.com`, derived from `docs/branding/logo_v2.svg`. The lockup pairs it with "stocd**up**" where "up" is Cobalt.
+- The mark is the **hexagon** (`public/logos/stocdup-logo-only.png`, two-tone navy/cobalt; `-white` variant for dark surfaces) — the same mark used on `www.stocdup.com`, derived from `docs/branding/logo_v2.svg`. The lockup pairs it with "stocd**up**" where "up" is Cobalt, at `font-extrabold` / `-0.045em` (see Display).
+- The browser favicon (`src/app/favicon.ico` + `src/app/icon.png`), the iOS icon (`src/app/apple-icon.png`) and the three PWA-manifest icons (`public/icons/icon-{192,512,maskable-512}.png`) are all the hexagon mark, regenerated from `apps/www/public/logo-mark.png`. The maskable icon has a white safe-zone background; the rest are transparent.
 - Product-image placeholders paint the hexagon silhouette as a faint 10%-opacity watermark via CSS `mask-image`.
 
 ## Do's and Don'ts
