@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import OrdersPage from './page';
 import { OrderStatus, type OrderSummary } from '@wholo/types';
@@ -108,7 +108,8 @@ describe('OrdersPage', () => {
     vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder({ requestedDeliveryDate: null })]));
     const { container } = render(<OrdersPage />);
     await waitFor(() => expect(screen.getAllByText('ORD-2026-00001').length).toBeGreaterThan(0));
-    const mobileCard = container.querySelector('.md\\:hidden');
+    const mobileCard = container.querySelector('.xl\\:hidden');
+    expect(mobileCard).not.toBeNull();
     expect(mobileCard?.textContent).not.toContain('—');
   });
 
@@ -143,5 +144,60 @@ describe('OrdersPage', () => {
     );
     render(<OrdersPage />);
     await waitFor(() => expect(screen.getByText('Export failed')).toBeTruthy());
+  });
+
+  it('renders the customer-facing status label via the badge', async () => {
+    vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder({ status: OrderStatus.COMPLETED })]));
+    render(<OrdersPage />);
+    // one badge in the desktop table, one in the mobile card ("Completed" is not a chip label)
+    await waitFor(() => expect(screen.getAllByText('Completed').length).toBe(2));
+  });
+
+  it('renders the per-status filter chips', async () => {
+    vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder()]));
+    render(<OrdersPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeTruthy());
+    for (const label of ['Awaiting confirmation', 'Delivered', 'Cancelled']) {
+      expect(screen.getByRole('button', { name: label })).toBeTruthy();
+    }
+    // "Accepted" is both a chip and (potentially) a badge — assert the chip exists
+    expect(screen.getByRole('button', { name: 'Accepted' })).toBeTruthy();
+  });
+
+  it('shows the "Showing N of total" count from the pagination total', async () => {
+    vi.mocked(ordersApi.listOrders).mockResolvedValue({
+      data: [makeOrder()],
+      pagination: { nextCursor: null, hasMore: false, total: 7 },
+    });
+    render(<OrdersPage />);
+    await waitFor(() => expect(screen.getByText('Showing 1 of 7')).toBeTruthy());
+  });
+
+  it('refetches from the first page with the exact status when a chip is clicked', async () => {
+    vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder()]));
+    render(<OrdersPage />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delivered' })).toBeTruthy());
+
+    vi.mocked(ordersApi.listOrders).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Delivered' }));
+
+    await waitFor(() => expect(ordersApi.listOrders).toHaveBeenCalledTimes(1));
+    const params = vi.mocked(ordersApi.listOrders).mock.calls[0][0];
+    expect(params.status).toBe(OrderStatus.DELIVERED);
+    expect(params.cursor).toBeUndefined();
+  });
+
+  it('shows a filter-specific empty state that clears back to the unfiltered list', async () => {
+    vi.mocked(ordersApi.listOrders).mockImplementation((params) =>
+      Promise.resolve(makeResponse(params.status ? [] : [makeOrder()])),
+    );
+    render(<OrdersPage />);
+    await waitFor(() => expect(screen.getAllByText('ORD-2026-00001').length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelled' }));
+    await waitFor(() => expect(screen.getByText('No orders match this filter')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter' }));
+    await waitFor(() => expect(screen.getAllByText('ORD-2026-00001').length).toBeGreaterThan(0));
   });
 });
