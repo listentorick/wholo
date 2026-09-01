@@ -67,11 +67,11 @@ export function DistributorNav({ distributorSlug }: Props) {
       <div
         aria-hidden={!showCollapsedMinOrderBar}
         className={[
-          'overflow-hidden border-t border-[#E5E7EB] px-5 transition-[max-height,opacity] duration-300 ease-out',
-          showCollapsedMinOrderBar ? 'max-h-20 opacity-100 py-2.5' : 'max-h-0 opacity-0 py-0',
+          'overflow-hidden bg-amber-light/60 px-5 transition-[max-height,opacity] duration-300 ease-out',
+          showCollapsedMinOrderBar ? 'max-h-20 opacity-100 py-3' : 'max-h-0 opacity-0 py-0',
         ].join(' ')}
       >
-        <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="compact" />
+        <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="collapsed" />
       </div>
     </nav>
   );

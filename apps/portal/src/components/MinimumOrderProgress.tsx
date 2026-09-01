@@ -6,8 +6,14 @@ import { useDistributor } from '@/lib/distributor-context';
 export interface MinimumOrderProgressProps {
   subtotal: number;
   minimum: number | null;
-  /** compact = shop header treatment; prominent = checkout order-summary treatment. */
-  size?: 'compact' | 'prominent';
+  /**
+   * compact   = shop header treatment (soft amber card).
+   * prominent = checkout order-summary treatment (bare).
+   * collapsed = the sticky-nav strip on mobile — same content as compact but
+   *             with no card of its own; the host fills the strip with the
+   *             amber-light background instead.
+   */
+  size?: 'compact' | 'prominent' | 'collapsed';
 }
 
 function CheckIcon() {
@@ -48,7 +54,9 @@ export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: Mi
       className={
         size === 'compact'
           ? 'mt-3 rounded-lg border border-amber-border bg-amber-light/60 px-3.5 py-3'
-          : 'mt-3'
+          : size === 'collapsed'
+            ? ''
+            : 'mt-3'
       }
     >
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-border/50">
