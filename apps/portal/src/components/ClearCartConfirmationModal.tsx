@@ -30,7 +30,7 @@ export function ClearCartConfirmationModal({ itemCount, onConfirm, onClose }: Cl
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm bg-surface p-6 shadow-xl"
+        className="w-full max-w-sm rounded-lg bg-surface p-6 shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="clear-cart-confirmation-title"

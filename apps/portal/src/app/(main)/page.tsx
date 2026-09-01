@@ -6,6 +6,8 @@ import { DistributorCard } from '@/components/DistributorCard';
 import { portalApi } from '@wholo/api-client';
 import { PageShell } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
+import { Eyebrow } from '@/components/Eyebrow';
+import { Button } from '@/components/Button';
 import type { PortalDistributorSummary } from '@wholo/types';
 
 function CompassIcon() {
@@ -47,14 +49,19 @@ export default function HomePage() {
 
         {/* Greeting */}
         <div className="mb-8">
+          <Eyebrow className="mb-2">Your account</Eyebrow>
           <h1 className="text-2xl font-semibold text-foreground">
-            Hi, {user?.firstName} 👋
+            Hi, {user?.firstName}
           </h1>
         </div>
 
         {/* My Suppliers */}
         <section className="mb-10">
-          <h2 className="text-base font-semibold text-foreground mb-4">My Suppliers</h2>
+          <Eyebrow className="mb-2">Your wholesalers</Eyebrow>
+          <h2 className="text-base font-semibold text-foreground">My suppliers</h2>
+          <p className="mt-1 mb-4 text-sm text-muted">
+            Jump back into an account, or add a new wholesaler you already buy from.
+          </p>
 
           {/* Search */}
           <SearchInput value={query} onChange={setQuery} placeholder="Search suppliers…" className="mb-4 max-w-sm" />
@@ -100,18 +107,15 @@ export default function HomePage() {
 
         {/* Find new suppliers */}
         <section>
+          <Eyebrow className="mb-2">Discover</Eyebrow>
           <h2 className="text-base font-semibold text-foreground mb-1">Find new suppliers</h2>
           <p className="text-sm text-muted mb-4">
             Browse the marketplace to discover distributors and request access
           </p>
-          <button
-            disabled
-            className="inline-flex items-center gap-2 border border-border px-4 py-2.5 text-sm font-medium text-muted cursor-not-allowed"
-            title="Coming soon"
-          >
+          <Button variant="secondary" disabled title="Coming soon">
             <CompassIcon />
             Browse marketplace
-          </button>
+          </Button>
         </section>
 
       </PageShell>

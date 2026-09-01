@@ -44,11 +44,20 @@ export function MinimumOrderProgress({ subtotal, minimum, size = 'compact' }: Mi
   const pct = Math.min(100, (subtotal / minimum) * 100);
 
   return (
-    <div className="mt-3">
-      <div className="h-1 w-full bg-border overflow-hidden">
-        <div className="h-full bg-amber transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+    <div
+      className={
+        size === 'compact'
+          ? 'mt-3 rounded-lg border border-amber-border bg-amber-light/60 px-3.5 py-3'
+          : 'mt-3'
+      }
+    >
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-border/50">
+        <div
+          className="h-full rounded-full bg-amber transition-[width] duration-300 ease-out"
+          style={{ width: `${pct}%` }}
+        />
       </div>
-      <p className="mt-1.5 text-sm text-foreground-tertiary">
+      <p className="mt-2 text-sm text-foreground-tertiary">
         Add {formatMoney(remaining, currencyCode)} more to reach the {formatMoney(minimum, currencyCode)} minimum order
       </p>
     </div>

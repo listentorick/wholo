@@ -93,7 +93,7 @@ export default function ProductDetailPage() {
           top: 50%; left: 50%;
           width: 35%; height: 35%;
           transform: translate(-50%, -50%);
-          background-color: hsl(var(--color-text) / 0.15);
+          background-color: hsl(var(--color-text) / 0.1);
           -webkit-mask-image: url('/logos/stocdup-logo-only.png');
           mask-image: url('/logos/stocdup-logo-only.png');
           -webkit-mask-size: contain;

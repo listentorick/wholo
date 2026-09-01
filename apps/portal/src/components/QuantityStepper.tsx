@@ -65,7 +65,7 @@ export function QuantityStepper({
         inputMode="numeric"
         pattern="[0-9]*"
         aria-label={`Quantity for ${itemLabel}`}
-        className="w-10 min-w-[40px] border border-border bg-white px-1 py-1.5 text-center text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-10 min-w-[40px] rounded-md border border-border bg-white px-1 py-1.5 text-center text-sm font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-40"
         value={draft}
         disabled={isDisabled}
         onFocus={(e) => {

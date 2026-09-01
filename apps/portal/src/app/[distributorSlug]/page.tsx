@@ -10,11 +10,13 @@ import { PageShell, PageSpinner } from '@/components/PageShell';
 import { TruckIcon } from '@/components/DistributorPageHeader';
 import { RelationshipStatusBadge } from '@/components/RelationshipStatusBadge';
 import { ConnectConfirmationModal } from '@/components/ConnectConfirmationModal';
+import { Eyebrow } from '@/components/Eyebrow';
+import { Button } from '@/components/Button';
 import { TradeRelationshipStatus, formatMoney, type DistributorInfo } from '@wholo/types';
 import { formatProcessingDays } from '@/lib/format-processing-days';
 
 const ICON = 'h-4 w-4 flex-shrink-0';
-const BOX = 'border border-border bg-surface-highlight p-6';
+const BOX = 'rounded-lg border border-border bg-surface p-6 shadow-sm';
 
 function MapPinIcon() {
   return (
@@ -105,12 +107,9 @@ function RelationshipCta({
       {ctaKind === 'connect' && (
         <>
           <p className="mb-3 text-sm text-muted">Request access to see your pricing and place orders.</p>
-          <button
-            className="w-full bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-            onClick={() => setShowConfirm(true)}
-          >
+          <Button fullWidth onClick={() => setShowConfirm(true)}>
             Add this supplier
-          </button>
+          </Button>
         </>
       )}
 
@@ -150,6 +149,7 @@ function AboutBox({
 }) {
   return (
     <div className={`${BOX} ${className}`}>
+      <Eyebrow className="mb-3">The wholesaler</Eyebrow>
       <div className="flex items-center gap-4">
         {distributor.logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -163,7 +163,7 @@ function AboutBox({
         <div>
           <BoxHeading>About us</BoxHeading>
           {distributor.tagline && (
-            <p className="mt-1 text-sm font-medium text-foreground">{distributor.tagline}</p>
+            <p className="mt-1 text-sm font-medium text-primary">{distributor.tagline}</p>
           )}
         </div>
       </div>

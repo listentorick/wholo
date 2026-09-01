@@ -57,7 +57,7 @@ export function DistributorCard({ distributor, locked = false }: { distributor: 
 
   if (locked) {
     return (
-      <div className="relative w-full text-left bg-white border border-[#E5E7EB] p-5 shadow-sm opacity-40 cursor-not-allowed select-none">
+      <div className="relative w-full text-left bg-white border border-border rounded-lg p-5 shadow-sm opacity-40 cursor-not-allowed select-none">
         <span className="absolute top-2 right-2 text-[#9CA3AF]">
           <LockIcon />
         </span>
@@ -69,7 +69,7 @@ export function DistributorCard({ distributor, locked = false }: { distributor: 
   return (
     <button
       onClick={() => router.push(`/${distributor.slug}`)}
-      className="group w-full text-left bg-white border border-[#E5E7EB] p-5 shadow-sm hover:border-accent hover:shadow-md transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="group w-full text-left bg-white border border-border rounded-lg p-5 shadow-sm hover:border-accent hover:shadow-md hover:-translate-y-1 will-change-transform transition-all duration-150 motion-reduce:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <CardInner distributor={distributor} hover={true} />
     </button>

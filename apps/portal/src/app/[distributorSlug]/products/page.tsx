@@ -10,6 +10,7 @@ import { catalogueApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
 import { QuantityStepper } from '@/components/QuantityStepper';
+import { Eyebrow } from '@/components/Eyebrow';
 import { TradeRelationshipStatus, formatMoney, type CatalogueProduct, type CatalogueProductsResponse } from '@wholo/types';
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -97,7 +98,7 @@ export default function CataloguePage() {
           top: 50%; left: 50%;
           width: 35%; height: 35%;
           transform: translate(-50%, -50%);
-          background-color: hsl(var(--color-text) / 0.15);
+          background-color: hsl(var(--color-text) / 0.1);
           -webkit-mask-image: url('/logos/stocdup-logo-only.png');
           mask-image: url('/logos/stocdup-logo-only.png');
           -webkit-mask-size: contain;
@@ -114,6 +115,10 @@ export default function CataloguePage() {
 
       {/* Product list */}
       <PageShell width="full">
+
+        <Eyebrow className="mb-3">
+          {distributor?.name ? `${distributor.name} catalogue` : 'Catalogue'}
+        </Eyebrow>
 
         <SearchInput
           value={search}
@@ -168,11 +173,11 @@ export default function CataloguePage() {
                         width={96}
                         height={96}
                         loading="lazy"
-                        className="h-24 w-24 object-cover sm:h-auto sm:w-full sm:aspect-square"
+                        className="h-24 w-24 rounded-lg object-cover sm:h-auto sm:w-full sm:aspect-square"
                       />
                     ) : (
                       <div
-                        className="product-img-placeholder h-24 w-24 sm:h-auto sm:w-full sm:aspect-square"
+                        className="product-img-placeholder h-24 w-24 rounded-lg sm:h-auto sm:w-full sm:aspect-square"
                         aria-hidden="true"
                       />
                     )}
