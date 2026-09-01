@@ -17,7 +17,7 @@ import { formatMoney } from '@wholo/types';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
 
-/** White 8px card on the Pale Stone checkout canvas. */
+/** 8px bordered card — the restyle's resting-surface treatment. */
 const CARD = 'co-card rounded-lg border border-border bg-surface p-5 shadow-sm';
 
 function TrashIcon() {
@@ -181,83 +181,90 @@ export default function CheckoutPage() {
 
       <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-      <PageShell width="full" padding="none">
-        <div className="flex-1 bg-canvas px-4 py-4 md:px-8 md:py-8">
-          <div className="mx-auto grid w-full max-w-[1200px] gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-6">
+      <PageShell width="full">
+        {/*
+          Mobile: one flex column. The left/right wrappers are `display: contents`
+          so all six cards are direct flex items and `order-*` puts Order summary
+          right under Products. At md+ the wrappers become real boxes again and
+          the two-column sticky-rail layout is exactly as before.
+        */}
+        <div className="flex w-full flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-6">
 
-            {/* ─────────────── Left: the order ─────────────── */}
-            <div className="flex min-w-0 flex-col gap-4 md:gap-5">
+          {/* ─────────────── Left: the order ─────────────── */}
+          <div className="contents md:flex md:min-w-0 md:flex-col md:gap-5">
 
-              {/* Products */}
-              <div className={CARD} style={{ animationDelay: '0.02s' }}>
-                <Eyebrow className="mb-3">Products</Eyebrow>
-                {items.map((item) => {
-                  const qty = quantities[item.productId] ?? item.quantity;
-                  const lineTotal = qty * parseFloat(item.unitPrice);
-                  const saving = savingItems.has(item.productId);
-                  return (
-                    <div
-                      key={item.productId}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border py-3.5 first:pt-1 last:border-b-0 last:pb-0"
-                      style={{ opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s' }}
+            {/* Products */}
+            <div className={`${CARD} order-1 md:order-none`} style={{ animationDelay: '0.02s' }}>
+              <Eyebrow className="mb-3">Products</Eyebrow>
+              {items.map((item) => {
+                const qty = quantities[item.productId] ?? item.quantity;
+                const lineTotal = qty * parseFloat(item.unitPrice);
+                const saving = savingItems.has(item.productId);
+                return (
+                  <div
+                    key={item.productId}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border py-3.5 first:pt-1 last:border-b-0 last:pb-0"
+                    style={{ opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s' }}
+                  >
+                    <span className="w-full truncate text-sm font-medium text-foreground md:w-auto md:flex-1">
+                      {item.product.name}
+                    </span>
+                    <span className="whitespace-nowrap text-xs text-muted">{fmt(parseFloat(item.unitPrice))} ea</span>
+                    <QuantityStepper
+                      value={qty}
+                      min={1}
+                      saving={saving}
+                      itemLabel={item.product.name}
+                      onChange={(next) => syncItem(item.productId, next)}
+                      className="ml-auto md:ml-0"
+                    />
+                    <span className="w-16 whitespace-nowrap text-right text-sm font-semibold text-foreground">
+                      {fmt(lineTotal)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Remove item"
+                      disabled={saving}
+                      onClick={() => handleRemove(item.productId)}
+                      className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-border transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <span className="w-full truncate text-sm font-medium text-foreground md:w-auto md:flex-1">
-                        {item.product.name}
-                      </span>
-                      <span className="whitespace-nowrap text-xs text-muted">{fmt(parseFloat(item.unitPrice))} ea</span>
-                      <QuantityStepper
-                        value={qty}
-                        min={1}
-                        saving={saving}
-                        itemLabel={item.product.name}
-                        onChange={(next) => syncItem(item.productId, next)}
-                        className="ml-auto md:ml-0"
-                      />
-                      <span className="w-16 whitespace-nowrap text-right text-sm font-semibold text-foreground">
-                        {fmt(lineTotal)}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="Remove item"
-                        disabled={saving}
-                        onClick={() => handleRemove(item.productId)}
-                        className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-border transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                      <TrashIcon />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
 
-              {/* Purchase order & notes */}
-              <div className={CARD} style={{ animationDelay: '0.06s' }}>
-                <Eyebrow className="mb-3">Purchase order &amp; notes</Eyebrow>
-                <div className="flex flex-col gap-3">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">PO number</span>
-                    <input
-                      value={poNumber}
-                      onChange={(e) => setPoNumber(e.target.value)}
-                      placeholder="Optional"
-                      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-muted">Comment</span>
-                    <input
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Add a note for this order…"
-                      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
-                  </label>
-                </div>
+            {/* Purchase order & notes */}
+            <div className={`${CARD} order-3 md:order-none`} style={{ animationDelay: '0.06s' }}>
+              <Eyebrow className="mb-3">Purchase order &amp; notes</Eyebrow>
+              <div className="flex flex-col gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted">PO number</span>
+                  <input
+                    value={poNumber}
+                    onChange={(e) => setPoNumber(e.target.value)}
+                    placeholder="Optional"
+                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-medium text-muted">Comment</span>
+                  <input
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Add a note for this order…"
+                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </label>
               </div>
+            </div>
 
-              {/* Delivery address */}
+            {/* Delivery — address + day in one card */}
+            <div className={`${CARD} order-4 md:order-none`} style={{ animationDelay: '0.1s' }}>
+
               {!loadingAddress && (
-                <div className={CARD} style={{ animationDelay: '0.1s' }}>
+                <div className="mb-6">
                   <Eyebrow className="mb-3">Delivery address</Eyebrow>
                   {formatAddress(deliveryAddress) ? (
                     <p className="text-sm leading-relaxed text-foreground">{formatAddress(deliveryAddress)}</p>
@@ -272,102 +279,99 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              {/* Delivery day */}
-              <div className={CARD} style={{ animationDelay: '0.12s' }}>
-                <Eyebrow className="mb-3">Delivery day</Eyebrow>
-                {loadingDates ? (
-                  <div className="flex justify-center py-2">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
-                  </div>
-                ) : availableDates.length === 0 ? (
-                  <p className="text-xs text-muted">
-                    No delivery dates available right now. Please contact your distributor.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {availableDates.map((d) => {
-                      const isSelected = selectedDeliveryDate === d.date;
-                      const deliveryDate = new Date(d.date + 'T00:00:00');
-                      const cutoff = new Date(d.cutoffDeadline);
-                      const cutoffLabel = cutoff.toLocaleString('en-GB', {
-                        weekday: 'long', day: 'numeric', month: 'long',
-                        hour: 'numeric', minute: '2-digit', hour12: true,
-                      });
-                      return (
-                        <button
-                          key={d.date}
-                          type="button"
-                          onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
-                          className={[
-                            'flex w-full flex-col gap-0.5 rounded-md border-[1.5px] px-3.5 py-3 text-left transition-colors',
-                            isSelected ? 'border-primary bg-accent-subtle' : 'border-border hover:border-muted',
-                          ].join(' ')}
-                        >
-                          <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
-                            {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-                          </span>
-                          <span className="text-xs text-muted">Order by {cutoffLabel}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <Eyebrow className="mb-3">Delivery day</Eyebrow>
+              {loadingDates ? (
+                <div className="flex justify-center py-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
+                </div>
+              ) : availableDates.length === 0 ? (
+                <p className="text-xs text-muted">
+                  No delivery dates available right now. Please contact your distributor.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {availableDates.map((d) => {
+                    const isSelected = selectedDeliveryDate === d.date;
+                    const deliveryDate = new Date(d.date + 'T00:00:00');
+                    const cutoff = new Date(d.cutoffDeadline);
+                    const cutoffLabel = cutoff.toLocaleString('en-GB', {
+                      weekday: 'long', day: 'numeric', month: 'long',
+                      hour: 'numeric', minute: '2-digit', hour12: true,
+                    });
+                    return (
+                      <button
+                        key={d.date}
+                        type="button"
+                        onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
+                        className={[
+                          'flex w-full flex-col gap-0.5 rounded-md border-[1.5px] px-3.5 py-3 text-left transition-colors',
+                          isSelected ? 'border-primary bg-accent-subtle' : 'border-border hover:border-muted',
+                        ].join(' ')}
+                      >
+                        <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                          {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        </span>
+                        <span className="text-xs text-muted">Order by {cutoffLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ─────────────── Right: totals + submit (anchored) ─────────────── */}
+          <div className="contents md:flex md:flex-col md:gap-4 md:sticky md:top-[112px] md:self-start">
+
+            {/* Order summary */}
+            <div className={`${CARD} order-2 md:order-none`} style={{ animationDelay: '0.16s' }}>
+              <Eyebrow className="mb-3">Order summary</Eyebrow>
+              {[
+                { label: 'Subtotal', value: fmt(subtotal) },
+                { label: 'Freight', value: fmt(freight) },
+                { label: taxLabel, value: fmt(taxAmount) },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center justify-between py-1.5 text-sm text-foreground">
+                  <span>{row.label}</span>
+                  <span>{row.value}</span>
+                </div>
+              ))}
+              <div className="mt-1 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold text-foreground">
+                <span>Total</span>
+                <span>{fmt(total)}</span>
               </div>
+              <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
             </div>
 
-            {/* ─────────────── Right: totals + submit (anchored) ─────────────── */}
-            <div className="flex flex-col gap-4 md:sticky md:top-[112px] md:self-start">
-
-              {/* Order summary */}
-              <div className={CARD} style={{ animationDelay: '0.16s' }}>
-                <Eyebrow className="mb-3">Order summary</Eyebrow>
-                {[
-                  { label: 'Subtotal', value: fmt(subtotal) },
-                  { label: 'Freight', value: fmt(freight) },
-                  { label: taxLabel, value: fmt(taxAmount) },
-                ].map((row) => (
-                  <div key={row.label} className="flex items-center justify-between py-1.5 text-sm text-foreground">
-                    <span>{row.label}</span>
-                    <span>{row.value}</span>
-                  </div>
-                ))}
-                <div className="mt-1 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold text-foreground">
-                  <span>Total</span>
-                  <span>{fmt(total)}</span>
-                </div>
-                <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
-              </div>
-
-              {/* Actions */}
-              <div className="flex flex-col gap-2" style={{ animationDelay: '0.22s' }}>
+            {/* Actions */}
+            <div className="order-6 flex flex-col gap-2 md:order-none" style={{ animationDelay: '0.22s' }}>
+              <button
+                type="button"
+                disabled={submitting || belowMinimum}
+                onClick={handlePlaceOrder}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-3.5 text-sm font-semibold tracking-[0.04em] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {submitting && (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                )}
+                {submitting ? 'Placing Order…' : 'Place Order'}
+              </button>
+              {belowMinimum && !submitError && (
+                <p className="text-center text-xs text-error">Minimum order value not yet met</p>
+              )}
+              {submitError && <p className="text-center text-xs text-error">{submitError}</p>}
+              <div className="flex justify-center gap-5 pt-1">
+                <button type="button" disabled className="text-xs text-muted disabled:opacity-50">
+                  Add to favourites
+                </button>
                 <button
                   type="button"
-                  disabled={submitting || belowMinimum}
-                  onClick={handlePlaceOrder}
-                  className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-3.5 text-sm font-semibold tracking-[0.04em] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={submitting}
+                  onClick={() => setClearCartConfirmOpen(true)}
+                  className="text-xs text-muted transition-colors hover:text-foreground disabled:opacity-50"
                 >
-                  {submitting && (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  )}
-                  {submitting ? 'Placing Order…' : 'Place Order'}
+                  Clear cart
                 </button>
-                {belowMinimum && !submitError && (
-                  <p className="text-center text-xs text-error">Minimum order value not yet met</p>
-                )}
-                {submitError && <p className="text-center text-xs text-error">{submitError}</p>}
-                <div className="flex justify-center gap-5 pt-1">
-                  <button type="button" disabled className="text-xs text-muted disabled:opacity-50">
-                    Add to favourites
-                  </button>
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => setClearCartConfirmOpen(true)}
-                    className="text-xs text-muted transition-colors hover:text-foreground disabled:opacity-50"
-                  >
-                    Clear cart
-                  </button>
-                </div>
               </div>
             </div>
           </div>
