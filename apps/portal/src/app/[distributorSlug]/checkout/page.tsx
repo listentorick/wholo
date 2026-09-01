@@ -183,7 +183,7 @@ export default function CheckoutPage() {
         .co-section { animation: co-fade-up 0.35s ease both; }
 
         .co-trash-btn {
-          width: 30px; height: 30px; border-radius: 0;
+          width: 30px; height: 30px; border-radius: 6px;
           border: none; background: transparent; cursor: pointer;
           display: flex; align-items: center; justify-content: center;
           color: hsl(var(--color-border)); transition: color 0.15s;
@@ -229,7 +229,7 @@ export default function CheckoutPage() {
         .co-field:focus-visible { outline: 2px solid hsl(var(--color-primary)); outline-offset: 2px; }
 
         .co-place-order {
-          width: 100%; border: none; background: hsl(var(--color-primary));
+          width: 100%; border: none; border-radius: 6px; background: hsl(var(--color-primary));
           color: hsl(var(--color-primary-fg)); padding: 15px 20px; font-size: 14px; font-weight: 600;
           letter-spacing: 0.08em; cursor: pointer;
           font-family: inherit; text-align: center;
@@ -250,7 +250,12 @@ export default function CheckoutPage() {
 
       <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-      <PageShell padding="none" className="pb-10">
+      <PageShell padding="none" className="pb-10 md:px-6 md:pt-6">
+
+        <div className="md:grid md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-x-7">
+
+        {/* ─────────────── Left: the order itself ─────────────── */}
+        <div className="md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-surface md:[&>*:last-child]:border-b-0">
 
         {/* Product list */}
         <div className="co-section" style={{ animationDelay: '0.05s' }}>
@@ -321,25 +326,6 @@ export default function CheckoutPage() {
           })}
         </div>
 
-        {/* Order summary */}
-        <div className="co-section px-4 py-4 border-b border-border" style={{ animationDelay: '0.2s' }}>
-          {[
-            { label: 'Subtotal', value: fmt(subtotal) },
-            { label: 'Freight',  value: fmt(freight)  },
-            { label: taxLabel,  value: fmt(taxAmount) },
-          ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between py-1.5">
-              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.label}</span>
-              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.value}</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
-            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>Total</span>
-            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>{fmt(total)}</span>
-          </div>
-          <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
-        </div>
-
         {/* PO Number + Comment */}
         <div className="co-section px-4 py-4 border-b border-border flex flex-col gap-4" style={{ animationDelay: '0.25s' }}>
           <div>
@@ -405,6 +391,31 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {/* end left column */}
+        </div>
+
+        {/* ─────────────── Right: totals, timing, submit (sticky rail) ─────────────── */}
+        <div className="md:sticky md:top-6 md:self-start md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-surface md:[&>*:last-child]:border-b-0">
+
+        {/* Order summary */}
+        <div className="co-section px-4 py-4 border-b border-border">
+          {[
+            { label: 'Subtotal', value: fmt(subtotal) },
+            { label: 'Freight',  value: fmt(freight)  },
+            { label: taxLabel,  value: fmt(taxAmount) },
+          ].map((row) => (
+            <div key={row.label} className="flex items-center justify-between py-1.5">
+              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.label}</span>
+              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.value}</span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>Total</span>
+            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>{fmt(total)}</span>
+          </div>
+          <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
+        </div>
+
         {/* Delivery Day */}
         <div className="co-section px-4 py-5 border-b border-border" style={{ animationDelay: '0.35s' }}>
           <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--color-muted))', textAlign: 'center', marginBottom: 12 }}>
@@ -435,6 +446,7 @@ export default function CheckoutPage() {
                     onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
                     style={{
                       border: `1.5px solid ${isSelected ? 'hsl(var(--color-primary))' : 'hsl(var(--color-border))'}`,
+                      borderRadius: 6,
                       background: isSelected ? 'hsl(var(--color-primary-subtle))' : 'transparent',
                       padding: '12px 14px',
                       display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
@@ -484,6 +496,12 @@ export default function CheckoutPage() {
           <button className="co-ghost-btn" disabled={submitting} onClick={() => setClearCartConfirmOpen(true)}>
             Clear Cart
           </button>
+        </div>
+
+        {/* end sticky rail */}
+        </div>
+
+        {/* end two-column grid */}
         </div>
 
       </PageShell>

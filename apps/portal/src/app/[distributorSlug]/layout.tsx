@@ -25,6 +25,9 @@ function DistributorMain({
   // Order-by-cutoff / minimum-order messaging is only relevant before you've
   // placed an order — suppress it on the orders list and order detail (invoice) views.
   const isOrdersPage = /^\/[^/]+\/orders(\/[^/]+)?$/.test(pathname ?? '');
+  // Checkout carries its own order-summary rail (totals, minimum, delivery day),
+  // so the shared sub-header would only duplicate it.
+  const isCheckoutPage = pathname === `/${distributorSlug}/checkout`;
 
   return (
     <main className="flex flex-1 flex-col min-h-screen min-w-0 bg-white pt-14 md:pt-0">
@@ -39,7 +42,7 @@ function DistributorMain({
           dominantColor={distributor?.bannerDominantColor ?? null}
           onScrolledPast={setBannerScrolledPast}
         />
-      ) : isOrdersPage ? null : (
+      ) : isOrdersPage || isCheckoutPage ? null : (
         <DistributorPageHeader distributorSlug={distributorSlug} />
       )}
       <div className="flex flex-1 flex-col min-w-0">

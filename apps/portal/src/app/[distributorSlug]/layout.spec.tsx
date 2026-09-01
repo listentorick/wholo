@@ -92,8 +92,9 @@ describe('DistributorLayout — page header visibility', () => {
     expect(screen.queryByTestId('branding-banner')).toBeNull();
   });
 
-  it('still renders DistributorPageHeader on the checkout page', () => {
+  it('renders neither BrandingBanner nor DistributorPageHeader on the checkout page (the order-summary rail carries that context)', () => {
     renderAt(`/${slug}/checkout`);
-    expect(screen.getByTestId('page-header')).toBeTruthy();
+    expect(screen.queryByTestId('page-header')).toBeNull();
+    expect(screen.queryByTestId('branding-banner')).toBeNull();
   });
 });
