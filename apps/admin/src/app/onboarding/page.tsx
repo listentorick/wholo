@@ -184,8 +184,8 @@ export default function OnboardingPage() {
         <div className="motion-safe:animate-[onboarding-enter_0.5s_ease-out]">
           <div className="inline-flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logos/stocdup-logo-only.png" alt="" className="h-8 w-8 shrink-0" />
-            <span className="text-2xl font-bold leading-none tracking-[-0.03em] text-sidebar-fg">
+            <img src="/logos/stocdup-logo-only-white.png" alt="" className="h-8 w-8 shrink-0" />
+            <span className="text-2xl font-extrabold leading-none tracking-[-0.045em] text-sidebar-fg">
               stocd<span className="text-primary">up</span>
             </span>
           </div>

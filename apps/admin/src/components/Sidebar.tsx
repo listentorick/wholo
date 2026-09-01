@@ -220,7 +220,7 @@ export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
       <div className="flex h-[var(--topbar-height)] shrink-0 items-center gap-2.5 border-b border-border bg-topbar-bg px-5">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logos/stocdup-logo-only.png" alt="" className="h-9 w-9 shrink-0" />
-        <span className="text-[18px] font-bold tracking-tight text-text">
+        <span className="text-[18px] font-extrabold tracking-[-0.045em] text-text">
           stocd<span className="text-primary">up</span>
         </span>
         {/* Close button — visible on mobile only */}

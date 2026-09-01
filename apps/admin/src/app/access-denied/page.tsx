@@ -27,7 +27,7 @@ export default function AccessDeniedPage() {
       <div className="w-full max-w-md rounded-lg border border-border bg-white p-8 text-center">
         <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logos/stocdup-logo-only.png" alt="Wholo" className="h-7 w-7 shrink-0" />
+          <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
         </div>
 
         <h1 className="text-lg font-semibold text-text">This is the distributor workspace</h1>
