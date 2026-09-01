@@ -4,15 +4,18 @@ const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
+      // Marketing-site alignment: soft corners on controls (6px) and cards (8px).
+      // `none` stays 0 for the deliberately square things; `full` (circular
+      // identity: avatars, marks, status dots, steppers) keeps the Tailwind default.
       borderRadius: {
         none: '0',
-        sm:   '0',
-        DEFAULT: '0',
-        md:   '0',
-        lg:   '0',
-        xl:   '0',
-        '2xl': '0',
-        '3xl': '0',
+        sm:   '4px',
+        DEFAULT: '6px',
+        md:   '6px',
+        lg:   '8px',
+        xl:   '8px',
+        '2xl': '12px',
+        '3xl': '16px',
       },
       colors: {
         sidebar: {
