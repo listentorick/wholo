@@ -73,14 +73,9 @@ function UsersIcon() {
   );
 }
 
-/** Shared header for each of the three profile boxes — an amber eyebrow kicker + a plain heading. */
-function BoxHeading({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) {
-  return (
-    <>
-      {eyebrow && <Eyebrow className="mb-3">{eyebrow}</Eyebrow>}
-      <h2 className="text-base font-semibold text-foreground">{children}</h2>
-    </>
-  );
+/** Box header — the amber eyebrow kicker is the only heading each profile box needs. */
+function BoxHeading({ children }: { children: ReactNode }) {
+  return <Eyebrow className="mb-3">{children}</Eyebrow>;
 }
 
 /**
@@ -154,24 +149,23 @@ function AboutBox({
 }) {
   return (
     <div className={`${BOX} ${className}`}>
-      <Eyebrow className="mb-3">The wholesaler</Eyebrow>
-      <div className="flex items-center gap-4">
-        {distributor.logoUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={distributor.logoUrl}
-            alt=""
-            className="hidden h-16 w-16 flex-shrink-0 rounded-full border border-muted object-cover lg:block"
-            draggable={false}
-          />
-        )}
-        <div>
-          <BoxHeading>About us</BoxHeading>
+      <BoxHeading>About us</BoxHeading>
+      {(distributor.logoUrl || distributor.tagline) && (
+        <div className="flex items-center gap-4">
+          {distributor.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={distributor.logoUrl}
+              alt=""
+              className="hidden h-16 w-16 flex-shrink-0 rounded-full border border-muted object-cover lg:block"
+              draggable={false}
+            />
+          )}
           {distributor.tagline && (
-            <p className="mt-1 text-sm font-medium text-primary">{distributor.tagline}</p>
+            <p className="text-sm font-medium text-primary">{distributor.tagline}</p>
           )}
         </div>
-      </div>
+      )}
       {distributor.aboutText && (
         <div className="prose prose-sm prose-gray mt-4 max-w-[68ch]">
           <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
@@ -198,7 +192,7 @@ function GetInTouch({ distributor, className = '' }: { distributor: DistributorI
 
   return (
     <div className={`${BOX} ${className}`}>
-      <BoxHeading eyebrow="Contact">Get in touch</BoxHeading>
+      <BoxHeading>Get in touch</BoxHeading>
       <p className="mt-1 text-sm text-muted">Got questions? We&apos;d love to hear from you.</p>
 
       <div className="mt-4 border-t border-border" />
@@ -275,7 +269,7 @@ function KeyInfo({
 
   return (
     <div className={`${BOX} ${className}`}>
-      <BoxHeading eyebrow="Before you order">What you need to know</BoxHeading>
+      <BoxHeading>What you need to know</BoxHeading>
 
       {hasBody && (
         <div className="mt-4 flex flex-col gap-4">

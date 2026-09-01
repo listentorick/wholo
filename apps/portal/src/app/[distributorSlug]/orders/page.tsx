@@ -231,8 +231,8 @@ export default function OrdersPage() {
           </div>
         ) : (
           <>
-            {/* Section label */}
-            <Eyebrow className="mx-4 mb-2 mt-2.5">Order history</Eyebrow>
+            {/* Section label — matches the 20px heading inset used on the other full-width pages */}
+            <Eyebrow className="mb-4 ml-5 mt-5">Order history</Eyebrow>
 
             {/* Desktop: real table */}
             <div className="hidden md:block overflow-x-auto">

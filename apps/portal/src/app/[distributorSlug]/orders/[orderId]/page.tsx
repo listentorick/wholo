@@ -6,6 +6,7 @@ import { Truck } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { Eyebrow } from '@/components/Eyebrow';
 import { ordersApi, ApiError } from '@wholo/api-client';
 import type { AddressSnapshot, Order } from '@wholo/types';
 import { formatMoney } from '@wholo/types';
@@ -29,15 +30,7 @@ function fmtAmt(amount: string, currency: string) {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p style={{
-      fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
-      textTransform: 'uppercase', color: '#9CA3AF',
-      padding: '12px 16px 4px',
-    }}>
-      {children}
-    </p>
-  );
+  return <Eyebrow className="mx-4 mb-2 mt-3">{children}</Eyebrow>;
 }
 
 export default function OrderDetailPage() {

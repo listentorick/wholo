@@ -144,7 +144,7 @@ describe('CheckoutPage — delivery address', () => {
 
     render(<CheckoutPage />);
 
-    expect(await screen.findByText('Delivery Address')).toBeInTheDocument();
+    expect(await screen.findByText('Delivery address')).toBeInTheDocument();
     expect(screen.getByText('1 Wine Lane, Melbourne, VIC, 3000, Australia')).toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe('CheckoutPage — delivery day', () => {
 
     render(<CheckoutPage />);
 
-    expect(await screen.findByText('Delivery Day')).toBeInTheDocument();
+    expect(await screen.findByText('Delivery day')).toBeInTheDocument();
     expect(
       await screen.findByText('No delivery dates available right now. Please contact your distributor.'),
     ).toBeInTheDocument();

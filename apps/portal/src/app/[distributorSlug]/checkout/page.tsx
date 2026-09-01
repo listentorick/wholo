@@ -11,10 +11,25 @@ import { PageShell, PageSpinner } from '@/components/PageShell';
 import { MinimumOrderProgress } from '@/components/MinimumOrderProgress';
 import { ClearCartConfirmationModal } from '@/components/ClearCartConfirmationModal';
 import { QuantityStepper } from '@/components/QuantityStepper';
+import { Eyebrow } from '@/components/Eyebrow';
 import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
 import { formatMoney } from '@wholo/types';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
+
+/** White 8px card on the Pale Stone checkout canvas. */
+const CARD = 'co-card rounded-lg border border-border bg-surface p-5 shadow-sm';
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-[15px] w-[15px]">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+    </svg>
+  );
+}
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -27,8 +42,6 @@ export default function CheckoutPage() {
   const { cartLoading, items, quantities, subtotal, taxAmount, taxLabel, total, savingItems, syncItem, refreshCart } = useCart();
   const { effectiveMinSpend, distributor } = useDistributor();
 
-  const [poOpen, setPoOpen] = useState(false);
-  const [commentOpen, setCommentOpen] = useState(false);
   const [poNumber, setPoNumber] = useState('');
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -136,37 +149,21 @@ export default function CheckoutPage() {
           @keyframes co-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
           .co-empty { animation: co-fade-up 0.4s ease both 0.1s; }
         `}</style>
-        <PageShell center className="co-empty px-8 text-center gap-6">
-          <div style={{
-            width: 56, height: 56, borderRadius: '50%',
-            border: '1.5px solid hsl(var(--color-border))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'hsl(var(--color-border))',
-          }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.25} style={{ width: 26, height: 26 }}>
+        <PageShell center className="co-empty gap-6 px-8 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border-[1.5px] border-border text-border">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.25} className="h-[26px] w-[26px]">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
               <line x1="3" y1="6" x2="21" y2="6" />
               <path d="M16 10a4 4 0 01-8 0" />
             </svg>
           </div>
           <div className="flex flex-col gap-1.5">
-            <p style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 400 }}>Your cart is empty</p>
-            <p style={{ fontSize: 13, color: 'hsl(var(--color-muted))' }}>Add products to get started</p>
+            <p className="text-sm text-foreground">Your cart is empty</p>
+            <p className="text-xs text-muted">Add products to get started</p>
           </div>
           <button
             onClick={() => router.push(`/${distributorSlug}/products`)}
-            style={{
-              border: '1.5px solid hsl(var(--color-primary))',
-              background: 'transparent',
-              color: 'hsl(var(--color-primary))',
-              padding: '11px 28px',
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
+            className="rounded-md border-[1.5px] border-primary px-7 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary transition-colors hover:bg-accent-subtle"
           >
             Browse Products
           </button>
@@ -178,332 +175,203 @@ export default function CheckoutPage() {
   return (
     <>
       <style>{`
-        @keyframes co-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .co-section { animation: co-fade-up 0.35s ease both; }
-
-        .co-trash-btn {
-          width: 30px; height: 30px; border-radius: 6px;
-          border: none; background: transparent; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          color: hsl(var(--color-border)); transition: color 0.15s;
-          flex-shrink: 0; padding: 0; font-family: inherit;
-        }
-        .co-trash-btn:hover { color: #DC2626; }
-        .co-trash-btn:disabled { cursor: not-allowed; opacity: 0.35; }
-        .co-trash-btn:focus-visible {
-          outline: none; box-shadow: 0 0 0 2px hsl(var(--color-primary));
-        }
-
-        .co-expand-btn {
-          display: flex; align-items: center; gap: 6px;
-          background: none; border: none; cursor: pointer;
-          padding: 0; font-family: inherit;
-          color: hsl(var(--color-primary)); font-size: 11px; font-weight: 600;
-          letter-spacing: 0.1em; text-transform: uppercase;
-        }
-
-        .co-expand-content {
-          display: grid;
-          grid-template-rows: 0fr;
-          overflow: hidden;
-          opacity: 0;
-          transition: grid-template-rows 0.25s ease, opacity 0.2s ease;
-        }
-        .co-expand-content > div { min-height: 0; overflow: hidden; }
-        .co-expand-content.open   { grid-template-rows: 1fr; opacity: 1; }
-        .co-expand-content.closed { grid-template-rows: 0fr; opacity: 0; }
-
-        .co-field {
-          width: 100%; border: none;
-          border-bottom: 1.5px solid hsl(var(--color-border));
-          background: transparent; padding: 8px 0 10px;
-          font-size: 14px; color: hsl(var(--color-text)); outline: none;
-          font-family: inherit; caret-color: hsl(var(--color-primary));
-        }
-        .co-field::placeholder { color: hsl(var(--color-muted) / 0.55); }
-        .co-field:focus {
-          border-bottom-color: hsl(var(--color-primary));
-          box-shadow: 0 2px 0 0 hsl(var(--color-primary));
-        }
-        .co-field:focus-visible { outline: 2px solid hsl(var(--color-primary)); outline-offset: 2px; }
-
-        .co-place-order {
-          width: 100%; border: none; border-radius: 6px; background: hsl(var(--color-primary));
-          color: hsl(var(--color-primary-fg)); padding: 15px 20px; font-size: 14px; font-weight: 600;
-          letter-spacing: 0.08em; cursor: pointer;
-          font-family: inherit; text-align: center;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-          transition: background 0.15s;
-        }
-        .co-place-order:hover:not(:disabled) { background: hsl(var(--color-primary-hover)); }
-        .co-place-order:disabled { opacity: 0.4; cursor: not-allowed; }
-
-        .co-ghost-btn {
-          width: 100%; border: none; background: transparent;
-          color: hsl(var(--color-muted)); padding: 12px 20px; font-size: 14px; font-weight: 400;
-          cursor: pointer; font-family: inherit; transition: color 0.15s;
-        }
-        .co-ghost-btn:hover    { color: hsl(var(--color-text)); }
-        .co-ghost-btn:disabled { cursor: not-allowed; opacity: 0.45; }
+        @keyframes co-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .co-card { animation: co-fade 0.3s ease both; }
       `}</style>
 
       <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-      <PageShell width="full" padding="none" className="pb-10 md:px-6 md:pt-6">
+      <PageShell width="full" padding="none">
+        <div className="flex-1 bg-canvas px-4 py-4 md:px-8 md:py-8">
+          <div className="mx-auto grid w-full max-w-[1200px] gap-4 md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-6">
 
-        <div className="mx-auto max-w-[560px] md:grid md:max-w-[1080px] md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-x-7">
+            {/* ─────────────── Left: the order ─────────────── */}
+            <div className="flex min-w-0 flex-col gap-4 md:gap-5">
 
-        {/* ─────────────── Left: the order itself ─────────────── */}
-        <div className="md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-surface md:[&>*:last-child]:border-b-0">
-
-        {/* Product list */}
-        <div className="co-section" style={{ animationDelay: '0.05s' }}>
-          <p style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
-            textTransform: 'uppercase', color: 'hsl(var(--color-muted))',
-            padding: '10px 16px 4px',
-          }}>
-            Products
-          </p>
-
-          {items.map((item, i) => {
-            const qty = quantities[item.productId] ?? item.quantity;
-            const lineTotal = qty * parseFloat(item.unitPrice);
-            const saving = savingItems.has(item.productId);
-            const delay = Math.min(0.08 + i * 0.05, 0.45);
-
-            return (
-              <div
-                key={item.productId}
-                className="co-section border-b border-border px-4 pt-3 pb-3"
-                style={{ animationDelay: `${delay}s`, opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s' }}
-              >
-                {/* Row 1: product name + stepper + trash */}
-                <div className="flex items-center justify-between gap-3">
-                  <span style={{
-                    fontSize: 14, fontWeight: 500, color: 'hsl(var(--color-text))',
-                    flex: 1, minWidth: 0, overflow: 'hidden',
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {item.product.name}
-                  </span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <QuantityStepper
-                      value={qty}
-                      min={1}
-                      saving={saving}
-                      itemLabel={item.product.name}
-                      onChange={(next) => syncItem(item.productId, next)}
-                    />
-                    <button
-                      className="co-trash-btn"
-                      aria-label="Remove item"
-                      disabled={saving}
-                      onClick={() => handleRemove(item.productId)}
+              {/* Products */}
+              <div className={CARD} style={{ animationDelay: '0.02s' }}>
+                <Eyebrow className="mb-3">Products</Eyebrow>
+                {items.map((item) => {
+                  const qty = quantities[item.productId] ?? item.quantity;
+                  const lineTotal = qty * parseFloat(item.unitPrice);
+                  const saving = savingItems.has(item.productId);
+                  return (
+                    <div
+                      key={item.productId}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border py-3.5 first:pt-1 last:border-b-0 last:pb-0"
+                      style={{ opacity: saving ? 0.5 : 1, transition: 'opacity 0.2s' }}
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 15, height: 15 }}>
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                        <path d="M10 11v6M14 11v6" />
-                        <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
-                      </svg>
-                    </button>
+                      <span className="w-full truncate text-sm font-medium text-foreground md:w-auto md:flex-1">
+                        {item.product.name}
+                      </span>
+                      <span className="whitespace-nowrap text-xs text-muted">{fmt(parseFloat(item.unitPrice))} ea</span>
+                      <QuantityStepper
+                        value={qty}
+                        min={1}
+                        saving={saving}
+                        itemLabel={item.product.name}
+                        onChange={(next) => syncItem(item.productId, next)}
+                        className="ml-auto md:ml-0"
+                      />
+                      <span className="w-16 whitespace-nowrap text-right text-sm font-semibold text-foreground">
+                        {fmt(lineTotal)}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label="Remove item"
+                        disabled={saving}
+                        onClick={() => handleRemove(item.productId)}
+                        className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-border transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Purchase order & notes */}
+              <div className={CARD} style={{ animationDelay: '0.06s' }}>
+                <Eyebrow className="mb-3">Purchase order &amp; notes</Eyebrow>
+                <div className="flex flex-col gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-muted">PO number</span>
+                    <input
+                      value={poNumber}
+                      onChange={(e) => setPoNumber(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-muted">Comment</span>
+                    <input
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Add a note for this order…"
+                      className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Delivery address */}
+              {!loadingAddress && (
+                <div className={CARD} style={{ animationDelay: '0.1s' }}>
+                  <Eyebrow className="mb-3">Delivery address</Eyebrow>
+                  {formatAddress(deliveryAddress) ? (
+                    <p className="text-sm leading-relaxed text-foreground">{formatAddress(deliveryAddress)}</p>
+                  ) : (
+                    <p className="text-sm text-muted">
+                      No delivery address on file. Please contact your distributor to add one.
+                    </p>
+                  )}
+                  {distributor?.name && (
+                    <p className="mt-2.5 text-xs text-muted">Held by {distributor.name} — contact them to change it.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ─────────────── Right: totals, timing, submit ─────────────── */}
+            <div className="flex flex-col gap-4 md:sticky md:top-5 md:self-start">
+
+              {/* Delivery day */}
+              <div className={CARD} style={{ animationDelay: '0.14s' }}>
+                <Eyebrow className="mb-3">Delivery day</Eyebrow>
+                {loadingDates ? (
+                  <div className="flex justify-center py-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
                   </div>
+                ) : availableDates.length === 0 ? (
+                  <p className="text-xs text-muted">
+                    No delivery dates available right now. Please contact your distributor.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {availableDates.map((d) => {
+                      const isSelected = selectedDeliveryDate === d.date;
+                      const deliveryDate = new Date(d.date + 'T00:00:00');
+                      const cutoff = new Date(d.cutoffDeadline);
+                      const cutoffLabel = cutoff.toLocaleString('en-GB', {
+                        weekday: 'long', day: 'numeric', month: 'long',
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      });
+                      return (
+                        <button
+                          key={d.date}
+                          type="button"
+                          onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
+                          className={[
+                            'flex w-full flex-col gap-0.5 rounded-md border-[1.5px] px-3.5 py-3 text-left transition-colors',
+                            isSelected ? 'border-primary bg-accent-subtle' : 'border-border hover:border-muted',
+                          ].join(' ')}
+                        >
+                          <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                            {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          </span>
+                          <span className="text-xs text-muted">Order by {cutoffLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Order summary */}
+              <div className={CARD} style={{ animationDelay: '0.18s' }}>
+                <Eyebrow className="mb-3">Order summary</Eyebrow>
+                {[
+                  { label: 'Subtotal', value: fmt(subtotal) },
+                  { label: 'Freight', value: fmt(freight) },
+                  { label: taxLabel, value: fmt(taxAmount) },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center justify-between py-1.5 text-sm text-foreground">
+                    <span>{row.label}</span>
+                    <span>{row.value}</span>
+                  </div>
+                ))}
+                <div className="mt-1 flex items-center justify-between border-t border-border pt-2 text-sm font-semibold text-foreground">
+                  <span>Total</span>
+                  <span>{fmt(total)}</span>
                 </div>
-
-                {/* Row 2: unit price + line total */}
-                <div className="flex items-center justify-between mt-1.5">
-                  <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
-                    {fmt(parseFloat(item.unitPrice))} ea
-                  </span>
-                  <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
-                    Total&nbsp;&nbsp;{fmt(lineTotal)}
-                  </span>
-                </div>
+                <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
               </div>
-            );
-          })}
-        </div>
 
-        {/* PO Number + Comment */}
-        <div className="co-section px-4 py-4 border-b border-border flex flex-col gap-4" style={{ animationDelay: '0.25s' }}>
-          <div>
-            <button className="co-expand-btn" onClick={() => setPoOpen((o) => !o)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} style={{ width: 11, height: 11 }}>
-                {poOpen
-                  ? <line x1="5" y1="12" x2="19" y2="12" />
-                  : <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>
-                }
-              </svg>
-              PO Number
-            </button>
-            <div className={`co-expand-content ${poOpen ? 'open' : 'closed'}`}>
-              <div className="pt-3">
-                <input
-                  className="co-field"
-                  placeholder="Enter PO number…"
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <button className="co-expand-btn" onClick={() => setCommentOpen((o) => !o)}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} style={{ width: 11, height: 11 }}>
-                {commentOpen
-                  ? <line x1="5" y1="12" x2="19" y2="12" />
-                  : <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>
-                }
-              </svg>
-              Comment
-            </button>
-            <div className={`co-expand-content ${commentOpen ? 'open' : 'closed'}`}>
-              <div className="pt-3">
-                <input
-                  className="co-field"
-                  placeholder="Add a comment…"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Delivery Address */}
-        {!loadingAddress && (
-          <div className="co-section px-4 py-5 border-b border-border" style={{ animationDelay: '0.3s' }}>
-            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--color-muted))', textAlign: 'center', marginBottom: 12 }}>
-              Delivery Address
-            </p>
-            {formatAddress(deliveryAddress) ? (
-              <p style={{ fontSize: 13, color: 'hsl(var(--color-text))', lineHeight: 1.7, textAlign: 'center' }}>
-                {formatAddress(deliveryAddress)}
-              </p>
-            ) : (
-              <p style={{ fontSize: 12, color: 'hsl(var(--color-muted))', textAlign: 'center' }}>
-                No delivery address on file. Please contact your distributor to add one.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* end left column */}
-        </div>
-
-        {/* ─────────────── Right: totals, timing, submit (sticky rail) ─────────────── */}
-        <div className="md:sticky md:top-6 md:self-start md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-surface md:[&>*:last-child]:border-b-0">
-
-        {/* Order summary */}
-        <div className="co-section px-4 py-4 border-b border-border">
-          {[
-            { label: 'Subtotal', value: fmt(subtotal) },
-            { label: 'Freight',  value: fmt(freight)  },
-            { label: taxLabel,  value: fmt(taxAmount) },
-          ].map((row) => (
-            <div key={row.label} className="flex items-center justify-between py-1.5">
-              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.label}</span>
-              <span style={{ fontSize: 14, color: 'hsl(var(--color-text))' }}>{row.value}</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
-            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>Total</span>
-            <span style={{ fontSize: 15, color: 'hsl(var(--color-text))', fontWeight: 500 }}>{fmt(total)}</span>
-          </div>
-          <MinimumOrderProgress subtotal={subtotal} minimum={effectiveMinSpend} size="prominent" />
-        </div>
-
-        {/* Delivery Day */}
-        <div className="co-section px-4 py-5 border-b border-border" style={{ animationDelay: '0.35s' }}>
-          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--color-muted))', textAlign: 'center', marginBottom: 12 }}>
-            Delivery Day
-          </p>
-          {loadingDates ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
-            </div>
-          ) : availableDates.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'hsl(var(--color-muted))', textAlign: 'center' }}>
-              No delivery dates available right now. Please contact your distributor.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {availableDates.map((d) => {
-                const isSelected = selectedDeliveryDate === d.date;
-                const deliveryDate = new Date(d.date + 'T00:00:00');
-                const cutoff = new Date(d.cutoffDeadline);
-                const cutoffLabel = cutoff.toLocaleString('en-GB', {
-                  weekday: 'long', day: 'numeric', month: 'long',
-                  hour: 'numeric', minute: '2-digit', hour12: true,
-                });
-                return (
-                  <button
-                    key={d.date}
-                    type="button"
-                    onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
-                    style={{
-                      border: `1.5px solid ${isSelected ? 'hsl(var(--color-primary))' : 'hsl(var(--color-border))'}`,
-                      borderRadius: 6,
-                      background: isSelected ? 'hsl(var(--color-primary-subtle))' : 'transparent',
-                      padding: '12px 14px',
-                      display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                      gap: 3, cursor: 'pointer', fontFamily: 'inherit',
-                      transition: 'border-color 0.15s, background 0.15s',
-                      textAlign: 'left', width: '100%',
-                    }}
-                  >
-                    <span style={{ fontSize: 14, fontWeight: 500, color: isSelected ? 'hsl(var(--color-primary))' : 'hsl(var(--color-text))' }}>
-                      {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'hsl(var(--color-muted))' }}>
-                      Order by {cutoffLabel}
-                    </span>
+              {/* Actions */}
+              <div className="flex flex-col gap-2" style={{ animationDelay: '0.22s' }}>
+                <button
+                  type="button"
+                  disabled={submitting || belowMinimum}
+                  onClick={handlePlaceOrder}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-5 py-3.5 text-sm font-semibold tracking-[0.04em] text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {submitting && (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  )}
+                  {submitting ? 'Placing Order…' : 'Place Order'}
+                </button>
+                {belowMinimum && !submitError && (
+                  <p className="text-center text-xs text-error">Minimum order value not yet met</p>
+                )}
+                {submitError && <p className="text-center text-xs text-error">{submitError}</p>}
+                <div className="flex justify-center gap-5 pt-1">
+                  <button type="button" disabled className="text-xs text-muted disabled:opacity-50">
+                    Add to favourites
                   </button>
-                );
-              })}
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => setClearCartConfirmOpen(true)}
+                    className="text-xs text-muted transition-colors hover:text-foreground disabled:opacity-50"
+                  >
+                    Clear cart
+                  </button>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Action buttons */}
-        <div className="co-section px-4 pt-5 pb-2 flex flex-col gap-1" style={{ animationDelay: '0.4s' }}>
-          <button
-            className="co-place-order"
-            disabled={submitting || belowMinimum}
-            onClick={handlePlaceOrder}
-          >
-            {submitting ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : null}
-            {submitting ? 'Placing Order…' : 'Place Order'}
-          </button>
-          {belowMinimum && !submitError && (
-            <p style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', padding: '6px 0 2px' }}>
-              Minimum order value not yet met
-            </p>
-          )}
-          {submitError && (
-            <p style={{ fontSize: 12, color: '#DC2626', textAlign: 'center', padding: '6px 0 2px' }}>
-              {submitError}
-            </p>
-          )}
-          <button className="co-ghost-btn" disabled>
-            Add to Favorites
-          </button>
-          <button className="co-ghost-btn" disabled={submitting} onClick={() => setClearCartConfirmOpen(true)}>
-            Clear Cart
-          </button>
-        </div>
-
-        {/* end sticky rail */}
-        </div>
-
-        {/* end two-column grid */}
-        </div>
-
       </PageShell>
 
       {clearCartConfirmOpen && (

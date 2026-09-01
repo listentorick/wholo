@@ -10,6 +10,7 @@ import { TradeRelationshipStatus, formatMoney, type CatalogueProductDetail } fro
 import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { QuantityStepper } from '@/components/QuantityStepper';
+import { Eyebrow } from '@/components/Eyebrow';
 
 function formatPrice(
   price: string | null,
@@ -186,12 +187,7 @@ export default function ProductDetailPage() {
 
         {/* About the product */}
         <div className="pd-card px-4 pt-4 pb-6" style={{ animationDelay: '0.14s' }}>
-          <p style={{
-            fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
-            textTransform: 'uppercase', color: '#9CA3AF', marginBottom: 10,
-          }}>
-            About the product
-          </p>
+          <Eyebrow className="mb-2.5">About the product</Eyebrow>
           <p style={{ fontSize: 14, color: '#1A1A1A', lineHeight: 1.65 }}>
             {product.description ?? 'No description available.'}
           </p>
