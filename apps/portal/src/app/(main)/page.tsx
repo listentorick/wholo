@@ -57,9 +57,8 @@ export default function HomePage() {
 
         {/* My Suppliers */}
         <section className="mb-10">
-          <Eyebrow className="mb-2">Your wholesalers</Eyebrow>
-          <h2 className="text-base font-semibold text-foreground">My suppliers</h2>
-          <p className="mt-1 mb-4 text-sm text-muted">
+          <Eyebrow className="mb-2">My suppliers</Eyebrow>
+          <p className="mb-4 text-sm text-muted">
             Jump back into an account, or add a new wholesaler you already buy from.
           </p>
 
@@ -107,8 +106,7 @@ export default function HomePage() {
 
         {/* Find new suppliers */}
         <section>
-          <Eyebrow className="mb-2">Discover</Eyebrow>
-          <h2 className="text-base font-semibold text-foreground mb-1">Find new suppliers</h2>
+          <Eyebrow className="mb-2">Find new suppliers</Eyebrow>
           <p className="text-sm text-muted mb-4">
             Browse the marketplace to discover distributors and request access
           </p>

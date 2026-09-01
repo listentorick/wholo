@@ -6,6 +6,7 @@ import { Hash, Calendar, Truck, FileText, Banknote, CircleDot } from 'lucide-rea
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { ordersApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
+import { Eyebrow } from '@/components/Eyebrow';
 import type { OrderSummary, OrderStatus, OrderInvoiceSummary } from '@wholo/types';
 import { formatMoney } from '@wholo/types';
 
@@ -231,13 +232,7 @@ export default function OrdersPage() {
         ) : (
           <>
             {/* Section label */}
-            <p style={{
-              fontSize: 10, fontWeight: 600, letterSpacing: '0.12em',
-              textTransform: 'uppercase', color: '#9CA3AF',
-              padding: '10px 16px 4px',
-            }}>
-              Order History
-            </p>
+            <Eyebrow className="mx-4 mb-2 mt-2.5">Order history</Eyebrow>
 
             {/* Desktop: real table */}
             <div className="hidden md:block overflow-x-auto">

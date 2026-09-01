@@ -73,9 +73,14 @@ function UsersIcon() {
   );
 }
 
-/** Shared header for each of the three profile boxes — one plain, confident heading. */
-function BoxHeading({ children }: { children: ReactNode }) {
-  return <h2 className="text-base font-semibold text-foreground">{children}</h2>;
+/** Shared header for each of the three profile boxes — an amber eyebrow kicker + a plain heading. */
+function BoxHeading({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) {
+  return (
+    <>
+      {eyebrow && <Eyebrow className="mb-3">{eyebrow}</Eyebrow>}
+      <h2 className="text-base font-semibold text-foreground">{children}</h2>
+    </>
+  );
 }
 
 /**
@@ -193,7 +198,7 @@ function GetInTouch({ distributor, className = '' }: { distributor: DistributorI
 
   return (
     <div className={`${BOX} ${className}`}>
-      <BoxHeading>Get in touch</BoxHeading>
+      <BoxHeading eyebrow="Contact">Get in touch</BoxHeading>
       <p className="mt-1 text-sm text-muted">Got questions? We&apos;d love to hear from you.</p>
 
       <div className="mt-4 border-t border-border" />
@@ -270,7 +275,7 @@ function KeyInfo({
 
   return (
     <div className={`${BOX} ${className}`}>
-      <BoxHeading>What you need to know</BoxHeading>
+      <BoxHeading eyebrow="Before you order">What you need to know</BoxHeading>
 
       {hasBody && (
         <div className="mt-4 flex flex-col gap-4">

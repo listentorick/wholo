@@ -250,9 +250,9 @@ export default function CheckoutPage() {
 
       <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
 
-      <PageShell padding="none" className="pb-10 md:px-6 md:pt-6">
+      <PageShell width="full" padding="none" className="pb-10 md:px-6 md:pt-6">
 
-        <div className="md:grid md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-x-7">
+        <div className="mx-auto max-w-[560px] md:grid md:max-w-[1080px] md:grid-cols-[minmax(0,1fr)_360px] md:items-start md:gap-x-7">
 
         {/* ─────────────── Left: the order itself ─────────────── */}
         <div className="md:overflow-hidden md:rounded-lg md:border md:border-border md:bg-surface md:[&>*:last-child]:border-b-0">
