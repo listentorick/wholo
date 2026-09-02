@@ -175,14 +175,9 @@ const navGroups: NavGroup[] = [
   },
 ];
 
-function CountBadge({ count, compact = false }: { count: number; compact?: boolean }) {
+function CountBadge({ count }: { count: number }) {
   return (
-    <span
-      className={[
-        'ml-auto inline-flex shrink-0 items-center justify-center rounded-full bg-accent/20 font-semibold text-accent',
-        compact ? 'px-1.5 py-[1px] text-[10px]' : 'px-1.5 py-0.5 text-[11px]',
-      ].join(' ')}
-    >
+    <span className="ml-auto inline-flex shrink-0 items-center justify-center rounded-full bg-accent/20 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
       {count}
     </span>
   );
@@ -222,45 +217,41 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
 
       {/* Nav groups */}
       <nav className="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4">
-        {navGroups.map((group, groupIndex) => {
-          const groupCount = group.items.reduce((sum, item) => sum + (counts[item.href] ?? 0), 0);
-          return (
-            <div key={group.label} className={groupIndex === 0 ? '' : 'mt-5'}>
-              <div className="flex items-center px-3 pb-1.5">
-                <span className="text-[11px] font-medium text-sidebar-fg/40">{group.label}</span>
-                {groupCount > 0 && <CountBadge count={groupCount} compact />}
-              </div>
-              <ul className="space-y-0.5">
-                {group.items.map((item) => {
-                  const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                  const count = counts[item.href] ?? 0;
-                  return (
-                    <li key={item.href}>
-                      <Link
-                        href={item.href}
-                        onClick={onClose}
-                        className={[
-                          'flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors',
-                          active
-                            ? 'bg-sidebar-accent/20 text-sidebar-accent'
-                            : 'text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
-                        ].join(' ')}
-                      >
-                        <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
-                        {item.label}
-                        {count > 0 ? (
-                          <CountBadge count={count} />
-                        ) : (
-                          active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+        {navGroups.map((group, groupIndex) => (
+          <div key={group.label} className={groupIndex === 0 ? '' : 'mt-5'}>
+            <div className="flex items-center px-3 pb-1.5">
+              <span className="text-[11px] font-medium text-sidebar-fg/40">{group.label}</span>
             </div>
-          );
-        })}
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const active = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                const count = counts[item.href] ?? 0;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onClose}
+                      className={[
+                        'flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors',
+                        active
+                          ? 'bg-sidebar-accent/20 text-sidebar-accent'
+                          : 'text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
+                      ].join(' ')}
+                    >
+                      <span className={active ? 'text-sidebar-accent' : ''}>{item.icon}</span>
+                      {item.label}
+                      {count > 0 ? (
+                        <CountBadge count={count} />
+                      ) : (
+                        active && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-sidebar-accent" />
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       {/* Bottom section */}
