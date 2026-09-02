@@ -17,6 +17,16 @@ const cartLineInclude = {
   taxType: { select: { name: true } },
 } as const;
 
+// Cart lines have no positional column, so an unordered load returns them in
+// Postgres heap-scan order — which shifts whenever a line row is UPDATEd (every
+// quantity change is an upsert). Order alphabetically by product name, with
+// productId as the deterministic tie-break, so the checkout list stays put.
+const cartLinesOrderBy: Prisma.CartOrderLineOrderByWithRelationInput[] = [
+  { product: { name: 'asc' } },
+  { productId: 'asc' },
+];
+const cartLinesArg = { include: cartLineInclude, orderBy: cartLinesOrderBy };
+
 @Injectable()
 export class CartService {
   constructor(
@@ -49,7 +59,7 @@ export class CartService {
 
       const updated = await this.prisma.cartOrder.findUniqueOrThrow({
         where: { id: existing.id },
-        include: { lines: { include: cartLineInclude } },
+        include: { lines: cartLinesArg },
       });
       return this.formatCart(updated);
     }
@@ -116,7 +126,7 @@ export class CartService {
 
     const updated = await this.prisma.cartOrder.findUniqueOrThrow({
       where: { id: order.id },
-      include: { lines: { include: cartLineInclude } },
+      include: { lines: cartLinesArg },
     });
 
     return this.formatCart(updated);
@@ -134,7 +144,7 @@ export class CartService {
   private async findDraft(distributorId: string, customerId: string, userId: string) {
     return this.prisma.cartOrder.findUnique({
       where: { distributorId_customerId_userId_status: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT } },
-      include: { lines: { include: cartLineInclude } },
+      include: { lines: cartLinesArg },
     });
   }
 
@@ -143,7 +153,7 @@ export class CartService {
       where: { distributorId_customerId_userId_status: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT } },
       create: { distributorId, customerId, userId, status: CartOrderStatus.DRAFT },
       update: {},
-      include: { lines: { include: cartLineInclude } },
+      include: { lines: cartLinesArg },
     });
   }
 
@@ -177,6 +187,14 @@ export class CartService {
         product: line.product,
       };
     });
+
+    // Stable, predictable display order regardless of how the caller supplied
+    // `lines` — the Prisma reads already sort, this covers the raw-object paths.
+    items.sort(
+      (a, b) =>
+        a.product.name.localeCompare(b.product.name, undefined, { sensitivity: 'base' }) ||
+        a.productId.localeCompare(b.productId),
+    );
 
     // Sum already-rounded per-line amounts — never re-round after summing,
     // same rule as OrdersService building Order.taxAmount from its lines.

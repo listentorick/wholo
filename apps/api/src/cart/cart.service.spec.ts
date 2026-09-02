@@ -30,14 +30,15 @@ function makeCart(lines: unknown[] = []) {
   };
 }
 
-function makeCartLine(overrides: Partial<{ quantity: number; unitPrice: Prisma.Decimal; taxRateSnapshot: Prisma.Decimal | null; taxTypeName: string | null }> = {}) {
+function makeCartLine(overrides: Partial<{ quantity: number; unitPrice: Prisma.Decimal; taxRateSnapshot: Prisma.Decimal | null; taxTypeName: string | null; productId: string; name: string }> = {}) {
+  const productId = overrides.productId ?? PRODUCT_ID;
   return {
-    productId: PRODUCT_ID,
+    productId,
     quantity: overrides.quantity ?? 2,
     unitPrice: overrides.unitPrice ?? new Prisma.Decimal('10.00'),
     taxRateSnapshot: 'taxRateSnapshot' in overrides ? overrides.taxRateSnapshot : new Prisma.Decimal('20.00'),
     taxType: 'taxTypeName' in overrides ? (overrides.taxTypeName ? { name: overrides.taxTypeName } : null) : { name: 'VAT' },
-    product: { id: PRODUCT_ID, name: 'Wine', sku: 'SKU-1' },
+    product: { id: productId, name: overrides.name ?? 'Wine', sku: 'SKU-1' },
   };
 }
 
@@ -92,6 +93,34 @@ describe('CartService', () => {
       expect(prisma.cartOrder.upsert).not.toHaveBeenCalled();
       expect(result.orderId).toBe(CART_ID);
       expect(result.items).toHaveLength(1);
+    });
+
+    it('loads cart lines ordered by product name', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
+
+      await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+
+      expect(prisma.cartOrder.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: { lines: expect.objectContaining({ orderBy: [{ product: { name: 'asc' } }, { productId: 'asc' }] }) },
+        }),
+      );
+    });
+
+    it('returns items sorted alphabetically by product name even if the DB yields them out of order', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
+        makeCart([
+          makeCartLine({ productId: 'p-shiraz', name: 'Shiraz' }),
+          makeCartLine({ productId: 'p-chardonnay', name: 'Chardonnay' }),
+          makeCartLine({ productId: 'p-merlot', name: 'Merlot' }),
+        ]),
+      );
+
+      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+
+      expect(result.items.map((i) => i.product.name)).toEqual(['Chardonnay', 'Merlot', 'Shiraz']);
     });
 
     it('throws NotFoundException when distributor slug is unknown', async () => {

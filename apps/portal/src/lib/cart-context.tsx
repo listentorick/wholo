@@ -23,6 +23,13 @@ interface CartContextValue {
 
 export const CartContext = createContext<CartContextValue | null>(null);
 
+// The API already returns cart lines sorted by product name, but a slow/stale
+// response could still arrive out of order — sort defensively so the checkout
+// list never reshuffles when a quantity changes.
+const byProductName = (a: CartItem, b: CartItem) =>
+  a.product.name.localeCompare(b.product.name, undefined, { sensitivity: 'base' }) ||
+  a.productId.localeCompare(b.productId);
+
 export function CartProvider({
   distributorSlug,
   children,
@@ -49,7 +56,7 @@ export function CartProvider({
       qtys[item.productId] = item.quantity;
       ids.add(item.productId);
     }
-    setItems(cart.items);
+    setItems([...cart.items].sort(byProductName));
     setQuantities(qtys);
     setInCart(ids);
     setServerTotals({ taxAmount: parseFloat(cart.taxAmount), total: parseFloat(cart.total), taxLabel: cart.taxLabel });

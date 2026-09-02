@@ -28,11 +28,12 @@ import { cartApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { quantities, inCart, syncItem, subtotal, taxAmount, taxLabel, total } = useCart();
+  const { items, quantities, inCart, syncItem, subtotal, taxAmount, taxLabel, total } = useCart();
   return (
     <div>
       <button onClick={() => syncItem('prod-1', Math.max(0, (quantities['prod-1'] ?? 0) + 1))}>increase</button>
       <button onClick={() => syncItem('prod-1', Math.max(0, (quantities['prod-1'] ?? 0) - 1))}>decrease</button>
+      <span data-testid="order">{items.map((i) => i.product.name).join(',')}</span>
       <span data-testid="qty">{quantities['prod-1'] ?? ''}</span>
       <span data-testid="in-cart">{inCart.has('prod-1') ? 'yes' : 'no'}</span>
       <span data-testid="subtotal">{subtotal}</span>
@@ -163,6 +164,46 @@ describe('CartProvider taxAmount/total/taxLabel', () => {
 
     await waitFor(() => expect(screen.getByTestId('tax').textContent).toBe('4'));
     expect(screen.getByTestId('total').textContent).toBe('24');
+  });
+});
+
+describe('CartProvider item order', () => {
+  const unordered = {
+    orderId: 'order-1',
+    items: [
+      cartItem({ productId: 'p-shiraz', product: { id: 'p-shiraz', name: 'Shiraz', sku: null } }),
+      cartItem({ productId: 'p-chardonnay', product: { id: 'p-chardonnay', name: 'Chardonnay', sku: null } }),
+      cartItem({ productId: 'p-merlot', product: { id: 'p-merlot', name: 'Merlot', sku: null } }),
+    ],
+    subtotal: '7.50', taxAmount: '1.50', total: '9.00', taxLabel: 'VAT',
+  };
+
+  it('sorts items alphabetically by product name when the API returns them out of order', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue(unordered);
+
+    renderCart();
+
+    await waitFor(() => expect(screen.getByTestId('order').textContent).toBe('Chardonnay,Merlot,Shiraz'));
+  });
+
+  it('keeps the order stable after a quantity change resolves', async () => {
+    (cartApi.getCart as ReturnType<typeof vi.fn>).mockResolvedValue(unordered);
+    (cartApi.upsertItem as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...unordered,
+      items: [
+        unordered.items[2],
+        { ...unordered.items[0], quantity: 5 },
+        unordered.items[1],
+      ],
+    });
+
+    renderCart();
+    await waitFor(() => expect(screen.getByTestId('order').textContent).toBe('Chardonnay,Merlot,Shiraz'));
+
+    fireEvent.click(screen.getByText('increase'));
+
+    await waitFor(() => expect(cartApi.upsertItem).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('order').textContent).toBe('Chardonnay,Merlot,Shiraz'));
   });
 });
 
