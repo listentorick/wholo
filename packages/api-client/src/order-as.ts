@@ -9,11 +9,10 @@ export interface OrderAsExchangeResponse {
 }
 
 export const orderAsApi = {
-  exchange(deliveryToken: string, token: string): Promise<OrderAsExchangeResponse> {
+  exchange(deliveryToken: string): Promise<OrderAsExchangeResponse> {
     return apiFetch<OrderAsExchangeResponse>('/api/v1/auth/order-as/exchange', {
       method: 'POST',
       body: JSON.stringify({ deliveryToken }),
-      token,
     });
   },
 };

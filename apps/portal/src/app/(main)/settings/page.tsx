@@ -51,7 +51,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (authLoading || !accessToken) return;
-    portalApi.getMyProfile(accessToken).then((profile: MyProfileResponse) => {
+    portalApi.getMyProfile().then((profile: MyProfileResponse) => {
       reset({
         name: profile.name ?? '',
         legalName: profile.legalName ?? '',
@@ -85,7 +85,7 @@ export default function SettingsPage() {
         billingPostcode: values.billingPostcode || null,
         billingCountry: values.billingCountry || null,
       };
-      await portalApi.updateMyProfile(accessToken, body);
+      await portalApi.updateMyProfile(body);
       setSaveResult('success');
     } catch {
       setSaveResult('error');

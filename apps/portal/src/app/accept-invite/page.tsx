@@ -66,7 +66,7 @@ function AcceptInviteContent() {
 
     sessionStorage.removeItem(INVITE_TOKEN_STORAGE_KEY);
 
-    invitationsApi.accept(accessToken, token)
+    invitationsApi.accept(token)
       .then(async (result) => {
         // The accept call just created this user's Wholo account — re-fetch the
         // session so the app doesn't land on a stale "couldn't sign in" state left

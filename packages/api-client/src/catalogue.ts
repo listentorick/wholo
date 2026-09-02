@@ -3,12 +3,13 @@ import { apiFetch } from './base';
 
 export const catalogueApi = {
   getDistributor(distributorSlug: string): Promise<DistributorInfo> {
-    return apiFetch<DistributorInfo>(`/api/v1/distributors/${distributorSlug}`);
+    // Public endpoint — the distributor "about" page renders before the customer
+    // has signed in, so this must not pull on the auth token provider.
+    return apiFetch<DistributorInfo>(`/api/v1/distributors/${distributorSlug}`, { anonymous: true });
   },
 
   getProducts(
     distributorSlug: string,
-    token: string,
     params?: CatalogueProductsParams,
   ): Promise<CatalogueProductsResponse> {
     const query = new URLSearchParams();
@@ -19,14 +20,12 @@ export const catalogueApi = {
     const qs = query.toString();
     return apiFetch<CatalogueProductsResponse>(
       `/api/v1/distributors/${distributorSlug}/products${qs ? `?${qs}` : ''}`,
-      { token },
     );
   },
 
-  getProduct(distributorSlug: string, productId: string, token: string): Promise<CatalogueProductDetail> {
+  getProduct(distributorSlug: string, productId: string): Promise<CatalogueProductDetail> {
     return apiFetch<CatalogueProductDetail>(
       `/api/v1/distributors/${distributorSlug}/products/${productId}`,
-      { token },
     );
   },
 };

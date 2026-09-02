@@ -75,7 +75,7 @@ export function useDeliveryParts(
     let cancelled = false;
 
     deliveryApi
-      .getAvailableDates(distributorSlug, accessToken)
+      .getAvailableDates(distributorSlug)
       .then(({ dates }) => {
         if (cancelled) return;
         setDeliveryParts(dates.length > 0 ? formatDeliveryParts(dates[0].date, dates[0].cutoffDeadline) : null);

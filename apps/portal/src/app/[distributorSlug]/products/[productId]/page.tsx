@@ -72,7 +72,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (authLoading || !accessToken) return;
     catalogueApi
-      .getProduct(distributorSlug, productId, accessToken)
+      .getProduct(distributorSlug, productId)
       .then(setProduct)
       .catch(() => setError('Product could not be loaded.'))
       .finally(() => setLoading(false));
@@ -81,7 +81,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (authLoading || !accessToken) return;
     catalogueApi
-      .getProducts(distributorSlug, accessToken, { limit: 6 })
+      .getProducts(distributorSlug, { limit: 6 })
       .then((res) => setRelated(res.data.filter((p) => p.id !== productId).slice(0, 4)))
       .catch(() => setRelated([]));
   }, [authLoading, accessToken, distributorSlug, productId]);

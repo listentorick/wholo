@@ -47,7 +47,7 @@ export default function CataloguePage() {
     setFetchLoading(true);
     setFetchError(null);
     catalogueApi
-      .getProducts(distributorSlug, accessToken, debouncedSearch ? { search: debouncedSearch } : undefined)
+      .getProducts(distributorSlug, debouncedSearch ? { search: debouncedSearch } : undefined)
       .then((res) => {
         if (!cancelled) setCatalogue(res);
       })

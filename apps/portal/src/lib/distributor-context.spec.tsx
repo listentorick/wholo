@@ -69,7 +69,7 @@ describe('DistributorProvider — relationship fetch', () => {
     renderDistributor();
 
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ACTIVE'));
-    expect(portalApi.getDistributorRelationship).toHaveBeenCalledWith('test-dist', 'cust-1', 'test-token');
+    expect(portalApi.getDistributorRelationship).toHaveBeenCalledWith('test-dist', 'cust-1');
     expect(screen.getByTestId('min-spend').textContent).toBe('150');
   });
 
@@ -113,7 +113,7 @@ describe('DistributorProvider — relationship fetch', () => {
     renderDistributor();
 
     await waitFor(() =>
-      expect(portalApi.getDistributorRelationship).toHaveBeenCalledWith('test-dist', 'impersonated-cust', 'test-token'),
+      expect(portalApi.getDistributorRelationship).toHaveBeenCalledWith('test-dist', 'impersonated-cust'),
     );
   });
 });
@@ -203,7 +203,7 @@ describe('DistributorProvider — requestAccess', () => {
     fireEvent.click(screen.getByText('request-yes'));
 
     await waitFor(() =>
-      expect(portalApi.requestDistributorAccess).toHaveBeenCalledWith('test-dist', 'cust-1', true, 'test-token'),
+      expect(portalApi.requestDistributorAccess).toHaveBeenCalledWith('test-dist', 'cust-1', true),
     );
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('PENDING_REQUEST'));
   });
@@ -218,7 +218,7 @@ describe('DistributorProvider — requestAccess', () => {
     fireEvent.click(screen.getByText('request-no'));
 
     await waitFor(() =>
-      expect(portalApi.requestDistributorAccess).toHaveBeenCalledWith('test-dist', 'cust-1', false, 'test-token'),
+      expect(portalApi.requestDistributorAccess).toHaveBeenCalledWith('test-dist', 'cust-1', false),
     );
   });
 });

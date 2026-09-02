@@ -41,7 +41,7 @@ export function OrderAsHandler() {
     history.replaceState(null, '', url.pathname + (url.search || ''));
 
     console.log('[OrderAs] starting exchange');
-    orderAsApi.exchange(token, accessToken)
+    orderAsApi.exchange(token)
       .then((data) => {
         console.log('[OrderAs] exchange succeeded, customer:', data.customerName);
         setOrderAsSession({

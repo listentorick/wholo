@@ -134,15 +134,12 @@ export default function OrdersPage() {
   const fetchOrders = useCallback(async (cursor?: string) => {
     if (!accessToken) return;
     try {
-      const res = await ordersApi.listOrders(
-        {
-          limit: 20,
-          distributorSlug,
-          ...(statusFilter ? { status: statusFilter } : {}),
-          ...(cursor ? { cursor } : {}),
-        },
-        accessToken,
-      );
+      const res = await ordersApi.listOrders({
+        limit: 20,
+        distributorSlug,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(cursor ? { cursor } : {}),
+      });
       if (cursor) {
         setOrders((prev) => [...prev, ...res.data]);
       } else {

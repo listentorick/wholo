@@ -72,7 +72,7 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
       setRelationshipMinSpend(null);
       return;
     }
-    const rel = await portalApi.getDistributorRelationship(distributorSlug, customerId, accessToken);
+    const rel = await portalApi.getDistributorRelationship(distributorSlug, customerId);
     setRelationshipStatus(rel?.status ?? 'NONE');
     setRelationshipMinSpend(
       rel?.status === TradeRelationshipStatus.ACTIVE && rel.minimumOrderSpend != null
@@ -94,7 +94,7 @@ export function DistributorProvider({ distributorSlug, children }: { distributor
   const requestAccess = useCallback(
     async (recentContact: boolean) => {
       if (!accessToken || !customerId) throw new Error('Not signed in');
-      await portalApi.requestDistributorAccess(distributorSlug, customerId, recentContact, accessToken);
+      await portalApi.requestDistributorAccess(distributorSlug, customerId, recentContact);
       await refetchRelationship();
     },
     [distributorSlug, accessToken, customerId, refetchRelationship],

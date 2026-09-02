@@ -176,7 +176,6 @@ describe('CartProvider syncItem', () => {
     await waitFor(() => {
       expect(cartApi.upsertItem).toHaveBeenCalledWith(
         { distributorSlug: 'test-dist', productId: 'prod-1', quantity: 1 },
-        'test-token',
       );
     });
   });
@@ -196,7 +195,6 @@ describe('CartProvider syncItem', () => {
     await waitFor(() => {
       expect(cartApi.upsertItem).toHaveBeenCalledWith(
         { distributorSlug: 'test-dist', productId: 'prod-1', quantity: 4 },
-        'test-token',
       );
     });
   });
@@ -210,7 +208,6 @@ describe('CartProvider syncItem', () => {
     await waitFor(() => {
       expect(cartApi.upsertItem).toHaveBeenCalledWith(
         { distributorSlug: 'test-dist', productId: 'prod-1', quantity: 0 },
-        'test-token',
       );
     });
   });

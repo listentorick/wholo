@@ -29,7 +29,7 @@ export default function HomePage() {
     if (!accessToken) return;
     setLoading(true);
     portalApi
-      .getMyDistributors(accessToken)
+      .getMyDistributors()
       .then(setDistributors)
       .catch(() => {})
       .finally(() => setLoading(false));

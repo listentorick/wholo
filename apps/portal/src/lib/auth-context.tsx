@@ -1,8 +1,15 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi, ApiError } from '@wholo/api-client';
 import type { AuthUser } from '@wholo/types';
+import { ensureKeycloak, getKeycloak } from './keycloak';
+import {
+  installAuthToken,
+  isSessionExpired,
+  onSessionExpired,
+  resetAuthTokenState,
+} from './auth-token';
 
 const ORDER_AS_STORAGE_KEY = 'orderAs_session';
 
@@ -19,6 +26,8 @@ interface AuthContextValue {
   accessToken: string | null;
   isLoading: boolean;
   authError: string | null;
+  /** Refresh has failed — authenticated requests are blocked until the user signs in again. */
+  sessionExpired: boolean;
   orderAsMode: boolean;
   orderAsCustomerId: string | null;
   orderAsCustomerName: string | null;
@@ -42,50 +51,18 @@ function isSafeReturnUrl(url: string): boolean {
   );
 }
 
-let initPromise: Promise<boolean> | null = null;
-
-async function getKeycloakAuth(onTokenExpired: () => void): Promise<boolean> {
-  if (initPromise) return initPromise;
-
-  const { default: Keycloak } = await import('keycloak-js');
-  const kc = new Keycloak({
-    url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080',
-    realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
-    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-portal',
-  });
-
-  // Must be assigned before init() — keycloak-js only arms its silent-refresh
-  // timer if onTokenExpired is already set when init() installs the initial token.
-  kc.onTokenExpired = onTokenExpired;
-
-  initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
-    (window as any).__kc = kc;
-    return authenticated;
-  });
-
-  return initPromise;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [orderAsState, setOrderAsStateInternal] = useState<OrderAsState | null>(null);
 
-  const handleTokenExpired = useCallback(() => {
-    const kc = (window as any).__kc;
-    kc?.updateToken(30)
-      .then(() => setAccessToken(kc.token ?? null))
-      .catch(() => {
-        setUser(null);
-        setAccessToken(null);
-      });
-  }, []);
-
-  const loadProfile = useCallback(async (token: string) => {
+  const loadProfile = useCallback(async () => {
     try {
-      const profile = await authApi.me(token);
+      // Token comes from the centralised provider (installAuthToken) — no snapshot here.
+      const profile = await authApi.me();
       setUser(profile as AuthUser);
       // Clears a stale error from an earlier failed fetch (see refreshSession) —
       // this is what lets a caller resync state after it fixes the underlying cause.
@@ -99,29 +76,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    getKeycloakAuth(handleTokenExpired)
-      .then(async (authenticated) => {
-        const kc = (window as any).__kc;
-        if (!authenticated || !kc?.token) return;
+    // Wire getAuthToken into the api-client and the keycloak-js refresh timer.
+    installAuthToken();
+    if (isSessionExpired()) setSessionExpired(true);
+    const unsubscribe = onSessionExpired(() => setSessionExpired(true));
 
-        const token: string = kc.token;
-        setAccessToken(token);
-        await loadProfile(token);
+    ensureKeycloak()
+      .then(async (kc) => {
+        if (!kc?.authenticated || !kc.token) return;
+        setAccessToken(kc.token);
+        await loadProfile();
       })
       .finally(() => setIsLoading(false));
-  }, [handleTokenExpired, loadProfile]);
+
+    return unsubscribe;
+  }, [loadProfile]);
 
   // Re-fetch the profile on demand — for a caller that just performed an action
   // (e.g. accepting an invite) which may have created the Wholo user record that
   // the initial mount fetch above raced against and lost. See ADR/invite-accept fix.
   const refreshSession = useCallback(async () => {
-    const kc = (window as any).__kc;
-    const token: string | undefined = kc?.token;
-    if (token) await loadProfile(token);
+    if (getKeycloak()?.token) await loadProfile();
   }, [loadProfile]);
 
   const login = useCallback((returnUrlOverride?: string) => {
-    const kc = (window as any).__kc;
+    resetAuthTokenState();
     const params = new URLSearchParams(window.location.search);
     const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
     // Concatenated directly onto origin below, so a value that isn't a plain
@@ -129,54 +108,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // redirect to an attacker-controlled host — reject anything but a path.
     const returnUrl = isSafeReturnUrl(requestedReturnUrl) ? requestedReturnUrl : '/';
     const redirectUri = window.location.origin + returnUrl;
-    if (kc) {
-      kc.login({ redirectUri });
-    } else {
-      getKeycloakAuth(handleTokenExpired).then(() => {
-        (window as any).__kc?.login({ redirectUri });
-      });
-    }
-  }, [handleTokenExpired]);
+    ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
+  }, []);
 
   const loginWithRedirect = useCallback((redirectUri: string) => {
-    const kc = (window as any).__kc;
-    if (kc) {
-      kc.login({ redirectUri });
-    } else {
-      getKeycloakAuth(handleTokenExpired).then(() => {
-        (window as any).__kc?.login({ redirectUri });
-      });
-    }
-  }, [handleTokenExpired]);
+    resetAuthTokenState();
+    ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
+  }, []);
 
   const registerWithRedirect = useCallback((redirectUri: string) => {
-    const kc = (window as any).__kc;
-    if (kc) {
-      kc.register({ redirectUri });
-    } else {
-      getKeycloakAuth(handleTokenExpired).then(() => {
-        (window as any).__kc?.register({ redirectUri });
-      });
-    }
-  }, [handleTokenExpired]);
+    resetAuthTokenState();
+    ensureKeycloak().then((kc) => kc?.register({ redirectUri }));
+  }, []);
 
   const changePassword = useCallback(() => {
-    const kc = (window as any).__kc;
     const redirectUri = window.location.href;
-    if (kc) {
-      kc.login({ action: 'UPDATE_PASSWORD', redirectUri });
-    } else {
-      getKeycloakAuth(handleTokenExpired).then(() => {
-        (window as any).__kc?.login({ action: 'UPDATE_PASSWORD', redirectUri });
-      });
-    }
-  }, [handleTokenExpired]);
+    ensureKeycloak().then((kc) => kc?.login({ action: 'UPDATE_PASSWORD', redirectUri }));
+  }, []);
 
   const logout = useCallback(() => {
+    resetAuthTokenState();
     sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
-    const kc = (window as any).__kc;
+    const kc = getKeycloak();
     try {
-      kc.logout({ redirectUri: window.location.origin + '/login' });
+      kc!.logout({ redirectUri: window.location.origin + '/login' });
     } catch {
       setUser(null);
       setAccessToken(null);
@@ -203,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken,
       isLoading,
       authError,
+      sessionExpired,
       orderAsMode: orderAsState !== null,
       orderAsCustomerId: orderAsState?.customerId ?? null,
       orderAsCustomerName: orderAsState?.customerName ?? null,
@@ -217,7 +173,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearOrderAsSession,
     }}>
       {children}
+      {sessionExpired && <SessionExpiredOverlay onSignIn={() => login()} />}
     </AuthContext.Provider>
+  );
+}
+
+function SessionExpiredOverlay({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="session-expired-heading"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white px-6 text-center"
+    >
+      <p id="session-expired-heading" className="max-w-sm text-sm font-medium text-foreground">
+        Your session has expired. Sign in again to continue.
+      </p>
+      <button
+        onClick={onSignIn}
+        className="mt-2 rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+      >
+        Sign in again
+      </button>
+    </div>
   );
 }
 

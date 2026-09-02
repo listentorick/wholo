@@ -62,7 +62,7 @@ export function CartProvider({
     }
     setCartLoading(true);
     cartApi
-      .getCart(distributorSlug, accessToken)
+      .getCart(distributorSlug)
       .then(reconcile)
       .catch(() => {})
       .finally(() => setCartLoading(false));
@@ -77,7 +77,7 @@ export function CartProvider({
       setQuantities((prev) => ({ ...prev, [productId]: quantity }));
 
       try {
-        const cart = await cartApi.upsertItem({ distributorSlug, productId, quantity }, accessToken);
+        const cart = await cartApi.upsertItem({ distributorSlug, productId, quantity });
         reconcile(cart);
       } catch {
         setInCart((prev) => {
@@ -98,7 +98,7 @@ export function CartProvider({
 
   const refreshCart = useCallback(async () => {
     if (!accessToken) return;
-    const cart = await cartApi.getCart(distributorSlug, accessToken);
+    const cart = await cartApi.getCart(distributorSlug);
     reconcile(cart);
   }, [accessToken, distributorSlug, reconcile]);
 

@@ -161,7 +161,7 @@ describe('CataloguePage', () => {
     });
 
     await waitFor(() => {
-      expect(catalogueApi.getProducts).toHaveBeenLastCalledWith('test-dist', 'test-token', {
+      expect(catalogueApi.getProducts).toHaveBeenLastCalledWith('test-dist', {
         search: 'egg',
       });
     });

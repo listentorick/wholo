@@ -63,7 +63,7 @@ export default function CheckoutPage() {
     if (!accessToken) return;
     setLoadingDates(true);
     deliveryApi
-      .getAvailableDates(distributorSlug, accessToken)
+      .getAvailableDates(distributorSlug)
       .then((res) => setAvailableDates(res.dates))
       .catch(() => setAvailableDates([]))
       .finally(() => setLoadingDates(false));
@@ -73,7 +73,7 @@ export default function CheckoutPage() {
     if (!accessToken || !customerId) return;
     setLoadingAddress(true);
     portalApi
-      .getMyDeliveryAddress(distributorSlug, customerId, accessToken)
+      .getMyDeliveryAddress(distributorSlug, customerId)
       .then((res) => setDeliveryAddress(res.deliveryAddress))
       .catch(() => setDeliveryAddress(null))
       .finally(() => setLoadingAddress(false));
@@ -84,15 +84,12 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const order = await ordersApi.submitOrder(
-        {
-          distributorSlug,
-          customerReference: poNumber || undefined,
-          notes: comment || undefined,
-          requestedDeliveryDate: selectedDeliveryDate ?? undefined,
-        },
-        accessToken,
-      );
+      const order = await ordersApi.submitOrder({
+        distributorSlug,
+        customerReference: poNumber || undefined,
+        notes: comment || undefined,
+        requestedDeliveryDate: selectedDeliveryDate ?? undefined,
+      });
       if (orderAsMode) {
         // Session was consumed atomically with order creation — clear it from storage
         // before any further requests fire (those would 401 with the stale token).
@@ -107,7 +104,7 @@ export default function CheckoutPage() {
         // Delivery date no longer valid — re-fetch available dates and prompt reselection
         setSelectedDeliveryDate(null);
         deliveryApi
-          .getAvailableDates(distributorSlug, accessToken)
+          .getAvailableDates(distributorSlug)
           .then((res) => setAvailableDates(res.dates))
           .catch(() => {});
         setSubmitError('That delivery date is no longer available. Please select another date.');

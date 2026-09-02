@@ -58,7 +58,7 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     if (authLoading || !accessToken) return;
-    ordersApi.getOrder(orderId, accessToken)
+    ordersApi.getOrder(orderId)
       .then(setOrder)
       .catch(() => setError('Order not found or could not be loaded'))
       .finally(() => setLoading(false));
@@ -69,7 +69,7 @@ export default function OrderDetailPage() {
     setCancelling(true);
     setCancelError(null);
     try {
-      const updated = await ordersApi.cancelOrder(orderId, { reason: 'Cancelled by customer' }, accessToken);
+      const updated = await ordersApi.cancelOrder(orderId, { reason: 'Cancelled by customer' });
       setOrder(updated);
       setCancelConfirm(false);
     } catch (err) {

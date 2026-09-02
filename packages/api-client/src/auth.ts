@@ -9,7 +9,7 @@ export const authApi = {
     });
   },
 
-  me(token: string): Promise<AuthUser> {
-    return apiFetch<AuthUser>('/api/v1/auth/me', { token });
+  me(): Promise<AuthUser> {
+    return apiFetch<AuthUser>('/api/v1/auth/me');
   },
 };
