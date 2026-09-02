@@ -1,0 +1,214 @@
+'use client';
+
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/lib/auth-context';
+import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
+import { SyncNowButton as ContactsSyncNowButton } from '@/components/integrations/contacts/SyncNowButton';
+import { ProductsTab } from '@/components/integrations/products/ProductsTab';
+import { SyncNowButton as ProductsSyncNowButton } from '@/components/integrations/products/SyncNowButton';
+import { TaxTypesTab } from '@/components/integrations/tax-types/TaxTypesTab';
+import { SyncNowButton as TaxTypesSyncNowButton } from '@/components/integrations/tax-types/SyncNowButton';
+import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
+import { adminAccountingApi } from '@wholo/admin-api-client';
+import type { AccountingConnectionStatusResponse } from '@wholo/types';
+
+type TabKey = 'contacts' | 'products' | 'taxTypes' | 'invoices' | 'settings';
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'contacts', label: 'Contacts' },
+  { key: 'products', label: 'Products' },
+  { key: 'taxTypes', label: 'Tax types' },
+  { key: 'invoices', label: 'Invoice exports' },
+  { key: 'settings', label: 'Settings' },
+];
+
+// Provider is an enum on the backend (AccountingProvider) — this page stays
+// provider-neutral in structure, this map is just display copy.
+const PROVIDER_LABELS: Record<string, string> = { XERO: 'Xero' };
+
+function Spinner() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-canvas">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+    </div>
+  );
+}
+
+function AccountingPageInner() {
+  const { accessToken } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null | undefined>(undefined);
+  const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
+  const [productsNeedsAttentionCount, setProductsNeedsAttentionCount] = useState(0);
+  const [taxTypesNeedsAttentionCount, setTaxTypesNeedsAttentionCount] = useState(0);
+
+  const activeTab = (searchParams.get('tab') as TabKey) ?? 'contacts';
+
+  useEffect(() => {
+    if (!accessToken) return;
+    adminAccountingApi
+      .getConnection(accessToken)
+      .then((res) => setConnection(res ?? null))
+      .catch(() => setConnection(null));
+  }, [accessToken]);
+
+  const fetchNeedsAttentionCount = useCallback(() => {
+    if (!accessToken || connection?.status !== 'CONNECTED') return;
+    adminAccountingApi
+      .countContactsNeedingAttention(accessToken)
+      .then((res) => setNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't update if this fails.
+      });
+  }, [accessToken, connection?.status]);
+
+  const fetchProductsNeedsAttentionCount = useCallback(() => {
+    if (!accessToken || connection?.status !== 'CONNECTED') return;
+    adminAccountingApi
+      .countProductsNeedingAttention(accessToken)
+      .then((res) => setProductsNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't update if this fails.
+      });
+  }, [accessToken, connection?.status]);
+
+  const fetchTaxTypesNeedsAttentionCount = useCallback(() => {
+    if (!accessToken || connection?.status !== 'CONNECTED') return;
+    adminAccountingApi
+      .countTaxTypesNeedingAttention(accessToken)
+      .then((res) => setTaxTypesNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the badge just doesn't update if this fails.
+      });
+  }, [accessToken, connection?.status]);
+
+  useEffect(() => {
+    fetchNeedsAttentionCount();
+    fetchProductsNeedsAttentionCount();
+    fetchTaxTypesNeedsAttentionCount();
+  }, [fetchNeedsAttentionCount, fetchProductsNeedsAttentionCount, fetchTaxTypesNeedsAttentionCount]);
+
+  function setTab(key: TabKey) {
+    router.push(`/integrations/accounting?tab=${key}`);
+  }
+
+  if (connection === undefined) {
+    return <Spinner />;
+  }
+
+  if (!connection || connection.status !== 'CONNECTED') {
+    return (
+      <>
+        <h1 className="mb-6 text-xl font-semibold text-text">Accounting</h1>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
+          <h2 className="mb-1.5 text-base font-semibold text-text">No accounting connection</h2>
+          <p className="mb-4 text-sm text-muted">
+            Connect an accounting provider to review and import its contacts, products, and invoices here.
+          </p>
+          <Link href="/integrations" className="text-sm text-primary hover:underline">
+            Go to Integrations →
+          </Link>
+        </div>
+      </>
+    );
+  }
+
+  const providerLabel = PROVIDER_LABELS[connection.provider] ?? connection.provider;
+
+  return (
+    <>
+      <div className="mb-6">
+        <Link
+          href="/integrations"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-text transition-colors mb-3"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Integrations
+        </Link>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-text">
+            {providerLabel} — {connection.externalOrganisationName}
+          </h1>
+          {activeTab === 'contacts' && accessToken && (
+            <ContactsSyncNowButton token={accessToken} onQueued={fetchNeedsAttentionCount} />
+          )}
+          {activeTab === 'products' && accessToken && (
+            <ProductsSyncNowButton token={accessToken} onQueued={fetchProductsNeedsAttentionCount} />
+          )}
+          {activeTab === 'taxTypes' && accessToken && (
+            <TaxTypesSyncNowButton token={accessToken} onQueued={fetchTaxTypesNeedsAttentionCount} />
+          )}
+        </div>
+      </div>
+
+      <div className="mb-6 border-b border-border">
+        <nav className="-mb-px flex gap-6 overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setTab(tab.key)}
+              className={[
+                'shrink-0 border-b-2 pb-3 text-sm font-medium transition-colors flex items-center gap-1.5',
+                activeTab === tab.key
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted hover:text-text hover:border-border',
+              ].join(' ')}
+            >
+              {tab.label}
+              {tab.key === 'contacts' && needsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {needsAttentionCount}
+                </span>
+              )}
+              {tab.key === 'products' && productsNeedsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {productsNeedsAttentionCount}
+                </span>
+              )}
+              {tab.key === 'taxTypes' && taxTypesNeedsAttentionCount > 0 && (
+                <span className="inline-flex items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">
+                  {taxTypesNeedsAttentionCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {activeTab === 'contacts' && accessToken && (
+        <ContactsTab token={accessToken} providerLabel={providerLabel} onContactsChanged={fetchNeedsAttentionCount} />
+      )}
+      {activeTab === 'products' && accessToken && (
+        <ProductsTab token={accessToken} providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
+      )}
+      {activeTab === 'taxTypes' && accessToken && (
+        <TaxTypesTab token={accessToken} providerLabel={providerLabel} onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount} />
+      )}
+      {activeTab === 'settings' && accessToken && (
+        <AccountingSettingsTab token={accessToken} connection={connection} onConnectionUpdated={setConnection} />
+      )}
+      {activeTab === 'invoices' && (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
+          <h2 className="mb-1.5 text-base font-semibold text-text">Coming soon</h2>
+          <p className="text-sm text-muted">Invoice export history is not available yet.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function AccountingPage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <AccountingPageInner />
+    </Suspense>
+  );
+}

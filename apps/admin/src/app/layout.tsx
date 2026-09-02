@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { NotificationProvider } from '@/lib/notification-context';
+import { NavBadgesProvider } from '@/lib/nav-badges-context';
 
 export const metadata: Metadata = {
   title: 'Stocdup Admin',
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AuthProvider>
-          <NotificationProvider>{children}</NotificationProvider>
+          <NotificationProvider>
+            <NavBadgesProvider>{children}</NavBadgesProvider>
+          </NotificationProvider>
         </AuthProvider>
       </body>
     </html>

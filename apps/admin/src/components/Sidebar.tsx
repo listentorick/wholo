@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { adminAccountingApi, adminOrdersApi } from '@wholo/admin-api-client';
+import { useNavBadges } from '@/lib/nav-badges-context';
 
 interface NavItem {
   label: string;
@@ -192,26 +191,11 @@ function CountBadge({ count, compact = false }: { count: number; compact?: boole
 interface SidebarProps {
   onClose: () => void;
   onLogout: () => void;
-  token?: string;
 }
 
-export function Sidebar({ onClose, onLogout, token }: SidebarProps) {
+export function Sidebar({ onClose, onLogout }: SidebarProps) {
   const pathname = usePathname();
-  const [counts, setCounts] = useState<Record<string, number>>({});
-
-  useEffect(() => {
-    if (!token) return;
-    // Best-effort, no polling — each returns 0 (no badge) when there's
-    // nothing to flag, so these are safe to call unconditionally.
-    adminAccountingApi
-      .countContactsNeedingAttention(token)
-      .then((res) => setCounts((c) => ({ ...c, '/integrations': res.count })))
-      .catch(() => {});
-    adminOrdersApi
-      .countOrdersNeedingAttention(token)
-      .then((res) => setCounts((c) => ({ ...c, '/orders': res.count })))
-      .catch(() => {});
-  }, [token]);
+  const { counts } = useNavBadges();
 
   return (
     <div className="flex h-full flex-col text-sidebar-fg">
