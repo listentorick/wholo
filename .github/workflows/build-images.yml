@@ -10,8 +10,9 @@ permissions:
   packages: write
 
 jobs:
-  # Informational for now — does not gate image publishing. Flip the build
-  # job to `needs: [test]` once this has a green track record.
+  # Informational for now — runs lint then tests, does not gate image
+  # publishing. Flip the build job to `needs: [test]` once this has a green
+  # track record. A lint failure reddens this job but images still publish.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +23,9 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Lint before tests. Flat config in eslint.config.mjs; non-type-checked,
+      # so it needs no prisma generate.
+      - run: pnpm lint
       # Tests compile against the generated Prisma client (enums, Decimal,
       # typed transactions) — without this every suite fails with TS2305.
       - run: pnpm --filter @wholo/api exec prisma generate

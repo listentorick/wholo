@@ -61,6 +61,16 @@ The current route layout of `apps/api` is acknowledged as messy and is being inc
 
 Advanced warehouse management, route optimisation, procurement forecasting, barcode scanning, multi-warehouse, BI/reporting, AI recommendations, EDI integrations.
 
+## Linting
+
+Lint is a **single repo-root concern**: `pnpm lint` (from the root) runs `eslint .`
+against one flat config, `eslint.config.mjs`. There are **no per-package lint
+scripts** and no `turbo` lint task. The ruleset is non-type-checked and currently
+tuned so the tree lints with zero errors — genuinely noisy rules are `warn`, not
+`error` (ratchet later). CI runs `pnpm lint` in the `test` job before the tests;
+it is informational and does not gate image publishing. `next build` does not lint
+(`eslint.ignoreDuringBuilds` is set in every `next.config.ts`).
+
 ## Testing
 
 Unit tests are **required** for all new code. Every service method, controller, and utility must have a corresponding `.spec.ts` (backend) or `.spec.tsx` (frontend) file alongside it.

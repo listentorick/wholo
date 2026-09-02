@@ -4,7 +4,6 @@ jest.mock('jwks-rsa', () => ({
   passportJwtSecret: jest.fn(() => jest.fn()),
 }));
 
-// eslint-disable-next-line import/first
 import { KeycloakJwtStrategy } from './keycloak-jwt.strategy';
 
 describe('KeycloakJwtStrategy', () => {

@@ -11,7 +11,7 @@
     "dev:driver": "turbo run dev --filter=@wholo/driver",
     "dev:www": "turbo run dev --filter=@wholo/www",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "type-check": "turbo run type-check",
     "db:migrate:dev": "pnpm --filter @wholo/api exec prisma migrate dev",
     "db:migrate:deploy": "pnpm --filter @wholo/api exec prisma migrate deploy",
@@ -25,8 +25,15 @@
     "k8s:pf:redis": "kubectl port-forward svc/wholo-redis-master 6379:6379"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^15.5.25",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
     "turbo": "^2.3.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.69.0"
   },
   "engines": {
     "node": ">=20",

@@ -6,6 +6,9 @@ const PLAUSIBLE_INTERNAL_URL =
   process.env.PLAUSIBLE_INTERNAL_URL || 'http://wholo-plausible:8000';
 
 const nextConfig: NextConfig = {
+  // Linting is a separate repo-root concern (`pnpm lint`), run in CI before
+  // tests. Keep it out of `next build` so image builds stay independent of it.
+  eslint: { ignoreDuringBuilds: true },
   // Standalone server output — this app deploys as its own container
   // (no NestJS BFF wrapper, unlike portal/admin/driver).
   output: 'standalone',
