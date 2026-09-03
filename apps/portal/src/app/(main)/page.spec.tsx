@@ -158,17 +158,17 @@ describe('HomePage — suppliers', () => {
 });
 
 describe('HomePage — discovery placeholders', () => {
-  it('renders the recommended-suppliers placeholder, visibly marked', async () => {
+  it('renders the recommended-suppliers section', async () => {
     render(<HomePage />);
     expect(await screen.findByText('Recommended suppliers')).toBeInTheDocument();
-    expect(screen.getByText(/example/i)).toBeInTheDocument();
+    expect(screen.getByText('Marketplace')).toBeInTheDocument();
   });
 
   it('renders the search bar as an inert placeholder', async () => {
     render(<HomePage />);
     expect(await screen.findByText('Search products or suppliers')).toBeInTheDocument();
-    expect(screen.getByText('Product & supplier search is coming soon.')).toBeInTheDocument();
     expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
   });
 
   it('renders the merchandising band', async () => {

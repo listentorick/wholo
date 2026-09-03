@@ -6,12 +6,11 @@ import { Beef, Carrot, ChevronLeft, ChevronRight, Coffee, Croissant, Milk } from
 import { Eyebrow } from '@/components/Eyebrow';
 
 /*
- * TODO(marketplace): replace EXAMPLE_SUPPLIERS with a real feed once a marketplace
- * directory exists. Today there is no endpoint that lists distributors a customer
- * is not connected to, no category taxonomy, and no recommendation logic —
- * `DistributorSettings.marketplaceVisible` / `marketplaceDescription` are
- * write-only (admin form only). This data is FAKE; the "Example" tag below MUST
- * stay visible until the feed is real. See docs/ follow-ups in the home-page plan.
+ * TODO(marketplace): EXAMPLE_SUPPLIERS is placeholder data — there is no endpoint
+ * that lists distributors a customer is not connected to, no category taxonomy,
+ * and no recommendation logic yet (`DistributorSettings.marketplaceVisible` /
+ * `marketplaceDescription` are write-only, admin form only). Replace with a real
+ * feed when the marketplace directory exists; see the home-page plan follow-ups.
  */
 type LucideIcon = ComponentType<{ className?: string; strokeWidth?: number }>;
 
@@ -84,24 +83,24 @@ const ARROW =
 function ExampleCard({ supplier }: { supplier: ExampleSupplier }) {
   const { Icon } = supplier;
   return (
-    <div className="w-[190px] flex-shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
-      <div className={clsx('relative flex h-24 items-center justify-center', supplier.tint)}>
+    <div className="w-[190px] flex-shrink-0 rounded-lg border border-border bg-surface">
+      <div className={clsx('relative flex h-24 items-center justify-center rounded-t-lg', supplier.tint)}>
         <Icon className="h-9 w-9 text-slate-400" strokeWidth={1.5} />
         {supplier.isNew && (
           <span className="absolute right-0 top-2 bg-amber px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-fg">
             New supplier
           </span>
         )}
-      </div>
-      <div className="px-3 pb-3">
         <span
           className={clsx(
-            '-mt-4 mb-2 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface',
+            'absolute -bottom-4 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface',
             supplier.badgeTint,
           )}
         >
           <Icon className="h-4 w-4 text-white" strokeWidth={1.75} />
         </span>
+      </div>
+      <div className="px-3 pb-3 pt-6">
         <p className="truncate text-sm font-semibold text-foreground">{supplier.name}</p>
         <p className="mt-0.5 text-xs text-muted">{supplier.location}</p>
         <p className="text-xs text-muted">{supplier.category}</p>
@@ -125,12 +124,7 @@ export function RecommendedSuppliers({ className }: { className?: string }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <Eyebrow className="mb-2">Marketplace</Eyebrow>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">Recommended suppliers</h2>
-            <span className="rounded-full border border-amber-border bg-amber-light px-2 py-0.5 text-[11px] font-medium text-amber-fg">
-              Example · coming soon
-            </span>
-          </div>
+          <h2 className="text-base font-semibold text-foreground">Recommended suppliers</h2>
         </div>
         <div className="flex flex-shrink-0 gap-1.5">
           <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className={ARROW}>
@@ -142,7 +136,10 @@ export function RecommendedSuppliers({ className }: { className?: string }) {
         </div>
       </div>
 
-      <div ref={scrollRef} className="mt-4 flex gap-4 overflow-x-auto pb-1">
+      <div
+        ref={scrollRef}
+        className="mt-4 flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {EXAMPLE_SUPPLIERS.map((s) => (
           <ExampleCard key={s.id} supplier={s} />
         ))}

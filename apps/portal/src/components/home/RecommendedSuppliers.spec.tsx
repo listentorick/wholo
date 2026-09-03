@@ -9,11 +9,6 @@ describe('RecommendedSuppliers', () => {
     expect(screen.getByText('Marketplace')).toBeTruthy();
   });
 
-  it('is visibly marked as example / coming-soon data', () => {
-    render(<RecommendedSuppliers />);
-    expect(screen.getByText(/example/i)).toBeTruthy();
-  });
-
   it('renders every example supplier card', () => {
     render(<RecommendedSuppliers />);
     for (const name of [

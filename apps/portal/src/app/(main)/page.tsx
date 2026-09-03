@@ -18,26 +18,26 @@ const SECONDARY_FILTER_THRESHOLD = 6;
 /**
  * The prominent discovery search from the design. Product + supplier search is a
  * greenfield feature, so this is a deliberately inert stand-in — a styled `<div>`,
- * never an `<input>`, so it cannot be focused, typed into, or submitted. The
- * visible caption does the "not yet" labelling for everyone.
+ * never an `<input>`, so it cannot be focused, typed into, or submitted.
  */
 function SupplierSearchPlaceholder({ className }: { className?: string }) {
   return (
-    <div className={clsx('hm-rise', className)} style={{ animationDelay: '0.06s' }}>
-      <div className="flex items-stretch gap-2" aria-hidden="true">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-            <Search className="h-4 w-4" />
-          </span>
-          <div className="w-full rounded-md border border-border bg-surface py-2.5 pl-10 pr-4 text-sm text-muted">
-            Search products or suppliers
-          </div>
-        </div>
-        <div className="flex w-11 items-center justify-center rounded-md bg-accent text-white">
+    <div
+      className={clsx('hm-rise flex items-stretch gap-2', className)}
+      style={{ animationDelay: '0.06s' }}
+      aria-hidden="true"
+    >
+      <div className="relative flex-1">
+        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
           <Search className="h-4 w-4" />
+        </span>
+        <div className="w-full rounded-md border border-border bg-surface py-2.5 pl-10 pr-4 text-sm text-muted">
+          Search products or suppliers
         </div>
       </div>
-      <p className="mt-1.5 text-xs text-muted">Product &amp; supplier search is coming soon.</p>
+      <div className="flex w-11 items-center justify-center rounded-md bg-accent text-white">
+        <Search className="h-4 w-4" />
+      </div>
     </div>
   );
 }
