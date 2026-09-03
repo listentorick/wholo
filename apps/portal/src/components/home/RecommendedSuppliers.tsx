@@ -139,7 +139,9 @@ export function RecommendedSuppliers({ className }: { className?: string }) {
       ) : (
         <div
           ref={scrollRef}
-          className="mt-4 flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          // Horizontal scroll forces overflow-y to clip too; the padding + matching
+          // negative margin give the cards' hover lift + shadow room without shifting them.
+          className="-mx-2 mt-3 flex gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {suppliers.map((d) => (
             <RecommendedCard key={d.id} distributor={d} />
