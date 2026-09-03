@@ -44,6 +44,23 @@ describe('DistributorCard', () => {
     expect(mockPush).toHaveBeenCalledWith('/winos');
   });
 
+  it('lays out as a horizontal row', () => {
+    render(<DistributorCard distributor={baseDistributor} />);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toContain('flex');
+    expect(cls).toContain('items-center');
+  });
+
+  it('renders a chevron when unlocked and a lock when locked', () => {
+    const { rerender } = render(<DistributorCard distributor={baseDistributor} />);
+    expect(screen.getByTestId('chevron-icon')).toBeTruthy();
+    expect(screen.queryByTestId('lock-icon')).toBeNull();
+
+    rerender(<DistributorCard distributor={baseDistributor} locked />);
+    expect(screen.getByTestId('lock-icon')).toBeTruthy();
+    expect(screen.queryByTestId('chevron-icon')).toBeNull();
+  });
+
   it('shows initials avatar when no logoUrl', () => {
     render(<DistributorCard distributor={{ ...baseDistributor, logoUrl: null }} />);
     expect(screen.getByText('W')).toBeTruthy();
