@@ -528,6 +528,20 @@ export interface PortalDistributorSummary {
   minimumOrderSpend: number | null;
 }
 
+/**
+ * A marketplace-visible distributor the trade customer is not yet connected to —
+ * shown in the portal home "Recommended suppliers" panel.
+ */
+export interface PortalRecommendedDistributor {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  tagline: string | null;
+  /** API-composed `[addressCity, addressCountry].filter(Boolean).join(', ') || null`. */
+  location: string | null;
+}
+
 export interface CatalogueProductsResponse {
   distributor: { id: string; name: string };
   data: CatalogueProduct[];

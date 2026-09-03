@@ -1,116 +1,104 @@
 'use client';
 
-import { useRef, type ComponentType } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import clsx from 'clsx';
-import { Beef, Carrot, ChevronLeft, ChevronRight, Coffee, Croissant, Milk } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { Eyebrow } from '@/components/Eyebrow';
+import { useAuth } from '@/lib/auth-context';
+import { portalApi } from '@wholo/api-client';
+import type { PortalRecommendedDistributor } from '@wholo/types';
 
-/*
- * TODO(marketplace): EXAMPLE_SUPPLIERS is placeholder data — there is no endpoint
- * that lists distributors a customer is not connected to, no category taxonomy,
- * and no recommendation logic yet (`DistributorSettings.marketplaceVisible` /
- * `marketplaceDescription` are write-only, admin form only). Replace with a real
- * feed when the marketplace directory exists; see the home-page plan follow-ups.
- */
-type LucideIcon = ComponentType<{ className?: string; strokeWidth?: number }>;
-
-type ExampleSupplier = {
-  id: string;
-  name: string;
-  location: string;
-  category: string;
-  Icon: LucideIcon;
-  /** Tailwind bg for the card's image area. */
-  tint: string;
-  /** Tailwind bg for the overlapping circular badge. */
-  badgeTint: string;
-  /** The amber "New supplier" corner ribbon — exactly one entry carries it. */
-  isNew?: boolean;
-};
-
-const EXAMPLE_SUPPLIERS: ExampleSupplier[] = [
-  {
-    id: 'ex-highland-dairy',
-    name: 'Highland Dairy Co',
-    location: 'Lancashire, UK',
-    category: 'Dairy & eggs',
-    Icon: Milk,
-    tint: 'bg-teal-50',
-    badgeTint: 'bg-teal-600',
-  },
-  {
-    id: 'ex-greenside-produce',
-    name: 'Greenside Produce',
-    location: 'Birmingham, UK',
-    category: 'Fruit & vegetables',
-    Icon: Carrot,
-    tint: 'bg-emerald-50',
-    badgeTint: 'bg-emerald-600',
-  },
-  {
-    id: 'ex-westmill-bakery',
-    name: 'Westmill Bakery',
-    location: 'Bristol, UK',
-    category: 'Bakery',
-    Icon: Croissant,
-    tint: 'bg-stone-100',
-    badgeTint: 'bg-stone-500',
-  },
-  {
-    id: 'ex-northstar-coffee',
-    name: 'Northstar Coffee',
-    location: 'Leeds, UK',
-    category: 'Drinks',
-    Icon: Coffee,
-    tint: 'bg-slate-100',
-    badgeTint: 'bg-slate-700',
-    isNew: true,
-  },
-  {
-    id: 'ex-butchers-choice',
-    name: "Butcher's Choice",
-    location: 'Manchester, UK',
-    category: 'Meat & poultry',
-    Icon: Beef,
-    tint: 'bg-rose-50',
-    badgeTint: 'bg-rose-600',
-  },
-];
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+}
 
 const ARROW =
   'flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-accent hover:text-accent';
 
-function ExampleCard({ supplier }: { supplier: ExampleSupplier }) {
-  const { Icon } = supplier;
+function RecommendedCard({ distributor }: { distributor: PortalRecommendedDistributor }) {
+  const router = useRouter();
   return (
-    <div className="w-[190px] flex-shrink-0 rounded-lg border border-border bg-surface">
-      <div className={clsx('relative flex h-24 items-center justify-center rounded-t-lg', supplier.tint)}>
-        <Icon className="h-9 w-9 text-slate-400" strokeWidth={1.5} />
-        {supplier.isNew && (
-          <span className="absolute right-0 top-2 bg-amber px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-fg">
-            New supplier
-          </span>
+    <button
+      onClick={() => router.push(`/${distributor.slug}`)}
+      className="group w-[190px] flex-shrink-0 rounded-lg border border-border bg-surface p-4 text-left shadow-sm transition-all duration-150 will-change-transform hover:-translate-y-1 hover:border-accent hover:shadow-md motion-reduce:hover:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-border bg-accent-light">
+        {distributor.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={distributor.logoUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+          />
+        ) : (
+          <span className="text-xs font-semibold text-accent">{initials(distributor.name)}</span>
         )}
-        <span
-          className={clsx(
-            'absolute -bottom-4 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface',
-            supplier.badgeTint,
-          )}
-        >
-          <Icon className="h-4 w-4 text-white" strokeWidth={1.75} />
-        </span>
-      </div>
-      <div className="px-3 pb-3 pt-6">
-        <p className="truncate text-sm font-semibold text-foreground">{supplier.name}</p>
-        <p className="mt-0.5 text-xs text-muted">{supplier.location}</p>
-        <p className="text-xs text-muted">{supplier.category}</p>
-      </div>
+      </span>
+      <p className="mt-3 truncate text-sm font-semibold text-foreground transition-colors group-hover:text-accent">
+        {distributor.name}
+      </p>
+      {distributor.location && (
+        <p className="mt-0.5 text-xs text-muted">{distributor.location}</p>
+      )}
+      {distributor.tagline && (
+        <p className="mt-1 text-xs text-muted line-clamp-2">{distributor.tagline}</p>
+      )}
+    </button>
+  );
+}
+
+/** Empty-state card — inert. There is no "invite a supplier" feature yet. */
+function InviteSupplierCard() {
+  return (
+    <div className="flex w-[190px] flex-shrink-0 flex-col items-center gap-2 rounded-lg border border-dashed border-border p-4 text-center opacity-60">
+      <span className="flex h-11 w-11 items-center justify-center rounded-full border border-dashed border-border text-muted">
+        <Plus className="h-5 w-5" aria-hidden />
+      </span>
+      <p className="text-xs text-muted">
+        Buy from a wholesaler that isn&rsquo;t on Stocdup yet? Ask them to join and add you as a
+        customer.
+      </p>
     </div>
   );
 }
 
+function CardSkeleton() {
+  return (
+    <div className="h-[132px] w-[190px] flex-shrink-0 animate-pulse rounded-lg border border-border bg-surface-hover" />
+  );
+}
+
+type Status = 'loading' | 'ready' | 'error';
+
 export function RecommendedSuppliers({ className }: { className?: string }) {
+  const { accessToken } = useAuth();
+  const [suppliers, setSuppliers] = useState<PortalRecommendedDistributor[]>([]);
+  const [status, setStatus] = useState<Status>('loading');
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    setStatus('loading');
+    portalApi
+      .getRecommendedDistributors()
+      .then((rows) => {
+        setSuppliers(rows);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
+  }, [accessToken]);
+
+  // A non-essential discovery panel — if the feed fails, drop it rather than
+  // show a misleading empty/invite state (the home page has no error UI).
+  if (status === 'error') return null;
+
+  const showArrows = status === 'ready' && suppliers.length > 3;
 
   const scroll = (dir: -1 | 1) => {
     scrollRef.current?.scrollBy?.({ left: dir * 220, behavior: 'smooth' });
@@ -126,33 +114,38 @@ export function RecommendedSuppliers({ className }: { className?: string }) {
           <Eyebrow className="mb-2">Marketplace</Eyebrow>
           <h2 className="text-base font-semibold text-foreground">Recommended suppliers</h2>
         </div>
-        <div className="flex flex-shrink-0 gap-1.5">
-          <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className={ARROW}>
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button type="button" aria-label="Scroll right" onClick={() => scroll(1)} className={ARROW}>
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        {showArrows && (
+          <div className="flex flex-shrink-0 gap-1.5">
+            <button type="button" aria-label="Scroll left" onClick={() => scroll(-1)} className={ARROW}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button type="button" aria-label="Scroll right" onClick={() => scroll(1)} className={ARROW}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {status === 'loading' ? (
+        <div className="mt-4 flex gap-4 overflow-hidden">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
         </div>
-      </div>
-
-      <div
-        ref={scrollRef}
-        className="mt-4 flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      >
-        {EXAMPLE_SUPPLIERS.map((s) => (
-          <ExampleCard key={s.id} supplier={s} />
-        ))}
-      </div>
-
-      <button
-        type="button"
-        disabled
-        title="Coming soon"
-        className="mt-4 text-sm font-medium text-foreground hover:underline disabled:opacity-60"
-      >
-        Discover suppliers
-      </button>
+      ) : suppliers.length === 0 ? (
+        <div className="mt-4 flex gap-4">
+          <InviteSupplierCard />
+        </div>
+      ) : (
+        <div
+          ref={scrollRef}
+          className="mt-4 flex gap-4 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {suppliers.map((d) => (
+            <RecommendedCard key={d.id} distributor={d} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

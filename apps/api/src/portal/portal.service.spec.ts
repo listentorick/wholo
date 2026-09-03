@@ -1,10 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { TradeRelationshipStatus } from '@prisma/client';
+import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
 import { PortalService } from './portal.service';
 
 const mockPrisma = {
-  organisation: { findFirst: jest.fn(), update: jest.fn() },
+  organisation: { findFirst: jest.fn(), update: jest.fn(), findMany: jest.fn() },
   tradeRelationship: { findMany: jest.fn() },
   assetImage: { findFirst: jest.fn() },
   order: { count: jest.fn() },
@@ -148,6 +148,124 @@ describe('PortalService', () => {
       expect(mockPrisma.order.count).toHaveBeenCalledWith({
         where: { distributorId: 'dist-1', traderCustomerId: 'cust-1' },
       });
+    });
+  });
+
+  describe('getRecommendedDistributors', () => {
+    const orgRow = (over: Record<string, unknown> = {}) => ({
+      id: 'd1',
+      name: 'Aaa Wines',
+      slug: 'aaa-wines',
+      addressCity: 'Leeds',
+      addressCountry: 'UK',
+      distributorSettings: { tagline: 'Small-batch cider' },
+      ...over,
+    });
+
+    it('returns an empty array when nothing is recommendable', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([]);
+      expect(await service.getRecommendedDistributors('cust-1')).toEqual([]);
+    });
+
+    it('looks up the customer relationships status-agnostically, non-deleted only', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([]);
+      await service.getRecommendedDistributors('cust-1');
+      expect(mockPrisma.tradeRelationship.findMany).toHaveBeenCalledWith({
+        where: { customerId: 'cust-1', deletedAt: null },
+        select: { distributorId: true },
+      });
+    });
+
+    it('excludes every already-connected distributor via notIn', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([
+        { distributorId: 'x' },
+        { distributorId: 'y' },
+      ]);
+      mockPrisma.organisation.findMany.mockResolvedValue([]);
+      await service.getRecommendedDistributors('cust-1');
+      expect(mockPrisma.organisation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: { notIn: ['x', 'y'] } }),
+        }),
+      );
+    });
+
+    it('queries only marketplace-visible, routable, non-deleted distributor orgs, name-ordered and capped', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([]);
+      await service.getRecommendedDistributors('cust-1');
+      expect(mockPrisma.organisation.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            type: OrganisationType.DISTRIBUTOR,
+            deletedAt: null,
+            slug: { not: null },
+            distributorSettings: { is: { marketplaceVisible: true } },
+          }),
+          orderBy: { name: 'asc' },
+          take: 24,
+        }),
+      );
+    });
+
+    it('returns the recommendation shape with a resolved logo url', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([orgRow()]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue({ variants: { full: 'logos/d1.jpg' } });
+
+      const result = await service.getRecommendedDistributors('cust-1');
+
+      expect(result).toEqual([
+        {
+          id: 'd1',
+          name: 'Aaa Wines',
+          slug: 'aaa-wines',
+          logoUrl: 'https://cdn.example.com/logos/d1.jpg',
+          tagline: 'Small-batch cider',
+          location: 'Leeds, UK',
+        },
+      ]);
+      expect(mockPrisma.assetImage.findFirst).toHaveBeenCalledWith({
+        where: { assetType: 'distributor-logo', entityId: 'd1' },
+      });
+    });
+
+    it('returns null logoUrl when the distributor has no logo image', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([orgRow()]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+      const result = await service.getRecommendedDistributors('cust-1');
+      expect(result[0].logoUrl).toBeNull();
+    });
+
+    it('composes location from whatever address parts exist', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+
+      mockPrisma.organisation.findMany.mockResolvedValueOnce([
+        orgRow({ addressCity: 'Leeds', addressCountry: null }),
+      ]);
+      expect((await service.getRecommendedDistributors('c'))[0].location).toBe('Leeds');
+
+      mockPrisma.organisation.findMany.mockResolvedValueOnce([
+        orgRow({ addressCity: null, addressCountry: 'UK' }),
+      ]);
+      expect((await service.getRecommendedDistributors('c'))[0].location).toBe('UK');
+
+      mockPrisma.organisation.findMany.mockResolvedValueOnce([
+        orgRow({ addressCity: null, addressCountry: null }),
+      ]);
+      expect((await service.getRecommendedDistributors('c'))[0].location).toBeNull();
+    });
+
+    it('returns null tagline when the distributor has no settings row', async () => {
+      mockPrisma.tradeRelationship.findMany.mockResolvedValue([]);
+      mockPrisma.organisation.findMany.mockResolvedValue([orgRow({ distributorSettings: null })]);
+      mockPrisma.assetImage.findFirst.mockResolvedValue(null);
+      const result = await service.getRecommendedDistributors('cust-1');
+      expect(result[0].tagline).toBeNull();
     });
   });
 

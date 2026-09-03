@@ -1,9 +1,19 @@
-import type { CustomerSelfView, MyDeliveryAddressResponse, MyProfileResponse, PortalDistributorSummary } from '@wholo/types';
+import type {
+  CustomerSelfView,
+  MyDeliveryAddressResponse,
+  MyProfileResponse,
+  PortalDistributorSummary,
+  PortalRecommendedDistributor,
+} from '@wholo/types';
 import { apiFetch } from './base';
 
 export const portalApi = {
   getMyDistributors(): Promise<PortalDistributorSummary[]> {
     return apiFetch<PortalDistributorSummary[]>('/api/v1/portal/me/distributors');
+  },
+
+  getRecommendedDistributors(): Promise<PortalRecommendedDistributor[]> {
+    return apiFetch<PortalRecommendedDistributor[]>('/api/v1/portal/me/recommended-distributors');
   },
 
   getMyProfile(): Promise<MyProfileResponse> {

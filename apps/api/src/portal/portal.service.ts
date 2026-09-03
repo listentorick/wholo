@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { TradeRelationshipStatus } from '@prisma/client';
+import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { UpdateMyProfileDto } from './dto/update-my-profile.dto';
 import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
+
+/** Hard cap on the "Recommended suppliers" feed — a scrollable discovery strip, not a directory. */
+const RECOMMENDED_DISTRIBUTOR_LIMIT = 24;
 
 @Injectable()
 export class PortalService {
@@ -122,6 +125,58 @@ export class PortalService {
             ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
             : null,
           minimumOrderSpend: effectiveMinSpend != null ? parseFloat(effectiveMinSpend.toString()) : null,
+        };
+      }),
+    );
+  }
+
+  /**
+   * Distributors the acting trade customer could connect with: marketplace-visible
+   * (opt-in), routable (has a slug), and not already the subject of any live
+   * trade relationship for this customer. A soft-deleted relationship does not
+   * suppress — the distributor becomes recommendable again.
+   */
+  async getRecommendedDistributors(customerOrgId: string) {
+    const relationships = await this.prisma.tradeRelationship.findMany({
+      where: { customerId: customerOrgId, deletedAt: null },
+      select: { distributorId: true },
+    });
+    const connectedIds = relationships.map((r) => r.distributorId);
+
+    const distributors = await this.prisma.organisation.findMany({
+      where: {
+        type: OrganisationType.DISTRIBUTOR,
+        deletedAt: null,
+        slug: { not: null },
+        id: { notIn: connectedIds },
+        distributorSettings: { is: { marketplaceVisible: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: RECOMMENDED_DISTRIBUTOR_LIMIT,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        addressCity: true,
+        addressCountry: true,
+        distributorSettings: { select: { tagline: true } },
+      },
+    });
+
+    return Promise.all(
+      distributors.map(async (d) => {
+        const logoImage = await this.prisma.assetImage.findFirst({
+          where: { assetType: 'distributor-logo', entityId: d.id },
+        });
+        return {
+          id: d.id,
+          name: d.name,
+          slug: d.slug!,
+          logoUrl: logoImage
+            ? this.r2Storage.getPublicUrl((logoImage.variants as Record<string, string>).full)
+            : null,
+          tagline: d.distributorSettings?.tagline ?? null,
+          location: [d.addressCity, d.addressCountry].filter(Boolean).join(', ') || null,
         };
       }),
     );

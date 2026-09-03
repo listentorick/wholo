@@ -10,6 +10,10 @@ export class PortalService {
     return this.api.get('/portal/me/distributors', token);
   }
 
+  getRecommendedDistributors(token: string) {
+    return this.api.get('/portal/me/recommended-distributors', token);
+  }
+
   getMyProfile(token: string) {
     return this.api.get('/portal/me/profile', token);
   }

@@ -14,6 +14,12 @@ export class PortalController {
     return this.portalService.getMyDistributors(token);
   }
 
+  @Get('me/recommended-distributors')
+  getRecommendedDistributors(@Req() req: Request) {
+    const { token } = req['user'] as { token: string };
+    return this.portalService.getRecommendedDistributors(token);
+  }
+
   @Get('me/profile')
   getMyProfile(@Req() req: Request) {
     const { token } = req['user'] as { token: string };

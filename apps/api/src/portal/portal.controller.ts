@@ -23,6 +23,15 @@ export class PortalController {
     return this.portalService.getMyDistributors(organisationId);
   }
 
+  @Get('me/recommended-distributors')
+  @ApiOperation({ summary: 'Marketplace-visible distributors the acting customer is not yet connected to' })
+  @ApiOkResponse({
+    description: 'Up to 24 distributor orgs, name-ordered, excluding any existing trade relationship',
+  })
+  getRecommendedDistributors(@ActingCustomerId() organisationId: string) {
+    return this.portalService.getRecommendedDistributors(organisationId);
+  }
+
   @Get('me/profile')
   @ApiOperation({ summary: 'Get the authenticated trade customer profile' })
   getMyProfile(@Req() req: RequestWithUser) {

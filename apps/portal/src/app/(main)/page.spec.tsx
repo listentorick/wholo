@@ -20,9 +20,18 @@ vi.mock('@/lib/hooks/use-require-auth', () => ({
   useRequireAuth: () => mockAuth,
 }));
 
+// The RecommendedSuppliers child reads `accessToken` straight from the context.
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({ accessToken: 'tok' }),
+}));
+
 const mockGetMyDistributors = vi.fn();
+const mockGetRecommended = vi.fn();
 vi.mock('@wholo/api-client', () => ({
-  portalApi: { getMyDistributors: (...args: unknown[]) => mockGetMyDistributors(...args) },
+  portalApi: {
+    getMyDistributors: (...args: unknown[]) => mockGetMyDistributors(...args),
+    getRecommendedDistributors: () => mockGetRecommended(),
+  },
 }));
 
 // This box runs the portal suite 33 files in parallel on WSL2; the async
@@ -62,6 +71,7 @@ beforeEach(() => {
     distributor('d1', 'Mere Wine Co', { orderCount: 3 }),
     distributor('d2', 'Goo Cheese', { orderCount: 12 }),
   ]);
+  mockGetRecommended.mockResolvedValue([]);
 });
 
 describe('HomePage — layout', () => {
