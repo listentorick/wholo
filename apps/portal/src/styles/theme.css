@@ -19,6 +19,12 @@
   --color-primary-light:   220 100% 95%;  /* light cobalt tint — selected/hover bg */
   --color-primary-subtle:  220 60%  97%;  /* very light cobalt tint */
 
+  /* Deep-navy promotional surface — the sidebar shell + the home merchandising
+     banner. Mirrors apps/www's on-navy family. */
+  --color-navy:            217 68% 14%;   /* Deep Navy #0B1D3A */
+  --color-on-navy:         0 0% 100%;     /* white — primary text on navy */
+  --color-on-navy-muted:   219 30% 76%;   /* #AEBAD0 — secondary text on navy */
+
   /* Content area */
   --color-surface:         0 0% 100%;     /* card/panel white */
   --color-canvas:          216 24% 96%;   /* Pale Stone #F2F4F7 — page background */

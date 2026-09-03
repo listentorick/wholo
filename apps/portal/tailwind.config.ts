@@ -61,6 +61,11 @@ const config: Config = {
           hover:     'hsl(var(--color-canvas))',
         },
         canvas: 'hsl(var(--color-canvas))',
+        navy: 'hsl(var(--color-navy))',
+        'on-navy': {
+          DEFAULT: 'hsl(var(--color-on-navy))',
+          muted:   'hsl(var(--color-on-navy-muted))',
+        },
         error:   '#DC2626',
         success: '#16A34A',
       },

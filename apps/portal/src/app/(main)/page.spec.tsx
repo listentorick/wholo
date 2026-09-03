@@ -181,9 +181,11 @@ describe('HomePage — discovery placeholders', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
-  it('renders the merchandising band', async () => {
+  it('renders the merchandising banner with an inert CTA', async () => {
     render(<HomePage />);
-    expect(await screen.findByText('Seasonal ranges & new arrivals')).toBeInTheDocument();
+    expect(await screen.findByText('Fresh ranges.')).toBeInTheDocument();
+    const cta = screen.getByRole('button', { name: /Browse.+new/i });
+    expect(cta).not.toBeDisabled();
   });
 
   it('renders the Find new suppliers card, non-interactive', async () => {

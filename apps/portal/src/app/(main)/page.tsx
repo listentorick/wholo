@@ -10,6 +10,7 @@ import { portalApi } from '@wholo/api-client';
 import { PageShell } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
 import { Eyebrow } from '@/components/Eyebrow';
+import { Button } from '@/components/Button';
 import type { PortalDistributorSummary } from '@wholo/types';
 
 /** Above this many suppliers, offer the small name filter over the stack. */
@@ -42,20 +43,37 @@ function SupplierSearchPlaceholder({ className }: { className?: string }) {
   );
 }
 
-/** Reserved merchandising slot — no promo/featured-range feature exists yet. */
+/**
+ * Merchandising slot — styled as a Deep-Navy marketing banner (after the marketing
+ * site's navy bands). The "Browse what's new" CTA has no destination yet: there is
+ * no featured-ranges / "what's new" feature behind it.
+ */
 function MerchandisingBand({ className }: { className?: string }) {
   return (
     <section
-      className={clsx(
-        'hm-rise min-h-[160px] rounded-lg border border-border bg-surface-highlight p-5',
-        className,
-      )}
+      className={clsx('hm-rise relative overflow-hidden rounded-lg bg-navy p-6 sm:p-7', className)}
       style={{ animationDelay: '0.12s' }}
     >
-      <h2 className="text-base font-semibold text-foreground">Seasonal ranges &amp; new arrivals</h2>
-      <p className="mt-1 max-w-sm text-sm text-muted">
-        Featured ranges and offers from your suppliers appear here.
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-highlight/25 blur-2xl"
+      />
+      <p className="relative flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-on-navy-muted">
+        <span aria-hidden className="h-1 w-[22px] rounded-full bg-amber" />
+        From your suppliers
       </p>
+      <h2 className="relative mt-3.5 text-[28px] font-extrabold uppercase leading-[0.98] tracking-[-0.02em] text-on-navy sm:text-[38px]">
+        Fresh ranges.
+        <br />
+        <span className="box-decoration-clone bg-amber px-[0.1em] text-amber-fg">Every week.</span>
+      </h2>
+      <p className="relative mt-3.5 max-w-sm text-sm leading-relaxed text-on-navy-muted">
+        New products and seasonal offers from the wholesalers you buy from.
+      </p>
+      <Button className="relative mt-4">
+        Browse what&rsquo;s new
+        <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
+      </Button>
     </section>
   );
 }
@@ -186,7 +204,9 @@ export default function HomePage() {
           <div className="contents md:flex md:min-w-0 md:flex-col md:gap-8">
             <div className="hm-rise order-1 md:order-none" style={{ animationDelay: '0.02s' }}>
               <Eyebrow className="mb-2">Your account</Eyebrow>
-              <h1 className="text-2xl font-semibold text-foreground">Hi, {user?.firstName}</h1>
+              <h1 className="text-2xl font-semibold text-foreground">
+                Hi, {user?.firstName} <span aria-hidden>👋</span>
+              </h1>
             </div>
 
             <section className="order-2 md:order-none">
