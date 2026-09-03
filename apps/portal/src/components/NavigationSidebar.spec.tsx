@@ -11,8 +11,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>{children}</a>
+  default: ({
+    href,
+    children,
+    ...rest
+  }: { href: string; children: React.ReactNode } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={href} {...rest}>{children}</a>
   ),
 }));
 
@@ -76,6 +80,10 @@ describe('NavigationSidebar', () => {
     const suppliersLink = screen.getByText('Our Suppliers').closest('a');
     expect(suppliersLink?.className).toContain('bg-sidebar-accent/20');
     expect(suppliersLink?.className).toContain('border-sidebar-accent');
+    // Label reads as a legible near-white, not the low-contrast Cobalt.
+    expect(suppliersLink?.className).toContain('font-semibold');
+    expect(suppliersLink?.className).not.toContain('text-sidebar-accent');
+    expect(suppliersLink?.getAttribute('aria-current')).toBe('page');
   });
 
   it('does not mark Our Suppliers active on sub-pages', () => {
@@ -83,6 +91,7 @@ describe('NavigationSidebar', () => {
     renderSidebar();
     const suppliersLink = screen.getByText('Our Suppliers').closest('a');
     expect(suppliersLink?.className).not.toContain('bg-sidebar-accent/20');
+    expect(suppliersLink?.getAttribute('aria-current')).toBeNull();
   });
 
   it('calls logout when Sign out is clicked', () => {

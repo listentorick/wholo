@@ -121,7 +121,7 @@ The system is flat and calm, with **soft corners borrowed from the marketing sit
 Grounded, confident neutrals (Deep Navy, Pale Stone, white) carry the page; Cobalt Blue is spent on exactly one thing at a time; Amber supplies warmth and status without ever being mistaken for the primary action.
 
 ### Primary
-- **Cobalt Blue** (`hsl(220 100% 54%)` / #1565FF): the one color that means "act here" — primary CTAs, the active sidebar item, the active tab underline, focus rings, cart-count badge. Also used at 46% lightness (`hsl(220 100% 46%)`) for hover/pressed states, and as 95%/97%-lightness tints (`cobalt-blue-light`, `cobalt-blue-subtle`) for selected/hover backgrounds.
+- **Cobalt Blue** (`hsl(220 100% 54%)` / #1565FF): the one color that means "act here" — primary CTAs, the active sidebar item (its left border + tint, not the label), the active tab underline, focus rings, cart-count badge. Also used at 46% lightness (`hsl(220 100% 46%)`) for hover/pressed states, and as 95%/97%-lightness tints (`cobalt-blue-light`, `cobalt-blue-subtle`) for selected/hover backgrounds.
 
 ### Secondary
 - **Amber** (`hsl(21 86% 63%)` / #F2864D): warmth and attention — the eyebrow-kicker dash, the minimum-order progress bar fill, pending/status accents. Never used for a primary action or a navigation state; it marks attention, Cobalt marks action. Tints at 95%/85% lightness (`amber-light`, `amber-border`) back status badges, the below-minimum callout panel, and the eyebrow.
@@ -243,7 +243,7 @@ Use the shared `<Button>` component (`variant="primary" | "secondary" | "ghost"`
 - **Error/Disabled:** not yet established anywhere in the codebase — treat as undecided rather than inventing a pattern.
 
 ### Navigation
-- **Sidebar (authenticated shell):** persistent dark Deep Navy panel on desktop, collapsible between 256px and 64px with an animated width transition; the logo strip at the top sits on Warm Off White and carries the hexagon mark + "stocd**up**" wordmark. Active item = 2px Cobalt left border + a 20%-opacity Cobalt tint background + Cobalt text; inactive = 70%-opacity white text, hover = a darker navy tint. On mobile the same content becomes a full off-canvas drawer (80% width, slide transform), triggered from a separate **light** top bar — the two-tone contrast (light mobile chrome, dark drawer content) is deliberate.
+- **Sidebar (authenticated shell):** persistent dark Deep Navy panel on desktop, collapsible between 256px and 64px with an animated width transition; the logo strip at the top sits on Warm Off White and carries the hexagon mark + "stocd**up**" wordmark. Active item = 2px Cobalt left border + a 20%-opacity Cobalt tint background + a near-white, semibold label and icon (Cobalt text on the navy shell fails contrast) + `aria-current="page"`; inactive = 70%-opacity white text, hover = a darker navy tint. On mobile the same content becomes a full off-canvas drawer (80% width, slide transform), triggered from a separate **light** top bar — the two-tone contrast (light mobile chrome, dark drawer content) is deliberate.
 - **Distributor tab bar:** light underline tabs, 3px bottom border; active = Deep Navy text + **Cobalt** underline; inactive = muted grey text; sticky directly beneath the distributor header. (Amber never marks the active tab.)
 
 ### Modal (confirmation dialogs)

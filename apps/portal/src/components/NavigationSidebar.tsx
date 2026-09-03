@@ -66,7 +66,7 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
       'group flex items-center py-2.5 border-l-2 transition-colors duration-150',
       isCollapsed ? 'md:justify-center md:px-0 gap-3 px-4' : 'gap-3 px-4',
       active
-        ? 'bg-sidebar-accent/20 border-sidebar-accent text-sidebar-accent font-medium'
+        ? 'bg-sidebar-accent/20 border-sidebar-accent text-sidebar-fg font-semibold'
         : 'border-transparent text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg',
     ].join(' ');
   }
@@ -126,8 +126,12 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
         <ul>
           {mainNavItems.map((item) => (
             <li key={item.href}>
-              <Link href={item.href} className={navItemClass(isActive(item))}>
-                <span className={isActive(item) ? 'text-sidebar-accent' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
+              <Link
+                href={item.href}
+                aria-current={isActive(item) ? 'page' : undefined}
+                className={navItemClass(isActive(item))}
+              >
+                <span className={isActive(item) ? 'text-sidebar-fg' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
                   {item.icon}
                 </span>
                 <span className={`text-sm ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
@@ -141,8 +145,12 @@ export function NavigationSidebar({ distributorSlug, contextName }: { distributo
         <ul>
           {accountNavItems.map((item) => (
             <li key={item.href}>
-              <Link href={item.href} className={navItemClass(isActive(item))}>
-                <span className={isActive(item) ? 'text-sidebar-accent' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
+              <Link
+                href={item.href}
+                aria-current={isActive(item) ? 'page' : undefined}
+                className={navItemClass(isActive(item))}
+              >
+                <span className={isActive(item) ? 'text-sidebar-fg' : 'text-sidebar-fg/50 group-hover:text-sidebar-fg/80'}>
                   {item.icon}
                 </span>
                 <span className={`text-sm ${isCollapsed ? 'md:hidden' : ''}`}>{item.label}</span>
