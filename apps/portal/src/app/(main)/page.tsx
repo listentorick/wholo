@@ -11,6 +11,7 @@ import { PageShell } from '@/components/PageShell';
 import { SearchInput } from '@/components/SearchInput';
 import { Eyebrow } from '@/components/Eyebrow';
 import { Button } from '@/components/Button';
+import { PromoBanner } from '@/components/PromoBanner';
 import type { PortalDistributorSummary } from '@wholo/types';
 
 /** Above this many suppliers, offer the small name filter over the stack. */
@@ -50,31 +51,25 @@ function SupplierSearchPlaceholder({ className }: { className?: string }) {
  */
 function MerchandisingBand({ className }: { className?: string }) {
   return (
-    <section
-      className={clsx('hm-rise relative overflow-hidden rounded-lg bg-navy p-6 sm:p-7', className)}
+    <PromoBanner
+      className={clsx('hm-rise', className)}
       style={{ animationDelay: '0.12s' }}
-    >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-highlight/25 blur-2xl"
-      />
-      <p className="relative flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-on-navy-muted">
-        <span aria-hidden className="h-1 w-[22px] rounded-full bg-amber" />
-        From your suppliers
-      </p>
-      <h2 className="relative mt-3.5 text-[28px] font-extrabold uppercase leading-[0.98] tracking-[-0.02em] text-on-navy sm:text-[38px]">
-        Fresh ranges.
-        <br />
-        <span className="box-decoration-clone bg-amber px-[0.1em] text-amber-fg">Every week.</span>
-      </h2>
-      <p className="relative mt-3.5 max-w-sm text-sm leading-relaxed text-on-navy-muted">
-        New products and seasonal offers from the wholesalers you buy from.
-      </p>
-      <Button className="relative mt-4">
-        Browse what&rsquo;s new
-        <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
-      </Button>
-    </section>
+      eyebrow="From your suppliers"
+      headline={
+        <>
+          Fresh ranges.
+          <br />
+          <span className="box-decoration-clone bg-amber px-[0.1em] text-amber-fg">Every week.</span>
+        </>
+      }
+      body="New products and seasonal offers from the wholesalers you buy from."
+      cta={
+        <Button>
+          Browse what&rsquo;s new
+          <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
+        </Button>
+      }
+    />
   );
 }
 
