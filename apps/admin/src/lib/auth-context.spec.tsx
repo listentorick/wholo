@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
@@ -134,5 +134,45 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByTestId('status').textContent).toBe('denied:buyer@b.com:no-user');
     });
+  });
+
+  it('logout drives kc.logout() and does not clear auth state first', async () => {
+    // Clearing `user` before navigating would re-render the shell, and
+    // useRequireAuth would fire login() → kc.login(), whose /authorize redirect
+    // supersedes the end-session redirect and re-authenticates via the still-live
+    // SSO cookie. So logout must NOT touch React state on the happy path.
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+
+    const { AuthProvider, useAuth } = await import('./auth-context');
+
+    function Probe() {
+      const { user, isLoading, logout } = useAuth();
+      return (
+        <>
+          <div data-testid="status">{isLoading ? 'loading' : user ? 'has-user' : 'no-user'}</div>
+          <button onClick={logout}>logout</button>
+        </>
+      );
+    }
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('status').textContent).toBe('has-user');
+    });
+
+    fireEvent.click(screen.getByText('logout'));
+
+    const kc = (window as any).__kc;
+    expect(kc.logout).toHaveBeenCalledWith({ redirectUri: `${window.location.origin}/login` });
+    // State untouched — the full-page navigation to Keycloak is what tears it down.
+    expect(screen.getByTestId('status').textContent).toBe('has-user');
   });
 });

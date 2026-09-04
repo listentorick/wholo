@@ -163,13 +163,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [handleTokenExpired]);
 
   const logout = useCallback(() => {
+    // Do NOT clear React auth state here first: nulling `user` re-renders the
+    // shell, useRequireAuth sees `!user` and fires login() → kc.login(), whose
+    // redirect to /authorize supersedes kc.logout()'s redirect to the
+    // end-session endpoint — the Keycloak SSO session is never destroyed and the
+    // still-valid cookie logs the user straight back in. Let the full-page
+    // navigation to Keycloak tear the app down instead. Mirrors apps/portal.
+    const kc = (window as any).__kc;
+    if (kc) {
+      kc.logout({ redirectUri: window.location.origin + '/login' });
+      return;
+    }
+    // No instance to drive the OIDC end-session redirect — fall back to a local
+    // clear + hard redirect.
     setUser(null);
     setAccessToken(null);
     setLogoUrl(null);
     setOnboardingRequired(false);
     setAccessDenied(false);
     setIdentity(null);
-    (window as any).__kc?.logout({ redirectUri: window.location.origin + '/login' });
+    window.location.href = '/login';
   }, []);
 
   return (
