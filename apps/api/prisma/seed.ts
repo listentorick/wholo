@@ -509,12 +509,296 @@ async function main() {
     });
   }
 
+  // ─── Delivery profiles for Vine & Co ─────────────────────────────────────
+  const standardWeekday = await prisma.deliveryProfile.upsert({
+    where: { id: 'seed-dp-standard' },
+    update: {
+      name: 'Standard Weekday',
+      active: true,
+      defaultWeekdays: [1, 2, 3, 4, 5],
+      defaultCutoffTime: '17:00',
+      defaultCutoffProcessingDays: 1,
+    },
+    create: {
+      id: 'seed-dp-standard',
+      distributorId: distributor.id,
+      name: 'Standard Weekday',
+      active: true,
+      defaultWeekdays: [1, 2, 3, 4, 5],
+      defaultCutoffTime: '17:00',
+      defaultCutoffProcessingDays: 1,
+    },
+  });
+
+  // Friday orders need an extra day's processing to cover the weekend.
+  await prisma.deliveryProfileCutoffRule.upsert({
+    where: { deliveryProfileId_weekday: { deliveryProfileId: standardWeekday.id, weekday: 5 } },
+    update: { cutoffTime: '13:00', processingDaysBeforeDelivery: 3 },
+    create: {
+      id: 'seed-dpr-standard-fri',
+      deliveryProfileId: standardWeekday.id,
+      weekday: 5,
+      cutoffTime: '13:00',
+      processingDaysBeforeDelivery: 3,
+    },
+  });
+
+  const saturdayExpress = await prisma.deliveryProfile.upsert({
+    where: { id: 'seed-dp-saturday' },
+    update: {
+      name: 'Saturday Express',
+      active: true,
+      defaultWeekdays: [6],
+      defaultCutoffTime: '12:00',
+      defaultCutoffProcessingDays: 2,
+    },
+    create: {
+      id: 'seed-dp-saturday',
+      distributorId: distributor.id,
+      name: 'Saturday Express',
+      active: true,
+      defaultWeekdays: [6],
+      defaultCutoffTime: '12:00',
+      defaultCutoffProcessingDays: 2,
+    },
+  });
+
+  // ─── Customers of Vine & Co, each with an order history ──────────────────
+  const daysFromNow = (n: number) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + n);
+    d.setUTCHours(12, 0, 0, 0);
+    return d;
+  };
+
+  const customerData = [
+    {
+      id: 'seed-cust-1', name: 'The Anchor Inn', accountNumber: 'VC-1001',
+      email: 'orders@theanchorinn.co.uk', phone: '0117 496 0142',
+      address: { line1: '12 Quay Street', city: 'Bristol', postcode: 'BS1 4EW', country: 'United Kingdom' },
+      contactFirstName: 'Alex', contactLastName: 'Turner',
+      deliveryProfileId: 'seed-dp-standard' as const,
+    },
+    {
+      id: 'seed-cust-2', name: 'Riverside Bistro', accountNumber: 'VC-1002',
+      email: 'bookings@riversidebistro.co.uk', phone: '0161 496 0187',
+      address: { line1: '4 Riverside Walk', city: 'Manchester', postcode: 'M1 5GD', country: 'United Kingdom' },
+      contactFirstName: 'Sophie', contactLastName: 'Nguyen',
+      deliveryProfileId: 'seed-dp-saturday' as const,
+    },
+    {
+      id: 'seed-cust-3', name: 'The Grand Hotel Leeds', accountNumber: 'VC-1003',
+      email: 'purchasing@grandhotelleeds.co.uk', phone: '0113 496 0223',
+      address: { line1: '88 Boar Lane', city: 'Leeds', postcode: 'LS1 5DA', country: 'United Kingdom' },
+      contactFirstName: 'Marcus', contactLastName: 'Webb',
+      deliveryProfileId: 'seed-dp-standard' as const,
+    },
+    {
+      id: 'seed-cust-4', name: 'Botanica Bar & Kitchen', accountNumber: 'VC-1004',
+      email: 'manager@botanicabar.co.uk', phone: '0121 496 0356',
+      address: { line1: '21 Colmore Row', city: 'Birmingham', postcode: 'B3 2BJ', country: 'United Kingdom' },
+      contactFirstName: 'Priya', contactLastName: 'Shah',
+      deliveryProfileId: 'seed-dp-saturday' as const,
+    },
+    {
+      id: 'seed-cust-5', name: 'Highfield Golf Club', accountNumber: 'VC-1005',
+      email: 'bar@highfieldgolfclub.co.uk', phone: '01904 496 411',
+      address: { line1: 'Highfield Lane', city: 'York', postcode: 'YO24 1LB', country: 'United Kingdom' },
+      contactFirstName: 'Ian', contactLastName: 'Fraser',
+      deliveryProfileId: 'seed-dp-standard' as const,
+    },
+    {
+      id: 'seed-cust-6', name: 'The Ivy Wine Bar', accountNumber: 'VC-1006',
+      email: 'cellar@theivywinebar.co.uk', phone: '0117 496 0509',
+      address: { line1: '3 King Street', city: 'Bristol', postcode: 'BS1 4EQ', country: 'United Kingdom' },
+      contactFirstName: 'Grace', contactLastName: 'Okafor',
+      deliveryProfileId: 'seed-dp-saturday' as const,
+    },
+  ];
+
+  // Each customer gets two orders: one delivered in the past (with a proof-of-
+  // delivery outcome), one accepted and awaiting an upcoming delivery date.
+  const orderSpecs = [
+    { delivered: true, submittedOffset: -16, acceptedOffset: -15, deliveryOffset: -14 },
+    { delivered: false, submittedOffset: -4, acceptedOffset: -3, deliveryOffset: 3 },
+  ];
+
+  let orderSeq = 0;
+  let deliveredCount = 0;
+  for (const c of customerData) {
+    const custOrg = await prisma.organisation.upsert({
+      where: { id: c.id },
+      update: {
+        name: c.name,
+        email: c.email,
+        phone: c.phone,
+        addressLine1: c.address.line1,
+        addressCity: c.address.city,
+        addressPostcode: c.address.postcode,
+        addressCountry: c.address.country,
+      },
+      create: {
+        id: c.id,
+        name: c.name,
+        type: OrganisationType.TRADE_CUSTOMER,
+        email: c.email,
+        phone: c.phone,
+        addressLine1: c.address.line1,
+        addressCity: c.address.city,
+        addressPostcode: c.address.postcode,
+        addressCountry: c.address.country,
+      },
+    });
+
+    // No matching Keycloak account is seeded for these — they exist purely
+    // for order/customer attribution in the admin UI, not portal login.
+    const custUser = await prisma.user.upsert({
+      where: { email: c.email },
+      update: { firstName: c.contactFirstName, lastName: c.contactLastName },
+      create: {
+        id: `seed-cust-user-${c.id}`,
+        email: c.email,
+        firstName: c.contactFirstName,
+        lastName: c.contactLastName,
+      },
+    });
+
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: custUser.id, organisationId: custOrg.id } },
+      update: {},
+      create: { userId: custUser.id, organisationId: custOrg.id, role: Role.TRADE_CUSTOMER },
+    });
+
+    const relationship = await prisma.tradeRelationship.upsert({
+      where: { distributorId_customerId: { distributorId: distributor.id, customerId: custOrg.id } },
+      update: { status: 'ACTIVE', accountNumber: c.accountNumber, activeAccountNumber: c.accountNumber },
+      create: {
+        id: `seed-rel-${c.id}`,
+        distributorId: distributor.id,
+        customerId: custOrg.id,
+        status: 'ACTIVE',
+        accountNumber: c.accountNumber,
+        activeAccountNumber: c.accountNumber,
+        deliveryLine1: c.address.line1,
+        deliveryCity: c.address.city,
+        deliveryPostcode: c.address.postcode,
+        deliveryCountry: c.address.country,
+      },
+    });
+
+    await prisma.traderCustomerSettings.upsert({
+      where: { tradeRelationshipId: relationship.id },
+      update: { priceListId: priceList.id, deliveryProfileId: c.deliveryProfileId },
+      create: {
+        id: `seed-tcs-${c.id}`,
+        tradeRelationshipId: relationship.id,
+        priceListId: priceList.id,
+        deliveryProfileId: c.deliveryProfileId,
+      },
+    });
+
+    for (const spec of orderSpecs) {
+      orderSeq += 1;
+      const orderId = `seed-order-${orderSeq}`;
+      const orderNumber = `SEED-2026-${String(orderSeq).padStart(5, '0')}`;
+
+      const lineProducts = [0, 1, 2].map((i) => productData[(orderSeq * 3 + i) % productData.length]);
+      const quantities = [6, 12, 4];
+      const lines = lineProducts.map((p, i) => {
+        const quantity = quantities[i % quantities.length];
+        const unitPrice = Number(p.price);
+        const lineTotal = Number((unitPrice * quantity).toFixed(2));
+        return { id: `seed-line-${orderSeq}-${i + 1}`, product: p, quantity, unitPrice, lineTotal };
+      });
+      const subtotal = Number(lines.reduce((sum, l) => sum + l.lineTotal, 0).toFixed(2));
+
+      const status = spec.delivered ? 'DELIVERED' : 'ACCEPTED';
+      const requestedDeliveryDate = daysFromNow(spec.deliveryOffset);
+
+      const order = await prisma.order.upsert({
+        where: { id: orderId },
+        update: { status, subtotalAmount: subtotal, taxAmount: 0, totalAmount: subtotal },
+        create: {
+          id: orderId,
+          distributorId: distributor.id,
+          traderCustomerId: custOrg.id,
+          placedByUserId: custUser.id,
+          orderNumber,
+          status,
+          acceptanceModeSnapshot: 'MANUAL',
+          acceptanceModeSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
+          currency: 'GBP',
+          subtotalAmount: subtotal,
+          taxAmount: 0,
+          totalAmount: subtotal,
+          billingAddressSnapshot: c.address,
+          deliveryAddressSnapshot: c.address,
+          requestedDeliveryDate,
+          scheduledDeliveryDate: requestedDeliveryDate,
+          customerReference: `PO-${1000 + orderSeq}`,
+          submittedAt: daysFromNow(spec.submittedOffset),
+          acceptedAt: daysFromNow(spec.acceptedOffset),
+          acceptedByActorType: 'USER',
+          acceptedByUserId: adminUser.id,
+        },
+      });
+
+      for (const line of lines) {
+        await prisma.orderLine.upsert({
+          where: { id: line.id },
+          update: {
+            quantityOrdered: line.quantity,
+            unitPriceSnapshot: line.unitPrice,
+            subtotalAmount: line.lineTotal,
+            taxAmount: 0,
+            totalAmount: line.lineTotal,
+          },
+          create: {
+            id: line.id,
+            orderId: order.id,
+            distributorId: distributor.id,
+            traderCustomerId: custOrg.id,
+            productId: line.product.id,
+            skuSnapshot: line.product.sku,
+            productNameSnapshot: line.product.name,
+            quantityOrdered: line.quantity,
+            unitPriceSnapshot: line.unitPrice,
+            subtotalAmount: line.lineTotal,
+            taxAmount: 0,
+            totalAmount: line.lineTotal,
+            priceListIdSnapshot: priceList.id,
+            priceListRuleIdSnapshot: `seed-plr-${line.product.sku.toLowerCase()}`,
+            status: 'ACCEPTED',
+          },
+        });
+      }
+
+      if (spec.delivered) {
+        deliveredCount += 1;
+        await prisma.orderDeliveryOutcome.upsert({
+          where: { orderId: order.id },
+          update: {},
+          create: {
+            id: `seed-outcome-${orderSeq}`,
+            orderId: order.id,
+            outcome: 'DELIVERED',
+            dropMethod: 'LEFT_IN_SAFE_LOCATION',
+            recipientName: `${c.contactFirstName} ${c.contactLastName}`,
+            notes: 'Left with goods-in as agreed.',
+          },
+        });
+      }
+    }
+  }
+
   console.log(
     `Seeded: distributor "${distributor.name}", ` +
     `user "${user.email}", admin "${adminUser.email}", ` +
     `${productTypeData.length} product types, ${supplierData.length} suppliers, ` +
     `${productData.length} products, price list "${priceList.name}", ` +
     `catalogues "${fullRangeCatalogue.name}" (${productData.length}) and "${featuredCatalogue.name}" (${featuredSkus.length}), ` +
+    `2 delivery profiles ("${standardWeekday.name}", "${saturdayExpress.name}"), ` +
+    `${customerData.length} customers, ${orderSeq} orders (${deliveredCount} delivered), ` +
     `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}", ` +
     `distributor "${rogersBakery.name}", admin "${rogersBakeryAdmin.email}", ` +
     `distributor "${gooCheese.name}", admin "${gooCheeseAdmin.email}", ` +
