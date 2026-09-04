@@ -357,10 +357,164 @@ async function main() {
     });
   }
 
+  // Products for Vine & Co — spread across the 5 product types and 3 suppliers above.
+  const productData = [
+    // Wine
+    { id: 'seed-prod-wine-1', typeId: 'seed-pt-wine', supplierId: 'seed-sup-1', name: 'Château Belmont Rouge 2021', sku: 'WINE-001', price: '14.50', description: 'Bordeaux blend, medium-bodied red with soft tannins.' },
+    { id: 'seed-prod-wine-2', typeId: 'seed-pt-wine', supplierId: 'seed-sup-2', name: 'Domaine Clairvue Chardonnay 2022', sku: 'WINE-002', price: '12.00', description: 'Burgundy-style Chardonnay, lightly oaked.' },
+    { id: 'seed-prod-wine-3', typeId: 'seed-pt-wine', supplierId: 'seed-sup-3', name: 'Rosé de Provence 2023', sku: 'WINE-003', price: '11.25', description: 'Pale, dry Provençal rosé with red berry notes.' },
+    { id: 'seed-prod-wine-4', typeId: 'seed-pt-wine', supplierId: 'seed-sup-1', name: 'Barolo Riserva 2019', sku: 'WINE-004', price: '28.00', description: 'Full-bodied Nebbiolo from Piedmont, aged in oak.' },
+    { id: 'seed-prod-wine-5', typeId: 'seed-pt-wine', supplierId: 'seed-sup-2', name: 'Marlborough Sauvignon Blanc 2023', sku: 'WINE-005', price: '13.75', description: 'Crisp, zesty white with gooseberry and citrus notes.' },
+    { id: 'seed-prod-wine-6', typeId: 'seed-pt-wine', supplierId: 'seed-sup-3', name: 'Rioja Crianza 2020', sku: 'WINE-006', price: '15.50', description: 'Tempranillo aged in American oak, smooth and savoury.' },
+    { id: 'seed-prod-wine-7', typeId: 'seed-pt-wine', supplierId: 'seed-sup-1', name: 'Prosecco Extra Dry', sku: 'WINE-007', price: '9.99', description: 'Light, fruity Italian sparkling wine.' },
+    { id: 'seed-prod-wine-8', typeId: 'seed-pt-wine', supplierId: 'seed-sup-2', name: 'Chianti Classico 2021', sku: 'WINE-008', price: '16.25', description: 'Tuscan Sangiovese with bright acidity and cherry notes.' },
+    { id: 'seed-prod-wine-9', typeId: 'seed-pt-wine', supplierId: 'seed-sup-3', name: 'Albariño Rías Baixas 2022', sku: 'WINE-009', price: '13.00', description: 'Aromatic Galician white, saline and citrus-driven.' },
+    { id: 'seed-prod-wine-10', typeId: 'seed-pt-wine', supplierId: 'seed-sup-1', name: 'Pinot Noir Central Otago 2021', sku: 'WINE-010', price: '22.50', description: 'Elegant New Zealand Pinot with red fruit and spice.' },
+    // Beer
+    { id: 'seed-prod-beer-1', typeId: 'seed-pt-beer', supplierId: 'seed-sup-2', name: 'Golden Ale 500ml', sku: 'BEER-001', price: '1.85', description: 'Easy-drinking golden ale, lightly hopped.' },
+    { id: 'seed-prod-beer-2', typeId: 'seed-pt-beer', supplierId: 'seed-sup-3', name: 'Session IPA 330ml', sku: 'BEER-002', price: '1.65', description: 'Low-ABV IPA with citrus and pine hop character.' },
+    { id: 'seed-prod-beer-3', typeId: 'seed-pt-beer', supplierId: 'seed-sup-1', name: 'Imperial Stout 440ml', sku: 'BEER-003', price: '2.40', description: 'Rich, roasty stout with notes of coffee and dark chocolate.' },
+    { id: 'seed-prod-beer-4', typeId: 'seed-pt-beer', supplierId: 'seed-sup-2', name: 'Belgian Wheat Beer 500ml', sku: 'BEER-004', price: '1.95', description: 'Unfiltered wheat beer with banana and clove notes.' },
+    { id: 'seed-prod-beer-5', typeId: 'seed-pt-beer', supplierId: 'seed-sup-3', name: 'American Pale Ale 330ml', sku: 'BEER-005', price: '1.70', description: 'Hoppy pale ale with a clean, bitter finish.' },
+    { id: 'seed-prod-beer-6', typeId: 'seed-pt-beer', supplierId: 'seed-sup-1', name: 'Premium Lager 330ml', sku: 'BEER-006', price: '1.55', description: 'Crisp, cold-fermented lager.' },
+    { id: 'seed-prod-beer-7', typeId: 'seed-pt-beer', supplierId: 'seed-sup-2', name: 'Smoked Porter 440ml', sku: 'BEER-007', price: '2.25', description: 'Dark porter with a subtle smoked malt character.' },
+    { id: 'seed-prod-beer-8', typeId: 'seed-pt-beer', supplierId: 'seed-sup-3', name: 'Amber Ale 500ml', sku: 'BEER-008', price: '1.80', description: 'Malt-forward amber ale with a caramel finish.' },
+    // Spirits
+    { id: 'seed-prod-spi-1', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-1', name: 'London Dry Gin 70cl', sku: 'SPI-001', price: '16.50', description: 'Classic juniper-forward London Dry Gin.' },
+    { id: 'seed-prod-spi-2', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-2', name: 'Highland Single Malt 12yr 70cl', sku: 'SPI-002', price: '32.00', description: 'Smooth 12-year-old single malt Scotch whisky.' },
+    { id: 'seed-prod-spi-3', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-3', name: 'Spiced Caribbean Rum 70cl', sku: 'SPI-003', price: '18.75', description: 'Dark rum infused with vanilla and warm spice.' },
+    { id: 'seed-prod-spi-4', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-1', name: 'Premium Vodka 70cl', sku: 'SPI-004', price: '15.25', description: 'Triple-distilled premium vodka.' },
+    { id: 'seed-prod-spi-5', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-2', name: 'Blended Scotch Whisky 70cl', sku: 'SPI-005', price: '19.50', description: 'Approachable blended Scotch, versatile for cocktails.' },
+    { id: 'seed-prod-spi-6', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-3', name: 'Aged Dark Rum 70cl', sku: 'SPI-006', price: '21.00', description: 'Rum aged in oak casks for a rich, rounded flavour.' },
+    { id: 'seed-prod-spi-7', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-1', name: 'Sloe Gin 50cl', sku: 'SPI-007', price: '14.00', description: 'Gin steeped with sloe berries, sweet and fruity.' },
+    { id: 'seed-prod-spi-8', typeId: 'seed-pt-spirits', supplierId: 'seed-sup-2', name: 'Brandy VSOP 70cl', sku: 'SPI-008', price: '24.50', description: 'Smooth VSOP brandy, aged for depth and warmth.' },
+    // Cider
+    { id: 'seed-prod-cid-1', typeId: 'seed-pt-cider', supplierId: 'seed-sup-3', name: 'Traditional Dry Cider 500ml', sku: 'CID-001', price: '1.75', description: 'Still, dry farmhouse-style cider.' },
+    { id: 'seed-prod-cid-2', typeId: 'seed-pt-cider', supplierId: 'seed-sup-1', name: 'Cloudy Apple Cider 500ml', sku: 'CID-002', price: '1.80', description: 'Unfiltered cider with a naturally sweet finish.' },
+    { id: 'seed-prod-cid-3', typeId: 'seed-pt-cider', supplierId: 'seed-sup-2', name: 'Perry Pear Cider 500ml', sku: 'CID-003', price: '1.85', description: 'Delicate perry made from traditional pear varieties.' },
+    { id: 'seed-prod-cid-4', typeId: 'seed-pt-cider', supplierId: 'seed-sup-3', name: 'Vintage Reserve Cider 750ml', sku: 'CID-004', price: '4.25', description: 'Single-vintage cider aged for extra depth.' },
+    { id: 'seed-prod-cid-5', typeId: 'seed-pt-cider', supplierId: 'seed-sup-1', name: 'Wild Berry Cider 330ml', sku: 'CID-005', price: '1.60', description: 'Cider blended with mixed berries.' },
+    { id: 'seed-prod-cid-6', typeId: 'seed-pt-cider', supplierId: 'seed-sup-2', name: 'Rhubarb Cider 500ml', sku: 'CID-006', price: '1.90', description: 'Cider infused with tart rhubarb.' },
+    { id: 'seed-prod-cid-7', typeId: 'seed-pt-cider', supplierId: 'seed-sup-3', name: 'Still Farmhouse Cider 500ml', sku: 'CID-007', price: '1.70', description: 'Uncarbonated, traditional-method cider.' },
+    { id: 'seed-prod-cid-8', typeId: 'seed-pt-cider', supplierId: 'seed-sup-1', name: 'Sparkling Vintage Cider 750ml', sku: 'CID-008', price: '4.50', description: 'Bottle-conditioned sparkling cider.' },
+    // Non-Alcoholic
+    { id: 'seed-prod-na-1', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-2', name: 'Alcohol-Free Sparkling Rosé', sku: 'NA-001', price: '6.50', description: 'De-alcoholised sparkling rosé.' },
+    { id: 'seed-prod-na-2', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-3', name: 'Alcohol-Free IPA', sku: 'NA-002', price: '1.95', description: 'Hoppy alcohol-free IPA, under 0.5% ABV.' },
+    { id: 'seed-prod-na-3', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-1', name: 'Alcohol-Free Botanical Gin & Tonic', sku: 'NA-003', price: '8.00', description: 'Botanical spirit alternative, ready mixed.' },
+    { id: 'seed-prod-na-4', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-2', name: 'Craft Ginger Beer', sku: 'NA-004', price: '1.50', description: 'Fiery, naturally brewed ginger beer.' },
+    { id: 'seed-prod-na-5', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-3', name: 'Elderflower Pressé', sku: 'NA-005', price: '2.10', description: 'Sparkling elderflower pressé.' },
+    { id: 'seed-prod-na-6', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-1', name: 'Alcohol-Free Lager', sku: 'NA-006', price: '1.60', description: 'Crisp alcohol-free lager.' },
+    { id: 'seed-prod-na-7', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-2', name: 'Original Kombucha', sku: 'NA-007', price: '2.25', description: 'Lightly fermented, naturally sparkling kombucha.' },
+    { id: 'seed-prod-na-8', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-3', name: 'Sparkling Grape Juice', sku: 'NA-008', price: '3.00', description: 'Sparkling pressed grape juice, alcohol-free.' },
+  ];
+
+  for (const p of productData) {
+    await prisma.product.upsert({
+      where: { id: p.id },
+      update: {
+        name: p.name,
+        description: p.description,
+        sku: p.sku,
+        status: 'ACTIVE',
+        price: p.price,
+        productTypeId: p.typeId,
+        supplierId: p.supplierId,
+      },
+      create: {
+        id: p.id,
+        distributorId: distributor.id,
+        productTypeId: p.typeId,
+        supplierId: p.supplierId,
+        name: p.name,
+        description: p.description,
+        sku: p.sku,
+        status: 'ACTIVE',
+        price: p.price,
+      },
+    });
+  }
+
+  // Default price list — one FIXED_PRICE rule per product, matching Product.price.
+  const priceList = await prisma.priceList.upsert({
+    where: { id: 'seed-pl-standard' },
+    update: { name: 'Standard Pricing', isDefault: true, active: true },
+    create: {
+      id: 'seed-pl-standard',
+      distributorId: distributor.id,
+      name: 'Standard Pricing',
+      description: 'Default trade pricing applied when no customer-specific price list is assigned.',
+      currency: 'GBP',
+      isDefault: true,
+      active: true,
+    },
+  });
+
+  for (const [index, p] of productData.entries()) {
+    await prisma.priceListRule.upsert({
+      where: { id: `seed-plr-${p.sku.toLowerCase()}` },
+      update: { unitPrice: p.price, active: true },
+      create: {
+        id: `seed-plr-${p.sku.toLowerCase()}`,
+        distributorId: distributor.id,
+        priceListId: priceList.id,
+        selectorType: 'PRODUCT',
+        productId: p.id,
+        minQuantity: 1,
+        valueType: 'FIXED_PRICE',
+        unitPrice: p.price,
+        currency: 'GBP',
+        sortOrder: index,
+        active: true,
+      },
+    });
+  }
+
+  // Catalogues — a full-range catalogue plus a curated featured selection.
+  const fullRangeCatalogue = await prisma.catalogue.upsert({
+    where: { id: 'seed-cat-full-range' },
+    update: { name: 'Full Range' },
+    create: {
+      id: 'seed-cat-full-range',
+      distributorId: distributor.id,
+      name: 'Full Range',
+      description: 'Every product Vine & Co currently offers.',
+    },
+  });
+
+  for (const p of productData) {
+    await prisma.catalogueProduct.upsert({
+      where: { catalogueId_productId: { catalogueId: fullRangeCatalogue.id, productId: p.id } },
+      update: {},
+      create: { catalogueId: fullRangeCatalogue.id, productId: p.id },
+    });
+  }
+
+  const featuredCatalogue = await prisma.catalogue.upsert({
+    where: { id: 'seed-cat-featured' },
+    update: { name: 'Featured Selection' },
+    create: {
+      id: 'seed-cat-featured',
+      distributorId: distributor.id,
+      name: 'Featured Selection',
+      description: 'A curated cross-category selection for new customers.',
+    },
+  });
+
+  const featuredSkus = ['WINE-001', 'WINE-004', 'BEER-001', 'BEER-003', 'SPI-001', 'SPI-002', 'CID-001', 'CID-004', 'NA-001', 'NA-003'];
+  for (const p of productData.filter((prod) => featuredSkus.includes(prod.sku))) {
+    await prisma.catalogueProduct.upsert({
+      where: { catalogueId_productId: { catalogueId: featuredCatalogue.id, productId: p.id } },
+      update: {},
+      create: { catalogueId: featuredCatalogue.id, productId: p.id },
+    });
+  }
+
   console.log(
     `Seeded: distributor "${distributor.name}", ` +
     `user "${user.email}", admin "${adminUser.email}", ` +
     `${productTypeData.length} product types, ${supplierData.length} suppliers, ` +
+    `${productData.length} products, price list "${priceList.name}", ` +
+    `catalogues "${fullRangeCatalogue.name}" (${productData.length}) and "${featuredCatalogue.name}" (${featuredSkus.length}), ` +
     `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}", ` +
     `distributor "${rogersBakery.name}", admin "${rogersBakeryAdmin.email}", ` +
     `distributor "${gooCheese.name}", admin "${gooCheeseAdmin.email}", ` +
