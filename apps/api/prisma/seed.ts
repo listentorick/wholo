@@ -791,6 +791,24 @@ async function main() {
     }
   }
 
+  // ─── Marketplace visibility — every seeded distributor is discoverable ───
+  const marketplaceSettings = [
+    { org: distributor, tagline: 'Boutique wine, beer, spirits, cider & non-alcoholic — hand-picked ranges for the trade.' },
+    { org: yhmp, tagline: 'Yorkshire hand-made pies, delivered fresh across the region.' },
+    { org: rogersBakery, tagline: 'Fresh-baked goods for cafes, hotels and delis.' },
+    { org: gooCheese, tagline: 'Artisan cheese for independent retailers and restaurants.' },
+    { org: croftersFoods, tagline: 'Quality farm-to-table produce for the trade.' },
+    { org: cryerAndStott, tagline: 'Traditional baked goods for food-service across the region.' },
+  ];
+
+  for (const { org, tagline } of marketplaceSettings) {
+    await prisma.distributorSettings.upsert({
+      where: { distributorId: org.id },
+      update: { marketplaceVisible: true, tagline },
+      create: { distributorId: org.id, marketplaceVisible: true, tagline },
+    });
+  }
+
   console.log(
     `Seeded: distributor "${distributor.name}", ` +
     `user "${user.email}", admin "${adminUser.email}", ` +
@@ -799,6 +817,7 @@ async function main() {
     `catalogues "${fullRangeCatalogue.name}" (${productData.length}) and "${featuredCatalogue.name}" (${featuredSkus.length}), ` +
     `2 delivery profiles ("${standardWeekday.name}", "${saturdayExpress.name}"), ` +
     `${customerData.length} customers, ${orderSeq} orders (${deliveredCount} delivered), ` +
+    `${marketplaceSettings.length} distributors marketplace-visible, ` +
     `distributor "${yhmp.name}", admin "${yhmpAdminUser.email}", ` +
     `distributor "${rogersBakery.name}", admin "${rogersBakeryAdmin.email}", ` +
     `distributor "${gooCheese.name}", admin "${gooCheeseAdmin.email}", ` +
