@@ -1,100 +1,70 @@
 import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import DistributorLayout from './layout';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ distributorSlug: 'fine-wines-co' }),
-  usePathname: vi.fn(),
+  notFound: vi.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
 }));
 
-vi.mock('@/lib/cart-context', () => ({
-  CartProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+vi.mock('@/lib/server/get-distributor', () => ({
+  getDistributorForSlug: vi.fn(),
 }));
 
-vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({ authError: null, logout: vi.fn() }),
+vi.mock('./DistributorShell', () => ({
+  DistributorShell: ({
+    distributorSlug,
+    initialDistributor,
+    children,
+  }: {
+    distributorSlug: string;
+    initialDistributor: { name: string };
+    children: React.ReactNode;
+  }) => (
+    <div data-testid="shell" data-slug={distributorSlug} data-name={initialDistributor?.name}>
+      {children}
+    </div>
+  ),
 }));
 
-vi.mock('@/lib/distributor-context', () => ({
-  DistributorProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useDistributor: () => ({ distributor: null, setBannerScrolledPast: vi.fn() }),
-}));
+import { notFound } from 'next/navigation';
+import { getDistributorForSlug } from '@/lib/server/get-distributor';
+import DistributorLayout from './layout';
 
-vi.mock('@/components/NavigationSidebar', () => ({
-  NavigationSidebar: () => <div data-testid="nav-sidebar" />,
-}));
-
-vi.mock('@/components/DistributorHeader', () => ({
-  DistributorHeader: () => <div data-testid="distributor-header" />,
-}));
-
-vi.mock('@/components/OrderAsBanner', () => ({
-  OrderAsBanner: () => null,
-}));
-
-vi.mock('@/components/OrderAsHandler', () => ({
-  OrderAsHandler: () => null,
-}));
-
-vi.mock('@/components/DistributorNav', () => ({
-  DistributorNav: () => <div data-testid="distributor-nav" />,
-}));
-
-vi.mock('@/components/BrandingBanner', () => ({
-  BrandingBanner: () => <div data-testid="branding-banner" />,
-}));
-
-vi.mock('@/components/DistributorPageHeader', () => ({
-  DistributorPageHeader: () => <div data-testid="page-header" />,
-}));
-
-import { usePathname } from 'next/navigation';
-
-const slug = 'fine-wines-co';
-
-function renderAt(pathname: string) {
-  vi.mocked(usePathname).mockReturnValue(pathname);
-  return render(
-    <DistributorLayout>
-      <div>content</div>
-    </DistributorLayout>,
-  );
-}
-
-describe('DistributorLayout — page header visibility', () => {
+describe('DistributorLayout (server) — slug resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders DistributorPageHeader on the products page', () => {
-    renderAt(`/${slug}/products`);
-    expect(screen.getByTestId('page-header')).toBeTruthy();
-    expect(screen.queryByTestId('branding-banner')).toBeNull();
+  it('renders the client shell with the resolved distributor when the slug exists', async () => {
+    vi.mocked(getDistributorForSlug).mockResolvedValue({ id: 'd1', name: 'Test Dist' } as any);
+
+    const element = await DistributorLayout({
+      children: <div>content</div>,
+      params: Promise.resolve({ distributorSlug: 'test-dist' }),
+    });
+    render(element);
+
+    expect(getDistributorForSlug).toHaveBeenCalledWith('test-dist');
+    expect(screen.getByTestId('shell').getAttribute('data-slug')).toBe('test-dist');
+    expect(screen.getByTestId('shell').getAttribute('data-name')).toBe('Test Dist');
+    expect(screen.getByText('content')).toBeTruthy();
+    expect(notFound).not.toHaveBeenCalled();
   });
 
-  it('renders BrandingBanner (not the page header) on the about page', () => {
-    renderAt(`/${slug}`);
-    expect(screen.getByTestId('branding-banner')).toBeTruthy();
-    expect(screen.queryByTestId('page-header')).toBeNull();
-  });
+  it('calls notFound() before rendering anything when the slug does not resolve', async () => {
+    vi.mocked(getDistributorForSlug).mockResolvedValue(null);
 
-  it('renders neither BrandingBanner nor DistributorPageHeader on the order detail page', () => {
-    renderAt(`/${slug}/orders/order-123`);
-    expect(screen.queryByTestId('page-header')).toBeNull();
-    expect(screen.queryByTestId('branding-banner')).toBeNull();
-  });
+    await expect(
+      DistributorLayout({
+        children: <div>content</div>,
+        params: Promise.resolve({ distributorSlug: 'bad-slug' }),
+      }),
+    ).rejects.toThrow();
 
-  it('renders neither BrandingBanner nor DistributorPageHeader on the orders list page', () => {
-    renderAt(`/${slug}/orders`);
-    expect(screen.queryByTestId('page-header')).toBeNull();
-    expect(screen.queryByTestId('branding-banner')).toBeNull();
-  });
-
-  it('renders neither BrandingBanner nor DistributorPageHeader on the checkout page (the order-summary rail carries that context)', () => {
-    renderAt(`/${slug}/checkout`);
-    expect(screen.queryByTestId('page-header')).toBeNull();
-    expect(screen.queryByTestId('branding-banner')).toBeNull();
+    expect(getDistributorForSlug).toHaveBeenCalledWith('bad-slug');
+    expect(notFound).toHaveBeenCalledTimes(1);
   });
 });

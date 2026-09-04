@@ -24,9 +24,11 @@ import { catalogueApi, portalApi } from '@wholo/api-client';
 // ── Test harness ──────────────────────────────────────────────────────────────
 
 function TestHarness() {
-  const { relationshipStatus, relationshipMinSpend, effectiveMinSpend, requestAccess } = useDistributor();
+  const { distributor, relationshipStatus, relationshipMinSpend, effectiveMinSpend, requestAccess } =
+    useDistributor();
   return (
     <div>
+      <span data-testid="distributor-name">{distributor?.name ?? ''}</span>
       <span data-testid="status">{relationshipStatus ?? 'loading'}</span>
       <span data-testid="min-spend">{relationshipMinSpend ?? ''}</span>
       <span data-testid="effective-min-spend">{effectiveMinSpend ?? ''}</span>
@@ -36,9 +38,9 @@ function TestHarness() {
   );
 }
 
-function renderDistributor() {
+function renderDistributor(initialDistributor?: any) {
   return render(
-    <DistributorProvider distributorSlug="test-dist">
+    <DistributorProvider distributorSlug="test-dist" initialDistributor={initialDistributor}>
       <TestHarness />
     </DistributorProvider>,
   );
@@ -220,6 +222,25 @@ describe('DistributorProvider — requestAccess', () => {
     await waitFor(() =>
       expect(portalApi.requestDistributorAccess).toHaveBeenCalledWith('test-dist', 'cust-1', false),
     );
+  });
+});
+
+describe('DistributorProvider — initialDistributor', () => {
+  it('seeds distributor state synchronously, before the background fetch resolves', () => {
+    vi.mocked(catalogueApi.getDistributor).mockImplementation(() => new Promise(() => {}));
+
+    renderDistributor({ id: 'dist-1', name: 'Seeded Dist' });
+
+    expect(screen.getByTestId('distributor-name').textContent).toBe('Seeded Dist');
+  });
+
+  it('is null when no initialDistributor is given, until the fetch resolves', async () => {
+    vi.mocked(catalogueApi.getDistributor).mockResolvedValue({ id: 'dist-1', name: 'Fetched Dist' } as any);
+
+    renderDistributor();
+
+    expect(screen.getByTestId('distributor-name').textContent).toBe('');
+    await waitFor(() => expect(screen.getByTestId('distributor-name').textContent).toBe('Fetched Dist'));
   });
 });
 

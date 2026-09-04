@@ -52,9 +52,18 @@ const DistributorContext = createContext<DistributorContextValue>({
   requestAccess: async () => {},
 });
 
-export function DistributorProvider({ distributorSlug, children }: { distributorSlug: string; children: ReactNode }) {
+export function DistributorProvider({
+  distributorSlug,
+  initialDistributor = null,
+  children,
+}: {
+  distributorSlug: string;
+  /** Server-resolved distributor, seeded from `layout.tsx` so the shell never paints unbranded on first load. */
+  initialDistributor?: DistributorInfo | null;
+  children: ReactNode;
+}) {
   const { user, accessToken, orderAsMode, orderAsCustomerId } = useAuth();
-  const [distributor, setDistributor] = useState<DistributorInfo | null>(null);
+  const [distributor, setDistributor] = useState<DistributorInfo | null>(initialDistributor);
   const [bannerScrolledPast, setBannerScrolledPastState] = useState(false);
   const [minOrderBarScrolledPast, setMinOrderBarScrolledPastState] = useState(false);
   const [relationshipStatus, setRelationshipStatus] = useState<RelationshipStatus | null>(null);
