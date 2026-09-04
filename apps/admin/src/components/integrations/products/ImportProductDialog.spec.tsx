@@ -37,7 +37,7 @@ beforeEach(() => {
 
 describe('ImportProductDialog', () => {
   it('pre-fills name, SKU and the price rounded to 2 decimal places', () => {
-    render(<ImportProductDialog product={product} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportProductDialog product={product} onClose={() => {}} onImported={() => {}} />);
     expect(screen.getByLabelText('Product name')).toHaveValue('Cabernet Sauvignon 2023');
     expect(screen.getByLabelText('SKU')).toHaveValue('CAB-SAUV-001');
     expect(screen.getByLabelText('Price')).toHaveValue('12.35');
@@ -48,7 +48,7 @@ describe('ImportProductDialog', () => {
     const onImported = vi.fn();
     const user = userEvent.setup();
 
-    render(<ImportProductDialog product={product} token="token-1" onClose={() => {}} onImported={onImported} />);
+    render(<ImportProductDialog product={product} onClose={() => {}} onImported={onImported} />);
     await user.clear(screen.getByLabelText('Product name'));
     await user.type(screen.getByLabelText('Product name'), 'House Cab');
     await user.click(screen.getByText('Import product'));
@@ -56,9 +56,7 @@ describe('ImportProductDialog', () => {
     await waitFor(() =>
       expect(adminAccountingApi.importProduct).toHaveBeenCalledWith(
         'ext-1',
-        { name: 'House Cab', sku: 'CAB-SAUV-001', price: '12.35' },
-        'token-1',
-      ),
+        { name: 'House Cab', sku: 'CAB-SAUV-001', price: '12.35' }),
     );
     await waitFor(() => expect(onImported).toHaveBeenCalled());
   });
@@ -67,7 +65,7 @@ describe('ImportProductDialog', () => {
     (adminAccountingApi.importProduct as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<ImportProductDialog product={product} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportProductDialog product={product} onClose={() => {}} onImported={() => {}} />);
     await user.click(screen.getByText('Import product'));
 
     await waitFor(() => expect(screen.getByText(/Failed to import this product/)).toBeInTheDocument());
@@ -83,7 +81,7 @@ describe('ImportProductDialog', () => {
     );
     const user = userEvent.setup();
 
-    render(<ImportProductDialog product={product} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportProductDialog product={product} onClose={() => {}} onImported={() => {}} />);
     await user.click(screen.getByText('Import product'));
 
     await waitFor(() =>
@@ -99,7 +97,7 @@ describe('ImportProductDialog', () => {
     render(
       <ImportProductDialog
         product={{ ...product, salesUnitPrice: null }}
-        token="token-1"
+
         onClose={() => {}}
         onImported={() => {}}
       />,

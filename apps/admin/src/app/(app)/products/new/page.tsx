@@ -12,14 +12,14 @@ export default function NewProductPage() {
 
   async function handleSubmit(data: CreateProductRequest) {
     if (!accessToken) return;
-    await adminProductsApi.create(accessToken, data);
+    await adminProductsApi.create(data);
     router.push('/products');
   }
 
   return (
     <ProductForm
       mode="create"
-      token={accessToken ?? ''}
+     
       currencyCode={user?.organisationCurrencyCode ?? 'GBP'}
       onSubmit={handleSubmit}
     />

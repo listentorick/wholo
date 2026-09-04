@@ -75,7 +75,7 @@ describe('MatchExistingCustomerDialog', () => {
       pagination: { nextCursor: null, hasMore: false, total: 2 },
     });
 
-    render(<MatchExistingCustomerDialog contact={contact} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingCustomerDialog contact={contact} onClose={() => {}} onMatched={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Acme Wines')).toBeInTheDocument());
     expect(screen.getByText('Blackbird Vine & Co')).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe('MatchExistingCustomerDialog', () => {
     });
     const user = userEvent.setup();
 
-    render(<MatchExistingCustomerDialog contact={contact} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingCustomerDialog contact={contact} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => screen.getByText('Acme Wines'));
 
     await user.type(screen.getByLabelText('Search customers'), 'Acme');
@@ -106,14 +106,14 @@ describe('MatchExistingCustomerDialog', () => {
     const onMatched = vi.fn();
     const user = userEvent.setup();
 
-    render(<MatchExistingCustomerDialog contact={contact} token="token-1" onClose={() => {}} onMatched={onMatched} />);
+    render(<MatchExistingCustomerDialog contact={contact} onClose={() => {}} onMatched={onMatched} />);
     await waitFor(() => screen.getByText('Acme Wines'));
 
     await user.click(screen.getByText('Acme Wines'));
     await user.click(screen.getByText('Link customer'));
 
     await waitFor(() =>
-      expect(adminAccountingApi.matchContact).toHaveBeenCalledWith('contact-1', { tradeRelationshipId: 'tr-1' }, 'token-1'),
+      expect(adminAccountingApi.matchContact).toHaveBeenCalledWith('contact-1', { tradeRelationshipId: 'tr-1' }),
     );
     await waitFor(() => expect(onMatched).toHaveBeenCalled());
   });
@@ -123,14 +123,14 @@ describe('MatchExistingCustomerDialog', () => {
       data: [makeCustomer('tr-1', 'Acme Wines')],
       pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
-    render(<MatchExistingCustomerDialog contact={contact} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingCustomerDialog contact={contact} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => screen.getByText('Acme Wines'));
     expect(screen.getByText('Link customer')).toBeDisabled();
   });
 
   it('shows a load error when the customer list fails to load', async () => {
     (adminCustomersApi.list as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
-    render(<MatchExistingCustomerDialog contact={contact} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingCustomerDialog contact={contact} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => expect(screen.getByText('Failed to load customers.')).toBeInTheDocument());
   });
 });

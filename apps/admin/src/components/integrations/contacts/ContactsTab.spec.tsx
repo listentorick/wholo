@@ -55,10 +55,10 @@ describe('ContactsTab', () => {
       pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
 
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
-    expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1');
+    expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS });
     // Renders as a normal, editable chip — not a hidden/baked-in constraint.
     expect(screen.getByRole('button', { name: /Status.*is.*Suggested match/ })).toBeInTheDocument();
   });
@@ -67,19 +67,19 @@ describe('ContactsTab', () => {
     mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() =>
-      expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1'),
+      expect(mockListContacts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }),
     );
 
     await user.click(screen.getByRole('button', { name: 'Clear all' }));
 
-    await waitFor(() => expect(mockListContacts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }, 'token-1'));
+    await waitFor(() => expect(mockListContacts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }));
   });
 
   it('shows an error banner when the initial load fails', async () => {
     mockListContacts.mockRejectedValue(new Error('boom'));
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() => expect(screen.getByText(/Failed to load contacts/)).toBeInTheDocument());
   });
 
@@ -87,16 +87,14 @@ describe('ContactsTab', () => {
     mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() => expect(mockListContacts).toHaveBeenCalledTimes(1));
 
     await addFilter(user, 'status', 'Suggested match');
 
     await waitFor(() =>
       expect(mockListContacts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: ['SUGGESTED'] },
-        'token-1',
-      ),
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'] }),
     );
   });
 
@@ -104,7 +102,7 @@ describe('ContactsTab', () => {
     mockListContacts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() => expect(mockListContacts).toHaveBeenCalledTimes(1));
 
     await addFilter(user, 'status', 'Suggested match');
@@ -114,9 +112,7 @@ describe('ContactsTab', () => {
 
     await waitFor(() =>
       expect(mockListContacts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: ['SUGGESTED'], type: ['suppliers'] },
-        'token-1',
-      ),
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'], type: ['suppliers'] }),
     );
   });
 
@@ -132,7 +128,7 @@ describe('ContactsTab', () => {
       });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
     expect(screen.getByText('Load more')).toBeInTheDocument();
 
@@ -152,7 +148,7 @@ describe('ContactsTab', () => {
     mockBulkImportContacts.mockResolvedValue({ jobId: 'job-1' });
     const user = userEvent.setup();
 
-    render(<ContactsTab token="token-1" providerLabel="Xero" />);
+    render(<ContactsTab providerLabel="Xero" />);
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Contact c1')).toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: 'Bulk import' })).toBeDisabled();
@@ -162,7 +158,7 @@ describe('ContactsTab', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() =>
-      expect(mockBulkImportContacts).toHaveBeenCalledWith({ ids: ['c1'], honourSuggestions: false }, 'token-1'),
+      expect(mockBulkImportContacts).toHaveBeenCalledWith({ ids: ['c1'], honourSuggestions: false }),
     );
     await waitFor(() => expect(screen.getByText(/Import queued/)).toBeInTheDocument());
   });

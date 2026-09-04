@@ -121,7 +121,7 @@ describe('CustomerPage — status transition actions', () => {
     expect(screen.queryByText(/Heads up/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Yes, accept'));
-    await waitFor(() => expect(mockAcceptRequest).toHaveBeenCalledWith('test-token', 'rel-1'));
+    await waitFor(() => expect(mockAcceptRequest).toHaveBeenCalledWith('rel-1'));
     // Once for the initial load, once for the post-action refetch.
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
@@ -141,7 +141,7 @@ describe('CustomerPage — status transition actions', () => {
 
     // Still just a warning — accepting is unaffected.
     fireEvent.click(screen.getByText('Yes, accept'));
-    await waitFor(() => expect(mockAcceptRequest).toHaveBeenCalledWith('test-token', 'rel-1'));
+    await waitFor(() => expect(mockAcceptRequest).toHaveBeenCalledWith('rel-1'));
   });
 
   it('Decline request opens a confirm modal before calling declineRequest', async () => {
@@ -157,7 +157,7 @@ describe('CustomerPage — status transition actions', () => {
     expect(screen.getByText(/will be notified and can request again later/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Yes, decline'));
-    await waitFor(() => expect(mockDeclineRequest).toHaveBeenCalledWith('test-token', 'rel-1'));
+    await waitFor(() => expect(mockDeclineRequest).toHaveBeenCalledWith('rel-1'));
   });
 
   it('shows Suspend (confirm-gated) for an ACTIVE customer, and no request/unsuspend actions', async () => {
@@ -174,7 +174,7 @@ describe('CustomerPage — status transition actions', () => {
     expect(mockSuspend).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Yes, suspend'));
-    await waitFor(() => expect(mockSuspend).toHaveBeenCalledWith('test-token', 'rel-1'));
+    await waitFor(() => expect(mockSuspend).toHaveBeenCalledWith('rel-1'));
   });
 
   it('Unsuspend opens a confirm modal before calling unsuspend', async () => {
@@ -189,7 +189,7 @@ describe('CustomerPage — status transition actions', () => {
     expect(screen.getByText("They'll immediately be able to browse and order again.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Yes, unsuspend'));
-    await waitFor(() => expect(mockUnsuspend).toHaveBeenCalledWith('test-token', 'rel-1'));
+    await waitFor(() => expect(mockUnsuspend).toHaveBeenCalledWith('rel-1'));
   });
 
   it('shows none of the transition actions for an ACTIVE-adjacent PENDING_INVITE customer', async () => {

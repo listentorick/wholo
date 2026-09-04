@@ -149,7 +149,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    Promise.all([adminProductTypesApi.list(accessToken), adminSuppliersApi.list(accessToken)])
+    Promise.all([adminProductTypesApi.list(), adminSuppliersApi.list()])
       .then(([types, sups]) => {
         setProductTypes(types);
         setSuppliers(sups);
@@ -202,7 +202,7 @@ export default function ProductsPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminProductsApi.list,
     buildParams,
     errorMessage: 'Failed to load products. Please refresh.',

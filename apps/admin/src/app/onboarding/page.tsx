@@ -119,7 +119,7 @@ export default function OnboardingPage() {
     if (!accessToken) return;
     setSubmitError(null);
     try {
-      const created = await adminOnboardingApi.createDistributor(accessToken, {
+      const created = await adminOnboardingApi.createDistributor({
         name: values.name,
         slug: values.slug,
         phone: values.phone || undefined,
@@ -133,7 +133,7 @@ export default function OnboardingPage() {
       });
       setOrg(created);
       // Now that the org exists, the settings row can be fetched (lazily created server-side).
-      setSettings(await adminSettingsApi.get(accessToken));
+      setSettings(await adminSettingsApi.get());
       setStep('branding');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && /portal address/i.test(e.message)) {
@@ -148,7 +148,7 @@ export default function OnboardingPage() {
 
   async function saveSettings(patch: UpdateDistributorSettingsRequest) {
     if (!accessToken) return;
-    const updated = await adminSettingsApi.update(accessToken, patch);
+    const updated = await adminSettingsApi.update(patch);
     setSettings(updated);
   }
 
@@ -286,7 +286,7 @@ export default function OnboardingPage() {
             )}
 
             {step === 'branding' && org && accessToken && (
-              <BrandingTab token={accessToken} distributorId={org.id} mode="wizard" onNext={next} />
+              <BrandingTab distributorId={org.id} mode="wizard" onNext={next} />
             )}
 
             {step === 'orders' && settings && (

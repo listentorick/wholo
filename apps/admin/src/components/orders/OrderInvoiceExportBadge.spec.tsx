@@ -33,7 +33,7 @@ describe('OrderInvoiceExportBadge', () => {
   // Historical state (raised / in-progress) is shown by the order's audit-log
   // Timeline instead — this component renders nothing for non-FAILED status.
   it.each(['COMPLETED', 'PENDING', 'PROCESSING'] as const)('renders nothing when status is %s', (status) => {
-    const { container } = render(<OrderInvoiceExportBadge invoiceExport={makeExport({ status })} token="token-1" />);
+    const { container } = render(<OrderInvoiceExportBadge invoiceExport={makeExport({ status })} />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -46,14 +46,14 @@ describe('OrderInvoiceExportBadge', () => {
         invoiceExport={makeExport({
           errorMessage: 'Cannot create accounting invoice because the customer is not linked to an accounting contact.',
         })}
-        token="token-1"
+
       />,
     );
 
     expect(screen.getByText(/customer is not linked/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry invoice export' }));
 
-    expect(mockRetry).toHaveBeenCalledWith('export-1', 'token-1');
+    expect(mockRetry).toHaveBeenCalledWith('export-1');
     await waitFor(() => expect(screen.getByText(/Retry requested/)).toBeInTheDocument());
   });
 
@@ -61,7 +61,7 @@ describe('OrderInvoiceExportBadge', () => {
     mockRetry.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<OrderInvoiceExportBadge invoiceExport={makeExport()} token="token-1" />);
+    render(<OrderInvoiceExportBadge invoiceExport={makeExport()} />);
     await user.click(screen.getByRole('button', { name: 'Retry invoice export' }));
 
     await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument());

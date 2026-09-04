@@ -62,29 +62,29 @@ describe('ProductsTab', () => {
       pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
 
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
-    expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1');
+    expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS });
   });
 
   it('lets the user clear the default filter and see every product', async () => {
     mockListProducts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() =>
-      expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }, 'token-1'),
+      expect(mockListProducts).toHaveBeenCalledWith({ limit: 20, cursor: undefined, status: DEFAULT_STATUS }),
     );
 
     await user.click(screen.getByRole('button', { name: 'Clear all' }));
 
-    await waitFor(() => expect(mockListProducts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }, 'token-1'));
+    await waitFor(() => expect(mockListProducts).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined }));
   });
 
   it('shows an error banner when the initial load fails', async () => {
     mockListProducts.mockRejectedValue(new Error('boom'));
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(screen.getByText(/Failed to load products/)).toBeInTheDocument());
   });
 
@@ -92,16 +92,14 @@ describe('ProductsTab', () => {
     mockListProducts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(mockListProducts).toHaveBeenCalledTimes(1));
 
     await addFilter(user, 'status', 'Suggested match');
 
     await waitFor(() =>
       expect(mockListProducts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: ['SUGGESTED'] },
-        'token-1',
-      ),
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'] }),
     );
   });
 
@@ -109,7 +107,7 @@ describe('ProductsTab', () => {
     mockListProducts.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(mockListProducts).toHaveBeenCalledTimes(1));
 
     await addFilter(user, 'status', 'Suggested match');
@@ -119,9 +117,7 @@ describe('ProductsTab', () => {
 
     await waitFor(() =>
       expect(mockListProducts).toHaveBeenLastCalledWith(
-        { limit: 20, cursor: undefined, status: ['SUGGESTED'], type: ['tracked'] },
-        'token-1',
-      ),
+        { limit: 20, cursor: undefined, status: ['SUGGESTED'], type: ['tracked'] }),
     );
   });
 
@@ -137,7 +133,7 @@ describe('ProductsTab', () => {
       });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
     expect(screen.getByText('Load more')).toBeInTheDocument();
 
@@ -157,7 +153,7 @@ describe('ProductsTab', () => {
     mockBulkImportProducts.mockResolvedValue({ jobId: 'job-1' });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
 
     expect(screen.getByRole('button', { name: 'Bulk import' })).toBeDisabled();
@@ -167,7 +163,7 @@ describe('ProductsTab', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() =>
-      expect(mockBulkImportProducts).toHaveBeenCalledWith({ ids: ['p1'], honourSuggestions: false }, 'token-1'),
+      expect(mockBulkImportProducts).toHaveBeenCalledWith({ ids: ['p1'], honourSuggestions: false }),
     );
     await waitFor(() => expect(screen.getByText(/Import queued/)).toBeInTheDocument());
   });
@@ -180,7 +176,7 @@ describe('ProductsTab', () => {
     mockBulkImportProducts.mockResolvedValue({ jobId: 'job-1' });
     const user = userEvent.setup();
 
-    render(<ProductsTab token="token-1" providerLabel="Xero" />);
+    render(<ProductsTab providerLabel="Xero" />);
     await waitFor(() => expect(within(screen.getByRole('table')).getByText('Product p1')).toBeInTheDocument());
 
     await user.click(within(screen.getByRole('table')).getByLabelText('Select Product p1'));
@@ -189,7 +185,7 @@ describe('ProductsTab', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() =>
-      expect(mockBulkImportProducts).toHaveBeenCalledWith({ ids: ['p1'], honourSuggestions: true }, 'token-1'),
+      expect(mockBulkImportProducts).toHaveBeenCalledWith({ ids: ['p1'], honourSuggestions: true }),
     );
   });
 });

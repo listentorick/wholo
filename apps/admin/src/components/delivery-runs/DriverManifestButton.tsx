@@ -26,7 +26,7 @@ export function DriverManifestButton({ runId, locked }: Props) {
     setDownloading(true);
     setError(null);
     try {
-      const blob = await adminDeliveryRunsApi.downloadManifest(accessToken, runId);
+      const blob = await adminDeliveryRunsApi.downloadManifest(runId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

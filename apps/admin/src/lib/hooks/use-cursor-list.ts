@@ -4,11 +4,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { PaginatedResponse } from '@wholo/types';
 
 interface UseCursorListOptions<T, TParams extends { limit?: number; cursor?: string }> {
-  token: string | null | undefined;
-  fetchPage: (token: string, params: TParams) => Promise<PaginatedResponse<T>>;
+  // Hold the query until auth (or anything else the caller needs) is ready.
+  // Defaults to true. The bearer itself is supplied by the centralised token
+  // provider inside the api-client — hooks never thread a token.
+  enabled?: boolean;
+  fetchPage: (params: TParams) => Promise<PaginatedResponse<T>>;
   buildParams: (cursor: string | undefined) => TParams;
   errorMessage: string;
-  // Extra reload triggers beyond `token` — e.g. [filters, sortBy, sortOrder].
+  // Extra reload triggers beyond `enabled` — e.g. [filters, sortBy, sortOrder].
   // Any change here resets the cursor and replaces `data` rather than appending.
   deps: React.DependencyList;
 }
@@ -25,7 +28,7 @@ interface UseCursorListResult<T> {
 }
 
 export function useCursorList<T, TParams extends { limit?: number; cursor?: string }>({
-  token,
+  enabled = true,
   fetchPage,
   buildParams,
   errorMessage,
@@ -48,10 +51,10 @@ export function useCursorList<T, TParams extends { limit?: number; cursor?: stri
   buildParamsRef.current = buildParams;
 
   const load = useCallback(
-    async (activeToken: string, nextCursor: string | undefined, append: boolean) => {
+    async (nextCursor: string | undefined, append: boolean) => {
       try {
         const params = buildParamsRef.current(nextCursor);
-        const result = await fetchPageRef.current(activeToken, params);
+        const result = await fetchPageRef.current(params);
         setData((prev) => (append ? [...prev, ...result.data] : result.data));
         setCursor(result.pagination.nextCursor ?? undefined);
         setHasMore(result.pagination.hasMore);
@@ -65,20 +68,20 @@ export function useCursorList<T, TParams extends { limit?: number; cursor?: stri
   );
 
   useEffect(() => {
-    if (!token) return;
+    if (!enabled) return;
     setIsLoading(true);
-    load(token, undefined, false).finally(() => setIsLoading(false));
+    load(undefined, false).finally(() => setIsLoading(false));
     // `deps` lets callers (e.g. Orders' filters/sort) trigger a fresh,
     // non-appending reload — spread is intentional, see UseCursorListOptions.deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, load, ...deps]);
+  }, [enabled, load, ...deps]);
 
   const loadMore = useCallback(async () => {
-    if (!token || !cursor) return;
+    if (!enabled || !cursor) return;
     setIsLoadingMore(true);
-    await load(token, cursor, true);
+    await load(cursor, true);
     setIsLoadingMore(false);
-  }, [token, cursor, load]);
+  }, [enabled, cursor, load]);
 
   return { data, setData, total, isLoading, isLoadingMore, hasMore, error, loadMore };
 }

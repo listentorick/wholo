@@ -9,11 +9,10 @@ const ACCEPTED_EXT = '.jpg,.jpeg,.png,.webp';
 const ASSET_TYPE = 'distributor-logo';
 
 interface Props {
-  token: string;
   distributorId: string;
 }
 
-export function BrandingLogoUploader({ token, distributorId }: Props) {
+export function BrandingLogoUploader({ distributorId }: Props) {
   const [image, setImage] = useState<AssetImage | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -23,11 +22,11 @@ export function BrandingLogoUploader({ token, distributorId }: Props) {
 
   useEffect(() => {
     adminAssetImagesApi
-      .list(token, ASSET_TYPE, distributorId)
+      .list(ASSET_TYPE, distributorId)
       .then((imgs) => setImage(imgs[0] ?? null))
       .catch(() => setError('Failed to load logo.'))
       .finally(() => setLoading(false));
-  }, [token, distributorId]);
+  }, [distributorId]);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -41,9 +40,9 @@ export function BrandingLogoUploader({ token, distributorId }: Props) {
       setUploading(true);
       try {
         if (image) {
-          await adminAssetImagesApi.delete(token, image.id);
+          await adminAssetImagesApi.delete(image.id);
         }
-        const uploaded = await adminAssetImagesApi.upload(token, ASSET_TYPE, distributorId, file);
+        const uploaded = await adminAssetImagesApi.upload(ASSET_TYPE, distributorId, file);
         setImage(uploaded);
       } catch {
         setError('Upload failed. Please try again.');
@@ -51,7 +50,7 @@ export function BrandingLogoUploader({ token, distributorId }: Props) {
         setUploading(false);
       }
     },
-    [token, distributorId, image],
+    [distributorId, image],
   );
 
   async function handleDelete() {
@@ -59,7 +58,7 @@ export function BrandingLogoUploader({ token, distributorId }: Props) {
     const prev = image;
     setImage(null);
     try {
-      await adminAssetImagesApi.delete(token, prev.id);
+      await adminAssetImagesApi.delete(prev.id);
     } catch {
       setImage(prev);
       setError('Failed to delete logo. Please try again.');

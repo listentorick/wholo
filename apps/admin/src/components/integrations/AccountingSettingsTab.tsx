@@ -23,12 +23,11 @@ const STATUS_OPTIONS: { value: AccountingInvoiceTargetStatus; label: string; des
 ];
 
 interface AccountingSettingsTabProps {
-  token: string;
   connection: AccountingConnectionStatusResponse;
   onConnectionUpdated: (connection: AccountingConnectionStatusResponse) => void;
 }
 
-export function AccountingSettingsTab({ token, connection, onConnectionUpdated }: AccountingSettingsTabProps) {
+export function AccountingSettingsTab({ connection, onConnectionUpdated }: AccountingSettingsTabProps) {
   const [selected, setSelected] = useState<AccountingInvoiceTargetStatus>(connection.invoiceExportTargetStatus);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,7 +42,6 @@ export function AccountingSettingsTab({ token, connection, onConnectionUpdated }
     try {
       const updated = await adminAccountingApi.updateConnectionSettings(
         { invoiceExportTargetStatus: selected },
-        token,
       );
       onConnectionUpdated(updated);
       setSaved(true);

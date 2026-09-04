@@ -26,7 +26,7 @@ beforeEach(() => {
 
 describe('AccountingSettingsTab', () => {
   it('preselects the connection-configured target status and disables save until changed', () => {
-    render(<AccountingSettingsTab token="token-1" connection={connection} onConnectionUpdated={vi.fn()} />);
+    render(<AccountingSettingsTab connection={connection} onConnectionUpdated={vi.fn()} />);
 
     expect(screen.getByRole('radio', { name: /Draft/ })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -39,12 +39,12 @@ describe('AccountingSettingsTab', () => {
     const user = userEvent.setup();
 
     render(
-      <AccountingSettingsTab token="token-1" connection={connection} onConnectionUpdated={onConnectionUpdated} />,
+      <AccountingSettingsTab connection={connection} onConnectionUpdated={onConnectionUpdated} />,
     );
     await user.click(screen.getByRole('radio', { name: /Authorised/ }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(mockUpdateSettings).toHaveBeenCalledWith({ invoiceExportTargetStatus: 'AUTHORISED' }, 'token-1');
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ invoiceExportTargetStatus: 'AUTHORISED' });
     await waitFor(() => expect(onConnectionUpdated).toHaveBeenCalledWith(updated));
   });
 
@@ -52,7 +52,7 @@ describe('AccountingSettingsTab', () => {
     mockUpdateSettings.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<AccountingSettingsTab token="token-1" connection={connection} onConnectionUpdated={vi.fn()} />);
+    render(<AccountingSettingsTab connection={connection} onConnectionUpdated={vi.fn()} />);
     await user.click(screen.getByRole('radio', { name: /Submitted/ }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 

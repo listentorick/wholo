@@ -5,11 +5,7 @@ import Link from 'next/link';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
-interface Props {
-  token: string;
-}
-
-export function XeroConnectionCard({ token }: Props) {
+export function XeroConnectionCard() {
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -20,11 +16,11 @@ export function XeroConnectionCard({ token }: Props) {
 
   useEffect(() => {
     adminAccountingApi
-      .getConnection(token)
+      .getConnection()
       .then((res) => setConnection(res ?? null))
       .catch(() => setLoadError('Failed to load connection status.'))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, []);
 
   const isConnected = connection?.status === 'CONNECTED';
   const isError = connection?.status === 'ERROR';
@@ -32,18 +28,18 @@ export function XeroConnectionCard({ token }: Props) {
   useEffect(() => {
     if (!isConnected) return;
     adminAccountingApi
-      .countContactsNeedingAttention(token)
+      .countContactsNeedingAttention()
       .then((res) => setNeedsAttentionCount(res.count))
       .catch(() => {
         // Non-critical — the badge just doesn't show if this fails.
       });
-  }, [isConnected, token]);
+  }, [isConnected]);
 
   async function handleConnect() {
     setActionError(null);
     setConnecting(true);
     try {
-      const { authorizationUrl } = await adminAccountingApi.createXeroAuthorizationUrl(token);
+      const { authorizationUrl } = await adminAccountingApi.createXeroAuthorizationUrl();
       window.location.href = authorizationUrl;
     } catch {
       setActionError('Failed to start the Xero connection. Please try again.');
@@ -56,7 +52,7 @@ export function XeroConnectionCard({ token }: Props) {
     setActionError(null);
     setDisconnecting(true);
     try {
-      await adminAccountingApi.disconnect(token);
+      await adminAccountingApi.disconnect();
       setConnection(null);
       setNeedsAttentionCount(0);
     } catch {

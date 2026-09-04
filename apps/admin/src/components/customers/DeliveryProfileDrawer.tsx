@@ -30,7 +30,7 @@ export function DeliveryProfileDrawer({ deliveryProfileId, onClose }: Props) {
 
   useEffect(() => {
     if (!accessToken) return;
-    adminDeliveryProfilesApi.get(accessToken, deliveryProfileId)
+    adminDeliveryProfilesApi.get(deliveryProfileId)
       .then(setProfile)
       .catch(() => setError('Failed to load delivery profile.'))
       .finally(() => setLoading(false));

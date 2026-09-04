@@ -11,7 +11,7 @@ describe('BulkImportControl', () => {
   it('is disabled when nothing is selected', () => {
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="products"
         selectedCount={0}
         buildDto={(honourSuggestions) => ({ ids: [], honourSuggestions })}
@@ -26,7 +26,7 @@ describe('BulkImportControl', () => {
   it('shows the selected count in the button label once something is selected', () => {
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="products"
         selectedCount={3}
         buildDto={(honourSuggestions) => ({ ids: ['a', 'b', 'c'], honourSuggestions })}
@@ -45,7 +45,7 @@ describe('BulkImportControl', () => {
 
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="products"
         selectedCount={2}
         buildDto={(honourSuggestions) => ({ ids: ['a', 'b'], honourSuggestions })}
@@ -58,7 +58,7 @@ describe('BulkImportControl', () => {
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
     await waitFor(() =>
-      expect(bulkImport).toHaveBeenCalledWith({ ids: ['a', 'b'], honourSuggestions: false }, 'token-1'),
+      expect(bulkImport).toHaveBeenCalledWith({ ids: ['a', 'b'], honourSuggestions: false }),
     );
     expect(onQueued).toHaveBeenCalled();
   });
@@ -69,7 +69,7 @@ describe('BulkImportControl', () => {
 
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="contacts"
         selectedCount={1}
         buildDto={(honourSuggestions) => ({ ids: ['a'], honourSuggestions })}
@@ -82,7 +82,7 @@ describe('BulkImportControl', () => {
     await user.click(screen.getByLabelText(/Honour suggested matches/));
     await user.click(screen.getByRole('button', { name: 'Import' }));
 
-    await waitFor(() => expect(bulkImport).toHaveBeenCalledWith({ ids: ['a'], honourSuggestions: true }, 'token-1'));
+    await waitFor(() => expect(bulkImport).toHaveBeenCalledWith({ ids: ['a'], honourSuggestions: true }));
   });
 
   it('shows a queued confirmation after a successful import', async () => {
@@ -91,7 +91,7 @@ describe('BulkImportControl', () => {
 
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="products"
         selectedCount={1}
         buildDto={(honourSuggestions) => ({ ids: ['a'], honourSuggestions })}
@@ -112,7 +112,7 @@ describe('BulkImportControl', () => {
 
     render(
       <BulkImportControl
-        token="token-1"
+
         entityLabel="products"
         selectedCount={1}
         buildDto={(honourSuggestions) => ({ ids: ['a'], honourSuggestions })}

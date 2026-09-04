@@ -57,7 +57,7 @@ function IntegrationsPageInner() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {accessToken && <XeroConnectionCard token={accessToken} />}
+        {accessToken && <XeroConnectionCard />}
         <ComingSoonProviderCard name="MYOB" description="Sync invoicing with MYOB." />
         <ComingSoonProviderCard name="QuickBooks" description="Sync invoicing with QuickBooks." />
       </div>

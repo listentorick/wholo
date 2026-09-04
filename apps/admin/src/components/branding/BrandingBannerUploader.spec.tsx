@@ -32,8 +32,8 @@ beforeEach(() => {
 
 describe('BrandingBannerUploader', () => {
   it('renders placeholder when no banner exists', async () => {
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledWith(TOKEN, 'distributor-banner', DISTRIBUTOR_ID));
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledWith('distributor-banner', DISTRIBUTOR_ID));
     expect(screen.queryByAltText('Banner')).toBeNull();
   });
 
@@ -43,7 +43,7 @@ describe('BrandingBannerUploader', () => {
       variants: { mobile: 'https://cdn/banner/mobile.webp' },
       dominantColor: '#3d6e3c',
     }]);
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(screen.getByAltText('Banner')).toBeInTheDocument());
   });
 
@@ -53,30 +53,30 @@ describe('BrandingBannerUploader', () => {
       variants: { mobile: 'https://cdn/banner/mobile.webp' },
       dominantColor: '#3d6e3c',
     }]);
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(screen.getByText('#3d6e3c')).toBeInTheDocument());
   });
 
   it('shows error when list fails', async () => {
     mockList.mockRejectedValue(new Error('Network error'));
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(screen.getByText('Failed to load banner.')).toBeInTheDocument());
   });
 
   it('uploads banner when file is selected', async () => {
     const user = userEvent.setup();
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(mockList).toHaveBeenCalled());
 
     const file = new File(['content'], 'banner.jpg', { type: 'image/jpeg' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, file);
 
-    await waitFor(() => expect(mockUpload).toHaveBeenCalledWith(TOKEN, 'distributor-banner', DISTRIBUTOR_ID, file));
+    await waitFor(() => expect(mockUpload).toHaveBeenCalledWith('distributor-banner', DISTRIBUTOR_ID, file));
   });
 
   it('rejects unsupported file types', async () => {
-    render(<BrandingBannerUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingBannerUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(mockList).toHaveBeenCalled());
 
     const file = new File(['content'], 'banner.bmp', { type: 'image/bmp' });

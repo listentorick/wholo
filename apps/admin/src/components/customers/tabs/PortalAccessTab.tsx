@@ -45,13 +45,12 @@ function InviteRow({ inv }: { inv: CustomerInvitation }) {
 
 interface Props {
   customer: Customer;
-  token: string;
   mode: 'tab' | 'wizard';
   onSaved?: () => void;
   onBack?: () => void;
 }
 
-export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Props) {
+export function PortalAccessTab({ customer, mode, onSaved, onBack }: Props) {
   const router = useRouter();
 
   // Wizard state
@@ -71,10 +70,10 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     setIsActivating(true);
     setActivateError(null);
     try {
-      await adminCustomersApi.activate(token, customer.id);
+      await adminCustomersApi.activate(customer.id);
       const email = inviteEmail.trim() || undefined;
       if (email || customer.organisation.email) {
-        try { await adminCustomersApi.invite(token, customer.id, email); } catch { /* no email — skip */ }
+        try { await adminCustomersApi.invite(customer.id, email); } catch { /* no email — skip */ }
       }
       router.push(`/customers/${customer.id}`);
     } catch (err: unknown) {
@@ -91,7 +90,7 @@ export function PortalAccessTab({ customer, token, mode, onSaved, onBack }: Prop
     setSendError(null);
     setSendSuccess(false);
     try {
-      await adminCustomersApi.invite(token, customer.id, email);
+      await adminCustomersApi.invite(customer.id, email);
       setNewInviteEmail('');
       setSendSuccess(true);
       onSaved?.();

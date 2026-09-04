@@ -10,11 +10,10 @@ interface SelectionDto {
 }
 
 interface Props {
-  token: string;
   entityLabel: string; // e.g. 'products' | 'contacts' — used in button/summary copy
   selectedCount: number;
   buildDto: (honourSuggestions: boolean) => SelectionDto;
-  bulkImport: (dto: SelectionDto, token: string) => Promise<BulkImportJobResponse>;
+  bulkImport: (dto: SelectionDto) => Promise<BulkImportJobResponse>;
   onQueued: () => void;
 }
 
@@ -23,7 +22,7 @@ interface Props {
 // across integration families, which would be a speculative abstraction with
 // no second consumer yet. Popover follows the same click-away pattern as
 // FilterBar/FilterPopover; the queued-toast mirrors SyncNowButton.
-export function BulkImportControl({ token, entityLabel, selectedCount, buildDto, bulkImport, onQueued }: Props) {
+export function BulkImportControl({ entityLabel, selectedCount, buildDto, bulkImport, onQueued }: Props) {
   const [open, setOpen] = useState(false);
   const [honourSuggestions, setHonourSuggestions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -51,7 +50,7 @@ export function BulkImportControl({ token, entityLabel, selectedCount, buildDto,
     setSubmitting(true);
     setError(null);
     try {
-      await bulkImport(buildDto(honourSuggestions), token);
+      await bulkImport(buildDto(honourSuggestions));
       setOpen(false);
       setQueued(true);
       setHonourSuggestions(false);

@@ -51,7 +51,7 @@ function AccountingPageInner() {
   useEffect(() => {
     if (!accessToken) return;
     adminAccountingApi
-      .getConnection(accessToken)
+      .getConnection()
       .then((res) => setConnection(res ?? null))
       .catch(() => setConnection(null));
   }, [accessToken]);
@@ -59,7 +59,7 @@ function AccountingPageInner() {
   const fetchNeedsAttentionCount = useCallback(() => {
     if (!accessToken || connection?.status !== 'CONNECTED') return;
     adminAccountingApi
-      .countContactsNeedingAttention(accessToken)
+      .countContactsNeedingAttention()
       .then((res) => setNeedsAttentionCount(res.count))
       .catch(() => {
         // Non-critical — the badge just doesn't update if this fails.
@@ -69,7 +69,7 @@ function AccountingPageInner() {
   const fetchProductsNeedsAttentionCount = useCallback(() => {
     if (!accessToken || connection?.status !== 'CONNECTED') return;
     adminAccountingApi
-      .countProductsNeedingAttention(accessToken)
+      .countProductsNeedingAttention()
       .then((res) => setProductsNeedsAttentionCount(res.count))
       .catch(() => {
         // Non-critical — the badge just doesn't update if this fails.
@@ -79,7 +79,7 @@ function AccountingPageInner() {
   const fetchTaxTypesNeedsAttentionCount = useCallback(() => {
     if (!accessToken || connection?.status !== 'CONNECTED') return;
     adminAccountingApi
-      .countTaxTypesNeedingAttention(accessToken)
+      .countTaxTypesNeedingAttention()
       .then((res) => setTaxTypesNeedsAttentionCount(res.count))
       .catch(() => {
         // Non-critical — the badge just doesn't update if this fails.
@@ -137,13 +137,13 @@ function AccountingPageInner() {
             {providerLabel} — {connection.externalOrganisationName}
           </h1>
           {activeTab === 'contacts' && accessToken && (
-            <ContactsSyncNowButton token={accessToken} onQueued={fetchNeedsAttentionCount} />
+            <ContactsSyncNowButton onQueued={fetchNeedsAttentionCount} />
           )}
           {activeTab === 'products' && accessToken && (
-            <ProductsSyncNowButton token={accessToken} onQueued={fetchProductsNeedsAttentionCount} />
+            <ProductsSyncNowButton onQueued={fetchProductsNeedsAttentionCount} />
           )}
           {activeTab === 'taxTypes' && accessToken && (
-            <TaxTypesSyncNowButton token={accessToken} onQueued={fetchTaxTypesNeedsAttentionCount} />
+            <TaxTypesSyncNowButton onQueued={fetchTaxTypesNeedsAttentionCount} />
           )}
         </div>
       </div>
@@ -184,16 +184,16 @@ function AccountingPageInner() {
       </div>
 
       {activeTab === 'contacts' && accessToken && (
-        <ContactsTab token={accessToken} providerLabel={providerLabel} onContactsChanged={fetchNeedsAttentionCount} />
+        <ContactsTab providerLabel={providerLabel} onContactsChanged={fetchNeedsAttentionCount} />
       )}
       {activeTab === 'products' && accessToken && (
-        <ProductsTab token={accessToken} providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
+        <ProductsTab providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
       )}
       {activeTab === 'taxTypes' && accessToken && (
-        <TaxTypesTab token={accessToken} providerLabel={providerLabel} onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount} />
+        <TaxTypesTab providerLabel={providerLabel} onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount} />
       )}
       {activeTab === 'settings' && accessToken && (
-        <AccountingSettingsTab token={accessToken} connection={connection} onConnectionUpdated={setConnection} />
+        <AccountingSettingsTab connection={connection} onConnectionUpdated={setConnection} />
       )}
       {activeTab === 'invoices' && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">

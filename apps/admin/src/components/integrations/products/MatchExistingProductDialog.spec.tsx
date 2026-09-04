@@ -53,16 +53,16 @@ beforeEach(() => {
 
 describe('MatchExistingProductDialog', () => {
   it('loads and lists the distributor products', async () => {
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={() => {}} />);
 
     await waitFor(() => expect(screen.getByText('Cabernet Sauvignon 2023', { selector: 'span' })).toBeInTheDocument());
     expect(screen.getByText('Merlot Case')).toBeInTheDocument();
-    expect(adminProductsApi.list).toHaveBeenCalledWith('token-1', { limit: 100 });
+    expect(adminProductsApi.list).toHaveBeenCalledWith({ limit: 100 });
   });
 
   it('filters products by name or SKU client-side', async () => {
     const user = userEvent.setup();
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
 
     await user.type(screen.getByLabelText('Search products'), 'MERLOT');
@@ -76,7 +76,7 @@ describe('MatchExistingProductDialog', () => {
     const onMatched = vi.fn();
     const user = userEvent.setup();
 
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={onMatched} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={onMatched} />);
     await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
 
     await user.click(screen.getByText('Merlot Case'));
@@ -85,15 +85,13 @@ describe('MatchExistingProductDialog', () => {
     await waitFor(() =>
       expect(adminAccountingApi.matchProduct).toHaveBeenCalledWith(
         'ext-1',
-        { productId: 'prod-2', confirmTaxTypeOverride: false },
-        'token-1',
-      ),
+        { productId: 'prod-2', confirmTaxTypeOverride: false }),
     );
     await waitFor(() => expect(onMatched).toHaveBeenCalled());
   });
 
   it('disables the link button until a product is selected', async () => {
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
 
     expect(screen.getByText('Link product')).toBeDisabled();
@@ -103,7 +101,7 @@ describe('MatchExistingProductDialog', () => {
     (adminAccountingApi.matchProduct as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={() => {}} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={() => {}} />);
     await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
 
     await user.click(screen.getByText('Merlot Case'));
@@ -122,7 +120,7 @@ describe('MatchExistingProductDialog', () => {
     const onMatched = vi.fn();
     const user = userEvent.setup();
 
-    render(<MatchExistingProductDialog product={external} token="token-1" onClose={() => {}} onMatched={onMatched} />);
+    render(<MatchExistingProductDialog product={external} onClose={() => {}} onMatched={onMatched} />);
     await waitFor(() => expect(screen.getByText('Merlot Case')).toBeInTheDocument());
 
     await user.click(screen.getByText('Merlot Case'));
@@ -135,9 +133,7 @@ describe('MatchExistingProductDialog', () => {
     await waitFor(() =>
       expect(adminAccountingApi.matchProduct).toHaveBeenLastCalledWith(
         'ext-1',
-        { productId: 'prod-2', confirmTaxTypeOverride: true },
-        'token-1',
-      ),
+        { productId: 'prod-2', confirmTaxTypeOverride: true }),
     );
     await waitFor(() => expect(onMatched).toHaveBeenCalled());
   });

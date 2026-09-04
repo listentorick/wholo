@@ -95,10 +95,9 @@ interface NewPricingRowProps {
   productId: string;
   onSave: (entry: ProductPricingEntry) => void;
   onCancel: () => void;
-  token: string;
 }
 
-function NewPricingRow({ priceLists, productId, onSave, onCancel, token }: NewPricingRowProps) {
+function NewPricingRow({ priceLists, productId, onSave, onCancel }: NewPricingRowProps) {
   const [priceListId, setPriceListId] = useState(priceLists[0]?.id ?? '');
   const [minQuantity, setMinQuantity] = useState('1');
   const [valueType, setValueType] = useState<PriceListRuleValueType>(PriceListRuleValueType.FIXED_PRICE);
@@ -124,7 +123,7 @@ function NewPricingRow({ priceLists, productId, onSave, onCancel, token }: NewPr
     setError(null);
     setSaving(true);
     try {
-      const rule = await adminPriceListsApi.createRule(token, priceListId, {
+      const rule = await adminPriceListsApi.createRule(priceListId, {
         selectorType: PriceListRuleSelectorType.PRODUCT,
         productId,
         minQuantity: qty,
@@ -205,10 +204,9 @@ interface PricingEntryRowProps {
   entry: ProductPricingEntry;
   priceLists: PriceListSummary[];
   onUpdate: (entry: ProductPricingEntry) => void;
-  token: string;
 }
 
-function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRowProps) {
+function PricingEntryRow({ entry, priceLists, onUpdate }: PricingEntryRowProps) {
   const rule = entry.rule;
   const isDiscount = rule.valueType === PriceListRuleValueType.PERCENTAGE_DISCOUNT;
   const [editing, setEditing] = useState(false);
@@ -227,7 +225,7 @@ function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRow
     if (isNaN(qty) || qty < 1) return;
     setSaving(true);
     try {
-      const updated = await adminPriceListsApi.updateRule(token, entry.priceListId, rule.id, {
+      const updated = await adminPriceListsApi.updateRule(entry.priceListId, rule.id, {
         minQuantity: qty,
         ...(isDiscount
           ? {
@@ -256,7 +254,7 @@ function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRow
   async function handleToggle() {
     setToggling(true);
     try {
-      const updated = await adminPriceListsApi.updateRule(token, entry.priceListId, rule.id, { active: !rule.active });
+      const updated = await adminPriceListsApi.updateRule(entry.priceListId, rule.id, { active: !rule.active });
       onUpdate({ ...entry, rule: updated });
     } finally {
       setToggling(false);
@@ -347,10 +345,9 @@ function PricingEntryRow({ entry, priceLists, onUpdate, token }: PricingEntryRow
 
 interface ProductPricingTableProps {
   productId: string;
-  token: string;
 }
 
-function ProductPricingTable({ productId, token }: ProductPricingTableProps) {
+function ProductPricingTable({ productId }: ProductPricingTableProps) {
   const [entries, setEntries] = useState<ProductPricingEntry[]>([]);
   const [priceLists, setPriceLists] = useState<PriceListSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -358,15 +355,15 @@ function ProductPricingTable({ productId, token }: ProductPricingTableProps) {
 
   useEffect(() => {
     Promise.all([
-      adminPriceListsApi.getProductPricing(token, productId),
-      adminPriceListsApi.list(token, { limit: 100 }),
+      adminPriceListsApi.getProductPricing(productId),
+      adminPriceListsApi.list({ limit: 100 }),
     ])
       .then(([pricing, plResult]) => {
         setEntries(pricing);
         setPriceLists(plResult.data.filter((pl) => pl.active));
       })
       .finally(() => setLoading(false));
-  }, [token, productId]);
+  }, [productId]);
 
   function handleUpdate(updated: ProductPricingEntry) {
     setEntries((prev) => prev.map((e) => (e.rule.id === updated.rule.id ? updated : e)));
@@ -403,13 +400,13 @@ function ProductPricingTable({ productId, token }: ProductPricingTableProps) {
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <PricingEntryRow key={entry.rule.id} entry={entry} priceLists={priceLists} onUpdate={handleUpdate} token={token} />
+                <PricingEntryRow key={entry.rule.id} entry={entry} priceLists={priceLists} onUpdate={handleUpdate} />
               ))}
               {addingRow && priceLists.length > 0 && (
                 <NewPricingRow
                   priceLists={priceLists}
                   productId={productId}
-                  token={token}
+                 
                   onSave={(entry) => { setEntries((prev) => [...prev, entry]); setAddingRow(false); }}
                   onCancel={() => setAddingRow(false)}
                 />
@@ -444,14 +441,13 @@ function ProductPricingTable({ productId, token }: ProductPricingTableProps) {
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
-  token: string;
   currencyCode: string;
   initialValues?: Product;
   onSubmit: (data: CreateProductRequest) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
 
-export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit, onDelete }: ProductFormProps) {
+export function ProductForm({ mode, currencyCode, initialValues, onSubmit, onDelete }: ProductFormProps) {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
@@ -482,7 +478,7 @@ export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit
   const selectedTaxType = taxTypes.find((t) => t.id === selectedTaxTypeId);
 
   useEffect(() => {
-    Promise.all([adminProductTypesApi.list(token), adminSuppliersApi.list(token), adminTaxTypesApi.list(token, { limit: 100 })])
+    Promise.all([adminProductTypesApi.list(), adminSuppliersApi.list(), adminTaxTypesApi.list({ limit: 100 })])
       .then(([types, sups, taxes]) => {
         setProductTypes(types);
         setSuppliers(sups);
@@ -490,7 +486,7 @@ export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit
       })
       .catch(() => {})
       .finally(() => setMetaLoading(false));
-  }, [token]);
+  }, []);
 
   async function onFormSubmit(data: FormValues) {
     setApiError(null);
@@ -674,7 +670,7 @@ export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit
                 <div className="mt-5 border-t border-border pt-5">
                   <FieldLabel>Price list overrides</FieldLabel>
                   <p className="mb-3 text-xs text-muted">Overrides the default price above for customers on a matching price list.</p>
-                  <ProductPricingTable productId={initialValues.id} token={token} />
+                  <ProductPricingTable productId={initialValues.id} />
                 </div>
               )}
             </FormCard>
@@ -735,7 +731,7 @@ export function ProductForm({ mode, token, currencyCode, initialValues, onSubmit
             {/* Product images — edit mode only */}
             {mode === 'edit' && initialValues?.id && (
               <FormCard title="Product images">
-                <ProductImageUploader token={token} productId={initialValues.id} />
+                <ProductImageUploader productId={initialValues.id} />
               </FormCard>
             )}
           </div>

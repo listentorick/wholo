@@ -10,7 +10,6 @@ import { BulkImportControl } from '@/components/integrations/BulkImportControl';
 import { AccountingContactsTable } from './AccountingContactsTable';
 
 interface Props {
-  token: string;
   providerLabel: string;
   onContactsChanged?: () => void;
 }
@@ -55,7 +54,7 @@ function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingCon
   return filter;
 }
 
-export function ContactsTab({ token, providerLabel, onContactsChanged }: Props) {
+export function ContactsTab({ providerLabel, onContactsChanged }: Props) {
   const filterFields = useMemo<FilterFieldConfig[]>(
     () => [
       { field: 'search', label: 'Name', operators: [{ value: 'contains', label: 'contains' }], valueKind: 'text' },
@@ -86,10 +85,9 @@ export function ContactsTab({ token, providerLabel, onContactsChanged }: Props) 
     error,
     loadMore,
   } = useCursorList({
-    token,
     // The accounting client takes (params, token) — reversed from what
     // useCursorList expects — so it needs a thin adapter here.
-    fetchPage: (activeToken, params) => adminAccountingApi.listContacts(params, activeToken),
+    fetchPage: (params) => adminAccountingApi.listContacts(params),
     buildParams,
     errorMessage: 'Failed to load contacts. Please refresh.',
     deps: [filters, reloadToken],
@@ -145,14 +143,14 @@ export function ContactsTab({ token, providerLabel, onContactsChanged }: Props) 
           onClearAll={() => setFilters([])}
         />
         <BulkImportControl
-          token={token}
+         
           entityLabel="contacts"
           selectedCount={selectAllMatching ? total : selectedIds.size}
           buildDto={(honourSuggestions) => ({
             ...(selectAllMatching ? { filter: buildSelectionFilter(filters) } : { ids: [...selectedIds] }),
             honourSuggestions,
           })}
-          bulkImport={(dto, activeToken) => adminAccountingApi.bulkImportContacts(dto, activeToken)}
+          bulkImport={(dto) => adminAccountingApi.bulkImportContacts(dto)}
           onQueued={handleBulkImportQueued}
         />
       </div>
@@ -164,7 +162,7 @@ export function ContactsTab({ token, providerLabel, onContactsChanged }: Props) 
           contacts={contacts}
           loading={isLoading}
           hasFilter={filters.length > 0}
-          token={token}
+         
           providerLabel={providerLabel}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}

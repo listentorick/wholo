@@ -26,14 +26,13 @@ type FormValues = z.infer<typeof schema>;
 interface CatalogueFormProps {
   mode: 'create' | 'edit';
   catalogue?: Catalogue;
-  token: string;
   onSuccess?: (catalogue: Catalogue) => void;
   onCancel?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: CatalogueFormProps) {
+export function CatalogueForm({ mode, catalogue, onSuccess, onCancel }: CatalogueFormProps) {
   const router = useRouter();
   const isDrawer = !!onCancel;
 
@@ -68,13 +67,13 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
     try {
       let saved: Catalogue;
       if (mode === 'create') {
-        saved = await adminCataloguesApi.create(token, {
+        saved = await adminCataloguesApi.create({
           name,
           description: description || undefined,
           productIds,
         });
       } else {
-        saved = await adminCataloguesApi.update(token, catalogue!.id, {
+        saved = await adminCataloguesApi.update(catalogue!.id, {
           name,
           description: description || undefined,
           productIds,
@@ -96,7 +95,7 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
     if (!catalogue) return;
     setIsDeleting(true);
     try {
-      await adminCataloguesApi.delete(token, catalogue.id);
+      await adminCataloguesApi.delete(catalogue.id);
       router.push('/catalogues');
     } catch {
       setIsDeleting(false);
@@ -189,7 +188,6 @@ export function CatalogueForm({ mode, catalogue, token, onSuccess, onCancel }: C
           </div>
           <div className="p-4">
             <ProductTransferPanel
-              token={token}
               currentProductIds={productIds}
               onProductIdsChange={setProductIds}
               disabled={disabled}

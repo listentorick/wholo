@@ -9,7 +9,6 @@ import { CLASSIFICATION_LABELS } from '@/lib/tax-classification-labels';
 
 interface Props {
   taxType: AccountingTaxTypeSummary;
-  token: string;
   onClose: () => void;
   onImported: () => void;
 }
@@ -20,7 +19,7 @@ function toTwoDpRate(value: string): string {
   return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
 }
 
-export function CreateTaxTypeFromExternalDialog({ taxType, token, onClose, onImported }: Props) {
+export function CreateTaxTypeFromExternalDialog({ taxType, onClose, onImported }: Props) {
   const [name, setName] = useState(taxType.displayName);
   const [classification, setClassification] = useState<TaxClassification | ''>('');
   const [ratePercentage, setRatePercentage] = useState(toTwoDpRate(taxType.ratePercentage));
@@ -39,7 +38,6 @@ export function CreateTaxTypeFromExternalDialog({ taxType, token, onClose, onImp
           classification,
           ratePercentage: ratePercentage.trim() || undefined,
         },
-        token,
       );
       onImported();
     } catch {

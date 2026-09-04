@@ -136,8 +136,8 @@ describe('DashboardPage', () => {
     render(<DashboardPage />);
 
     await waitFor(() => expect(screen.getByText('Welcome back, Ada')).toBeInTheDocument());
-    expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'month' }, 'tok-1');
-    expect(adminAnalyticsApi.actionItems).toHaveBeenCalledWith('tok-1');
+    expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'month' });
+    expect(adminAnalyticsApi.actionItems).toHaveBeenCalledWith();
   });
 
   it('renders stat tiles with values and the growth percentage', async () => {
@@ -156,8 +156,8 @@ describe('DashboardPage', () => {
 
     await userEvent.click(await screen.findByRole('radio', { name: 'Last 7 days' }));
 
-    await waitFor(() => expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'rolling7' }, 'tok-1'));
-    expect(adminAnalyticsApi.customerRankings).toHaveBeenCalledWith({ period: 'rolling7', limit: 10 }, 'tok-1');
+    await waitFor(() => expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'rolling7' }));
+    expect(adminAnalyticsApi.customerRankings).toHaveBeenCalledWith({ period: 'rolling7', limit: 10 });
   });
 
   it('renders top customers and products linking to their detail pages', async () => {

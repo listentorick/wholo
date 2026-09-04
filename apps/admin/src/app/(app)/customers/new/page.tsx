@@ -71,7 +71,7 @@ export default function NewCustomerPage() {
     setIsSubmitting(true);
     setApiError(null);
     try {
-      const result = await adminCustomersApi.create(accessToken, { organisationId: selectedOrg.id });
+      const result = await adminCustomersApi.create({ organisationId: selectedOrg.id });
       setCustomer(result);
       setIsNewBusiness(false);
       setStep('account');
@@ -88,7 +88,7 @@ export default function NewCustomerPage() {
     setIsSubmitting(true);
     setApiError(null);
     try {
-      const result = await adminCustomersApi.create(accessToken, { name: newBusinessName.trim() });
+      const result = await adminCustomersApi.create({ name: newBusinessName.trim() });
       setCustomer(result);
       setIsNewBusiness(true);
       setStep('account');
@@ -123,7 +123,7 @@ export default function NewCustomerPage() {
         {step === 'search' && (
           <>
             <CustomerSearchStep
-              token={accessToken ?? ''}
+             
               selectedOrg={selectedOrg}
               onSelectOrg={setSelectedOrg}
               onCantFind={() => { setSelectedOrg(null); setStep('create-new'); }}
@@ -227,7 +227,7 @@ export default function NewCustomerPage() {
         {step === 'account' && customer && (
           <AccountTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="wizard"
             onNext={() => setStep('delivery')}
             onBack={() => setStep(accountBackStep)}
@@ -237,7 +237,7 @@ export default function NewCustomerPage() {
         {step === 'delivery' && customer && (
           <DeliveryTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="wizard"
             onNext={() => setStep('catalogue-pricing')}
             onBack={() => setStep('account')}
@@ -247,7 +247,7 @@ export default function NewCustomerPage() {
         {step === 'catalogue-pricing' && customer && (
           <CataloguePricingTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="wizard"
             onNext={() => setStep('portal-access')}
             onBack={() => setStep('delivery')}
@@ -257,7 +257,7 @@ export default function NewCustomerPage() {
         {step === 'portal-access' && customer && (
           <PortalAccessTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="wizard"
             onBack={() => setStep('catalogue-pricing')}
           />

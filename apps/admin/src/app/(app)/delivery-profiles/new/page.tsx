@@ -8,5 +8,5 @@ export default function NewDeliveryProfilePage() {
 
   if (!accessToken) return null;
 
-  return <DeliveryProfileForm token={accessToken} />;
+  return <DeliveryProfileForm />;
 }

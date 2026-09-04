@@ -8,7 +8,6 @@ import { TaxTypeConflictModal } from './TaxTypeConflictModal';
 
 interface Props {
   product: AccountingProductSummary;
-  token: string;
   onClose: () => void;
   onMatched: () => void;
 }
@@ -17,7 +16,7 @@ interface Props {
 // contacts MatchExistingCustomerDialog and this app's other modest-volume
 // list-filtering conventions rather than adding a new search endpoint for
 // this first release.
-export function MatchExistingProductDialog({ product, token, onClose, onMatched }: Props) {
+export function MatchExistingProductDialog({ product, onClose, onMatched }: Props) {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -28,10 +27,10 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
 
   useEffect(() => {
     adminProductsApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setProducts(res.data))
       .catch(() => setLoadError('Failed to load products.'));
-  }, [token]);
+  }, []);
 
   const filtered = (products ?? []).filter(
     (p) =>
@@ -44,7 +43,7 @@ export function MatchExistingProductDialog({ product, token, onClose, onMatched 
     setSubmitting(true);
     setActionError(null);
     try {
-      await adminAccountingApi.matchProduct(product.id, { productId: selected.id, confirmTaxTypeOverride }, token);
+      await adminAccountingApi.matchProduct(product.id, { productId: selected.id, confirmTaxTypeOverride });
       onMatched();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_CONFLICT') {

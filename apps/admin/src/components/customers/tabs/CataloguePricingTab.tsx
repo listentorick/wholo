@@ -9,7 +9,6 @@ import type { OnTabSaveStateChange } from './tab-save-state';
 
 interface Props {
   customer: Customer;
-  token: string;
   mode: 'tab' | 'wizard';
   onSaved?: () => void;
   onNext?: () => void;
@@ -17,7 +16,7 @@ interface Props {
   onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
+export function CataloguePricingTab({ customer, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [priceLists, setPriceLists] = useState<PriceListSummary[]>([]);
   const [selectedPriceListId, setSelectedPriceListId] = useState(customer.priceListId ?? '');
   const [saving, setSaving] = useState(false);
@@ -30,16 +29,16 @@ export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, on
 
   useEffect(() => {
     adminPriceListsApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setPriceLists(res.data.filter((pl) => pl.active)))
       .catch(() => {});
-  }, [token]);
+  }, []);
 
   async function handleSave(next: boolean) {
     setSaving(true);
     setError(null);
     try {
-      await adminPriceListsApi.assignToCustomer(token, customer.id, {
+      await adminPriceListsApi.assignToCustomer(customer.id, {
         priceListId: selectedPriceListId || null,
       });
       if (next) {
@@ -100,7 +99,7 @@ export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, on
           </p>
           <div>
             <WizardSectionHeading>Catalogues</WizardSectionHeading>
-            <CustomerCatalogues customerId={customer.id} token={token} />
+            <CustomerCatalogues customerId={customer.id} />
           </div>
           <div className="space-y-2">
             <WizardSectionHeading>Price list</WizardSectionHeading>
@@ -130,7 +129,7 @@ export function CataloguePricingTab({ customer, token, mode, onSaved, onNext, on
   return (
     <div className="space-y-5">
       <FormCard title="Catalogues">
-        <CustomerCatalogues customerId={customer.id} token={token} />
+        <CustomerCatalogues customerId={customer.id} />
       </FormCard>
       <FormCard title="Price list">
         {priceListSelect}

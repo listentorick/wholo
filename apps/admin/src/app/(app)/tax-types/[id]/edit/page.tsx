@@ -19,7 +19,7 @@ export default function EditTaxTypePage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    adminTaxTypesApi.get(accessToken, id)
+    adminTaxTypesApi.get(id)
       .then(setTaxType)
       .catch(() => setError('Tax type not found.'))
       .finally(() => setIsLoading(false));
@@ -44,13 +44,13 @@ export default function EditTaxTypePage() {
   }
 
   async function handleSubmit(data: CreateTaxTypeRequest) {
-    const updated = await adminTaxTypesApi.update(accessToken!, id, data);
+    const updated = await adminTaxTypesApi.update(id, data);
     setTaxType(updated);
     return updated;
   }
 
   async function handleDeactivate() {
-    await adminTaxTypesApi.deactivate(accessToken!, id);
+    await adminTaxTypesApi.deactivate(id);
     router.push('/tax-types');
   }
 

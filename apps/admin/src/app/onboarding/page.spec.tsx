@@ -119,11 +119,9 @@ describe('OnboardingPage (wizard v2)', () => {
     await user.click(screen.getByRole('button', { name: 'Create your distributorship' }));
 
     await waitFor(() => expect(screen.getByTestId('logo-uploader')).toBeInTheDocument());
-    expect(mockCreate).toHaveBeenCalledWith(
-      'tok-1',
-      expect.objectContaining({ name: 'Acme Wines', slug: 'acme-wines', email: 'ada@acme.com' }),
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Acme Wines', slug: 'acme-wines', email: 'ada@acme.com' }),
     );
-    expect(mockSettingsGet).toHaveBeenCalledWith('tok-1');
+    expect(mockSettingsGet).toHaveBeenCalledWith();
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -172,9 +170,7 @@ describe('OnboardingPage (wizard v2)', () => {
     await user.click(screen.getByRole('button', { name: 'Save & continue' }));
 
     await waitFor(() =>
-      expect(mockSettingsUpdate).toHaveBeenCalledWith(
-        'tok-1',
-        expect.objectContaining({ defaultOrderAcceptanceMode: 'MANUAL' }),
+      expect(mockSettingsUpdate).toHaveBeenCalledWith(expect.objectContaining({ defaultOrderAcceptanceMode: 'MANUAL' }),
       ),
     );
     expect(screen.getByText('Tagline')).toBeInTheDocument(); // advanced to portal step

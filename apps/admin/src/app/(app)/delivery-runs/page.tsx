@@ -61,7 +61,7 @@ export default function DeliveryRunsPage() {
 
   const {
     board, isLoading, isRefreshing, error, refetch, mutate,
-  } = useDeliveryDay(accessToken, selectedDate);
+  } = useDeliveryDay(!!accessToken, selectedDate);
 
   // Mutation flow: never auto-retry a 409 — the board the user acted on no
   // longer exists, so the only correct move is a fresh re-GET.
@@ -82,11 +82,11 @@ export default function DeliveryRunsPage() {
       if (toRunId === null) {
         const sourceRun = board.runs.find((r) => r.runId === fromRunId);
         if (!sourceRun || !fromRunId) return;
-        refreshed = await adminDeliveryRunsApi.unassignOrderFromRun(accessToken, fromRunId, orderId, sourceRun.version);
+        refreshed = await adminDeliveryRunsApi.unassignOrderFromRun(fromRunId, orderId, sourceRun.version);
       } else {
         const destinationRun = board.runs.find((r) => r.runId === toRunId);
         if (!destinationRun) return;
-        refreshed = await adminDeliveryRunsApi.assignOrderToRun(accessToken, toRunId, {
+        refreshed = await adminDeliveryRunsApi.assignOrderToRun(toRunId, {
           orderId,
           version: destinationRun.version,
           sourceRunId: fromRunId ?? undefined,
@@ -117,7 +117,7 @@ export default function DeliveryRunsPage() {
     setMutationBanner(null);
     mutate(applyReorder(board, runId, orderedOrderIds));
     try {
-      const refreshed = await adminDeliveryRunsApi.reorderRunOrders(accessToken, runId, { version: run.version, orderedOrderIds });
+      const refreshed = await adminDeliveryRunsApi.reorderRunOrders(runId, { version: run.version, orderedOrderIds });
       mutate(refreshed);
     } catch (e) {
       mutate(previousBoard);
@@ -141,7 +141,7 @@ export default function DeliveryRunsPage() {
     setMutationBanner(null);
     mutate(applyRunUpdate(board, runId, patch));
     try {
-      const refreshed = await adminDeliveryRunsApi.updateRun(accessToken, runId, { version: run.version, ...patch });
+      const refreshed = await adminDeliveryRunsApi.updateRun(runId, { version: run.version, ...patch });
       mutate(refreshed);
     } catch (e) {
       mutate(previousBoard);
@@ -204,7 +204,7 @@ export default function DeliveryRunsPage() {
     setPendingOrderId(orderId);
     setMutationBanner(null);
     try {
-      await adminDeliveryRunsApi.changeScheduledDeliveryDate(accessToken, orderId, params);
+      await adminDeliveryRunsApi.changeScheduledDeliveryDate(orderId, params);
       await refetch();
       setWorkloadRefreshKey((k) => k + 1);
     } catch (e) {
@@ -277,14 +277,14 @@ export default function DeliveryRunsPage() {
         />
 
         <WorkloadStrip
-          token={accessToken}
+         
           selectedDate={selectedDate}
           onSelectDate={handleSelectDate}
           weekStart={weekStart}
           onWeekStartChange={setWeekStart}
           refreshKey={workloadRefreshKey}
         />
-        <UndatedDeliveriesPanel token={accessToken} />
+        <UndatedDeliveriesPanel />
 
         {mutationBanner && (
           <div className="mb-4">
@@ -364,7 +364,7 @@ export default function DeliveryRunsPage() {
         if (!card) return null;
         return (
           <ChangeDeliveryDateDialog
-            token={accessToken}
+           
             orderId={card.orderId}
             orderNumber={card.orderNumber}
             customerName={card.customerName}

@@ -21,10 +21,10 @@ describe('SyncNowButton (products)', () => {
     mockSyncProducts.mockResolvedValue({ queued: true });
     const user = userEvent.setup();
 
-    render(<SyncNowButton token="token-1" />);
+    render(<SyncNowButton />);
     await user.click(screen.getByText('Sync now'));
 
-    expect(mockSyncProducts).toHaveBeenCalledWith('token-1');
+    expect(mockSyncProducts).toHaveBeenCalledWith();
     await waitFor(() => expect(screen.getByText(/Sync queued/)).toBeInTheDocument());
   });
 
@@ -33,7 +33,7 @@ describe('SyncNowButton (products)', () => {
     const onQueued = vi.fn();
     const user = userEvent.setup();
 
-    render(<SyncNowButton token="token-1" onQueued={onQueued} />);
+    render(<SyncNowButton onQueued={onQueued} />);
     await user.click(screen.getByText('Sync now'));
 
     await waitFor(() => expect(onQueued).toHaveBeenCalled());
@@ -43,7 +43,7 @@ describe('SyncNowButton (products)', () => {
     mockSyncProducts.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<SyncNowButton token="token-1" />);
+    render(<SyncNowButton />);
     await user.click(screen.getByText('Sync now'));
 
     await waitFor(() => expect(screen.getByText(/Failed to queue a sync/)).toBeInTheDocument());

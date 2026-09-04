@@ -7,7 +7,6 @@ import type { AccountingTaxTypeSummary, TaxType } from '@wholo/types';
 
 interface Props {
   taxType: AccountingTaxTypeSummary;
-  token: string;
   onClose: () => void;
   onMatched: () => void;
 }
@@ -15,7 +14,7 @@ interface Props {
 // Fetches the tax type list directly and filters client-side — same
 // modest-volume convention as MatchExistingProductDialog; there are at most
 // a handful of Stocdup tax types per distributor.
-export function MatchExistingTaxTypeDialog({ taxType, token, onClose, onMatched }: Props) {
+export function MatchExistingTaxTypeDialog({ taxType, onClose, onMatched }: Props) {
   const [taxTypes, setTaxTypes] = useState<TaxType[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -25,10 +24,10 @@ export function MatchExistingTaxTypeDialog({ taxType, token, onClose, onMatched 
 
   useEffect(() => {
     adminTaxTypesApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setTaxTypes(res.data))
       .catch(() => setLoadError('Failed to load tax types.'));
-  }, [token]);
+  }, []);
 
   const filtered = (taxTypes ?? []).filter((t) => t.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -37,7 +36,7 @@ export function MatchExistingTaxTypeDialog({ taxType, token, onClose, onMatched 
     setSubmitting(true);
     setActionError(null);
     try {
-      await adminAccountingApi.matchTaxType(taxType.id, { taxTypeId: selected.id }, token);
+      await adminAccountingApi.matchTaxType(taxType.id, { taxTypeId: selected.id });
       onMatched();
     } catch {
       setActionError('Failed to link this tax type. It may already be linked to a different accounting tax type.');

@@ -10,7 +10,6 @@ import { BulkImportControl } from '@/components/integrations/BulkImportControl';
 import { AccountingProductsTable } from './AccountingProductsTable';
 
 interface Props {
-  token: string;
   providerLabel: string;
   onProductsChanged?: () => void;
 }
@@ -55,7 +54,7 @@ function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingPro
   return filter;
 }
 
-export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) {
+export function ProductsTab({ providerLabel, onProductsChanged }: Props) {
   const filterFields = useMemo<FilterFieldConfig[]>(
     () => [
       { field: 'search', label: 'Name', operators: [{ value: 'contains', label: 'contains' }], valueKind: 'text' },
@@ -86,10 +85,9 @@ export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) 
     error,
     loadMore,
   } = useCursorList({
-    token,
     // The accounting client takes (params, token) — reversed from what
     // useCursorList expects — so it needs a thin adapter here.
-    fetchPage: (activeToken, params) => adminAccountingApi.listProducts(params, activeToken),
+    fetchPage: (params) => adminAccountingApi.listProducts(params),
     buildParams,
     errorMessage: 'Failed to load products. Please refresh.',
     deps: [filters, reloadToken],
@@ -145,14 +143,14 @@ export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) 
           onClearAll={() => setFilters([])}
         />
         <BulkImportControl
-          token={token}
+         
           entityLabel="products"
           selectedCount={selectAllMatching ? total : selectedIds.size}
           buildDto={(honourSuggestions) => ({
             ...(selectAllMatching ? { filter: buildSelectionFilter(filters) } : { ids: [...selectedIds] }),
             honourSuggestions,
           })}
-          bulkImport={(dto, activeToken) => adminAccountingApi.bulkImportProducts(dto, activeToken)}
+          bulkImport={(dto) => adminAccountingApi.bulkImportProducts(dto)}
           onQueued={handleBulkImportQueued}
         />
       </div>
@@ -164,7 +162,7 @@ export function ProductsTab({ token, providerLabel, onProductsChanged }: Props) 
           products={products}
           loading={isLoading}
           hasFilter={filters.length > 0}
-          token={token}
+         
           providerLabel={providerLabel}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}

@@ -47,13 +47,13 @@ beforeEach(() => {
 
 describe('AccountTab', () => {
   it('pre-fills the account number from the customer', () => {
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" />);
+    render(<AccountTab customer={makeCustomer()} mode="tab" />);
     expect(screen.getByLabelText('Account number')).toHaveValue('ACC-001');
   });
 
   it('registers a save state with the sidebar via onSaveStateChange', () => {
     const onSaveStateChange = vi.fn();
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+    render(<AccountTab customer={makeCustomer()} mode="tab" onSaveStateChange={onSaveStateChange} />);
     expect(onSaveStateChange).toHaveBeenCalledWith(
       expect.objectContaining({ label: 'Save', saving: false, onSave: expect.any(Function) }),
     );
@@ -62,7 +62,7 @@ describe('AccountTab', () => {
   it('clears the registered save state on unmount', () => {
     const onSaveStateChange = vi.fn();
     const { unmount } = render(
-      <AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />,
+      <AccountTab customer={makeCustomer()} mode="tab" onSaveStateChange={onSaveStateChange} />,
     );
     onSaveStateChange.mockClear();
     unmount();
@@ -76,7 +76,7 @@ describe('AccountTab', () => {
       captured.state = state;
     });
 
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+    render(<AccountTab customer={makeCustomer()} mode="tab" onSaveStateChange={onSaveStateChange} />);
 
     await act(async () => {
       captured.state?.onSave();
@@ -94,7 +94,7 @@ describe('AccountTab', () => {
       captured.state = state;
     });
 
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+    render(<AccountTab customer={makeCustomer()} mode="tab" onSaveStateChange={onSaveStateChange} />);
 
     await act(async () => {
       captured.state?.onSave();
@@ -113,7 +113,7 @@ describe('AccountTab', () => {
       captured.state = state;
     });
 
-    render(<AccountTab customer={makeCustomer()} token="token-1" mode="tab" onSaveStateChange={onSaveStateChange} />);
+    render(<AccountTab customer={makeCustomer()} mode="tab" onSaveStateChange={onSaveStateChange} />);
 
     await act(async () => {
       captured.state?.onSave();

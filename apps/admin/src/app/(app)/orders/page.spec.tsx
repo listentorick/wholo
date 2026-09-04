@@ -161,7 +161,7 @@ describe('OrdersPage', () => {
       await userEvent.click(list.getByRole('button', { name: /ORD-1001/ }));
       await userEvent.click(list.getByRole('button', { name: 'Accept' }));
 
-      expect(mockAcceptOrder).toHaveBeenCalledWith('order-1', 'test-token', { confirmUnmappedTaxTypes: false });
+      expect(mockAcceptOrder).toHaveBeenCalledWith('order-1', { confirmUnmappedTaxTypes: false });
     });
   });
 });

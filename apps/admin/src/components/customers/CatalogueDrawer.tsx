@@ -20,7 +20,7 @@ export function CatalogueDrawer({ catalogueId, onClose }: CatalogueDrawerProps) 
 
   useEffect(() => {
     if (!accessToken) return;
-    adminCataloguesApi.get(accessToken, catalogueId)
+    adminCataloguesApi.get(catalogueId)
       .then(setCatalogue)
       .catch(() => setError('Failed to load catalogue.'))
       .finally(() => setLoading(false));
@@ -39,7 +39,7 @@ export function CatalogueDrawer({ catalogueId, onClose }: CatalogueDrawerProps) 
           <CatalogueForm
             mode="edit"
             catalogue={catalogue}
-            token={accessToken!}
+           
             onSuccess={onClose}
             onCancel={onClose}
           />

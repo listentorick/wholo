@@ -7,7 +7,6 @@ import type { Customer, DeliveryRouteCustomer } from '@wholo/types';
 
 interface Props {
   routeId: string;
-  token: string;
   existingCustomerIds: string[];
   onClose: () => void;
   onAssigned: (routeCustomer: DeliveryRouteCustomer) => void;
@@ -16,7 +15,7 @@ interface Props {
 // Same "fetch a modest-volume list, then filter client-side" convention as
 // MatchExistingCustomerDialog — a searchable customer picker among the
 // distributor's already-onboarded customers, not a general org search.
-export function CustomerSearchSelect({ routeId, token, existingCustomerIds, onClose, onAssigned }: Props) {
+export function CustomerSearchSelect({ routeId, existingCustomerIds, onClose, onAssigned }: Props) {
   const [customers, setCustomers] = useState<Customer[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -26,10 +25,10 @@ export function CustomerSearchSelect({ routeId, token, existingCustomerIds, onCl
 
   useEffect(() => {
     adminCustomersApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setCustomers(res.data))
       .catch(() => setLoadError('Failed to load customers.'));
-  }, [token]);
+  }, []);
 
   const available = (customers ?? []).filter((c) => !existingCustomerIds.includes(c.organisationId));
   const filtered = available.filter((c) =>
@@ -41,7 +40,7 @@ export function CustomerSearchSelect({ routeId, token, existingCustomerIds, onCl
     setSubmitting(true);
     setActionError(null);
     try {
-      const routeCustomer = await adminDeliveryRoutesApi.assignCustomer(token, routeId, {
+      const routeCustomer = await adminDeliveryRoutesApi.assignCustomer(routeId, {
         customerId: selected.organisationId,
       });
       onAssigned(routeCustomer);

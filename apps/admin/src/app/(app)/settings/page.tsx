@@ -38,7 +38,7 @@ function SettingsPageInner() {
   useEffect(() => {
     if (!accessToken) return;
     adminSettingsApi
-      .get(accessToken)
+      .get()
       .then(setSettings)
       .catch(() => setLoadError('Failed to load settings.'))
       .finally(() => setIsLoading(false));
@@ -46,7 +46,7 @@ function SettingsPageInner() {
 
   async function handleSave(dto: UpdateDistributorSettingsRequest) {
     if (!accessToken) return;
-    const updated = await adminSettingsApi.update(accessToken, dto);
+    const updated = await adminSettingsApi.update(dto);
     setSettings(updated);
   }
 
@@ -112,7 +112,7 @@ function SettingsPageInner() {
         <NotificationsForm settings={settings} onSave={handleSave} />
       )}
       {activeTab === 'branding' && user && (
-        <BrandingTab token={accessToken ?? ''} distributorId={user.organisationId} />
+        <BrandingTab distributorId={user.organisationId} />
       )}
     </>
   );

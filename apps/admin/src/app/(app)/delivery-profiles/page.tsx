@@ -100,7 +100,7 @@ export default function DeliveryProfilesPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminDeliveryProfilesApi.list,
     buildParams,
     errorMessage: 'Failed to load delivery profiles. Please refresh.',

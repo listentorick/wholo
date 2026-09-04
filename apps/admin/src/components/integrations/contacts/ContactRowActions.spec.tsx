@@ -65,10 +65,10 @@ describe('ContactRowActions', () => {
     });
     const user = userEvent.setup();
 
-    render(<ContactRowActions contact={contact} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
+    render(<ContactRowActions contact={contact} providerLabel="Xero" onActionComplete={onActionComplete} />);
     await user.click(screen.getByText('Confirm match'));
 
-    await waitFor(() => expect(adminAccountingApi.confirmSuggestion).toHaveBeenCalledWith('sugg-1', 'token-1'));
+    await waitFor(() => expect(adminAccountingApi.confirmSuggestion).toHaveBeenCalledWith('sugg-1'));
     await waitFor(() => expect(onActionComplete).toHaveBeenCalled());
   });
 
@@ -77,16 +77,16 @@ describe('ContactRowActions', () => {
     const onActionComplete = vi.fn();
     const user = userEvent.setup();
 
-    render(<ContactRowActions contact={makeContact()} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
+    render(<ContactRowActions contact={makeContact()} providerLabel="Xero" onActionComplete={onActionComplete} />);
     await user.click(screen.getByText('Ignore'));
 
-    await waitFor(() => expect(adminAccountingApi.ignoreContact).toHaveBeenCalledWith('contact-1', 'token-1'));
+    await waitFor(() => expect(adminAccountingApi.ignoreContact).toHaveBeenCalledWith('contact-1'));
     await waitFor(() => expect(onActionComplete).toHaveBeenCalled());
   });
 
   it('opens the import dialog for a ready-to-import contact', async () => {
     const user = userEvent.setup();
-    render(<ContactRowActions contact={makeContact()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
+    render(<ContactRowActions contact={makeContact()} providerLabel="Xero" onActionComplete={() => {}} />);
 
     await user.click(screen.getByText('Import as new'));
 
@@ -95,7 +95,7 @@ describe('ContactRowActions', () => {
 
   it('opens the match dialog for a ready-to-import contact', async () => {
     const user = userEvent.setup();
-    render(<ContactRowActions contact={makeContact()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
+    render(<ContactRowActions contact={makeContact()} providerLabel="Xero" onActionComplete={() => {}} />);
 
     await user.click(screen.getByText('Match to existing'));
 
@@ -118,17 +118,17 @@ describe('ContactRowActions', () => {
     });
     const user = userEvent.setup();
 
-    render(<ContactRowActions contact={contact} token="token-1" providerLabel="Xero" onActionComplete={onActionComplete} />);
+    render(<ContactRowActions contact={contact} providerLabel="Xero" onActionComplete={onActionComplete} />);
     expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/tr-1');
 
     await user.click(screen.getByText('Unlink'));
 
-    await waitFor(() => expect(adminAccountingApi.unlinkMapping).toHaveBeenCalledWith('mapping-1', 'token-1'));
+    await waitFor(() => expect(adminAccountingApi.unlinkMapping).toHaveBeenCalledWith('mapping-1'));
     await waitFor(() => expect(onActionComplete).toHaveBeenCalled());
   });
 
   it('shows no actions for an archived contact', () => {
-    render(<ContactRowActions contact={makeContact({ status: 'ARCHIVED' })} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
+    render(<ContactRowActions contact={makeContact({ status: 'ARCHIVED' })} providerLabel="Xero" onActionComplete={() => {}} />);
     expect(screen.getByText('Archived in Xero')).toBeInTheDocument();
     expect(screen.queryByText('Import as new')).not.toBeInTheDocument();
   });
@@ -137,7 +137,7 @@ describe('ContactRowActions', () => {
     (adminAccountingApi.ignoreContact as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<ContactRowActions contact={makeContact()} token="token-1" providerLabel="Xero" onActionComplete={() => {}} />);
+    render(<ContactRowActions contact={makeContact()} providerLabel="Xero" onActionComplete={() => {}} />);
     await user.click(screen.getByText('Ignore'));
 
     await waitFor(() => expect(screen.getByText('That action failed. Please try again.')).toBeInTheDocument());

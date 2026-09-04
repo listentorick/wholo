@@ -8,5 +8,5 @@ export default function NewDeliveryRoutePage() {
 
   if (!accessToken) return null;
 
-  return <DeliveryRouteForm token={accessToken} />;
+  return <DeliveryRouteForm />;
 }

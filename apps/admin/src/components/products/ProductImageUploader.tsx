@@ -8,7 +8,6 @@ const ACCEPTED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 const ACCEPTED_EXT = '.jpg,.jpeg,.png,.webp';
 
 interface Props {
-  token: string;
   productId: string;
 }
 
@@ -17,7 +16,7 @@ interface UploadSlot {
   filename: string;
 }
 
-export function ProductImageUploader({ token, productId }: Props) {
+export function ProductImageUploader({ productId }: Props) {
   const [images, setImages] = useState<AssetImage[]>([]);
   const [uploadSlots, setUploadSlots] = useState<UploadSlot[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -27,11 +26,11 @@ export function ProductImageUploader({ token, productId }: Props) {
 
   useEffect(() => {
     adminAssetImagesApi
-      .list(token, 'product-image', productId)
+      .list('product-image', productId)
       .then(setImages)
       .catch(() => setError('Failed to load images.'))
       .finally(() => setLoading(false));
-  }, [token, productId]);
+  }, [productId]);
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -61,9 +60,7 @@ export function ProductImageUploader({ token, productId }: Props) {
       await Promise.all(
         valid.map(async (file, i) => {
           try {
-            const uploaded = await adminAssetImagesApi.upload(
-              token,
-              'product-image',
+            const uploaded = await adminAssetImagesApi.upload('product-image',
               productId,
               file,
             );
@@ -76,7 +73,7 @@ export function ProductImageUploader({ token, productId }: Props) {
         }),
       );
     },
-    [token, productId],
+    [productId],
   );
 
   function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -106,10 +103,10 @@ export function ProductImageUploader({ token, productId }: Props) {
   async function handleDelete(imageId: string) {
     setImages((prev) => prev.filter((img) => img.id !== imageId));
     try {
-      await adminAssetImagesApi.delete(token, imageId);
+      await adminAssetImagesApi.delete(imageId);
     } catch {
       adminAssetImagesApi
-        .list(token, 'product-image', productId)
+        .list('product-image', productId)
         .then(setImages)
         .catch(() => null);
       setError('Failed to delete image. Please try again.');

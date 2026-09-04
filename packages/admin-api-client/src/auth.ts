@@ -9,12 +9,12 @@ export const adminAuthApi = {
     });
   },
 
-  me(token: string): Promise<AuthUser> {
-    return apiFetch<AuthUser>('/api/v1/auth/me', { token });
+  me(): Promise<AuthUser> {
+    return apiFetch<AuthUser>('/api/v1/auth/me');
   },
 
   /** Tri-state session check: ACTIVE (profile) or ONBOARDING_REQUIRED (identity only). */
-  session(token: string): Promise<AuthSession> {
-    return apiFetch<AuthSession>('/api/v1/auth/session', { token });
+  session(): Promise<AuthSession> {
+    return apiFetch<AuthSession>('/api/v1/auth/session');
   },
 };

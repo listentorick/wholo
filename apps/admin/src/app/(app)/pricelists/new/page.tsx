@@ -9,7 +9,7 @@ export default function NewPriceListPage() {
   const { accessToken } = useAuth();
 
   async function handleSubmit(data: CreatePriceListRequest) {
-    return adminPriceListsApi.create(accessToken!, data);
+    return adminPriceListsApi.create(data);
   }
 
   return <PriceListForm mode="create" token={accessToken!} onSubmit={handleSubmit} />;

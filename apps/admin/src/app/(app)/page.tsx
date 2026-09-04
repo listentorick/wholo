@@ -56,11 +56,11 @@ export default function DashboardPage() {
     setLoadError(null);
     try {
       const [summary, trend, customers, products, actionItems] = await Promise.all([
-        adminAnalyticsApi.orderSummary({ period: p }, token),
-        adminAnalyticsApi.orderTrend({ period: p }, token),
-        adminAnalyticsApi.customerRankings({ period: p, limit: 10 }, token),
-        adminAnalyticsApi.productRankings({ period: p, limit: 10 }, token),
-        adminAnalyticsApi.actionItems(token),
+        adminAnalyticsApi.orderSummary({ period: p }),
+        adminAnalyticsApi.orderTrend({ period: p }),
+        adminAnalyticsApi.customerRankings({ period: p, limit: 10 }),
+        adminAnalyticsApi.productRankings({ period: p, limit: 10 }),
+        adminAnalyticsApi.actionItems(),
       ]);
       setData({ summary, trend, customers, products, actionItems });
     } catch {

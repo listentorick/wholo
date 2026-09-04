@@ -63,7 +63,7 @@ describe('DeliveryTab', () => {
     render(
       <DeliveryTab
         customer={makeCustomer({ deliveryProfileId: null })}
-        token="token-1"
+
         mode="tab"
         onSaveStateChange={onSaveStateChange}
       />,
@@ -84,7 +84,7 @@ describe('DeliveryTab', () => {
     });
 
     await waitFor(() => {
-      expect(assignToCustomer).toHaveBeenCalledWith('token-1', 'rel-1', { deliveryProfileId: 'profile-2' });
+      expect(assignToCustomer).toHaveBeenCalledWith('rel-1', { deliveryProfileId: 'profile-2' });
     });
   });
 });

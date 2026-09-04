@@ -23,7 +23,6 @@ type FormValues = z.infer<typeof schema>;
 
 interface Props {
   customer: Customer;
-  token: string;
   mode: 'tab' | 'wizard';
   onSaved?: () => void;
   onNext?: () => void;
@@ -31,7 +30,7 @@ interface Props {
   onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
+export function DeliveryTab({ customer, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -40,10 +39,10 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, on
 
   useEffect(() => {
     adminDeliveryProfilesApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setProfiles(res.data.filter((p) => p.active)))
       .catch(() => {});
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     setSelectedProfileId(customer.deliveryProfileId ?? '');
@@ -66,7 +65,7 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, on
     setSuccess(false);
     setApiError(null);
     try {
-      await adminCustomersApi.update(token, customer.id, {
+      await adminCustomersApi.update(customer.id, {
         deliveryLine1: data.deliveryLine1 || undefined,
         deliveryLine2: data.deliveryLine2 || undefined,
         deliveryCity: data.deliveryCity || undefined,
@@ -74,7 +73,7 @@ export function DeliveryTab({ customer, token, mode, onSaved, onNext, onBack, on
         deliveryPostcode: data.deliveryPostcode || undefined,
         deliveryCountry: data.deliveryCountry || undefined,
       });
-      await adminDeliveryProfilesApi.assignToCustomer(token, customer.id, {
+      await adminDeliveryProfilesApi.assignToCustomer(customer.id, {
         deliveryProfileId: selectedProfileId || null,
       });
       if (mode === 'wizard') {

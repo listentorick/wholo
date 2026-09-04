@@ -14,7 +14,7 @@ import type {
 import { apiFetch } from './base';
 
 export const adminOrdersApi = {
-  listOrders(params: OrderListParams, token: string): Promise<PaginatedResponse<OrderSummary>> {
+  listOrders(params: OrderListParams): Promise<PaginatedResponse<OrderSummary>> {
     const qs = new URLSearchParams();
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
@@ -26,58 +26,52 @@ export const adminOrdersApi = {
     if (params.undated) qs.set('undated', 'true');
     if (params.sortBy) qs.set('sortBy', params.sortBy);
     if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
-    return apiFetch<PaginatedResponse<OrderSummary>>(`/api/v1/orders?${qs.toString()}`, { token });
+    return apiFetch<PaginatedResponse<OrderSummary>>(`/api/v1/orders?${qs.toString()}`);
   },
 
-  getOrder(orderId: string, token: string): Promise<Order> {
-    return apiFetch<Order>(`/api/v1/orders/${orderId}`, { token });
+  getOrder(orderId: string): Promise<Order> {
+    return apiFetch<Order>(`/api/v1/orders/${orderId}`);
   },
 
-  countOrdersNeedingAttention(token: string): Promise<OrderNeedsAttentionCountResponse> {
-    return apiFetch<OrderNeedsAttentionCountResponse>('/api/v1/orders/needs-attention-count', { token });
+  countOrdersNeedingAttention(): Promise<OrderNeedsAttentionCountResponse> {
+    return apiFetch<OrderNeedsAttentionCountResponse>('/api/v1/orders/needs-attention-count');
   },
 
   getOrderAuditLog(
     orderId: string,
     params: AuditLogQueryParams,
-    token: string,
   ): Promise<PaginatedResponse<AuditLogEntry>> {
     const qs = new URLSearchParams();
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.cursor) qs.set('cursor', params.cursor);
-    return apiFetch<PaginatedResponse<AuditLogEntry>>(`/api/v1/orders/${orderId}/audit-log?${qs.toString()}`, {
-      token,
-    });
+    return apiFetch<PaginatedResponse<AuditLogEntry>>(`/api/v1/orders/${orderId}/audit-log?${qs.toString()}`);
   },
 
   // Recorded proof of delivery for a DELIVERED / DELIVERY_FAILED order.
   // photos[].url / thumbnailUrl are short-lived presigned R2 URLs — re-call
   // this to refresh them if the drawer stays open past their TTL.
-  getDeliveryOutcome(orderId: string, token: string): Promise<DeliveryOutcomeDetail> {
-    return apiFetch<DeliveryOutcomeDetail>(`/api/v1/orders/${orderId}/delivery-outcome`, { token });
+  getDeliveryOutcome(orderId: string): Promise<DeliveryOutcomeDetail> {
+    return apiFetch<DeliveryOutcomeDetail>(`/api/v1/orders/${orderId}/delivery-outcome`);
   },
 
-  acceptOrder(orderId: string, token: string, body?: AcceptOrderRequest): Promise<Order> {
+  acceptOrder(orderId: string, body?: AcceptOrderRequest): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}/accept`, {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
-      token,
     });
   },
 
-  rejectOrder(orderId: string, body: RejectOrderRequest, token: string): Promise<Order> {
+  rejectOrder(orderId: string, body: RejectOrderRequest): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}/reject`, {
       method: 'POST',
       body: JSON.stringify(body),
-      token,
     });
   },
 
-  cancelOrder(orderId: string, body: CancelOrderRequest, token: string): Promise<Order> {
+  cancelOrder(orderId: string, body: CancelOrderRequest): Promise<Order> {
     return apiFetch<Order>(`/api/v1/orders/${orderId}/cancel`, {
       method: 'POST',
       body: JSON.stringify(body),
-      token,
     });
   },
 };

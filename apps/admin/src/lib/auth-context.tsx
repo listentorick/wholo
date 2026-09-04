@@ -3,12 +3,21 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminAuthApi, adminAssetImagesApi, ApiError } from '@wholo/admin-api-client';
 import type { AuthUser, SessionIdentity } from '@wholo/types';
+import { ensureKeycloak, getKeycloak } from './keycloak';
+import {
+  installAuthToken,
+  isSessionExpired,
+  onSessionExpired,
+  resetAuthTokenState,
+} from './auth-token';
 
 interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
   logoUrl: string | null;
   isLoading: boolean;
+  /** Refresh has failed — authenticated requests are blocked until the user signs in again. */
+  sessionExpired: boolean;
   /** Authenticated with Keycloak but no Wholo user yet — route to /onboarding. */
   onboardingRequired: boolean;
   /** Has a Wholo user, but not on a distributor org — route to /access-denied. */
@@ -30,12 +39,11 @@ function isSafeReturnUrl(url: string): boolean {
 }
 
 async function fetchLogoUrl(
-  token: string,
   organisationId: string,
   setLogoUrl: (url: string | null) => void,
 ) {
   try {
-    const imgs = await adminAssetImagesApi.list(token, 'distributor-logo', organisationId);
+    const imgs = await adminAssetImagesApi.list('distributor-logo', organisationId);
     const img = imgs[0];
     setLogoUrl(img?.variants['full'] ?? img?.variants['thumb'] ?? null);
   } catch {
@@ -43,51 +51,27 @@ async function fetchLogoUrl(
   }
 }
 
-// Module-level state so init only happens once across React Strict Mode double-effects
-let initPromise: Promise<boolean> | null = null;
-
-async function getKeycloakAuth(onTokenExpired: () => void): Promise<boolean> {
-  if (initPromise) return initPromise;
-
-  const { default: Keycloak } = await import('keycloak-js');
-  const kc = new Keycloak({
-    url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080',
-    realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
-    clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-admin',
-  });
-
-  // Must be assigned before init() — keycloak-js only arms its silent-refresh
-  // timer if onTokenExpired is already set when init() installs the initial token.
-  kc.onTokenExpired = onTokenExpired;
-
-  initPromise = kc.init({ checkLoginIframe: false }).then((authenticated) => {
-    // Store instance globally so login/logout can access it
-    (window as any).__kc = kc;
-    return authenticated;
-  });
-
-  return initPromise;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
 
-  const loadSession = useCallback(async (token: string) => {
+  const loadSession = useCallback(async () => {
     try {
-      const session = await adminAuthApi.session(token);
+      // Token comes from the centralised provider (installAuthToken) — no snapshot here.
+      const session = await adminAuthApi.session();
       if (session.status === 'ACTIVE' && session.user) {
         setUser(session.user);
         setOnboardingRequired(false);
         setAccessDenied(false);
         setIdentity(null);
         if (session.user.organisationId) {
-          fetchLogoUrl(token, session.user.organisationId, setLogoUrl);
+          fetchLogoUrl(session.user.organisationId, setLogoUrl);
         }
       } else if (session.status === 'ONBOARDING_REQUIRED') {
         setUser(null);
@@ -114,38 +98,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const handleTokenExpired = useCallback(() => {
-    const kc = (window as any).__kc;
-    kc?.updateToken(30)
-      .then(() => setAccessToken(kc.token ?? null))
-      .catch(() => {
-        setUser(null);
-        setAccessToken(null);
-      });
-  }, []);
-
   useEffect(() => {
-    getKeycloakAuth(handleTokenExpired)
-      .then(async (authenticated) => {
-        const kc = (window as any).__kc;
-        if (!authenticated || !kc?.token) return;
+    // Wire getAuthToken into the api-client and the keycloak-js refresh timer.
+    installAuthToken();
+    if (isSessionExpired()) setSessionExpired(true);
+    const unsubscribe = onSessionExpired(() => setSessionExpired(true));
 
-        const token: string = kc.token;
-        setAccessToken(token);
-
-        await loadSession(token);
+    ensureKeycloak()
+      .then(async (kc) => {
+        if (!kc?.authenticated || !kc.token) return;
+        setAccessToken(kc.token);
+        await loadSession();
       })
       .finally(() => setIsLoading(false));
-  }, [loadSession, handleTokenExpired]);
+
+    return unsubscribe;
+  }, [loadSession]);
 
   const refreshSession = useCallback(async () => {
-    const kc = (window as any).__kc;
-    const token: string | undefined = kc?.token;
-    if (token) await loadSession(token);
+    if (getKeycloak()?.token) await loadSession();
   }, [loadSession]);
 
   const login = useCallback((returnUrlOverride?: string) => {
-    const kc = (window as any).__kc;
+    resetAuthTokenState();
     const params = new URLSearchParams(window.location.search);
     const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
     // Concatenated directly onto origin below, so a value that isn't a plain
@@ -153,14 +128,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // redirect to an attacker-controlled host — reject anything but a path.
     const returnUrl = isSafeReturnUrl(requestedReturnUrl) ? requestedReturnUrl : '/';
     const redirectUri = window.location.origin + returnUrl;
-    if (kc) {
-      kc.login({ redirectUri });
-    } else {
-      getKeycloakAuth(handleTokenExpired).then(() => {
-        (window as any).__kc?.login({ redirectUri });
-      });
-    }
-  }, [handleTokenExpired]);
+    ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
+  }, []);
 
   const logout = useCallback(() => {
     // Do NOT clear React auth state here first: nulling `user` re-renders the
@@ -169,7 +138,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // end-session endpoint — the Keycloak SSO session is never destroyed and the
     // still-valid cookie logs the user straight back in. Let the full-page
     // navigation to Keycloak tear the app down instead. Mirrors apps/portal.
-    const kc = (window as any).__kc;
+    resetAuthTokenState();
+    const kc = getKeycloak();
     if (kc) {
       kc.logout({ redirectUri: window.location.origin + '/login' });
       return;
@@ -192,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         accessToken,
         logoUrl,
         isLoading,
+        sessionExpired,
         onboardingRequired,
         accessDenied,
         identity,
@@ -201,7 +172,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      {sessionExpired && <SessionExpiredOverlay onSignIn={() => login()} />}
     </AuthContext.Provider>
+  );
+}
+
+function SessionExpiredOverlay({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="session-expired-heading"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-canvas px-6 text-center"
+    >
+      <p id="session-expired-heading" className="max-w-sm text-sm font-medium text-text">
+        Your session has expired. Sign in again to continue.
+      </p>
+      <button
+        onClick={onSignIn}
+        className="mt-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+      >
+        Sign in again
+      </button>
+    </div>
   );
 }
 

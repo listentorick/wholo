@@ -2,15 +2,14 @@ import type { DistributorSettings, UpdateDistributorSettingsRequest } from '@who
 import { apiFetch } from './base';
 
 export const adminSettingsApi = {
-  get(token: string): Promise<DistributorSettings> {
-    return apiFetch<DistributorSettings>('/api/v1/settings', { token });
+  get(): Promise<DistributorSettings> {
+    return apiFetch<DistributorSettings>('/api/v1/settings');
   },
 
-  update(token: string, req: UpdateDistributorSettingsRequest): Promise<DistributorSettings> {
+  update(req: UpdateDistributorSettingsRequest): Promise<DistributorSettings> {
     return apiFetch<DistributorSettings>('/api/v1/settings', {
       method: 'PATCH',
       body: JSON.stringify(req),
-      token,
     });
   },
 };

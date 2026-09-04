@@ -18,7 +18,7 @@ export default function EditDeliveryRoutePage() {
   useEffect(() => {
     if (!accessToken || !params.id) return;
     adminDeliveryRoutesApi
-      .get(accessToken, params.id)
+      .get(params.id)
       .then(setRoute)
       .catch(() => setError('Failed to load delivery route.'))
       .finally(() => setIsLoading(false));
@@ -44,7 +44,7 @@ export default function EditDeliveryRoutePage() {
 
   return (
     <>
-      <DeliveryRouteForm route={route} token={accessToken} />
+      <DeliveryRouteForm route={route} />
     </>
   );
 }

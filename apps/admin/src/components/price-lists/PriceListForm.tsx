@@ -130,7 +130,7 @@ function ProductPicker({ token, currency, selectedId, onSelect, disabled }: Prod
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adminProductsApi.list(token, { limit: 500, status: [ProductStatus.ACTIVE] })
+    adminProductsApi.list({ limit: 500, status: [ProductStatus.ACTIVE] })
       .then((r) => setProducts(r.data))
       .finally(() => setLoading(false));
   }, [token]);
@@ -332,7 +332,7 @@ function RuleDrawer({ state, priceListId, currency, pricelists, token, onSaved, 
       let rule: PriceListRule;
 
       if (isEdit && editRule) {
-        rule = await adminPriceListsApi.updateRule(token, priceListId, editRule.id, {
+        rule = await adminPriceListsApi.updateRule(priceListId, editRule.id, {
           minQuantity: qty,
           ...(!isDiscount
             ? { unitPrice: parseFloat(unitPrice).toFixed(2) }
@@ -346,7 +346,7 @@ function RuleDrawer({ state, priceListId, currency, pricelists, token, onSaved, 
               }),
         });
       } else {
-        rule = await adminPriceListsApi.createRule(token, priceListId, {
+        rule = await adminPriceListsApi.createRule(priceListId, {
           selectorType,
           productId:
             selectorType === PriceListRuleSelectorType.PRODUCT ? selectedProductId : undefined,
@@ -703,8 +703,8 @@ function RulesTable({ token, priceListId, currency }: RulesTableProps) {
 
   useEffect(() => {
     Promise.all([
-      adminPriceListsApi.listRules(token, priceListId),
-      adminPriceListsApi.list(token, { limit: 100 }).then((r) => r.data),
+      adminPriceListsApi.listRules(priceListId),
+      adminPriceListsApi.list({ limit: 100 }).then((r) => r.data),
     ]).then(([r, p]) => { setRules(r); setPricelists(p); }).finally(() => setLoading(false));
   }, [token, priceListId]);
 
@@ -717,12 +717,12 @@ function RulesTable({ token, priceListId, currency }: RulesTableProps) {
   }
 
   async function handleToggle(rule: PriceListRule) {
-    const updated = await adminPriceListsApi.updateRule(token, priceListId, rule.id, { active: !rule.active });
+    const updated = await adminPriceListsApi.updateRule(priceListId, rule.id, { active: !rule.active });
     setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
   }
 
   async function handleDelete(rule: PriceListRule) {
-    await adminPriceListsApi.deleteRule(token, priceListId, rule.id);
+    await adminPriceListsApi.deleteRule(priceListId, rule.id);
     setRules((prev) => prev.filter((r) => r.id !== rule.id));
   }
 

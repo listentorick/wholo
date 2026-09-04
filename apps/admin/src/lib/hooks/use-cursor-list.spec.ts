@@ -25,7 +25,6 @@ describe('useCursorList', () => {
 
     const { result } = renderHook(() =>
       useCursorList({
-        token: 'token-1',
         fetchPage,
         buildParams: (cursor) => ({ limit: 20, cursor }),
         errorMessage: 'Failed to load.',
@@ -40,7 +39,7 @@ describe('useCursorList', () => {
     expect(result.current.data).toEqual([{ id: '1' }, { id: '2' }]);
     expect(result.current.total).toBe(5);
     expect(result.current.hasMore).toBe(true);
-    expect(fetchPage).toHaveBeenCalledWith('token-1', { limit: 20, cursor: undefined });
+    expect(fetchPage).toHaveBeenCalledWith({ limit: 20, cursor: undefined });
   });
 
   it('appends results and passes the returned cursor back into buildParams on loadMore', async () => {
@@ -51,7 +50,6 @@ describe('useCursorList', () => {
 
     const { result } = renderHook(() =>
       useCursorList({
-        token: 'token-1',
         fetchPage,
         buildParams: (cursor) => ({ limit: 1, cursor }),
         errorMessage: 'Failed to load.',
@@ -66,7 +64,7 @@ describe('useCursorList', () => {
       await result.current.loadMore();
     });
 
-    expect(fetchPage).toHaveBeenLastCalledWith('token-1', { limit: 1, cursor: 'c1' });
+    expect(fetchPage).toHaveBeenLastCalledWith({ limit: 1, cursor: 'c1' });
     expect(result.current.data).toEqual([{ id: '1' }, { id: '2' }]);
     expect(result.current.hasMore).toBe(false);
   });
@@ -76,7 +74,6 @@ describe('useCursorList', () => {
 
     const { result } = renderHook(() =>
       useCursorList({
-        token: 'token-1',
         fetchPage,
         buildParams: (cursor) => ({ limit: 20, cursor }),
         errorMessage: 'Failed to load products. Please refresh.',
@@ -98,7 +95,6 @@ describe('useCursorList', () => {
     const { result, rerender } = renderHook(
       ({ status }: { status: string }) =>
         useCursorList({
-          token: 'token-1',
           fetchPage,
           buildParams: (cursor) => ({ limit: 20, cursor, status }),
           errorMessage: 'Failed to load.',
@@ -114,6 +110,6 @@ describe('useCursorList', () => {
 
     // Fresh load, not appended — replaces rather than concatenates.
     await waitFor(() => expect(result.current.data).toEqual([{ id: '2' }]));
-    expect(fetchPage).toHaveBeenLastCalledWith('token-1', { limit: 20, cursor: undefined, status: 'ARCHIVED' });
+    expect(fetchPage).toHaveBeenLastCalledWith({ limit: 20, cursor: undefined, status: 'ARCHIVED' });
   });
 });

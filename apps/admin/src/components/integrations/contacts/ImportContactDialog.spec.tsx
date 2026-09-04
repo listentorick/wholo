@@ -35,7 +35,7 @@ beforeEach(() => {
 
 describe('ImportContactDialog', () => {
   it('pre-fills the customer name and account number from the cached contact', () => {
-    render(<ImportContactDialog contact={contact} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportContactDialog contact={contact} onClose={() => {}} onImported={() => {}} />);
     expect(screen.getByLabelText('Customer name')).toHaveValue('Blackbird Vine & Co');
     expect(screen.getByLabelText('Account number')).toHaveValue('XC-1');
   });
@@ -45,7 +45,7 @@ describe('ImportContactDialog', () => {
     const onImported = vi.fn();
     const user = userEvent.setup();
 
-    render(<ImportContactDialog contact={contact} token="token-1" onClose={() => {}} onImported={onImported} />);
+    render(<ImportContactDialog contact={contact} onClose={() => {}} onImported={onImported} />);
     await user.clear(screen.getByLabelText('Customer name'));
     await user.type(screen.getByLabelText('Customer name'), 'Renamed Co');
     await user.click(screen.getByText('Import customer'));
@@ -53,9 +53,7 @@ describe('ImportContactDialog', () => {
     await waitFor(() =>
       expect(adminAccountingApi.importContact).toHaveBeenCalledWith(
         'contact-1',
-        { name: 'Renamed Co', accountNumber: 'XC-1' },
-        'token-1',
-      ),
+        { name: 'Renamed Co', accountNumber: 'XC-1' }),
     );
     await waitFor(() => expect(onImported).toHaveBeenCalled());
   });
@@ -64,7 +62,7 @@ describe('ImportContactDialog', () => {
     (adminAccountingApi.importContact as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
 
-    render(<ImportContactDialog contact={contact} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportContactDialog contact={contact} onClose={() => {}} onImported={() => {}} />);
     await user.click(screen.getByText('Import customer'));
 
     await waitFor(() => expect(screen.getByText(/Failed to import this contact/)).toBeInTheDocument());
@@ -77,7 +75,7 @@ describe('ImportContactDialog', () => {
     );
     const user = userEvent.setup();
 
-    render(<ImportContactDialog contact={contact} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportContactDialog contact={contact} onClose={() => {}} onImported={() => {}} />);
     await user.click(screen.getByText('Import customer'));
 
     await waitFor(() =>
@@ -90,7 +88,7 @@ describe('ImportContactDialog', () => {
     (adminAccountingApi.importContact as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'tr-1' });
     const user = userEvent.setup();
 
-    render(<ImportContactDialog contact={contact} token="token-1" onClose={() => {}} onImported={() => {}} />);
+    render(<ImportContactDialog contact={contact} onClose={() => {}} onImported={() => {}} />);
     await user.click(screen.getByText('Import customer'));
 
     await waitFor(() => expect(adminAccountingApi.importContact).toHaveBeenCalled());

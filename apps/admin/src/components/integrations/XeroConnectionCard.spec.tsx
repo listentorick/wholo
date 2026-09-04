@@ -31,7 +31,7 @@ beforeEach(() => {
 describe('XeroConnectionCard', () => {
   it('shows a Connect button when there is no connection', async () => {
     mockGetConnection.mockResolvedValue(undefined);
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
     expect(screen.queryByText('Connected')).not.toBeInTheDocument();
@@ -45,7 +45,7 @@ describe('XeroConnectionCard', () => {
       connectedAt: '2026-01-01T00:00:00.000Z',
       lastSyncedAt: null,
     });
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Acme Wines')).toBeInTheDocument());
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -63,15 +63,15 @@ describe('XeroConnectionCard', () => {
     });
     mockCountNeedsAttention.mockResolvedValue({ count: 4 });
 
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
-    await waitFor(() => expect(mockCountNeedsAttention).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(mockCountNeedsAttention).toHaveBeenCalledWith());
     await waitFor(() => expect(screen.getByText('4')).toBeInTheDocument());
   });
 
   it('does not fetch or show a needs-attention count when not connected', async () => {
     mockGetConnection.mockResolvedValue(undefined);
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
     expect(mockCountNeedsAttention).not.toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe('XeroConnectionCard', () => {
 
   it('shows a load error banner when the status fetch fails', async () => {
     mockGetConnection.mockRejectedValue(new Error('network error'));
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Failed to load connection status.')).toBeInTheDocument());
   });
@@ -90,11 +90,11 @@ describe('XeroConnectionCard', () => {
     mockCreateAuthUrl.mockResolvedValue({ authorizationUrl: 'https://xero.example/consent' });
     const user = userEvent.setup();
 
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
     await waitFor(() => screen.getByText('Connect Xero'));
     await user.click(screen.getByText('Connect Xero'));
 
-    await waitFor(() => expect(mockCreateAuthUrl).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(mockCreateAuthUrl).toHaveBeenCalledWith());
     await waitFor(() => expect(window.location.href).toBe('https://xero.example/consent'));
   });
 
@@ -106,7 +106,7 @@ describe('XeroConnectionCard', () => {
       connectedAt: '2026-01-01T00:00:00.000Z',
       lastSyncedAt: null,
     });
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Connection error')).toBeInTheDocument());
     expect(screen.getByText('Reconnect Xero')).toBeInTheDocument();
@@ -124,11 +124,11 @@ describe('XeroConnectionCard', () => {
     mockCreateAuthUrl.mockResolvedValue({ authorizationUrl: 'https://xero.example/consent' });
     const user = userEvent.setup();
 
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
     await waitFor(() => screen.getByText('Reconnect Xero'));
     await user.click(screen.getByText('Reconnect Xero'));
 
-    await waitFor(() => expect(mockCreateAuthUrl).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(mockCreateAuthUrl).toHaveBeenCalledWith());
   });
 
   it('disconnects and returns to the not-connected state', async () => {
@@ -142,11 +142,11 @@ describe('XeroConnectionCard', () => {
     mockDisconnect.mockResolvedValue(undefined);
     const user = userEvent.setup();
 
-    render(<XeroConnectionCard token={TOKEN} />);
+    render(<XeroConnectionCard />);
     await waitFor(() => screen.getByText('Disconnect'));
     await user.click(screen.getByText('Disconnect'));
 
-    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith(TOKEN));
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith());
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
   });
 });

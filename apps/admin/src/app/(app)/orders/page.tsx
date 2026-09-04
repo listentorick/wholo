@@ -134,11 +134,10 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 
 interface QuickActionsProps {
   order: OrderSummary;
-  token: string;
   onUpdate: (updated: OrderSummary) => void;
 }
 
-function QuickActions({ order, token, onUpdate }: QuickActionsProps) {
+function QuickActions({ order, onUpdate }: QuickActionsProps) {
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [unmappedTaxDetail, setUnmappedTaxDetail] = useState<string | null>(null);
@@ -149,7 +148,7 @@ function QuickActions({ order, token, onUpdate }: QuickActionsProps) {
     if (accepting) return;
     setAccepting(true);
     try {
-      const updated = await adminOrdersApi.acceptOrder(order.id, token, { confirmUnmappedTaxTypes });
+      const updated = await adminOrdersApi.acceptOrder(order.id, { confirmUnmappedTaxTypes });
       onUpdate({ ...order, status: updated.status, acceptedAt: updated.acceptedAt });
       setUnmappedTaxDetail(null);
     } catch (err) {
@@ -169,7 +168,7 @@ function QuickActions({ order, token, onUpdate }: QuickActionsProps) {
     if (rejecting) return;
     setRejecting(true);
     try {
-      const updated = await adminOrdersApi.rejectOrder(order.id, { reason: 'Rejected by distributor' }, token);
+      const updated = await adminOrdersApi.rejectOrder(order.id, { reason: 'Rejected by distributor' });
       onUpdate({ ...order, status: updated.status, rejectedAt: updated.rejectedAt });
     } finally {
       setRejecting(false);
@@ -223,7 +222,7 @@ export default function OrdersPage() {
     [filters, sortBy, sortOrder],
   );
   const fetchPage = useCallback(
-    (token: string, params: OrderListParams) => adminOrdersApi.listOrders(params, token),
+    (params: OrderListParams) => adminOrdersApi.listOrders(params),
     [],
   );
 
@@ -237,7 +236,7 @@ export default function OrdersPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+    enabled: !!accessToken,
     fetchPage,
     buildParams,
     errorMessage: 'Failed to load orders. Please refresh.',
@@ -351,7 +350,7 @@ export default function OrdersPage() {
               <>
                 <MobileCardField label="Submitted" value={fmtDateStr(order.submittedAt)} />
                 {order.status === OrderStatus.SUBMITTED && accessToken && (
-                  <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
+                  <QuickActions order={order} onUpdate={handleOrderUpdate} />
                 )}
                 {hasProof(order.status) && (
                   <button
@@ -427,7 +426,7 @@ export default function OrdersPage() {
                     </td>
                     <td className="py-3 pl-4 pr-5">
                       {order.status === OrderStatus.SUBMITTED && accessToken ? (
-                        <QuickActions order={order} token={accessToken} onUpdate={handleOrderUpdate} />
+                        <QuickActions order={order} onUpdate={handleOrderUpdate} />
                       ) : hasProof(order.status) ? (
                         <button
                           type="button"

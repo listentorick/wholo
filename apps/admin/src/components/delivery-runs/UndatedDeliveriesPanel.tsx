@@ -7,10 +7,6 @@ import { adminOrdersApi, adminDeliveryRunsApi, ApiError } from '@wholo/admin-api
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ChangeDeliveryDateDialog } from './ChangeDeliveryDateDialog';
 
-interface Props {
-  token: string | null | undefined;
-}
-
 const LIMIT = 10;
 
 // Closes the "undated accepted orders are invisible on every dated board"
@@ -22,7 +18,7 @@ const LIMIT = 10;
 // apps/admin/orders isn't URL-param/filter-driven — a link into a filtered
 // Orders list wouldn't actually filter anything. Its own mutation flow is
 // independent of the board's page.tsx (different data source entirely).
-export function UndatedDeliveriesPanel({ token }: Props) {
+export function UndatedDeliveriesPanel() {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState(false);
@@ -30,28 +26,26 @@ export function UndatedDeliveriesPanel({ token }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    try {
-      const result = await adminOrdersApi.listOrders({ status: OrderStatus.ACCEPTED, undated: true, limit: LIMIT }, token);
+  const load = useCallback(async () => {    try {
+      const result = await adminOrdersApi.listOrders({ status: OrderStatus.ACCEPTED, undated: true, limit: LIMIT });
       setOrders(result.data);
       setTotal(result.pagination.total);
       setError(false);
     } catch {
       setError(true);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
   async function handleConfirm(params: { scheduledDeliveryDate: string; expectedScheduledDeliveryDate: string | null }) {
-    if (!token || !dialogOrder) return;
+    if (!dialogOrder) return;
     setSubmitting(true);
     setMutationError(null);
     try {
-      await adminDeliveryRunsApi.changeScheduledDeliveryDate(token, dialogOrder.id, params);
+      await adminDeliveryRunsApi.changeScheduledDeliveryDate(dialogOrder.id, params);
       setDialogOrder(null);
       await load();
     } catch (e) {
@@ -100,7 +94,7 @@ export function UndatedDeliveriesPanel({ token }: Props) {
       </ul>
       {dialogOrder && (
         <ChangeDeliveryDateDialog
-          token={token}
+         
           orderId={dialogOrder.id}
           orderNumber={dialogOrder.orderNumber}
           customerName={dialogOrder.traderCustomerName}

@@ -10,12 +10,11 @@ import { TaxTypeConflictModal } from './TaxTypeConflictModal';
 
 interface Props {
   product: AccountingProductSummary;
-  token: string;
   providerLabel: string;
   onActionComplete: () => void;
 }
 
-export function ProductRowActions({ product, token, providerLabel, onActionComplete }: Props) {
+export function ProductRowActions({ product, providerLabel, onActionComplete }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
@@ -39,7 +38,7 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
     setBusy('confirm');
     setError(null);
     try {
-      await adminAccountingApi.confirmProductSuggestion(product.suggestion.id, token, { confirmTaxTypeOverride });
+      await adminAccountingApi.confirmProductSuggestion(product.suggestion.id, { confirmTaxTypeOverride });
       onActionComplete();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409 && err.problem.title === 'TAX_TYPE_CONFLICT') {
@@ -53,13 +52,13 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
   }
 
   function handleIgnore() {
-    run('ignore', () => adminAccountingApi.ignoreProduct(product.id, token));
+    run('ignore', () => adminAccountingApi.ignoreProduct(product.id));
   }
 
   function handleUnlink() {
     if (!product.mapping) return;
     if (!window.confirm('Unlink this product from the accounting product?')) return;
-    run('unlink', () => adminAccountingApi.unlinkProductMapping(product.mapping!.id, token));
+    run('unlink', () => adminAccountingApi.unlinkProductMapping(product.mapping!.id));
   }
 
   const anyBusy = busy !== null;
@@ -174,7 +173,7 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
       {dialog === 'import' && (
         <ImportProductDialog
           product={product}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onImported={() => {
             setDialog(null);
@@ -185,7 +184,7 @@ export function ProductRowActions({ product, token, providerLabel, onActionCompl
       {dialog === 'match' && (
         <MatchExistingProductDialog
           product={product}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onMatched={() => {
             setDialog(null);

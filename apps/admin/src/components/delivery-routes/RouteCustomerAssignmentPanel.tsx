@@ -15,7 +15,6 @@ import { CustomerSearchSelect } from './CustomerSearchSelect';
 
 interface Props {
   routeId: string;
-  token: string;
   customers: DeliveryRouteCustomer[];
   onCustomersChange: (customers: DeliveryRouteCustomer[]) => void;
 }
@@ -123,7 +122,7 @@ function CustomerRow({
   );
 }
 
-export function RouteCustomerAssignmentPanel({ routeId, token, customers, onCustomersChange }: Props) {
+export function RouteCustomerAssignmentPanel({ routeId, customers, onCustomersChange }: Props) {
   const [showAdd, setShowAdd] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [reorderError, setReorderError] = useState<string | null>(null);
@@ -139,7 +138,7 @@ export function RouteCustomerAssignmentPanel({ routeId, token, customers, onCust
     onCustomersChange(renumbered);
     setReorderError(null);
     try {
-      const saved = await adminDeliveryRoutesApi.reorderCustomers(token, routeId, {
+      const saved = await adminDeliveryRoutesApi.reorderCustomers(routeId, {
         orderedCustomerIds: renumbered.map((rc) => rc.customerId),
       });
       onCustomersChange(saved);
@@ -168,7 +167,7 @@ export function RouteCustomerAssignmentPanel({ routeId, token, customers, onCust
   async function handleRemove(routeCustomer: DeliveryRouteCustomer) {
     setRemovingId(routeCustomer.id);
     try {
-      await adminDeliveryRoutesApi.removeCustomer(token, routeId, routeCustomer.customerId);
+      await adminDeliveryRoutesApi.removeCustomer(routeId, routeCustomer.customerId);
       onCustomersChange(customers.filter((c) => c.id !== routeCustomer.id));
     } finally {
       setRemovingId(null);
@@ -220,7 +219,7 @@ export function RouteCustomerAssignmentPanel({ routeId, token, customers, onCust
       {showAdd && (
         <CustomerSearchSelect
           routeId={routeId}
-          token={token}
+         
           existingCustomerIds={customers.map((c) => c.customerId)}
           onClose={() => setShowAdd(false)}
           onAssigned={(added) => {

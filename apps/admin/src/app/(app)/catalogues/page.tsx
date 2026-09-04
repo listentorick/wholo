@@ -103,7 +103,7 @@ export default function CataloguesPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminCataloguesApi.list,
     buildParams,
     errorMessage: 'Failed to load catalogues. Please refresh.',

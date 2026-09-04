@@ -6,7 +6,6 @@ import { adminDeliveryRunsApi } from '@wholo/admin-api-client';
 import { toIso, addDays } from '@/lib/date';
 
 interface WorkloadStripProps {
-  token: string | null | undefined;
   selectedDate: string;
   onSelectDate: (date: string) => void;
   // The visible Monday-start week — owned by the parent (page.tsx) so it can
@@ -34,19 +33,16 @@ function ChevronIcon({ direction }: { direction: 'left' | 'right' }) {
 // strip showing each day's workload count. The month/year the strip is
 // showing is surfaced by the sibling DeliveryDateRangeControl in the page
 // header, not repeated here.
-export function WorkloadStrip({
-  token, selectedDate, onSelectDate, weekStart, onWeekStartChange, refreshKey,
+export function WorkloadStrip({ selectedDate, onSelectDate, weekStart, onWeekStartChange, refreshKey,
 }: WorkloadStripProps) {
   const [days, setDays] = useState<DeliveryDaySummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setIsLoading(true);
+  const load = useCallback(async () => {    setIsLoading(true);
     try {
       const weekEnd = addDays(weekStart, 6);
-      const result = await adminDeliveryRunsApi.listDays(token, { from: toIso(weekStart), to: toIso(weekEnd) });
+      const result = await adminDeliveryRunsApi.listDays({ from: toIso(weekStart), to: toIso(weekEnd) });
       setDays(result.data);
       setError(false);
     } catch {
@@ -54,7 +50,7 @@ export function WorkloadStrip({
     } finally {
       setIsLoading(false);
     }
-  }, [token, weekStart]);
+  }, [weekStart]);
 
   // refreshKey carries no data of its own — it's only in this dependency
   // list to force a re-fetch when a cross-day mutation happens elsewhere.

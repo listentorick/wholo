@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminNotificationsApi } from '@wholo/admin-api-client';
 import type { AdminNotification } from '@wholo/types';
 import { useAuth } from './auth-context';
@@ -23,21 +23,18 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { accessToken } = useAuth();
+  // `user` is the "authenticated and cleared for the admin app" signal — the
+  // bearer for each poll comes from the centralised token provider in the
+  // api-client, which refreshes it (and so recovers a suspended tab).
+  const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState<AdminNotification[]>([]);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [recentError, setRecentError] = useState(false);
-  // Ref'd so the poll interval (set up once per accessToken change) always
-  // calls with the latest token without needing to be its own effect dep.
-  const tokenRef = useRef(accessToken);
-  tokenRef.current = accessToken;
 
   const refreshUnreadCount = useCallback(async () => {
-    const token = tokenRef.current;
-    if (!token) return;
     try {
-      const res = await adminNotificationsApi.unreadCount(token);
+      const res = await adminNotificationsApi.unreadCount();
       setUnreadCount(res.count);
     } catch {
       // Non-critical — the badge just doesn't update if this fails.
@@ -45,19 +42,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!user) return;
     refreshUnreadCount();
     const interval = setInterval(refreshUnreadCount, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [accessToken, refreshUnreadCount]);
+  }, [user, refreshUnreadCount]);
 
   const fetchRecent = useCallback(async () => {
-    const token = tokenRef.current;
-    if (!token) return;
     setIsLoadingRecent(true);
     setRecentError(false);
     try {
-      const list = await adminNotificationsApi.list(token);
+      const list = await adminNotificationsApi.list();
       setRecent(list);
     } catch {
       setRecentError(true);
@@ -67,8 +62,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markRead = useCallback(async (id: string) => {
-    const token = tokenRef.current;
-    if (!token) return;
     let wasUnread = false;
     setRecent((prev) =>
       prev.map((n) => {
@@ -81,7 +74,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     );
     if (wasUnread) setUnreadCount((prev) => Math.max(0, prev - 1));
     try {
-      await adminNotificationsApi.markRead(id, token);
+      await adminNotificationsApi.markRead(id);
     } catch {
       // Optimistic update, no rollback on failure for v1 — accept rare
       // staleness; the next poll/dropdown-open reconciles it.
@@ -89,12 +82,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markAllRead = useCallback(async () => {
-    const token = tokenRef.current;
-    if (!token) return;
     setRecent((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
     setUnreadCount(0);
     try {
-      await adminNotificationsApi.markAllRead(token);
+      await adminNotificationsApi.markAllRead();
     } catch {
       // Same accepted-staleness trade-off as markRead.
     }

@@ -8,12 +8,11 @@ import { MatchExistingTaxTypeDialog } from './MatchExistingTaxTypeDialog';
 
 interface Props {
   taxType: AccountingTaxTypeSummary;
-  token: string;
   providerLabel: string;
   onActionComplete: () => void;
 }
 
-export function TaxTypeRowActions({ taxType, token, providerLabel, onActionComplete }: Props) {
+export function TaxTypeRowActions({ taxType, providerLabel, onActionComplete }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'create' | 'match' | null>(null);
@@ -33,17 +32,17 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
 
   function handleConfirmMatch() {
     if (!taxType.suggestion) return;
-    run('confirm', () => adminAccountingApi.confirmTaxTypeSuggestion(taxType.suggestion!.id, token));
+    run('confirm', () => adminAccountingApi.confirmTaxTypeSuggestion(taxType.suggestion!.id));
   }
 
   function handleIgnore() {
-    run('ignore', () => adminAccountingApi.ignoreTaxType(taxType.id, token));
+    run('ignore', () => adminAccountingApi.ignoreTaxType(taxType.id));
   }
 
   function handleUnlink() {
     if (!taxType.mapping) return;
     if (!window.confirm('Unlink this tax type from the accounting tax type?')) return;
-    run('unlink', () => adminAccountingApi.unlinkTaxTypeMapping(taxType.mapping!.id, token));
+    run('unlink', () => adminAccountingApi.unlinkTaxTypeMapping(taxType.mapping!.id));
   }
 
   const anyBusy = busy !== null;
@@ -155,7 +154,7 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
       {dialog === 'create' && (
         <CreateTaxTypeFromExternalDialog
           taxType={taxType}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onImported={() => {
             setDialog(null);
@@ -166,7 +165,7 @@ export function TaxTypeRowActions({ taxType, token, providerLabel, onActionCompl
       {dialog === 'match' && (
         <MatchExistingTaxTypeDialog
           taxType={taxType}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onMatched={() => {
             setDialog(null);

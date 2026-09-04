@@ -7,12 +7,11 @@ import { useCursorList } from '@/lib/hooks/use-cursor-list';
 import { AccountingTaxTypesTable } from './AccountingTaxTypesTable';
 
 interface Props {
-  token: string;
   providerLabel: string;
   onTaxTypesChanged?: () => void;
 }
 
-export function TaxTypesTab({ token, providerLabel, onTaxTypesChanged }: Props) {
+export function TaxTypesTab({ providerLabel, onTaxTypesChanged }: Props) {
   const [reloadToken, setReloadToken] = useState(0);
 
   const buildParams = useCallback((cursor: string | undefined): AccountingTaxTypeListParams => ({ limit: 20, cursor }), []);
@@ -25,8 +24,7 @@ export function TaxTypesTab({ token, providerLabel, onTaxTypesChanged }: Props) 
     error,
     loadMore,
   } = useCursorList({
-    token,
-    fetchPage: (activeToken, params) => adminAccountingApi.listTaxTypes(params, activeToken),
+    fetchPage: (params) => adminAccountingApi.listTaxTypes(params),
     buildParams,
     errorMessage: 'Failed to load tax rates. Please refresh.',
     deps: [reloadToken],
@@ -46,7 +44,7 @@ export function TaxTypesTab({ token, providerLabel, onTaxTypesChanged }: Props) 
           taxTypes={taxTypes}
           loading={isLoading}
           hasFilter={false}
-          token={token}
+         
           providerLabel={providerLabel}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}

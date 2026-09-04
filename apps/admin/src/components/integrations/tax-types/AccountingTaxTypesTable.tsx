@@ -17,7 +17,6 @@ interface Props {
   taxTypes: AccountingTaxTypeSummary[];
   loading: boolean;
   hasFilter: boolean;
-  token: string;
   providerLabel: string;
   hasMore: boolean;
   isLoadingMore: boolean;
@@ -45,7 +44,6 @@ export function AccountingTaxTypesTable({
   taxTypes,
   loading,
   hasFilter,
-  token,
   providerLabel,
   hasMore,
   isLoadingMore,
@@ -88,7 +86,7 @@ export function AccountingTaxTypesTable({
           <ChangedIndicator
             changeDetectedAt={taxType.changeDetectedAt}
             changeAcknowledgedAt={taxType.changeAcknowledgedAt}
-            onAcknowledge={() => adminAccountingApi.acknowledgeTaxTypeChange(taxType.id, token).then(onActionComplete)}
+            onAcknowledge={() => adminAccountingApi.acknowledgeTaxTypeChange(taxType.id).then(onActionComplete)}
           />
         )}
         renderExpanded={(taxType) => (
@@ -105,7 +103,7 @@ export function AccountingTaxTypesTable({
             />
             <TaxTypeRowActions
               taxType={taxType}
-              token={token}
+             
               providerLabel={providerLabel}
               onActionComplete={onActionComplete}
             />
@@ -139,7 +137,7 @@ export function AccountingTaxTypesTable({
                     <ChangedIndicator
                       changeDetectedAt={taxType.changeDetectedAt}
                       changeAcknowledgedAt={taxType.changeAcknowledgedAt}
-                      onAcknowledge={() => adminAccountingApi.acknowledgeTaxTypeChange(taxType.id, token).then(onActionComplete)}
+                      onAcknowledge={() => adminAccountingApi.acknowledgeTaxTypeChange(taxType.id).then(onActionComplete)}
                     />
                   </td>
                   <td className="py-3 px-4 text-sm text-muted">{taxType.ratePercentage}%</td>
@@ -155,7 +153,7 @@ export function AccountingTaxTypesTable({
                   <td className="py-3 pl-4 pr-5">
                     <TaxTypeRowActions
                       taxType={taxType}
-                      token={token}
+                     
                       providerLabel={providerLabel}
                       onActionComplete={onActionComplete}
                     />

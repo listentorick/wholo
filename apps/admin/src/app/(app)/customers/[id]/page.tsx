@@ -64,7 +64,7 @@ function CustomerPageInner() {
   const fetchCustomer = useCallback(() => {
     if (!accessToken || !params?.id) return;
     adminCustomersApi
-      .get(accessToken, params.id)
+      .get(params.id)
       .then(setCustomer)
       .catch(() => setFetchError('Customer not found.'))
       .finally(() => setIsLoading(false));
@@ -78,7 +78,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsOrderingAs(true);
     try {
-      const { portalUrl } = await adminOrderAsApi.createSession(accessToken, customer.id);
+      const { portalUrl } = await adminOrderAsApi.createSession(customer.id);
       window.open(portalUrl, '_blank', 'noopener');
     } catch {
       // silently ignore — user sees the button un-disable
@@ -91,7 +91,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsDeleting(true);
     try {
-      await adminCustomersApi.delete(accessToken, customer.id);
+      await adminCustomersApi.delete(customer.id);
       router.push('/customers');
     } catch {
       setIsDeleting(false);
@@ -102,7 +102,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsAccepting(true);
     try {
-      await adminCustomersApi.acceptRequest(accessToken, customer.id);
+      await adminCustomersApi.acceptRequest(customer.id);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -115,7 +115,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsDeclining(true);
     try {
-      await adminCustomersApi.declineRequest(accessToken, customer.id);
+      await adminCustomersApi.declineRequest(customer.id);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -128,7 +128,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsSuspending(true);
     try {
-      await adminCustomersApi.suspend(accessToken, customer.id);
+      await adminCustomersApi.suspend(customer.id);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -141,7 +141,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsUnsuspending(true);
     try {
-      await adminCustomersApi.unsuspend(accessToken, customer.id);
+      await adminCustomersApi.unsuspend(customer.id);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -307,7 +307,7 @@ function CustomerPageInner() {
         {activeTab === 'overview' && (
           <OverviewTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             onSaved={fetchCustomer}
             onSaveStateChange={setActiveSaveState}
           />
@@ -315,7 +315,7 @@ function CustomerPageInner() {
         {activeTab === 'account' && (
           <AccountTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="tab"
             onSaved={fetchCustomer}
             onSaveStateChange={setActiveSaveState}
@@ -324,7 +324,7 @@ function CustomerPageInner() {
         {activeTab === 'delivery' && (
           <DeliveryTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="tab"
             onSaved={fetchCustomer}
             onSaveStateChange={setActiveSaveState}
@@ -333,7 +333,7 @@ function CustomerPageInner() {
         {activeTab === 'catalogue-pricing' && (
           <CataloguePricingTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="tab"
             onSaved={fetchCustomer}
             onSaveStateChange={setActiveSaveState}
@@ -342,7 +342,7 @@ function CustomerPageInner() {
         {activeTab === 'portal-access' && (
           <PortalAccessTab
             customer={customer}
-            token={accessToken ?? ''}
+           
             mode="tab"
             onSaved={fetchCustomer}
           />

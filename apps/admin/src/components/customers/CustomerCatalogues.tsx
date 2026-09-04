@@ -8,14 +8,13 @@ import { CatalogueForm } from '@/components/catalogues/CatalogueForm';
 // ─── Assign-existing picker modal ─────────────────────────────────────────────
 
 interface AssignModalProps {
-  token: string;
   customerId: string;
   assignedIds: Set<string>;
   onAssign: (catalogue: CustomerCatalogueSummary[]) => void;
   onClose: () => void;
 }
 
-function AssignModal({ token, customerId, assignedIds, onAssign, onClose }: AssignModalProps) {
+function AssignModal({ customerId, assignedIds, onAssign, onClose }: AssignModalProps) {
   const [catalogues, setCatalogues] = useState<CatalogueSummary[]>([]);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -23,10 +22,10 @@ function AssignModal({ token, customerId, assignedIds, onAssign, onClose }: Assi
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    adminCataloguesApi.list(token, { limit: 200 })
+    adminCataloguesApi.list({ limit: 200 })
       .then((r) => setCatalogues(r.data))
       .finally(() => setIsLoading(false));
-  }, [token]);
+  }, []);
 
   const available = catalogues.filter((c) => {
     if (assignedIds.has(c.id)) return false;
@@ -37,7 +36,7 @@ function AssignModal({ token, customerId, assignedIds, onAssign, onClose }: Assi
   async function handleAssign(catalogueId: string) {
     setAssigning(catalogueId);
     try {
-      const updated = await adminCataloguesApi.assignToCustomer(token, customerId, catalogueId);
+      const updated = await adminCataloguesApi.assignToCustomer(customerId, catalogueId);
       onAssign(updated);
       onClose();
     } catch {
@@ -156,13 +155,12 @@ function AssignModal({ token, customerId, assignedIds, onAssign, onClose }: Assi
 // ─── Create-new drawer (slides in from right) ─────────────────────────────────
 
 interface CreateDrawerProps {
-  token: string;
   customerId: string;
   onCreated: (catalogue: CustomerCatalogueSummary[]) => void;
   onClose: () => void;
 }
 
-function CreateDrawer({ token, customerId, onCreated, onClose }: CreateDrawerProps) {
+function CreateDrawer({ customerId, onCreated, onClose }: CreateDrawerProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -173,7 +171,7 @@ function CreateDrawer({ token, customerId, onCreated, onClose }: CreateDrawerPro
 
   async function handleSuccess(catalogue: Catalogue) {
     try {
-      const updated = await adminCataloguesApi.assignToCustomer(token, customerId, catalogue.id);
+      const updated = await adminCataloguesApi.assignToCustomer(customerId, catalogue.id);
       onCreated(updated);
     } catch {
       // Catalogue was created; assignment failed silently — user can assign manually
@@ -207,7 +205,7 @@ function CreateDrawer({ token, customerId, onCreated, onClose }: CreateDrawerPro
         <div className="flex-1 p-6">
           <CatalogueForm
             mode="create"
-            token={token}
+           
             onSuccess={handleSuccess}
             onCancel={handleClose}
           />
@@ -254,10 +252,9 @@ function CataloguePill({ catalogue, onRemove, isRemoving }: {
 
 interface CustomerCataloguesProps {
   customerId: string;
-  token: string;
 }
 
-export function CustomerCatalogues({ customerId, token }: CustomerCataloguesProps) {
+export function CustomerCatalogues({ customerId }: CustomerCataloguesProps) {
   const [assigned, setAssigned] = useState<CustomerCatalogueSummary[]>([]);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -265,17 +262,17 @@ export function CustomerCatalogues({ customerId, token }: CustomerCataloguesProp
   const [showCreateDrawer, setShowCreateDrawer] = useState(false);
 
   useEffect(() => {
-    adminCataloguesApi.getCustomerCatalogues(token, customerId)
+    adminCataloguesApi.getCustomerCatalogues(customerId)
       .then(setAssigned)
       .finally(() => setIsLoading(false));
-  }, [token, customerId]);
+  }, [customerId]);
 
   async function handleRemove(catalogueId: string) {
     setRemovingIds((prev) => new Set(prev).add(catalogueId));
     const previous = assigned;
     setAssigned((prev) => prev.filter((c) => c.id !== catalogueId));
     try {
-      await adminCataloguesApi.unassignFromCustomer(token, customerId, catalogueId);
+      await adminCataloguesApi.unassignFromCustomer(customerId, catalogueId);
     } catch {
       setAssigned(previous);
     }
@@ -342,7 +339,7 @@ export function CustomerCatalogues({ customerId, token }: CustomerCataloguesProp
 
       {showAssignModal && (
         <AssignModal
-          token={token}
+         
           customerId={customerId}
           assignedIds={assignedIds}
           onAssign={(updated) => setAssigned(updated)}
@@ -352,7 +349,7 @@ export function CustomerCatalogues({ customerId, token }: CustomerCataloguesProp
 
       {showCreateDrawer && (
         <CreateDrawer
-          token={token}
+         
           customerId={customerId}
           onCreated={(updated) => setAssigned(updated)}
           onClose={() => setShowCreateDrawer(false)}

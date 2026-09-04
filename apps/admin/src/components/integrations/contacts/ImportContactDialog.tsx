@@ -7,12 +7,11 @@ import type { AccountingContactSummary } from '@wholo/types';
 
 interface Props {
   contact: AccountingContactSummary;
-  token: string;
   onClose: () => void;
   onImported: () => void;
 }
 
-export function ImportContactDialog({ contact, token, onClose, onImported }: Props) {
+export function ImportContactDialog({ contact, onClose, onImported }: Props) {
   const [name, setName] = useState(contact.displayName);
   const [accountNumber, setAccountNumber] = useState(contact.externalContactCode ?? contact.externalAccountNumber ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +26,6 @@ export function ImportContactDialog({ contact, token, onClose, onImported }: Pro
       await adminAccountingApi.importContact(
         contact.id,
         { name: name.trim() || undefined, accountNumber: accountNumber.trim() || undefined },
-        token,
       );
       onImported();
     } catch (err) {

@@ -18,7 +18,7 @@ export default function EditCataloguePage() {
   useEffect(() => {
     if (!accessToken || !params?.id) return;
     adminCataloguesApi
-      .get(accessToken, params.id)
+      .get(params.id)
       .then(setCatalogue)
       .catch(() => setError('Catalogue not found.'))
       .finally(() => setIsLoading(false));
@@ -47,7 +47,6 @@ export default function EditCataloguePage() {
       <CatalogueForm
         mode="edit"
         catalogue={catalogue}
-        token={accessToken ?? ''}
       />
     </>
   );

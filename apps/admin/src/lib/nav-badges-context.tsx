@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminAccountingApi, adminOrdersApi } from '@wholo/admin-api-client';
 import { useAuth } from './auth-context';
 
@@ -22,33 +22,30 @@ interface NavBadgesContextValue {
 const NavBadgesContext = createContext<NavBadgesContextValue | null>(null);
 
 export function NavBadgesProvider({ children }: { children: React.ReactNode }) {
-  const { accessToken } = useAuth();
+  // `user` is the "authenticated and cleared for the admin app" signal — the
+  // bearer for each poll comes from the centralised token provider in the
+  // api-client, which refreshes it (and so recovers a suspended tab).
+  const { user } = useAuth();
   const [counts, setCounts] = useState<Record<string, number>>({});
-  // Ref'd so the poll interval (set up once per accessToken change) always
-  // calls with the latest token without needing to be its own effect dep.
-  const tokenRef = useRef(accessToken);
-  tokenRef.current = accessToken;
 
   const refresh = useCallback(async () => {
-    const token = tokenRef.current;
-    if (!token) return;
     // Best-effort — a failed call just leaves the badge at its last value.
     adminOrdersApi
-      .countOrdersNeedingAttention(token)
+      .countOrdersNeedingAttention()
       .then((res) => setCounts((c) => ({ ...c, '/orders': res.count })))
       .catch(() => {});
     adminAccountingApi
-      .countContactsNeedingAttention(token)
+      .countContactsNeedingAttention()
       .then((res) => setCounts((c) => ({ ...c, '/integrations': res.count })))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!user) return;
     refresh();
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [accessToken, refresh]);
+  }, [user, refresh]);
 
   return <NavBadgesContext.Provider value={{ counts }}>{children}</NavBadgesContext.Provider>;
 }

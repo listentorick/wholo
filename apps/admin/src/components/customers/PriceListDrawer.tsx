@@ -20,14 +20,14 @@ export function PriceListDrawer({ priceListId, onClose }: PriceListDrawerProps) 
 
   useEffect(() => {
     if (!accessToken) return;
-    adminPriceListsApi.get(accessToken, priceListId)
+    adminPriceListsApi.get(priceListId)
       .then(setPriceList)
       .catch(() => setError('Failed to load price list.'))
       .finally(() => setLoading(false));
   }, [accessToken, priceListId]);
 
   async function handleSubmit(data: CreatePriceListRequest): Promise<PriceList> {
-    const updated = await adminPriceListsApi.update(accessToken!, priceListId, data);
+    const updated = await adminPriceListsApi.update(priceListId, data);
     setPriceList(updated);
     return updated;
   }

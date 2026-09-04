@@ -242,9 +242,9 @@ export default function CustomersPage() {
   useEffect(() => {
     if (!accessToken) return;
     Promise.all([
-      adminPriceListsApi.list(accessToken, { limit: 100 }),
-      adminDeliveryProfilesApi.list(accessToken, { limit: 100 }),
-      adminCataloguesApi.list(accessToken, { limit: 100 }),
+      adminPriceListsApi.list({ limit: 100 }),
+      adminDeliveryProfilesApi.list({ limit: 100 }),
+      adminCataloguesApi.list({ limit: 100 }),
     ])
       .then(([pl, dp, cat]) => {
         setPriceLists(pl.data.filter((p) => p.active));
@@ -305,7 +305,7 @@ export default function CustomersPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminCustomersApi.list,
     buildParams,
     errorMessage: 'Failed to load customers. Please refresh.',

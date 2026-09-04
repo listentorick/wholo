@@ -35,7 +35,7 @@ function BulkImportReportInner() {
   useEffect(() => {
     if (!accessToken) return;
     const fetchJob = recordType === 'contacts' ? adminAccountingApi.getContactBulkImportJob : adminAccountingApi.getProductBulkImportJob;
-    fetchJob(jobId, accessToken)
+    fetchJob(jobId)
       .then(setJob)
       .catch(() => {
         setError('Failed to load the import report. Please refresh.');

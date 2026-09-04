@@ -9,7 +9,9 @@ vi.mock('@wholo/admin-api-client', () => ({
   adminAccountingApi: { countContactsNeedingAttention: (...a: unknown[]) => countContacts(...a) },
 }));
 
-const authState: { accessToken: string | null } = { accessToken: 'tok-1' };
+// The poll is gated on `user` — an authenticated, admin-cleared session. The
+// bearer for each call comes from the centralised token provider, not context.
+const authState: { user: { id: string } | null } = { user: { id: 'u1' } };
 vi.mock('./auth-context', () => ({ useAuth: () => authState }));
 
 function Probe() {
@@ -22,7 +24,7 @@ const flush = () => act(async () => { await Promise.resolve(); await Promise.res
 
 beforeEach(() => {
   vi.clearAllMocks();
-  authState.accessToken = 'tok-1';
+  authState.user = { id: 'u1' };
   countOrders.mockResolvedValue({ count: 3 });
   countContacts.mockResolvedValue({ count: 1 });
 });
@@ -36,15 +38,15 @@ describe('NavBadgesProvider', () => {
     render(<NavBadgesProvider><Probe /></NavBadgesProvider>);
     await flush();
 
-    expect(countOrders).toHaveBeenCalledWith('tok-1');
-    expect(countContacts).toHaveBeenCalledWith('tok-1');
+    expect(countOrders).toHaveBeenCalledWith();
+    expect(countContacts).toHaveBeenCalledWith();
     expect(screen.getByTestId('counts').textContent).toBe(
       JSON.stringify({ '/orders': 3, '/integrations': 1 }),
     );
   });
 
-  it('makes no request when there is no access token', async () => {
-    authState.accessToken = null;
+  it('makes no request when there is no authenticated user', async () => {
+    authState.user = null;
     render(<NavBadgesProvider><Probe /></NavBadgesProvider>);
     await flush();
 

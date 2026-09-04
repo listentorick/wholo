@@ -32,8 +32,8 @@ beforeEach(() => {
 
 describe('BrandingLogoUploader', () => {
   it('renders placeholder circle when no logo exists', async () => {
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledWith(TOKEN, 'distributor-logo', DISTRIBUTOR_ID));
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledWith('distributor-logo', DISTRIBUTOR_ID));
     expect(screen.getByText('No logo set')).toBeInTheDocument();
   });
 
@@ -43,27 +43,27 @@ describe('BrandingLogoUploader', () => {
       variants: { full: 'https://cdn/logo/full.webp', thumb: 'https://cdn/logo/thumb.webp' },
       dominantColor: null,
     }]);
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(screen.getByAltText('Logo')).toBeInTheDocument());
     expect(screen.getByText('Logo uploaded')).toBeInTheDocument();
   });
 
   it('shows error when list fails', async () => {
     mockList.mockRejectedValue(new Error('Network error'));
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(screen.getByText('Failed to load logo.')).toBeInTheDocument());
   });
 
   it('uploads new logo when file is selected', async () => {
     const user = userEvent.setup();
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(mockList).toHaveBeenCalled());
 
     const file = new File(['content'], 'logo.png', { type: 'image/png' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, file);
 
-    await waitFor(() => expect(mockUpload).toHaveBeenCalledWith(TOKEN, 'distributor-logo', DISTRIBUTOR_ID, file));
+    await waitFor(() => expect(mockUpload).toHaveBeenCalledWith('distributor-logo', DISTRIBUTOR_ID, file));
   });
 
   it('deletes existing image before uploading replacement', async () => {
@@ -71,19 +71,19 @@ describe('BrandingLogoUploader', () => {
     mockList.mockResolvedValue([existingImage]);
 
     const user = userEvent.setup();
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => screen.getByAltText('Logo'));
 
     const file = new File(['content'], 'new-logo.png', { type: 'image/png' });
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, file);
 
-    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith(TOKEN, 'img-existing'));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('img-existing'));
     expect(mockUpload).toHaveBeenCalled();
   });
 
   it('rejects unsupported file types', async () => {
-    render(<BrandingLogoUploader token={TOKEN} distributorId={DISTRIBUTOR_ID} />);
+    render(<BrandingLogoUploader distributorId={DISTRIBUTOR_ID} />);
     await waitFor(() => expect(mockList).toHaveBeenCalled());
 
     const file = new File(['content'], 'logo.gif', { type: 'image/gif' });

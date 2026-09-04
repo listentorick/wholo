@@ -49,7 +49,7 @@ beforeEach(() => {
 
 describe('DeliveryRouteForm', () => {
   it('renders initial values in edit mode', () => {
-    render(<DeliveryRouteForm route={makeRoute()} token="token-1" />);
+    render(<DeliveryRouteForm route={makeRoute()} />);
 
     expect(screen.getByDisplayValue('Yorkshire')).toBeInTheDocument();
     expect(screen.getByDisplayValue('YKS')).toBeInTheDocument();
@@ -57,24 +57,24 @@ describe('DeliveryRouteForm', () => {
   });
 
   it('does not show the customer assignment panel for a new route', () => {
-    render(<DeliveryRouteForm token="token-1" />);
+    render(<DeliveryRouteForm />);
     expect(screen.queryByText('Customer assignment')).not.toBeInTheDocument();
   });
 
   it('shows the customer assignment panel once a route exists', () => {
-    render(<DeliveryRouteForm route={makeRoute()} token="token-1" />);
+    render(<DeliveryRouteForm route={makeRoute()} />);
     expect(screen.getByText('Customer assignment')).toBeInTheDocument();
   });
 
   it('creates a route and navigates to its edit page', async () => {
     create.mockResolvedValue(makeRoute({ id: 'route-new' }));
-    render(<DeliveryRouteForm token="token-1" />);
+    render(<DeliveryRouteForm />);
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'North Leeds' } });
     fireEvent.click(screen.getByRole('button', { name: /create route/i }));
 
     await waitFor(() => {
-      expect(create).toHaveBeenCalledWith('token-1', expect.objectContaining({ name: 'North Leeds' }));
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'North Leeds' }));
     });
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith('/delivery-routes/route-new/edit');
@@ -82,15 +82,13 @@ describe('DeliveryRouteForm', () => {
   });
 
   it('updates an existing route and shows a Saved confirmation', async () => {
-    render(<DeliveryRouteForm route={makeRoute()} token="token-1" />);
+    render(<DeliveryRouteForm route={makeRoute()} />);
 
     fireEvent.change(screen.getByDisplayValue('Yorkshire'), { target: { value: 'Yorkshire (renamed)' } });
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
     await waitFor(() => {
-      expect(update).toHaveBeenCalledWith(
-        'token-1',
-        'route-1',
+      expect(update).toHaveBeenCalledWith('route-1',
         expect.objectContaining({ name: 'Yorkshire (renamed)' }),
       );
     });
@@ -101,7 +99,7 @@ describe('DeliveryRouteForm', () => {
 
   it('shows an error banner when saving fails', async () => {
     update.mockRejectedValue(new Error('network error'));
-    render(<DeliveryRouteForm route={makeRoute()} token="token-1" />);
+    render(<DeliveryRouteForm route={makeRoute()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -111,7 +109,7 @@ describe('DeliveryRouteForm', () => {
   });
 
   it('disables the primary action when the name is blank', () => {
-    render(<DeliveryRouteForm route={makeRoute({ name: '' })} token="token-1" />);
+    render(<DeliveryRouteForm route={makeRoute({ name: '' })} />);
     expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
   });
 });

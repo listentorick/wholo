@@ -20,7 +20,9 @@ interface UseDeliveryDayResult {
 // navigation needs a request-id guard so a slow response for an earlier
 // date can never clobber a later one that resolved first
 // (today → next → next painting stale).
-export function useDeliveryDay(token: string | null | undefined, date: string): UseDeliveryDayResult {
+// `enabled` holds the load until auth is ready; the bearer itself comes from
+// the centralised token provider in the api-client, never threaded here.
+export function useDeliveryDay(enabled: boolean, date: string): UseDeliveryDayResult {
   const [board, setBoard] = useState<DeliveryDayBoard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -31,7 +33,7 @@ export function useDeliveryDay(token: string | null | undefined, date: string): 
   const hasLoadedOnceRef = useRef(false);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!enabled) return;
     const myId = ++requestIdRef.current;
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -41,7 +43,7 @@ export function useDeliveryDay(token: string | null | undefined, date: string): 
     else setIsLoading(true);
 
     try {
-      const result = await adminDeliveryRunsApi.getDay(token, date, controller.signal);
+      const result = await adminDeliveryRunsApi.getDay(date, controller.signal);
       if (requestIdRef.current !== myId) return; // stale-response guard
       setBoard(result);
       setError(null);
@@ -56,7 +58,7 @@ export function useDeliveryDay(token: string | null | undefined, date: string): 
         setIsRefreshing(false);
       }
     }
-  }, [token, date]);
+  }, [enabled, date]);
 
   useEffect(() => {
     load();

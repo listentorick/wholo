@@ -1,10 +1,11 @@
 import type { AssetImage, ReorderAssetImagesRequest } from '@wholo/types';
-import { apiFetch, ApiError } from './base';
+import { apiFetch, ApiError, getRequestToken } from './base';
 
-async function apiFetchMultipart<T>(path: string, formData: FormData, token: string): Promise<T> {
+async function apiFetchMultipart<T>(path: string, formData: FormData): Promise<T> {
+  const token = await getRequestToken();
   const res = await fetch(path, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   });
   if (!res.ok) {
@@ -16,28 +17,27 @@ async function apiFetchMultipart<T>(path: string, formData: FormData, token: str
 }
 
 export const adminAssetImagesApi = {
-  upload(token: string, assetType: string, entityId: string, file: File): Promise<AssetImage> {
+  upload(assetType: string, entityId: string, file: File): Promise<AssetImage> {
     const form = new FormData();
     form.append('file', file);
     form.append('assetType', assetType);
     form.append('entityId', entityId);
-    return apiFetchMultipart<AssetImage>('/api/v1/asset-images', form, token);
+    return apiFetchMultipart<AssetImage>('/api/v1/asset-images', form);
   },
 
-  list(token: string, assetType: string, entityId: string): Promise<AssetImage[]> {
+  list(assetType: string, entityId: string): Promise<AssetImage[]> {
     const qs = new URLSearchParams({ assetType, entityId }).toString();
-    return apiFetch<AssetImage[]>(`/api/v1/asset-images?${qs}`, { token });
+    return apiFetch<AssetImage[]>(`/api/v1/asset-images?${qs}`);
   },
 
-  delete(token: string, imageId: string): Promise<void> {
-    return apiFetch<void>(`/api/v1/asset-images/${imageId}`, { method: 'DELETE', token });
+  delete(imageId: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/asset-images/${imageId}`, { method: 'DELETE' });
   },
 
-  reorder(token: string, req: ReorderAssetImagesRequest): Promise<AssetImage[]> {
+  reorder(req: ReorderAssetImagesRequest): Promise<AssetImage[]> {
     return apiFetch<AssetImage[]>('/api/v1/asset-images/reorder', {
       method: 'PUT',
       body: JSON.stringify(req),
-      token,
     });
   },
 };

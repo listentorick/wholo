@@ -39,7 +39,7 @@ describe('DriverManifestButton', () => {
     render(<DriverManifestButton runId="run-1" locked={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Driver manifest' }));
 
-    await waitFor(() => expect(downloadManifest).toHaveBeenCalledWith('token-1', 'run-1'));
+    await waitFor(() => expect(downloadManifest).toHaveBeenCalledWith('run-1'));
     expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });

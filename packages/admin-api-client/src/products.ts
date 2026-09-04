@@ -8,7 +8,7 @@ import type {
 import { apiFetch } from './base';
 
 export const adminProductsApi = {
-  list(token: string, params?: ProductListParams): Promise<PaginatedResponse<Product>> {
+  list(params?: ProductListParams): Promise<PaginatedResponse<Product>> {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', params.cursor);
@@ -16,30 +16,28 @@ export const adminProductsApi = {
     if (params?.productTypeId?.length) query.set('productTypeId', params.productTypeId.join(','));
     if (params?.supplierId?.length) query.set('supplierId', params.supplierId.join(','));
     const qs = query.toString();
-    return apiFetch<PaginatedResponse<Product>>(`/api/v1/products${qs ? `?${qs}` : ''}`, { token });
+    return apiFetch<PaginatedResponse<Product>>(`/api/v1/products${qs ? `?${qs}` : ''}`);
   },
 
-  get(token: string, id: string): Promise<Product> {
-    return apiFetch<Product>(`/api/v1/products/${id}`, { token });
+  get(id: string): Promise<Product> {
+    return apiFetch<Product>(`/api/v1/products/${id}`);
   },
 
-  create(token: string, req: CreateProductRequest): Promise<Product> {
+  create(req: CreateProductRequest): Promise<Product> {
     return apiFetch<Product>('/api/v1/products', {
       method: 'POST',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  update(token: string, id: string, req: UpdateProductRequest): Promise<Product> {
+  update(id: string, req: UpdateProductRequest): Promise<Product> {
     return apiFetch<Product>(`/api/v1/products/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  delete(token: string, id: string): Promise<void> {
-    return apiFetch<void>(`/api/v1/products/${id}`, { method: 'DELETE', token });
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/products/${id}`, { method: 'DELETE' });
   },
 };

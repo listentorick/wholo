@@ -106,7 +106,7 @@ export default function PriceListsPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminPriceListsApi.list,
     buildParams,
     errorMessage: 'Failed to load price lists. Please refresh.',

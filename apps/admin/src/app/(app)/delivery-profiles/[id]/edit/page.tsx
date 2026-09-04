@@ -18,7 +18,7 @@ export default function EditDeliveryProfilePage() {
   useEffect(() => {
     if (!accessToken || !params.id) return;
     adminDeliveryProfilesApi
-      .get(accessToken, params.id)
+      .get(params.id)
       .then(setProfile)
       .catch(() => setError('Failed to load delivery profile.'))
       .finally(() => setIsLoading(false));
@@ -44,7 +44,7 @@ export default function EditDeliveryProfilePage() {
 
   return (
     <>
-      <DeliveryProfileForm profile={profile} token={accessToken} />
+      <DeliveryProfileForm profile={profile} />
     </>
   );
 }

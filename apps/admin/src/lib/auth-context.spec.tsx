@@ -1,5 +1,6 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import type { ReactNode } from 'react';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@wholo/admin-api-client', () => ({
   adminAuthApi: { session: vi.fn() },
   adminAssetImagesApi: { list: vi.fn().mockResolvedValue([]) },
+  setTokenProvider: vi.fn(),
   ApiError: class ApiError extends Error {
     problem: { type: string; title: string; status: number; detail?: string };
     status: number;
@@ -25,8 +27,11 @@ vi.mock('@wholo/admin-api-client', () => ({
 vi.mock('keycloak-js', () => ({
   default: vi.fn().mockImplementation(() => {
     const kc: any = {
+      authenticated: true,
       token: 'test-token',
+      updateToken: vi.fn().mockResolvedValue(true),
       login: vi.fn(),
+      register: vi.fn(),
       logout: vi.fn(),
     };
     // onTokenExpired must be assigned by the caller before init() is invoked —
@@ -34,19 +39,69 @@ vi.mock('keycloak-js', () => ({
     // if the handler is already present when init() installs the initial token.
     kc.init = vi.fn().mockImplementation(() => {
       expect(kc.onTokenExpired).toBeInstanceOf(Function);
+      (window as any).__kc = kc;
       return Promise.resolve(true);
     });
     return kc;
   }),
 }));
 
-import { adminAuthApi } from '@wholo/admin-api-client';
+import { adminAuthApi, setTokenProvider } from '@wholo/admin-api-client';
+
+type AuthContextModule = typeof import('./auth-context');
+
+async function loadContext(): Promise<AuthContextModule> {
+  vi.resetModules();
+  return import('./auth-context');
+}
+
+function renderWithProbe(
+  mod: AuthContextModule,
+  extra?: (ctx: ReturnType<AuthContextModule['useAuth']>) => ReactNode,
+) {
+  const { AuthProvider, useAuth } = mod;
+  function Probe() {
+    const ctx = useAuth();
+    const status = ctx.isLoading
+      ? 'loading'
+      : ctx.accessDenied
+        ? `denied:${ctx.identity?.email}:${ctx.user ? 'has-user' : 'no-user'}`
+        : ctx.onboardingRequired
+          ? 'onboarding'
+          : ctx.user
+            ? 'has-user'
+            : 'no-user';
+    return (
+      <div>
+        <div data-testid="status">{status}</div>
+        {extra?.(ctx)}
+      </div>
+    );
+  }
+  return render(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  );
+}
 
 describe('AuthProvider', () => {
   beforeEach(() => {
-    vi.resetModules();
     vi.clearAllMocks();
     delete (window as any).__kc;
+  });
+
+  it('registers the centralised token provider with the api-client on mount', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+    const mod = await loadContext();
+    const { getAuthToken } = await import('./auth-token');
+
+    renderWithProbe(mod);
+
+    await waitFor(() => expect(setTokenProvider).toHaveBeenCalledWith(getAuthToken));
   });
 
   it('sets user when the session check resolves ACTIVE', async () => {
@@ -55,22 +110,9 @@ describe('AuthProvider', () => {
       user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
     });
 
-    const { AuthProvider, useAuth } = await import('./auth-context');
+    renderWithProbe(await loadContext());
 
-    function StatusProbe() {
-      const { user, isLoading } = useAuth();
-      return <div data-testid="status">{isLoading ? 'loading' : user ? 'has-user' : 'no-user'}</div>;
-    }
-
-    render(
-      <AuthProvider>
-        <StatusProbe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('has-user');
-    });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
   });
 
   it('flags onboarding when the session check resolves ONBOARDING_REQUIRED', async () => {
@@ -79,26 +121,9 @@ describe('AuthProvider', () => {
       identity: { email: 'a@b.com' },
     });
 
-    const { AuthProvider, useAuth } = await import('./auth-context');
+    renderWithProbe(await loadContext());
 
-    function StatusProbe() {
-      const { user, onboardingRequired, isLoading } = useAuth();
-      return (
-        <div data-testid="status">
-          {isLoading ? 'loading' : onboardingRequired ? 'onboarding' : user ? 'has-user' : 'no-user'}
-        </div>
-      );
-    }
-
-    render(
-      <AuthProvider>
-        <StatusProbe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('onboarding');
-    });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('onboarding'));
   });
 
   it('flags access-denied without setting user when the session check resolves ACCESS_DENIED', async () => {
@@ -114,26 +139,11 @@ describe('AuthProvider', () => {
       },
     });
 
-    const { AuthProvider, useAuth } = await import('./auth-context');
+    renderWithProbe(await loadContext());
 
-    function StatusProbe() {
-      const { user, accessDenied, identity, isLoading } = useAuth();
-      return (
-        <div data-testid="status">
-          {isLoading ? 'loading' : accessDenied ? `denied:${identity?.email}:${user ? 'has-user' : 'no-user'}` : 'other'}
-        </div>
-      );
-    }
-
-    render(
-      <AuthProvider>
-        <StatusProbe />
-      </AuthProvider>,
+    await waitFor(() =>
+      expect(screen.getByTestId('status').textContent).toBe('denied:buyer@b.com:no-user'),
     );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('denied:buyer@b.com:no-user');
-    });
   });
 
   it('logout drives kc.logout() and does not clear auth state first', async () => {
@@ -146,33 +156,59 @@ describe('AuthProvider', () => {
       user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
     });
 
-    const { AuthProvider, useAuth } = await import('./auth-context');
+    renderWithProbe(await loadContext(), (ctx) => <button onClick={ctx.logout}>logout</button>);
 
-    function Probe() {
-      const { user, isLoading, logout } = useAuth();
-      return (
-        <>
-          <div data-testid="status">{isLoading ? 'loading' : user ? 'has-user' : 'no-user'}</div>
-          <button onClick={logout}>logout</button>
-        </>
-      );
-    }
-
-    render(
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByTestId('status').textContent).toBe('has-user');
-    });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
 
     fireEvent.click(screen.getByText('logout'));
 
     const kc = (window as any).__kc;
     expect(kc.logout).toHaveBeenCalledWith({ redirectUri: `${window.location.origin}/login` });
-    // State untouched — the full-page navigation to Keycloak is what tears it down.
     expect(screen.getByTestId('status').textContent).toBe('has-user');
+  });
+
+  it('shows the blocking session-expired panel and a working "Sign in again" button when a refresh fails', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+
+    renderWithProbe(await loadContext());
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
+
+    // Simulate the keycloak-js refresh timer firing after the refresh token is dead.
+    const kc = (window as any).__kc;
+    kc.updateToken = vi.fn().mockRejectedValue(new Error('refresh failed'));
+    await act(async () => {
+      kc.onTokenExpired();
+      await Promise.resolve();
+    });
+
+    const panel = await screen.findByRole('alertdialog');
+    expect(panel.textContent).toContain('Your session has expired. Sign in again to continue.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in again' }));
+    await waitFor(() => expect(kc.login).toHaveBeenCalled());
+  });
+
+  it('a 403 from an API call does not flip the session-expired latch or trigger a refresh', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+
+    renderWithProbe(await loadContext());
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
+
+    const kc = (window as any).__kc;
+    const updateCallsBefore = kc.updateToken.mock.calls.length;
+
+    // Nothing in the auth layer reacts to a 403 — no handler is invoked.
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(kc.updateToken.mock.calls.length).toBe(updateCallsBefore);
   });
 });

@@ -8,7 +8,6 @@ import { TextInput } from '@/components/form/TextInput';
 import { formatShortDate, unallocatedReasonCopy } from './attention';
 
 interface Props {
-  token: string | null | undefined;
   orderId: string;
   orderNumber: string;
   customerName: string;
@@ -32,21 +31,20 @@ function resolutionCopy(resolution: ReschedulePreviewResponse['resolution']): st
 // (context → drift note → resolution preview → nearby-address panel) so the
 // common case (no drift, no address collision) stays as light as
 // MarkReadyDialog/ReopenConfirm; the heavier cases only appear when relevant.
-export function ChangeDeliveryDateDialog({
-  token, orderId, orderNumber, customerName, currentScheduledDeliveryDate, requestedDeliveryDate,
+export function ChangeDeliveryDateDialog({ orderId, orderNumber, customerName, currentScheduledDeliveryDate, requestedDeliveryDate,
   submitting, onCancel, onConfirm,
 }: Props) {
   const [date, setDate] = useState(currentScheduledDeliveryDate ?? '');
   const [preview, setPreview] = useState<ReschedulePreviewResponse | null>(null);
 
   useEffect(() => {
-    if (!token || !date) {
+    if (!date) {
       setPreview(null);
       return undefined;
     }
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      adminDeliveryRunsApi.getReschedulePreview(token, orderId, date, controller.signal)
+      adminDeliveryRunsApi.getReschedulePreview(orderId, date, controller.signal)
         .then(setPreview)
         .catch(() => setPreview(null)); // informational only — a failed preview never blocks Save
     }, PREVIEW_DEBOUNCE_MS);
@@ -54,7 +52,7 @@ export function ChangeDeliveryDateDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [token, orderId, date]);
+  }, [orderId, date]);
 
   const unchanged = date === (currentScheduledDeliveryDate ?? '');
   const isDrift = !unchanged && requestedDeliveryDate != null && date !== requestedDeliveryDate;

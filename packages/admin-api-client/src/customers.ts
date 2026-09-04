@@ -10,12 +10,12 @@ import type {
 import { apiFetch } from './base';
 
 export const adminCustomersApi = {
-  searchOrganisations(token: string, q: string, limit = 10): Promise<OrganisationSearchResult[]> {
+  searchOrganisations(q: string, limit = 10): Promise<OrganisationSearchResult[]> {
     const params = new URLSearchParams({ q, limit: String(limit) });
-    return apiFetch<OrganisationSearchResult[]>(`/api/v1/customers/organisations/search?${params.toString()}`, { token });
+    return apiFetch<OrganisationSearchResult[]>(`/api/v1/customers/organisations/search?${params.toString()}`);
   },
 
-  list(token: string, params?: CustomerListParams): Promise<PaginatedResponse<Customer>> {
+  list(params?: CustomerListParams): Promise<PaginatedResponse<Customer>> {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', params.cursor);
@@ -24,58 +24,55 @@ export const adminCustomersApi = {
     if (params?.deliveryProfileId?.length) query.set('deliveryProfileId', params.deliveryProfileId.join(','));
     if (params?.catalogueId?.length) query.set('catalogueId', params.catalogueId.join(','));
     const qs = query.toString();
-    return apiFetch<PaginatedResponse<Customer>>(`/api/v1/customers${qs ? `?${qs}` : ''}`, { token });
+    return apiFetch<PaginatedResponse<Customer>>(`/api/v1/customers${qs ? `?${qs}` : ''}`);
   },
 
-  get(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}`, { token });
+  get(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}`);
   },
 
-  create(token: string, req: CreateCustomerRequest): Promise<Customer> {
+  create(req: CreateCustomerRequest): Promise<Customer> {
     return apiFetch<Customer>('/api/v1/customers', {
       method: 'POST',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  update(token: string, id: string, req: UpdateCustomerRequest): Promise<Customer> {
+  update(id: string, req: UpdateCustomerRequest): Promise<Customer> {
     return apiFetch<Customer>(`/api/v1/customers/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  delete(token: string, id: string): Promise<void> {
-    return apiFetch<void>(`/api/v1/customers/${id}`, { method: 'DELETE', token });
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/customers/${id}`, { method: 'DELETE' });
   },
 
-  invite(token: string, id: string, email?: string): Promise<InviteResponse> {
+  invite(id: string, email?: string): Promise<InviteResponse> {
     return apiFetch<InviteResponse>(`/api/v1/customers/${id}/invite`, {
       method: 'POST',
       body: JSON.stringify({ email }),
-      token,
     });
   },
 
-  acceptRequest(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}/accept-request`, { method: 'POST', token });
+  acceptRequest(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/accept-request`, { method: 'POST' });
   },
 
-  declineRequest(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}/decline-request`, { method: 'POST', token });
+  declineRequest(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/decline-request`, { method: 'POST' });
   },
 
-  suspend(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}/suspend`, { method: 'POST', token });
+  suspend(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/suspend`, { method: 'POST' });
   },
 
-  unsuspend(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}/unsuspend`, { method: 'POST', token });
+  unsuspend(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/unsuspend`, { method: 'POST' });
   },
 
-  activate(token: string, id: string): Promise<Customer> {
-    return apiFetch<Customer>(`/api/v1/customers/${id}/activate`, { method: 'POST', token });
+  activate(id: string): Promise<Customer> {
+    return apiFetch<Customer>(`/api/v1/customers/${id}/activate`, { method: 'POST' });
   },
 };

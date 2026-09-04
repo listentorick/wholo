@@ -7,7 +7,6 @@ import { formatMoney } from '@wholo/types';
 import { useAuth } from '@/lib/auth-context';
 
 interface ProductTransferPanelProps {
-  token: string;
   currentProductIds: string[];
   onProductIdsChange: (ids: string[]) => void;
   disabled?: boolean;
@@ -29,7 +28,7 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-export function ProductTransferPanel({ token, currentProductIds, onProductIdsChange, disabled }: ProductTransferPanelProps) {
+export function ProductTransferPanel({ currentProductIds, onProductIdsChange, disabled }: ProductTransferPanelProps) {
   const { user } = useAuth();
   const currencyCode = user?.organisationCurrencyCode ?? 'GBP';
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -39,10 +38,10 @@ export function ProductTransferPanel({ token, currentProductIds, onProductIdsCha
   const [selectedLeft, setSelectedLeft] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    adminProductsApi.list(token, { limit: 500 })
+    adminProductsApi.list({ limit: 500 })
       .then((r) => setAllProducts(r.data))
       .finally(() => setIsLoading(false));
-  }, [token]);
+  }, []);
 
   const inSet = new Set(currentProductIds);
 

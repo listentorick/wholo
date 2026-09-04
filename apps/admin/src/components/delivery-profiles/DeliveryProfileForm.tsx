@@ -41,13 +41,11 @@ function isoDate(s: string) {
 function CutoffRuleRow({
   profileId,
   rule,
-  token,
   onDeleted,
   onUpdated,
 }: {
   profileId: string;
   rule: DeliveryProfileCutoffRule;
-  token: string;
   onDeleted: (id: string) => void;
   onUpdated: (r: DeliveryProfileCutoffRule) => void;
 }) {
@@ -59,7 +57,7 @@ function CutoffRuleRow({
   async function save() {
     setSaving(true);
     try {
-      const updated = await adminDeliveryProfilesApi.updateCutoffRule(token, profileId, rule.id, {
+      const updated = await adminDeliveryProfilesApi.updateCutoffRule(profileId, rule.id, {
         cutoffTime,
         processingDaysBeforeDelivery: Number(processingDays),
       });
@@ -71,7 +69,7 @@ function CutoffRuleRow({
   }
 
   async function remove() {
-    await adminDeliveryProfilesApi.deleteCutoffRule(token, profileId, rule.id);
+    await adminDeliveryProfilesApi.deleteCutoffRule(profileId, rule.id);
     onDeleted(rule.id);
   }
 
@@ -120,13 +118,11 @@ function CutoffRuleRow({
 
 function AddCutoffRuleForm({
   profileId,
-  token,
   existingWeekdays,
   onAdded,
   onCancel,
 }: {
   profileId: string;
-  token: string;
   existingWeekdays: number[];
   onAdded: (r: DeliveryProfileCutoffRule) => void;
   onCancel: () => void;
@@ -141,7 +137,7 @@ function AddCutoffRuleForm({
     e.preventDefault();
     setSaving(true);
     try {
-      const rule = await adminDeliveryProfilesApi.createCutoffRule(token, profileId, {
+      const rule = await adminDeliveryProfilesApi.createCutoffRule(profileId, {
         weekday: Number(weekday),
         cutoffTime,
         processingDaysBeforeDelivery: Number(processingDays),
@@ -435,10 +431,9 @@ function DateExceptionsPicker({
 
 interface Props {
   profile?: DeliveryProfile;
-  token: string;
 }
 
-export function DeliveryProfileForm({ profile, token }: Props) {
+export function DeliveryProfileForm({ profile }: Props) {
   const router = useRouter();
   const isNew = !profile;
 
@@ -482,10 +477,10 @@ export function DeliveryProfileForm({ profile, token }: Props) {
 
     try {
       if (isNew) {
-        const created = await adminDeliveryProfilesApi.create(token, payload);
+        const created = await adminDeliveryProfilesApi.create(payload);
         router.push(`/delivery-profiles/${created.id}/edit`);
       } else {
-        await adminDeliveryProfilesApi.update(token, profile.id, payload);
+        await adminDeliveryProfilesApi.update(profile.id, payload);
         setSuccess(true);
       }
     } catch {
@@ -499,7 +494,7 @@ export function DeliveryProfileForm({ profile, token }: Props) {
     if (!profile) return;
     setIsDeleting(true);
     try {
-      await adminDeliveryProfilesApi.delete(token, profile.id);
+      await adminDeliveryProfilesApi.delete(profile.id);
       router.push('/delivery-profiles');
     } finally {
       setIsDeleting(false);
@@ -680,7 +675,7 @@ export function DeliveryProfileForm({ profile, token }: Props) {
                         key={rule.id}
                         profileId={profile!.id}
                         rule={rule}
-                        token={token}
+                       
                         onDeleted={handleRuleDeleted}
                         onUpdated={handleRuleUpdated}
                       />
@@ -688,7 +683,7 @@ export function DeliveryProfileForm({ profile, token }: Props) {
                     {showAddRule ? (
                       <AddCutoffRuleForm
                         profileId={profile!.id}
-                        token={token}
+                       
                         existingWeekdays={cutoffRules.map((r) => r.weekday)}
                         onAdded={handleRuleAdded}
                         onCancel={() => setShowAddRule(false)}

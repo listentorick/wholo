@@ -17,10 +17,9 @@ import { RouteCustomerAssignmentPanel } from './RouteCustomerAssignmentPanel';
 
 interface Props {
   route?: DeliveryRoute;
-  token: string;
 }
 
-export function DeliveryRouteForm({ route, token }: Props) {
+export function DeliveryRouteForm({ route }: Props) {
   const router = useRouter();
   const isNew = !route;
 
@@ -51,10 +50,10 @@ export function DeliveryRouteForm({ route, token }: Props) {
 
     try {
       if (isNew) {
-        const created = await adminDeliveryRoutesApi.create(token, payload);
+        const created = await adminDeliveryRoutesApi.create(payload);
         router.push(`/delivery-routes/${created.id}/edit`);
       } else {
-        await adminDeliveryRoutesApi.update(token, route.id, payload);
+        await adminDeliveryRoutesApi.update(route.id, payload);
         setSuccess(true);
       }
     } catch {
@@ -68,7 +67,7 @@ export function DeliveryRouteForm({ route, token }: Props) {
     if (!route) return;
     setIsDeleting(true);
     try {
-      await adminDeliveryRoutesApi.delete(token, route.id);
+      await adminDeliveryRoutesApi.delete(route.id);
       router.push('/delivery-routes');
     } finally {
       setIsDeleting(false);
@@ -178,7 +177,7 @@ export function DeliveryRouteForm({ route, token }: Props) {
           <FormCard title="Customer assignment">
             <RouteCustomerAssignmentPanel
               routeId={route!.id}
-              token={token}
+             
               customers={customers}
               onCustomersChange={setCustomers}
             />

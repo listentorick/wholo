@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 
 interface Props {
-  token: string;
   onQueued?: () => void;
 }
 
-export function SyncNowButton({ token, onQueued }: Props) {
+export function SyncNowButton({ onQueued }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [queued, setQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +22,7 @@ export function SyncNowButton({ token, onQueued }: Props) {
     setSyncing(true);
     setError(null);
     try {
-      await adminAccountingApi.syncContacts(token);
+      await adminAccountingApi.syncContacts();
       setQueued(true);
       onQueued?.();
     } catch {

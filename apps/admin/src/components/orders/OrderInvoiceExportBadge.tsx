@@ -6,7 +6,6 @@ import type { OrderInvoiceExportSummary } from '@wholo/types';
 
 interface OrderInvoiceExportBadgeProps {
   invoiceExport: OrderInvoiceExportSummary;
-  token: string;
 }
 
 // A live, actionable retry affordance for a currently-FAILED invoice export.
@@ -15,7 +14,7 @@ interface OrderInvoiceExportBadgeProps {
 // component's only job is the action, not the display. Renders nothing for
 // any other status. Retry only queues the export again — the worker picks it
 // up asynchronously, so the UI reports "requested", not a result.
-export function OrderInvoiceExportBadge({ invoiceExport, token }: OrderInvoiceExportBadgeProps) {
+export function OrderInvoiceExportBadge({ invoiceExport }: OrderInvoiceExportBadgeProps) {
   const [retryRequested, setRetryRequested] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
@@ -26,7 +25,7 @@ export function OrderInvoiceExportBadge({ invoiceExport, token }: OrderInvoiceEx
     setRetrying(true);
     setRetryError(null);
     try {
-      await adminAccountingApi.retryInvoiceExport(invoiceExport.id, token);
+      await adminAccountingApi.retryInvoiceExport(invoiceExport.id);
       setRetryRequested(true);
     } catch (err) {
       setRetryError(err instanceof Error ? err.message : 'Failed to request a retry');

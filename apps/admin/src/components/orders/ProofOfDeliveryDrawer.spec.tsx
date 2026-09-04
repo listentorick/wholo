@@ -76,7 +76,7 @@ describe('ProofOfDeliveryDrawer', () => {
     expect(screen.getByText(/Via QR link/)).toBeInTheDocument();
     expect(screen.getByTestId('signature')).toHaveTextContent('has-signature');
     expect(screen.getByTestId('map')).toHaveTextContent('51.51,-0.12');
-    expect(mockGetDeliveryOutcome).toHaveBeenCalledWith('order-1', 'test-token');
+    expect(mockGetDeliveryOutcome).toHaveBeenCalledWith('order-1');
   });
 
   it('renders an unable-to-deliver outcome with its reason and no map when location is unavailable', async () => {

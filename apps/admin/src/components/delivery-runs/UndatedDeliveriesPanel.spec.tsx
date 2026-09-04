@@ -55,7 +55,7 @@ describe('UndatedDeliveriesPanel', () => {
   it('queries ACCEPTED + undated orders', async () => {
     mockListOrders.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
 
     await waitFor(() => expect(mockListOrders).toHaveBeenCalled());
     const [params] = mockListOrders.mock.calls[0];
@@ -65,7 +65,7 @@ describe('UndatedDeliveriesPanel', () => {
   it('renders nothing when there are no undated deliveries', async () => {
     mockListOrders.mockResolvedValue({ data: [], pagination: { nextCursor: null, hasMore: false, total: 0 } });
 
-    const { container } = render(<UndatedDeliveriesPanel token="token-1" />);
+    const { container } = render(<UndatedDeliveriesPanel />);
 
     await waitFor(() => expect(mockListOrders).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
@@ -77,7 +77,7 @@ describe('UndatedDeliveriesPanel', () => {
       pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
 
     expect(await screen.findByText('1 accepted delivery has no delivery date')).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'ORD-1001' });
@@ -91,7 +91,7 @@ describe('UndatedDeliveriesPanel', () => {
       pagination: { nextCursor: 'cursor-1', hasMore: true, total: 25 },
     });
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
 
     expect(await screen.findByText('25 accepted deliveries have no delivery date (showing 1)')).toBeInTheDocument();
   });
@@ -99,7 +99,7 @@ describe('UndatedDeliveriesPanel', () => {
   it('shows an inline error message instead of throwing when listOrders rejects', async () => {
     mockListOrders.mockRejectedValue(new Error('boom'));
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
 
     await waitFor(() => expect(screen.getByText('Could not check for undated deliveries.')).toBeInTheDocument());
   });
@@ -110,7 +110,7 @@ describe('UndatedDeliveriesPanel', () => {
       pagination: { nextCursor: null, hasMore: false, total: 1 },
     });
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
     await userEvent.click(await screen.findByText('Set delivery date'));
 
     expect(screen.getByText('Change delivery date')).toBeInTheDocument();
@@ -124,7 +124,7 @@ describe('UndatedDeliveriesPanel', () => {
     });
     mockChangeScheduledDeliveryDate.mockResolvedValue({});
 
-    render(<UndatedDeliveriesPanel token="token-1" />);
+    render(<UndatedDeliveriesPanel />);
     await userEvent.click(await screen.findByText('Set delivery date'));
 
     const input = screen.getByLabelText('New delivery date');
@@ -132,8 +132,7 @@ describe('UndatedDeliveriesPanel', () => {
     await waitFor(() => expect(screen.getByText('Save date')).not.toBeDisabled());
     await userEvent.click(screen.getByText('Save date'));
 
-    await waitFor(() => expect(mockChangeScheduledDeliveryDate).toHaveBeenCalledWith(
-      'token-1', 'order-1', { scheduledDeliveryDate: '2026-08-25', expectedScheduledDeliveryDate: null },
+    await waitFor(() => expect(mockChangeScheduledDeliveryDate).toHaveBeenCalledWith('order-1', { scheduledDeliveryDate: '2026-08-25', expectedScheduledDeliveryDate: null },
     ));
     expect(mockListOrders).toHaveBeenCalledTimes(2); // initial load + reload after confirm
   });

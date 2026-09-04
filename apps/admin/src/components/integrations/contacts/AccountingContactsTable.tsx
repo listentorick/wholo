@@ -18,7 +18,6 @@ interface Props {
   contacts: AccountingContactSummary[];
   loading: boolean;
   hasFilter: boolean;
-  token: string;
   providerLabel: string;
   hasMore: boolean;
   isLoadingMore: boolean;
@@ -53,7 +52,6 @@ export function AccountingContactsTable({
   contacts,
   loading,
   hasFilter,
-  token,
   providerLabel,
   hasMore,
   isLoadingMore,
@@ -108,7 +106,7 @@ export function AccountingContactsTable({
           <ChangedIndicator
             changeDetectedAt={contact.changeDetectedAt}
             changeAcknowledgedAt={contact.changeAcknowledgedAt}
-            onAcknowledge={() => adminAccountingApi.acknowledgeContactChange(contact.id, token).then(onActionComplete)}
+            onAcknowledge={() => adminAccountingApi.acknowledgeContactChange(contact.id).then(onActionComplete)}
           />
         )}
         renderExpanded={(contact) => (
@@ -129,7 +127,7 @@ export function AccountingContactsTable({
             />
             <ContactRowActions
               contact={contact}
-              token={token}
+             
               providerLabel={providerLabel}
               onActionComplete={onActionComplete}
             />
@@ -191,7 +189,7 @@ export function AccountingContactsTable({
                     <ChangedIndicator
                       changeDetectedAt={contact.changeDetectedAt}
                       changeAcknowledgedAt={contact.changeAcknowledgedAt}
-                      onAcknowledge={() => adminAccountingApi.acknowledgeContactChange(contact.id, token).then(onActionComplete)}
+                      onAcknowledge={() => adminAccountingApi.acknowledgeContactChange(contact.id).then(onActionComplete)}
                     />
                   </td>
                   <td className="py-3 px-4 text-sm text-muted">{contact.email ?? '—'}</td>
@@ -210,7 +208,7 @@ export function AccountingContactsTable({
                   <td className="py-3 pl-4 pr-5">
                     <ContactRowActions
                       contact={contact}
-                      token={token}
+                     
                       providerLabel={providerLabel}
                       onActionComplete={onActionComplete}
                     />

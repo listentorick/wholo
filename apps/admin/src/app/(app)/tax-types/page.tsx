@@ -96,7 +96,7 @@ export default function TaxTypesPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminTaxTypesApi.list,
     buildParams,
     errorMessage: 'Failed to load tax types. Please refresh.',

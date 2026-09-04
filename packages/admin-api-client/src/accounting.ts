@@ -51,150 +51,132 @@ function buildTaxTypeListQuery(params: AccountingTaxTypeListParams): string {
 }
 
 export const adminAccountingApi = {
-  getConnection(token: string): Promise<AccountingConnectionStatusResponse | undefined> {
-    return apiFetch<AccountingConnectionStatusResponse | undefined>('/api/v1/accounting/connection', { token });
+  getConnection(): Promise<AccountingConnectionStatusResponse | undefined> {
+    return apiFetch<AccountingConnectionStatusResponse | undefined>('/api/v1/accounting/connection');
   },
 
-  createXeroAuthorizationUrl(token: string): Promise<AccountingAuthorizationUrlResponse> {
+  createXeroAuthorizationUrl(): Promise<AccountingAuthorizationUrlResponse> {
     return apiFetch<AccountingAuthorizationUrlResponse>('/api/v1/accounting/connections/xero/authorization-url', {
       method: 'POST',
-      token,
     });
   },
 
   updateConnectionSettings(
     body: UpdateAccountingConnectionSettingsRequest,
-    token: string,
   ): Promise<AccountingConnectionStatusResponse> {
     return apiFetch<AccountingConnectionStatusResponse>('/api/v1/accounting/connection', {
       method: 'PATCH',
       body: JSON.stringify(body),
-      token,
     });
   },
 
-  disconnect(token: string): Promise<void> {
-    return apiFetch<void>('/api/v1/accounting/connection', { method: 'DELETE', token });
+  disconnect(): Promise<void> {
+    return apiFetch<void>('/api/v1/accounting/connection', { method: 'DELETE' });
   },
 
-  retryInvoiceExport(exportId: string, token: string): Promise<{ status: 'requested' }> {
+  retryInvoiceExport(exportId: string): Promise<{ status: 'requested' }> {
     return apiFetch<{ status: 'requested' }>(`/api/v1/accounting/invoice-exports/${exportId}/retry`, {
       method: 'POST',
-      token,
     });
   },
 
-  listContacts(params: AccountingContactListParams, token: string): Promise<AccountingContactListResponse> {
-    return apiFetch<AccountingContactListResponse>(`/api/v1/accounting/contacts${buildListQuery(params)}`, { token });
+  listContacts(params: AccountingContactListParams): Promise<AccountingContactListResponse> {
+    return apiFetch<AccountingContactListResponse>(`/api/v1/accounting/contacts${buildListQuery(params)}`);
   },
 
-  countContactsNeedingAttention(token: string): Promise<AccountingContactNeedsAttentionCountResponse> {
-    return apiFetch<AccountingContactNeedsAttentionCountResponse>('/api/v1/accounting/contacts/needs-attention-count', {
-      token,
-    });
+  countContactsNeedingAttention(): Promise<AccountingContactNeedsAttentionCountResponse> {
+    return apiFetch<AccountingContactNeedsAttentionCountResponse>(
+      '/api/v1/accounting/contacts/needs-attention-count',
+    );
   },
 
-  syncContacts(token: string): Promise<AccountingContactSyncRequestedResponse> {
+  syncContacts(): Promise<AccountingContactSyncRequestedResponse> {
     return apiFetch<AccountingContactSyncRequestedResponse>('/api/v1/accounting/contacts/sync', {
       method: 'POST',
-      token,
     });
   },
 
   importContact(
     externalContactId: string,
     dto: ImportAccountingContactRequest,
-    token: string,
   ): Promise<Customer> {
     return apiFetch<Customer>(`/api/v1/accounting/contacts/${externalContactId}/import`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  confirmSuggestion(suggestionId: string, token: string): Promise<void> {
+  confirmSuggestion(suggestionId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/suggestions/${suggestionId}/confirm`, {
       method: 'POST',
-      token,
     });
   },
 
   matchContact(
     externalContactId: string,
     dto: MatchAccountingContactRequest,
-    token: string,
   ): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/${externalContactId}/match`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  ignoreContact(externalContactId: string, token: string): Promise<void> {
+  ignoreContact(externalContactId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/${externalContactId}/ignore`, {
       method: 'POST',
-      token,
     });
   },
 
-  unlinkMapping(mappingId: string, token: string): Promise<void> {
+  unlinkMapping(mappingId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/mappings/${mappingId}/unlink`, {
       method: 'POST',
-      token,
     });
   },
 
-  bulkImportContacts(dto: BulkImportContactSelectionRequest, token: string): Promise<BulkImportJobResponse> {
+  bulkImportContacts(dto: BulkImportContactSelectionRequest): Promise<BulkImportJobResponse> {
     return apiFetch<BulkImportJobResponse>('/api/v1/accounting/contacts/bulk-import', {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  getContactBulkImportJob(jobId: string, token: string): Promise<AccountingBulkImportJob> {
-    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/contacts/bulk-import-jobs/${jobId}`, { token });
+  getContactBulkImportJob(jobId: string): Promise<AccountingBulkImportJob> {
+    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/contacts/bulk-import-jobs/${jobId}`);
   },
 
-  listProducts(params: AccountingProductListParams, token: string): Promise<AccountingProductListResponse> {
-    return apiFetch<AccountingProductListResponse>(`/api/v1/accounting/products${buildListQuery(params)}`, { token });
+  listProducts(params: AccountingProductListParams): Promise<AccountingProductListResponse> {
+    return apiFetch<AccountingProductListResponse>(`/api/v1/accounting/products${buildListQuery(params)}`);
   },
 
-  countProductsNeedingAttention(token: string): Promise<AccountingProductNeedsAttentionCountResponse> {
-    return apiFetch<AccountingProductNeedsAttentionCountResponse>('/api/v1/accounting/products/needs-attention-count', {
-      token,
-    });
+  countProductsNeedingAttention(): Promise<AccountingProductNeedsAttentionCountResponse> {
+    return apiFetch<AccountingProductNeedsAttentionCountResponse>(
+      '/api/v1/accounting/products/needs-attention-count',
+    );
   },
 
-  syncProducts(token: string): Promise<AccountingProductSyncRequestedResponse> {
+  syncProducts(): Promise<AccountingProductSyncRequestedResponse> {
     return apiFetch<AccountingProductSyncRequestedResponse>('/api/v1/accounting/products/sync', {
       method: 'POST',
-      token,
     });
   },
 
   importProduct(
     externalProductId: string,
     dto: ImportAccountingProductRequest,
-    token: string,
   ): Promise<Product> {
     return apiFetch<Product>(`/api/v1/accounting/products/${externalProductId}/import`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
   confirmProductSuggestion(
     suggestionId: string,
-    token: string,
     dto?: ConfirmAccountingProductSuggestionRequest,
   ): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/suggestions/${suggestionId}/confirm`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto ?? {}),
     });
   },
@@ -202,123 +184,107 @@ export const adminAccountingApi = {
   matchProduct(
     externalProductId: string,
     dto: MatchAccountingProductRequest,
-    token: string,
   ): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/match`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  ignoreProduct(externalProductId: string, token: string): Promise<void> {
+  ignoreProduct(externalProductId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/ignore`, {
       method: 'POST',
-      token,
     });
   },
 
-  unlinkProductMapping(mappingId: string, token: string): Promise<void> {
+  unlinkProductMapping(mappingId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/mappings/${mappingId}/unlink`, {
       method: 'POST',
-      token,
     });
   },
 
-  bulkImportProducts(dto: BulkImportProductSelectionRequest, token: string): Promise<BulkImportJobResponse> {
+  bulkImportProducts(dto: BulkImportProductSelectionRequest): Promise<BulkImportJobResponse> {
     return apiFetch<BulkImportJobResponse>('/api/v1/accounting/products/bulk-import', {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  getProductBulkImportJob(jobId: string, token: string): Promise<AccountingBulkImportJob> {
-    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/products/bulk-import-jobs/${jobId}`, { token });
+  getProductBulkImportJob(jobId: string): Promise<AccountingBulkImportJob> {
+    return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/products/bulk-import-jobs/${jobId}`);
   },
 
-  acknowledgeProductChange(externalProductId: string, token: string): Promise<void> {
+  acknowledgeProductChange(externalProductId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/products/${externalProductId}/acknowledge-change`, {
       method: 'POST',
-      token,
     });
   },
 
-  acknowledgeContactChange(externalContactId: string, token: string): Promise<void> {
+  acknowledgeContactChange(externalContactId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/contacts/${externalContactId}/acknowledge-change`, {
       method: 'POST',
-      token,
     });
   },
 
-  listTaxTypes(params: AccountingTaxTypeListParams, token: string): Promise<AccountingTaxTypeListResponse> {
-    return apiFetch<AccountingTaxTypeListResponse>(`/api/v1/accounting/tax-types${buildTaxTypeListQuery(params)}`, {
-      token,
-    });
+  listTaxTypes(params: AccountingTaxTypeListParams): Promise<AccountingTaxTypeListResponse> {
+    return apiFetch<AccountingTaxTypeListResponse>(
+      `/api/v1/accounting/tax-types${buildTaxTypeListQuery(params)}`,
+    );
   },
 
-  countTaxTypesNeedingAttention(token: string): Promise<AccountingTaxTypeNeedsAttentionCountResponse> {
-    return apiFetch<AccountingTaxTypeNeedsAttentionCountResponse>('/api/v1/accounting/tax-types/needs-attention-count', {
-      token,
-    });
+  countTaxTypesNeedingAttention(): Promise<AccountingTaxTypeNeedsAttentionCountResponse> {
+    return apiFetch<AccountingTaxTypeNeedsAttentionCountResponse>(
+      '/api/v1/accounting/tax-types/needs-attention-count',
+    );
   },
 
-  syncTaxTypes(token: string): Promise<AccountingTaxTypeSyncRequestedResponse> {
+  syncTaxTypes(): Promise<AccountingTaxTypeSyncRequestedResponse> {
     return apiFetch<AccountingTaxTypeSyncRequestedResponse>('/api/v1/accounting/tax-types/sync', {
       method: 'POST',
-      token,
     });
   },
 
   importTaxType(
     externalTaxTypeId: string,
     dto: ImportAccountingTaxTypeRequest,
-    token: string,
   ): Promise<AccountingTaxTypeSummary> {
     return apiFetch<AccountingTaxTypeSummary>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/import`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  confirmTaxTypeSuggestion(suggestionId: string, token: string): Promise<void> {
+  confirmTaxTypeSuggestion(suggestionId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/tax-types/suggestions/${suggestionId}/confirm`, {
       method: 'POST',
-      token,
     });
   },
 
   matchTaxType(
     externalTaxTypeId: string,
     dto: MatchAccountingTaxTypeRequest,
-    token: string,
   ): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/match`, {
       method: 'POST',
-      token,
       body: JSON.stringify(dto),
     });
   },
 
-  ignoreTaxType(externalTaxTypeId: string, token: string): Promise<void> {
+  ignoreTaxType(externalTaxTypeId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/ignore`, {
       method: 'POST',
-      token,
     });
   },
 
-  unlinkTaxTypeMapping(mappingId: string, token: string): Promise<void> {
+  unlinkTaxTypeMapping(mappingId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/tax-types/mappings/${mappingId}/unlink`, {
       method: 'POST',
-      token,
     });
   },
 
-  acknowledgeTaxTypeChange(externalTaxTypeId: string, token: string): Promise<void> {
+  acknowledgeTaxTypeChange(externalTaxTypeId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/accounting/tax-types/${externalTaxTypeId}/acknowledge-change`, {
       method: 'POST',
-      token,
     });
   },
 };

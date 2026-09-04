@@ -7,7 +7,6 @@ import type { AccountingProductSummary } from '@wholo/types';
 
 interface Props {
   product: AccountingProductSummary;
-  token: string;
   onClose: () => void;
   onImported: () => void;
 }
@@ -20,7 +19,7 @@ function toTwoDpPrice(value: string | null): string {
   return Number.isFinite(parsed) ? parsed.toFixed(2) : '';
 }
 
-export function ImportProductDialog({ product, token, onClose, onImported }: Props) {
+export function ImportProductDialog({ product, onClose, onImported }: Props) {
   const [name, setName] = useState(product.displayName);
   const [sku, setSku] = useState(product.externalProductCode ?? '');
   const [price, setPrice] = useState(toTwoDpPrice(product.salesUnitPrice));
@@ -40,7 +39,6 @@ export function ImportProductDialog({ product, token, onClose, onImported }: Pro
           sku: sku.trim() || undefined,
           price: price.trim() || undefined,
         },
-        token,
       );
       onImported();
     } catch (err) {

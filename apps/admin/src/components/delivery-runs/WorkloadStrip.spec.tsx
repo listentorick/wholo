@@ -32,7 +32,6 @@ describe('WorkloadStrip', () => {
 
     render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -41,7 +40,7 @@ describe('WorkloadStrip', () => {
     );
 
     await waitFor(() => expect(mockListDays).toHaveBeenCalled());
-    const [, params] = mockListDays.mock.calls[0];
+    const [params] = mockListDays.mock.calls[0];
     expect(params).toEqual({ from: '2026-08-17', to: '2026-08-23' });
 
     await waitFor(() => expect(screen.getAllByText(/^[0-6]$/).length).toBeGreaterThan(0));
@@ -53,7 +52,6 @@ describe('WorkloadStrip', () => {
 
     render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={onSelectDate}
         weekStart={WEEK_START}
@@ -74,7 +72,6 @@ describe('WorkloadStrip', () => {
 
     render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -95,7 +92,6 @@ describe('WorkloadStrip', () => {
 
     render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -115,7 +111,6 @@ describe('WorkloadStrip', () => {
 
     const { rerender } = render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -126,7 +121,6 @@ describe('WorkloadStrip', () => {
 
     rerender(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={new Date(2026, 7, 24)}
@@ -135,7 +129,7 @@ describe('WorkloadStrip', () => {
     );
 
     await waitFor(() => expect(mockListDays).toHaveBeenCalledTimes(2));
-    const [, params] = mockListDays.mock.calls[1];
+    const [params] = mockListDays.mock.calls[1];
     expect(params).toEqual({ from: '2026-08-24', to: '2026-08-30' });
   });
 
@@ -144,7 +138,6 @@ describe('WorkloadStrip', () => {
 
     render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -160,7 +153,6 @@ describe('WorkloadStrip', () => {
 
     const { rerender } = render(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -172,7 +164,6 @@ describe('WorkloadStrip', () => {
 
     rerender(
       <WorkloadStrip
-        token="token-1"
         selectedDate="2026-08-19"
         onSelectDate={vi.fn()}
         weekStart={WEEK_START}
@@ -182,7 +173,7 @@ describe('WorkloadStrip', () => {
     );
 
     await waitFor(() => expect(mockListDays).toHaveBeenCalledTimes(2));
-    const [, params] = mockListDays.mock.calls[1];
+    const [params] = mockListDays.mock.calls[1];
     expect(params).toEqual({ from: '2026-08-17', to: '2026-08-23' });
   });
 });

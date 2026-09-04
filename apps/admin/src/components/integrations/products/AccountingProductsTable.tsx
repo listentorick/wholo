@@ -18,7 +18,6 @@ interface Props {
   products: AccountingProductSummary[];
   loading: boolean;
   hasFilter: boolean;
-  token: string;
   providerLabel: string;
   hasMore: boolean;
   isLoadingMore: boolean;
@@ -53,7 +52,6 @@ export function AccountingProductsTable({
   products,
   loading,
   hasFilter,
-  token,
   providerLabel,
   hasMore,
   isLoadingMore,
@@ -108,7 +106,7 @@ export function AccountingProductsTable({
           <ChangedIndicator
             changeDetectedAt={product.changeDetectedAt}
             changeAcknowledgedAt={product.changeAcknowledgedAt}
-            onAcknowledge={() => adminAccountingApi.acknowledgeProductChange(product.id, token).then(onActionComplete)}
+            onAcknowledge={() => adminAccountingApi.acknowledgeProductChange(product.id).then(onActionComplete)}
           />
         )}
         renderExpanded={(product) => (
@@ -121,7 +119,7 @@ export function AccountingProductsTable({
             />
             <ProductRowActions
               product={product}
-              token={token}
+             
               providerLabel={providerLabel}
               onActionComplete={onActionComplete}
             />
@@ -184,7 +182,7 @@ export function AccountingProductsTable({
                     <ChangedIndicator
                       changeDetectedAt={product.changeDetectedAt}
                       changeAcknowledgedAt={product.changeAcknowledgedAt}
-                      onAcknowledge={() => adminAccountingApi.acknowledgeProductChange(product.id, token).then(onActionComplete)}
+                      onAcknowledge={() => adminAccountingApi.acknowledgeProductChange(product.id).then(onActionComplete)}
                     />
                   </td>
                   <td className="py-3 px-4 text-sm text-muted">{product.salesUnitPrice ?? '—'}</td>
@@ -200,7 +198,7 @@ export function AccountingProductsTable({
                   <td className="py-3 pl-4 pr-5">
                     <ProductRowActions
                       product={product}
-                      token={token}
+                     
                       providerLabel={providerLabel}
                       onActionComplete={onActionComplete}
                     />

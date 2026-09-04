@@ -57,7 +57,7 @@ export function ProofOfDeliveryDrawer({ orderId, orderNumber, onClose }: ProofOf
     setError(null);
     setNotRecorded(false);
     adminOrdersApi
-      .getDeliveryOutcome(orderId, accessToken)
+      .getDeliveryOutcome(orderId)
       .then((res) => {
         if (!cancelled) setData(res);
       })

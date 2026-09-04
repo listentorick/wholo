@@ -19,7 +19,7 @@ export default function EditPriceListPage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    adminPriceListsApi.get(accessToken, id)
+    adminPriceListsApi.get(id)
       .then(setPriceList)
       .catch(() => setError('Price list not found.'))
       .finally(() => setIsLoading(false));
@@ -44,18 +44,18 @@ export default function EditPriceListPage() {
   }
 
   async function handleSubmit(data: CreatePriceListRequest) {
-    const updated = await adminPriceListsApi.update(accessToken!, id, data);
+    const updated = await adminPriceListsApi.update(id, data);
     setPriceList(updated);
     return updated;
   }
 
   async function handleDelete() {
-    await adminPriceListsApi.delete(accessToken!, id);
+    await adminPriceListsApi.delete(id);
     router.push('/pricelists');
   }
 
   async function handleSetDefault() {
-    const updated = await adminPriceListsApi.setDefault(accessToken!, id);
+    const updated = await adminPriceListsApi.setDefault(id);
     setPriceList(updated);
   }
 

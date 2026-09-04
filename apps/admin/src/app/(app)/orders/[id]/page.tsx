@@ -221,15 +221,15 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     if (!accessToken) return;
-    adminOrdersApi.getOrder(orderId, accessToken)
+    adminOrdersApi.getOrder(orderId)
       .then(setOrder)
       .catch(() => setError('Order not found or could not be loaded'))
       .finally(() => setLoading(false));
   }, [accessToken, orderId]);
 
   const auditLog = useCursorList<AuditLogEntry, AuditLogQueryParams>({
-    token: accessToken,
-    fetchPage: (token, params) => adminOrdersApi.getOrderAuditLog(orderId, params, token),
+    enabled: !!accessToken,
+    fetchPage: (params) => adminOrdersApi.getOrderAuditLog(orderId, params),
     buildParams: (cursor) => ({ limit: 30, cursor }),
     errorMessage: 'Could not load activity',
     deps: [auditRefreshKey],
@@ -239,7 +239,7 @@ export default function OrderDetailPage() {
     if (!accessToken || accepting) return;
     setAccepting(true);
     try {
-      const updated = await adminOrdersApi.acceptOrder(orderId, accessToken, { confirmUnmappedTaxTypes });
+      const updated = await adminOrdersApi.acceptOrder(orderId, { confirmUnmappedTaxTypes });
       setOrder(updated);
       setAuditRefreshKey((k) => k + 1);
       setShowAcceptModal(false);
@@ -257,7 +257,7 @@ export default function OrderDetailPage() {
 
   const handleReject = async (reason: string) => {
     if (!accessToken) return;
-    const updated = await adminOrdersApi.rejectOrder(orderId, { reason }, accessToken);
+    const updated = await adminOrdersApi.rejectOrder(orderId, { reason });
     setOrder(updated);
     setAuditRefreshKey((k) => k + 1);
     setShowRejectModal(false);
@@ -265,7 +265,7 @@ export default function OrderDetailPage() {
 
   const handleCancel = async (reason: string) => {
     if (!accessToken) return;
-    const updated = await adminOrdersApi.cancelOrder(orderId, { reason }, accessToken);
+    const updated = await adminOrdersApi.cancelOrder(orderId, { reason });
     setOrder(updated);
     setAuditRefreshKey((k) => k + 1);
     setShowCancelModal(false);
@@ -496,7 +496,7 @@ export default function OrderDetailPage() {
 
           {/* Accounting invoice export state */}
           {order.invoiceExport && accessToken && (
-            <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} token={accessToken} />
+            <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} />
           )}
 
           {/* Order lines */}

@@ -5,7 +5,6 @@ import type { OrganisationSearchResult } from '@wholo/types';
 import { adminCustomersApi } from '@wholo/admin-api-client';
 
 interface Props {
-  token: string;
   selectedOrg: OrganisationSearchResult | null;
   onSelectOrg: (org: OrganisationSearchResult | null) => void;
   onCantFind: () => void;
@@ -24,7 +23,7 @@ function formatAddress(org: OrganisationSearchResult): string {
   return [org.addressLine1, org.addressCity, org.addressState].filter(Boolean).join(', ');
 }
 
-export function CustomerSearchStep({ token, selectedOrg, onSelectOrg, onCantFind }: Props) {
+export function CustomerSearchStep({ selectedOrg, onSelectOrg, onCantFind }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<OrganisationSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -40,7 +39,7 @@ export function CustomerSearchStep({ token, selectedOrg, onSelectOrg, onCantFind
     }
     let cancelled = false;
     setIsSearching(true);
-    adminCustomersApi.searchOrganisations(token, debouncedQuery).then((res) => {
+    adminCustomersApi.searchOrganisations(debouncedQuery).then((res) => {
       if (!cancelled) {
         setResults(res);
         setOpen(true);
@@ -50,7 +49,7 @@ export function CustomerSearchStep({ token, selectedOrg, onSelectOrg, onCantFind
       if (!cancelled) setIsSearching(false);
     });
     return () => { cancelled = true; };
-  }, [debouncedQuery, token]);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

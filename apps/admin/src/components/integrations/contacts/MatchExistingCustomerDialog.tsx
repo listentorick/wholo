@@ -7,7 +7,6 @@ import type { AccountingContactSummary, Customer } from '@wholo/types';
 
 interface Props {
   contact: AccountingContactSummary;
-  token: string;
   onClose: () => void;
   onMatched: () => void;
 }
@@ -19,7 +18,7 @@ interface Props {
 // list directly and filters client-side, matching this app's other
 // modest-volume list-filtering conventions rather than adding a new search
 // endpoint for this first release.
-export function MatchExistingCustomerDialog({ contact, token, onClose, onMatched }: Props) {
+export function MatchExistingCustomerDialog({ contact, onClose, onMatched }: Props) {
   const [customers, setCustomers] = useState<Customer[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -29,10 +28,10 @@ export function MatchExistingCustomerDialog({ contact, token, onClose, onMatched
 
   useEffect(() => {
     adminCustomersApi
-      .list(token, { limit: 100 })
+      .list({ limit: 100 })
       .then((res) => setCustomers(res.data))
       .catch(() => setLoadError('Failed to load customers.'));
-  }, [token]);
+  }, []);
 
   const filtered = (customers ?? []).filter((c) =>
     c.organisation.name.toLowerCase().includes(query.toLowerCase()),
@@ -43,7 +42,7 @@ export function MatchExistingCustomerDialog({ contact, token, onClose, onMatched
     setSubmitting(true);
     setActionError(null);
     try {
-      await adminAccountingApi.matchContact(contact.id, { tradeRelationshipId: selected.id }, token);
+      await adminAccountingApi.matchContact(contact.id, { tradeRelationshipId: selected.id });
       onMatched();
     } catch {
       setActionError('Failed to link this contact. The customer may already be linked to a different contact.');

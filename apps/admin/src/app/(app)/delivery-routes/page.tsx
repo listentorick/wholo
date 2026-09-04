@@ -90,7 +90,7 @@ export default function DeliveryRoutesPage() {
     error,
     loadMore,
   } = useCursorList({
-    token: accessToken,
+        enabled: !!accessToken,
     fetchPage: adminDeliveryRoutesApi.list,
     buildParams,
     errorMessage: 'Failed to load delivery routes. Please refresh.',

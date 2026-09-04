@@ -45,7 +45,7 @@ describe('RouteCustomerAssignmentPanel', () => {
       makeCustomer({ id: 'rc-2', customerId: 'cust-2', customerName: 'The Old Mill Cafe', defaultDropPosition: 2 }),
     ];
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={customers} onCustomersChange={vi.fn()} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={customers} onCustomersChange={vi.fn()} />,
     );
 
     expect(screen.getByText('Blackbird Kitchen')).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe('RouteCustomerAssignmentPanel', () => {
 
   it('shows an empty state when no customers are assigned', () => {
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={[]} onCustomersChange={vi.fn()} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={[]} onCustomersChange={vi.fn()} />,
     );
     expect(screen.getByText('No customers assigned yet.')).toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe('RouteCustomerAssignmentPanel', () => {
       makeCustomer({ id: 'rc-2', customerId: 'cust-2', customerName: 'Second', defaultDropPosition: 2 }),
     ];
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={customers} onCustomersChange={vi.fn()} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={customers} onCustomersChange={vi.fn()} />,
     );
 
     const moveUpButtons = screen.getAllByRole('button', { name: 'Move up' });
@@ -88,14 +88,14 @@ describe('RouteCustomerAssignmentPanel', () => {
     ]);
 
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={customers} onCustomersChange={onCustomersChange} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={customers} onCustomersChange={onCustomersChange} />,
     );
 
     const moveUpButtons = screen.getAllByRole('button', { name: 'Move up' });
     fireEvent.click(moveUpButtons[1]);
 
     await waitFor(() => {
-      expect(reorderCustomers).toHaveBeenCalledWith('token-1', 'route-1', {
+      expect(reorderCustomers).toHaveBeenCalledWith('route-1', {
         orderedCustomerIds: ['cust-2', 'cust-1'],
       });
     });
@@ -115,7 +115,7 @@ describe('RouteCustomerAssignmentPanel', () => {
     reorderCustomers.mockRejectedValue(new Error('network error'));
 
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={customers} onCustomersChange={onCustomersChange} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={customers} onCustomersChange={onCustomersChange} />,
     );
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Move up' })[1]);
@@ -131,20 +131,20 @@ describe('RouteCustomerAssignmentPanel', () => {
     const onCustomersChange = vi.fn();
 
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={customers} onCustomersChange={onCustomersChange} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={customers} onCustomersChange={onCustomersChange} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => {
-      expect(removeCustomer).toHaveBeenCalledWith('token-1', 'route-1', 'cust-1');
+      expect(removeCustomer).toHaveBeenCalledWith('route-1', 'cust-1');
     });
     expect(onCustomersChange).toHaveBeenCalledWith([]);
   });
 
   it('opens the add-customer drawer', async () => {
     render(
-      <RouteCustomerAssignmentPanel routeId="route-1" token="token-1" customers={[]} onCustomersChange={vi.fn()} />,
+      <RouteCustomerAssignmentPanel routeId="route-1" customers={[]} onCustomersChange={vi.fn()} />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /add customers/i }));

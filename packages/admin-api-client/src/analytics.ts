@@ -19,23 +19,23 @@ function periodQueryString(params: AnalyticsPeriodQuery): string {
 }
 
 export const adminAnalyticsApi = {
-  orderSummary(params: AnalyticsPeriodQuery, token: string): Promise<OrderSummaryResponse> {
-    return apiFetch<OrderSummaryResponse>(`/api/v1/analytics/order-summary${periodQueryString(params)}`, { token });
+  orderSummary(params: AnalyticsPeriodQuery): Promise<OrderSummaryResponse> {
+    return apiFetch<OrderSummaryResponse>(`/api/v1/analytics/order-summary${periodQueryString(params)}`);
   },
 
-  orderTrend(params: AnalyticsPeriodQuery, token: string): Promise<OrderTrendResponse> {
-    return apiFetch<OrderTrendResponse>(`/api/v1/analytics/order-trend${periodQueryString(params)}`, { token });
+  orderTrend(params: AnalyticsPeriodQuery): Promise<OrderTrendResponse> {
+    return apiFetch<OrderTrendResponse>(`/api/v1/analytics/order-trend${periodQueryString(params)}`);
   },
 
-  customerRankings(params: AnalyticsPeriodQuery, token: string): Promise<CustomerRankingsResponse> {
-    return apiFetch<CustomerRankingsResponse>(`/api/v1/analytics/customer-rankings${periodQueryString(params)}`, { token });
+  customerRankings(params: AnalyticsPeriodQuery): Promise<CustomerRankingsResponse> {
+    return apiFetch<CustomerRankingsResponse>(`/api/v1/analytics/customer-rankings${periodQueryString(params)}`);
   },
 
-  productRankings(params: AnalyticsPeriodQuery, token: string): Promise<ProductRankingsResponse> {
-    return apiFetch<ProductRankingsResponse>(`/api/v1/analytics/product-rankings${periodQueryString(params)}`, { token });
+  productRankings(params: AnalyticsPeriodQuery): Promise<ProductRankingsResponse> {
+    return apiFetch<ProductRankingsResponse>(`/api/v1/analytics/product-rankings${periodQueryString(params)}`);
   },
 
-  actionItems(token: string): Promise<ActionItemsResponse> {
-    return apiFetch<ActionItemsResponse>('/api/v1/analytics/action-items', { token });
+  actionItems(): Promise<ActionItemsResponse> {
+    return apiFetch<ActionItemsResponse>('/api/v1/analytics/action-items');
   },
 };

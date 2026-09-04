@@ -235,7 +235,7 @@ describe('DeliveryRunsPage — run update flow (mark ready / reopen / driver)', 
     render(<DeliveryRunsPage />);
     await markYorkshireReady();
 
-    expect(mockUpdateRun).toHaveBeenCalledWith('test-token', 'run-1', { version: 0, status: 'READY' });
+    expect(mockUpdateRun).toHaveBeenCalledWith('run-1', { version: 0, status: 'READY' });
   });
 
   it('on 409, shows a banner and refetches', async () => {
@@ -303,9 +303,7 @@ describe('DeliveryRunsPage — change delivery date flow', () => {
     await waitFor(() => expect(screen.getByText('Save date')).not.toBeDisabled());
     await userEvent.click(screen.getByText('Save date'));
 
-    await waitFor(() => expect(mockChangeScheduledDeliveryDate).toHaveBeenCalledWith(
-      'test-token',
-      'order-1',
+    await waitFor(() => expect(mockChangeScheduledDeliveryDate).toHaveBeenCalledWith('order-1',
       { scheduledDeliveryDate: '2026-08-25', expectedScheduledDeliveryDate: '2026-08-20' },
     ));
     await waitFor(() => expect(screen.queryByText('Change delivery date')).not.toBeInTheDocument());

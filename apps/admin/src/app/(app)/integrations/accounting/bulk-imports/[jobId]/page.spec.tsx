@@ -77,7 +77,7 @@ describe('BulkImportReportPage', () => {
     render(<BulkImportReportPage />);
 
     await waitFor(() => expect(screen.getByText('Widget C')).toBeInTheDocument());
-    expect(mockGetProductJob).toHaveBeenCalledWith('job-1', 'token-1');
+    expect(mockGetProductJob).toHaveBeenCalledWith('job-1');
     expect(screen.getByText('2')).toBeInTheDocument(); // imported count
     expect(screen.getByText('SKU collision')).toBeInTheDocument();
     // Only failed/skipped rows are listed — successful imports aren't itemized
@@ -90,7 +90,7 @@ describe('BulkImportReportPage', () => {
 
     render(<BulkImportReportPage />);
 
-    await waitFor(() => expect(mockGetContactJob).toHaveBeenCalledWith('job-1', 'token-1'));
+    await waitFor(() => expect(mockGetContactJob).toHaveBeenCalledWith('job-1'));
     expect(mockGetProductJob).not.toHaveBeenCalled();
   });
 

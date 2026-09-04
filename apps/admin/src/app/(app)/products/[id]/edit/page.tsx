@@ -19,7 +19,7 @@ export default function EditProductPage() {
   useEffect(() => {
     if (!accessToken || !params?.id) return;
     adminProductsApi
-      .get(accessToken, params.id)
+      .get(params.id)
       .then(setProduct)
       .catch(() => setError('Product not found.'))
       .finally(() => setIsLoading(false));
@@ -45,13 +45,13 @@ export default function EditProductPage() {
 
   async function handleSubmit(data: UpdateProductRequest) {
     if (!accessToken || !product) return;
-    await adminProductsApi.update(accessToken, product.id, data);
+    await adminProductsApi.update(product.id, data);
     router.push('/products');
   }
 
   async function handleDelete() {
     if (!accessToken || !product) return;
-    await adminProductsApi.delete(accessToken, product.id);
+    await adminProductsApi.delete(product.id);
     router.push('/products');
   }
 
@@ -59,7 +59,7 @@ export default function EditProductPage() {
     <>
       <ProductForm
         mode="edit"
-        token={accessToken ?? ''}
+       
         currencyCode={user?.organisationCurrencyCode ?? 'GBP'}
         initialValues={product}
         onSubmit={handleSubmit}

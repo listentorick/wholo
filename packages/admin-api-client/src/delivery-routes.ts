@@ -12,7 +12,7 @@ import type {
 import { apiFetch } from './base';
 
 export const adminDeliveryRoutesApi = {
-  list(token: string, params?: DeliveryRouteListParams): Promise<PaginatedResponse<DeliveryRouteSummary>> {
+  list(params?: DeliveryRouteListParams): Promise<PaginatedResponse<DeliveryRouteSummary>> {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.cursor) query.set('cursor', params.cursor);
@@ -20,58 +20,52 @@ export const adminDeliveryRoutesApi = {
     const qs = query.toString();
     return apiFetch<PaginatedResponse<DeliveryRouteSummary>>(
       `/api/v1/delivery-routes${qs ? `?${qs}` : ''}`,
-      { token },
     );
   },
 
-  get(token: string, id: string): Promise<DeliveryRoute> {
-    return apiFetch<DeliveryRoute>(`/api/v1/delivery-routes/${id}`, { token });
+  get(id: string): Promise<DeliveryRoute> {
+    return apiFetch<DeliveryRoute>(`/api/v1/delivery-routes/${id}`);
   },
 
-  create(token: string, req: CreateDeliveryRouteRequest): Promise<DeliveryRoute> {
+  create(req: CreateDeliveryRouteRequest): Promise<DeliveryRoute> {
     return apiFetch<DeliveryRoute>('/api/v1/delivery-routes', {
       method: 'POST',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  update(token: string, id: string, req: UpdateDeliveryRouteRequest): Promise<DeliveryRoute> {
+  update(id: string, req: UpdateDeliveryRouteRequest): Promise<DeliveryRoute> {
     return apiFetch<DeliveryRoute>(`/api/v1/delivery-routes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  delete(token: string, id: string): Promise<void> {
-    return apiFetch<void>(`/api/v1/delivery-routes/${id}`, { method: 'DELETE', token });
+  delete(id: string): Promise<void> {
+    return apiFetch<void>(`/api/v1/delivery-routes/${id}`, { method: 'DELETE' });
   },
 
-  listCustomers(token: string, routeId: string): Promise<DeliveryRouteCustomer[]> {
-    return apiFetch<DeliveryRouteCustomer[]>(`/api/v1/delivery-routes/${routeId}/customers`, { token });
+  listCustomers(routeId: string): Promise<DeliveryRouteCustomer[]> {
+    return apiFetch<DeliveryRouteCustomer[]>(`/api/v1/delivery-routes/${routeId}/customers`);
   },
 
-  assignCustomer(token: string, routeId: string, req: AssignRouteCustomerRequest): Promise<DeliveryRouteCustomer> {
+  assignCustomer(routeId: string, req: AssignRouteCustomerRequest): Promise<DeliveryRouteCustomer> {
     return apiFetch<DeliveryRouteCustomer>(`/api/v1/delivery-routes/${routeId}/customers`, {
       method: 'POST',
       body: JSON.stringify(req),
-      token,
     });
   },
 
-  removeCustomer(token: string, routeId: string, customerId: string): Promise<void> {
+  removeCustomer(routeId: string, customerId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/delivery-routes/${routeId}/customers/${customerId}`, {
       method: 'DELETE',
-      token,
     });
   },
 
-  reorderCustomers(token: string, routeId: string, req: ReorderRouteCustomersRequest): Promise<DeliveryRouteCustomer[]> {
+  reorderCustomers(routeId: string, req: ReorderRouteCustomersRequest): Promise<DeliveryRouteCustomer[]> {
     return apiFetch<DeliveryRouteCustomer[]>(`/api/v1/delivery-routes/${routeId}/customers/reorder`, {
       method: 'PATCH',
       body: JSON.stringify(req),
-      token,
     });
   },
 };

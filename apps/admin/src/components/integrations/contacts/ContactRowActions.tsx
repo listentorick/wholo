@@ -9,12 +9,11 @@ import { MatchExistingCustomerDialog } from './MatchExistingCustomerDialog';
 
 interface Props {
   contact: AccountingContactSummary;
-  token: string;
   providerLabel: string;
   onActionComplete: () => void;
 }
 
-export function ContactRowActions({ contact, token, providerLabel, onActionComplete }: Props) {
+export function ContactRowActions({ contact, providerLabel, onActionComplete }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
@@ -34,17 +33,17 @@ export function ContactRowActions({ contact, token, providerLabel, onActionCompl
 
   function handleConfirmMatch() {
     if (!contact.suggestion) return;
-    run('confirm', () => adminAccountingApi.confirmSuggestion(contact.suggestion!.id, token));
+    run('confirm', () => adminAccountingApi.confirmSuggestion(contact.suggestion!.id));
   }
 
   function handleIgnore() {
-    run('ignore', () => adminAccountingApi.ignoreContact(contact.id, token));
+    run('ignore', () => adminAccountingApi.ignoreContact(contact.id));
   }
 
   function handleUnlink() {
     if (!contact.mapping) return;
     if (!window.confirm('Unlink this customer from the accounting contact?')) return;
-    run('unlink', () => adminAccountingApi.unlinkMapping(contact.mapping!.id, token));
+    run('unlink', () => adminAccountingApi.unlinkMapping(contact.mapping!.id));
   }
 
   const anyBusy = busy !== null;
@@ -157,7 +156,7 @@ export function ContactRowActions({ contact, token, providerLabel, onActionCompl
       {dialog === 'import' && (
         <ImportContactDialog
           contact={contact}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onImported={() => {
             setDialog(null);
@@ -168,7 +167,7 @@ export function ContactRowActions({ contact, token, providerLabel, onActionCompl
       {dialog === 'match' && (
         <MatchExistingCustomerDialog
           contact={contact}
-          token={token}
+         
           onClose={() => setDialog(null)}
           onMatched={() => {
             setDialog(null);

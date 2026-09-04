@@ -39,7 +39,6 @@ type FormValues = z.infer<typeof schema>;
 
 interface Props {
   customer: Customer;
-  token: string;
   mode: 'tab' | 'wizard';
   onSaved?: () => void;
   onNext?: () => void;
@@ -47,7 +46,7 @@ interface Props {
   onSaveStateChange?: OnTabSaveStateChange;
 }
 
-export function AccountTab({ customer, token, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
+export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStateChange }: Props) {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -80,7 +79,7 @@ export function AccountTab({ customer, token, mode, onSaved, onNext, onBack, onS
     setApiError(null);
     setAccountNumberError(null);
     try {
-      await adminCustomersApi.update(token, customer.id, {
+      await adminCustomersApi.update(customer.id, {
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
         minimumOrderSpend: data.minimumOrderSpend || undefined,

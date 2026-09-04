@@ -36,7 +36,7 @@ describe('useDeliveryDay', () => {
     mockGetDay.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
     const { result, rerender } = renderHook(
-      ({ date }: { date: string }) => useDeliveryDay('token-1', date),
+      ({ date }: { date: string }) => useDeliveryDay(true, date),
       { initialProps: { date: '2026-08-20' } },
     );
 
@@ -56,7 +56,7 @@ describe('useDeliveryDay', () => {
     mockGetDay.mockResolvedValue(makeBoard('2026-08-20'));
 
     const { result, rerender } = renderHook(
-      ({ date }: { date: string }) => useDeliveryDay('token-1', date),
+      ({ date }: { date: string }) => useDeliveryDay(true, date),
       { initialProps: { date: '2026-08-20' } },
     );
 
@@ -74,7 +74,7 @@ describe('useDeliveryDay', () => {
     const abortError = new DOMException('aborted', 'AbortError');
     mockGetDay.mockRejectedValue(abortError);
 
-    const { result } = renderHook(() => useDeliveryDay('token-1', '2026-08-20'));
+    const { result } = renderHook(() => useDeliveryDay(true, '2026-08-20'));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.error).toBeNull();
@@ -83,7 +83,7 @@ describe('useDeliveryDay', () => {
   it('sets error on a real failure', async () => {
     mockGetDay.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useDeliveryDay('token-1', '2026-08-20'));
+    const { result } = renderHook(() => useDeliveryDay(true, '2026-08-20'));
 
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current.isLoading).toBe(false);
@@ -92,7 +92,7 @@ describe('useDeliveryDay', () => {
   it('mutate() swaps the board synchronously with no network call', async () => {
     mockGetDay.mockResolvedValue(makeBoard('2026-08-20'));
 
-    const { result } = renderHook(() => useDeliveryDay('token-1', '2026-08-20'));
+    const { result } = renderHook(() => useDeliveryDay(true, '2026-08-20'));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const callsBefore = mockGetDay.mock.calls.length;

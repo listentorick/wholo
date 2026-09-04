@@ -40,32 +40,32 @@ beforeEach(() => {
 describe('OverviewTab', () => {
   it('shows the connection request banner for a PENDING_REQUEST customer', () => {
     render(
-      <OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.PENDING_REQUEST })} token="token-1" />,
+      <OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.PENDING_REQUEST })} />,
     );
     expect(screen.getByText('Connection request pending')).toBeInTheDocument();
     expect(screen.getByText(/Blackbird Kitchen wants to connect/)).toBeInTheDocument();
   });
 
   it('does not show the banner for an ACTIVE customer', () => {
-    render(<OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.ACTIVE })} token="token-1" />);
+    render(<OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.ACTIVE })} />);
     expect(screen.queryByText('Connection request pending')).not.toBeInTheDocument();
   });
 
   it('still renders the editable business details form for a PENDING_REQUEST customer', () => {
     render(
-      <OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.PENDING_REQUEST })} token="token-1" />,
+      <OverviewTab customer={makeCustomer({ status: TradeRelationshipStatus.PENDING_REQUEST })} />,
     );
     expect(screen.getByLabelText('Business name')).not.toBeDisabled();
   });
 
   it('pre-fills the business name from the customer', () => {
-    render(<OverviewTab customer={makeCustomer()} token="token-1" />);
+    render(<OverviewTab customer={makeCustomer()} />);
     expect(screen.getByLabelText('Business name')).toHaveValue('Blackbird Kitchen');
   });
 
   it('registers a save state with the sidebar via onSaveStateChange', () => {
     const onSaveStateChange = vi.fn();
-    render(<OverviewTab customer={makeCustomer()} token="token-1" onSaveStateChange={onSaveStateChange} />);
+    render(<OverviewTab customer={makeCustomer()} onSaveStateChange={onSaveStateChange} />);
     expect(onSaveStateChange).toHaveBeenCalledWith(
       expect.objectContaining({ label: 'Save', saving: false, onSave: expect.any(Function) }),
     );
