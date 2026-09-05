@@ -5,6 +5,20 @@ import Link from 'next/link';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
+function formatSyncCaption(lastSyncedAt: string | null): string {
+  if (!lastSyncedAt) return 'Waiting for review since you connected';
+  return `Waiting for review since your last sync on ${new Date(lastSyncedAt).toLocaleDateString()}`;
+}
+
+function SyncStatChip({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="rounded-md bg-accent/10 px-2.5 py-2 text-center">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-0.5 text-lg font-semibold text-accent">{count}</p>
+    </div>
+  );
+}
+
 export function XeroConnectionCard() {
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -12,7 +26,9 @@ export function XeroConnectionCard() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
+  const [contactsNeedsAttentionCount, setContactsNeedsAttentionCount] = useState(0);
+  const [productsNeedsAttentionCount, setProductsNeedsAttentionCount] = useState(0);
+  const [taxTypesNeedsAttentionCount, setTaxTypesNeedsAttentionCount] = useState(0);
 
   useEffect(() => {
     adminAccountingApi
@@ -24,14 +40,28 @@ export function XeroConnectionCard() {
 
   const isConnected = connection?.status === 'CONNECTED';
   const isError = connection?.status === 'ERROR';
+  const hasAttentionStats =
+    contactsNeedsAttentionCount > 0 || productsNeedsAttentionCount > 0 || taxTypesNeedsAttentionCount > 0;
 
   useEffect(() => {
     if (!isConnected) return;
     adminAccountingApi
       .countContactsNeedingAttention()
-      .then((res) => setNeedsAttentionCount(res.count))
+      .then((res) => setContactsNeedsAttentionCount(res.count))
       .catch(() => {
-        // Non-critical — the badge just doesn't show if this fails.
+        // Non-critical — the stat just doesn't show if this fails.
+      });
+    adminAccountingApi
+      .countProductsNeedingAttention()
+      .then((res) => setProductsNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the stat just doesn't show if this fails.
+      });
+    adminAccountingApi
+      .countTaxTypesNeedingAttention()
+      .then((res) => setTaxTypesNeedsAttentionCount(res.count))
+      .catch(() => {
+        // Non-critical — the stat just doesn't show if this fails.
       });
   }, [isConnected]);
 
@@ -54,7 +84,9 @@ export function XeroConnectionCard() {
     try {
       await adminAccountingApi.disconnect();
       setConnection(null);
-      setNeedsAttentionCount(0);
+      setContactsNeedsAttentionCount(0);
+      setProductsNeedsAttentionCount(0);
+      setTaxTypesNeedsAttentionCount(0);
     } catch {
       setActionError('Failed to disconnect. Please try again.');
     } finally {
@@ -105,6 +137,16 @@ export function XeroConnectionCard() {
         </div>
       ) : isConnected && connection ? (
         <div className="mt-4 space-y-3">
+          {hasAttentionStats && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted">{formatSyncCaption(connection.lastSyncedAt)}</p>
+              <div className="grid grid-cols-3 gap-2">
+                <SyncStatChip label="Contacts" count={contactsNeedsAttentionCount} />
+                <SyncStatChip label="Products" count={productsNeedsAttentionCount} />
+                <SyncStatChip label="Tax types" count={taxTypesNeedsAttentionCount} />
+              </div>
+            </div>
+          )}
           <dl className="space-y-1 text-xs text-muted">
             <div className="flex gap-1.5">
               <dt className="font-medium text-text">Organisation:</dt>
@@ -115,24 +157,19 @@ export function XeroConnectionCard() {
               <dd>{new Date(connection.connectedAt).toLocaleDateString()}</dd>
             </div>
           </dl>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center justify-between border-t border-border pt-3">
             <Link
               href="/integrations/accounting"
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
             >
               View synced data
-              {needsAttentionCount > 0 && (
-                <span className="inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold">
-                  {needsAttentionCount}
-                </span>
-              )}
               <span aria-hidden>→</span>
             </Link>
             <button
               type="button"
               onClick={handleDisconnect}
               disabled={disconnecting}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text transition-colors hover:bg-[hsl(var(--color-border)/10%)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
             >
               {disconnecting ? 'Disconnecting…' : 'Disconnect'}
             </button>

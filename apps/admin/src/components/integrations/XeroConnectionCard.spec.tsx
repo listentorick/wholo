@@ -10,6 +10,8 @@ vi.mock('@wholo/admin-api-client', () => ({
     createXeroAuthorizationUrl: vi.fn(),
     disconnect: vi.fn(),
     countContactsNeedingAttention: vi.fn(),
+    countProductsNeedingAttention: vi.fn(),
+    countTaxTypesNeedingAttention: vi.fn(),
   },
 }));
 
@@ -18,14 +20,24 @@ const TOKEN = 'test-token';
 const mockGetConnection = adminAccountingApi.getConnection as ReturnType<typeof vi.fn>;
 const mockCreateAuthUrl = adminAccountingApi.createXeroAuthorizationUrl as ReturnType<typeof vi.fn>;
 const mockDisconnect = adminAccountingApi.disconnect as ReturnType<typeof vi.fn>;
-const mockCountNeedsAttention = adminAccountingApi.countContactsNeedingAttention as ReturnType<typeof vi.fn>;
+const mockCountContactsNeedingAttention = adminAccountingApi.countContactsNeedingAttention as ReturnType<
+  typeof vi.fn
+>;
+const mockCountProductsNeedingAttention = adminAccountingApi.countProductsNeedingAttention as ReturnType<
+  typeof vi.fn
+>;
+const mockCountTaxTypesNeedingAttention = adminAccountingApi.countTaxTypesNeedingAttention as ReturnType<
+  typeof vi.fn
+>;
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(window, 'confirm').mockReturnValue(true);
   delete (window as unknown as { location?: unknown }).location;
   (window as unknown as { location: { href: string } }).location = { href: '' };
-  mockCountNeedsAttention.mockResolvedValue({ count: 0 });
+  mockCountContactsNeedingAttention.mockResolvedValue({ count: 0 });
+  mockCountProductsNeedingAttention.mockResolvedValue({ count: 0 });
+  mockCountTaxTypesNeedingAttention.mockResolvedValue({ count: 0 });
 });
 
 describe('XeroConnectionCard', () => {
@@ -53,7 +65,30 @@ describe('XeroConnectionCard', () => {
     expect(screen.getByText('View synced data').closest('a')).toHaveAttribute('href', '/integrations/accounting');
   });
 
-  it('shows a needs-attention badge on the View synced data link when there is a count', async () => {
+  it('shows the sync stat chips with per-category counts when any category needs attention', async () => {
+    mockGetConnection.mockResolvedValue({
+      provider: 'XERO',
+      status: 'CONNECTED',
+      externalOrganisationName: 'Acme Wines',
+      connectedAt: '2026-01-01T00:00:00.000Z',
+      lastSyncedAt: '2026-01-02T00:00:00.000Z',
+    });
+    mockCountContactsNeedingAttention.mockResolvedValue({ count: 4 });
+    mockCountProductsNeedingAttention.mockResolvedValue({ count: 2 });
+    mockCountTaxTypesNeedingAttention.mockResolvedValue({ count: 0 });
+
+    render(<XeroConnectionCard />);
+
+    await waitFor(() => expect(screen.getByText('4')).toBeInTheDocument());
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('0')).toBeInTheDocument();
+    expect(screen.getByText('Contacts')).toBeInTheDocument();
+    expect(screen.getByText('Products')).toBeInTheDocument();
+    expect(screen.getByText('Tax types')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting for review since your last sync on/)).toBeInTheDocument();
+  });
+
+  it('shows a generic review caption when the connection has never synced', async () => {
     mockGetConnection.mockResolvedValue({
       provider: 'XERO',
       status: 'CONNECTED',
@@ -61,20 +96,38 @@ describe('XeroConnectionCard', () => {
       connectedAt: '2026-01-01T00:00:00.000Z',
       lastSyncedAt: null,
     });
-    mockCountNeedsAttention.mockResolvedValue({ count: 4 });
+    mockCountContactsNeedingAttention.mockResolvedValue({ count: 1 });
 
     render(<XeroConnectionCard />);
 
-    await waitFor(() => expect(mockCountNeedsAttention).toHaveBeenCalledWith());
-    await waitFor(() => expect(screen.getByText('4')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Waiting for review since you connected')).toBeInTheDocument());
   });
 
-  it('does not fetch or show a needs-attention count when not connected', async () => {
+  it('hides the sync stats block when no category needs attention', async () => {
+    mockGetConnection.mockResolvedValue({
+      provider: 'XERO',
+      status: 'CONNECTED',
+      externalOrganisationName: 'Acme Wines',
+      connectedAt: '2026-01-01T00:00:00.000Z',
+      lastSyncedAt: null,
+    });
+
+    render(<XeroConnectionCard />);
+
+    await waitFor(() => expect(screen.getByText('Acme Wines')).toBeInTheDocument());
+    expect(screen.queryByText('Contacts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Products')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tax types')).not.toBeInTheDocument();
+  });
+
+  it('does not fetch or show attention counts when not connected', async () => {
     mockGetConnection.mockResolvedValue(undefined);
     render(<XeroConnectionCard />);
 
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
-    expect(mockCountNeedsAttention).not.toHaveBeenCalled();
+    expect(mockCountContactsNeedingAttention).not.toHaveBeenCalled();
+    expect(mockCountProductsNeedingAttention).not.toHaveBeenCalled();
+    expect(mockCountTaxTypesNeedingAttention).not.toHaveBeenCalled();
     expect(screen.queryByText('View synced data')).not.toBeInTheDocument();
   });
 
