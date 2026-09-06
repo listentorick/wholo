@@ -18,4 +18,18 @@ describe('DistributorNotFound', () => {
     const link = screen.getByRole('link', { name: 'Go to Your Suppliers' });
     expect(link.getAttribute('href')).toBe('/');
   });
+
+  it('shows a "Browse marketplace" placeholder that is not yet a working link', () => {
+    render(<DistributorNotFound />);
+
+    expect(screen.getByText('Browse marketplace')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Browse marketplace/ })).toBeNull();
+  });
+
+  it('shows a contact-support line as plain text, not a link', () => {
+    render(<DistributorNotFound />);
+
+    expect(screen.getByText(/Contact support/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Contact support/ })).toBeNull();
+  });
 });
