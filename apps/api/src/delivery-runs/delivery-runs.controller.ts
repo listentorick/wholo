@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
+import { CreateDeliveryRunDto } from './dto/create-delivery-run.dto';
 import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
 import { UnassignOrderQueryDto } from './dto/unassign-order-query.dto';
 import { UpdateDeliveryRunDto } from './dto/update-delivery-run.dto';
@@ -23,6 +24,23 @@ interface RequestWithUser extends Request {
 @Controller('distributors/:distributorId/delivery-runs')
 export class DeliveryRunsController {
   constructor(private service: DeliveryRunsService, private manifestService: ManifestService) {}
+
+  // Create the empty run that auto-allocation would have lazily created,
+  // triggered by a human instead of an order — so staff can plan a route's
+  // deliveries onto a day no accepted order has populated yet. 200 + the
+  // refreshed DeliveryDayBoard, not 201, for the same reason as
+  // unassignOrderFromRun below: the client never has to guess versions or
+  // totals on the success path.
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create an empty delivery run for a route on a given day' })
+  createRun(
+    @Param('distributorId') distributorId: string,
+    @Body() dto: CreateDeliveryRunDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.service.createRun(distributorId, dto, req.user.sub);
+  }
 
   @Post(':runId/orders')
   @HttpCode(HttpStatus.OK)

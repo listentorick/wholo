@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { DeliveryDayBoard } from '@wholo/types';
 import { DeliveryRunBoard } from './DeliveryRunBoard';
 
@@ -28,12 +29,20 @@ const NOOP = {
   onReopen: vi.fn(),
   onSetDriver: vi.fn(),
   onChangeDate: vi.fn(),
+  onAddRun: vi.fn(),
 };
 
 describe('DeliveryRunBoard', () => {
   it('always renders the Unassigned column, even with zero runs', () => {
     render(<DeliveryRunBoard board={makeBoard()} {...NOOP} />);
     expect(screen.getByText('Unassigned')).toBeInTheDocument();
+  });
+
+  it('renders an "Add run" affordance and fires onAddRun when clicked', async () => {
+    const onAddRun = vi.fn();
+    render(<DeliveryRunBoard board={makeBoard()} {...NOOP} onAddRun={onAddRun} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add run' }));
+    expect(onAddRun).toHaveBeenCalledOnce();
   });
 
   it('renders one column per run', () => {

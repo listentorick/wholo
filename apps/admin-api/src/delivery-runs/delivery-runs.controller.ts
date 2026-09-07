@@ -10,6 +10,16 @@ import { DeliveryRunsService } from './delivery-runs.service';
 export class DeliveryRunsController {
   constructor(private service: DeliveryRunsService) {}
 
+  // Nest defaults a bare @Post() to 201 — override to 200 to match apps/api's
+  // own @HttpCode(OK): this returns the refreshed board, not a bare created
+  // resource.
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  createRun(@Req() req: Request, @Body() body: unknown) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.createRun(organisationId, body, token);
+  }
+
   // Nest defaults a bare @Post() to 201 — override to 200 to match
   // apps/api's own @HttpCode(OK) on this action (a move, not a resource
   // creation) and to be consistent with the other two mutations below.

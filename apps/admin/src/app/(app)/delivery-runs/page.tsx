@@ -21,8 +21,9 @@ import { DeliveryBoardFilters, type BoardAttentionFilter } from '@/components/de
 import { DeliveryRunBoard } from '@/components/delivery-runs/DeliveryRunBoard';
 import { DeliveryRunList, type DeliveryListRow } from '@/components/delivery-runs/DeliveryRunList';
 import { ChangeDeliveryDateDialog } from '@/components/delivery-runs/ChangeDeliveryDateDialog';
+import { CreateRunDialog } from '@/components/delivery-runs/CreateRunDialog';
 
-function DeliveryRunsEmptyState() {
+function DeliveryRunsEmptyState({ onPlanRun }: { onPlanRun: () => void }) {
   return (
     <ListEmptyState
       icon={
@@ -34,7 +35,16 @@ function DeliveryRunsEmptyState() {
         </svg>
       }
       title="No deliveries for this day"
-      description="Accepted orders with a scheduled delivery date will appear here, either allocated to a run or waiting to be assigned."
+      description="Accepted orders with a scheduled delivery date land here, either allocated to a run or waiting to be assigned. You can also plan an empty run now and move deliveries into it."
+      action={(
+        <button
+          type="button"
+          onClick={onPlanRun}
+          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+        >
+          Plan a run
+        </button>
+      )}
     />
   );
 }
@@ -58,6 +68,8 @@ export default function DeliveryRunsPage() {
   // the only mutation that moves a stop's count from one day to another;
   // move/reorder/mark-ready/reopen all stay within the currently viewed day.
   const [workloadRefreshKey, setWorkloadRefreshKey] = useState(0);
+  const [createRunOpen, setCreateRunOpen] = useState(false);
+  const [creatingRun, setCreatingRun] = useState(false);
 
   const {
     board, isLoading, isRefreshing, error, refetch, mutate,
@@ -159,6 +171,33 @@ export default function DeliveryRunsPage() {
     }
   }
 
+  // Modal-gated, like handleChangeDeliveryDate: no optimistic pre-update (a
+  // brand-new run has no local board shape to compute), the response is the
+  // full refreshed board, and the dialog always closes afterwards.
+  async function handleCreateRun(routeId: string) {
+    if (!accessToken) return;
+    setCreatingRun(true);
+    setMutationBanner(null);
+    try {
+      const refreshed = await adminDeliveryRunsApi.createRun({ routeId, deliveryDate: selectedDate });
+      mutate(refreshed);
+      setWorkloadRefreshKey((k) => k + 1); // the day's run count changed
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setMutationBanner('This board changed elsewhere — refreshed.');
+        await refetch();
+      } else if (e instanceof ApiError && (e.status === 422 || e.status === 404)) {
+        setMutationBanner(e.problem.detail ?? 'Could not add that run.');
+        await refetch();
+      } else {
+        setMutationBanner('Could not add the run. Please try again.');
+      }
+    } finally {
+      setCreatingRun(false);
+      setCreateRunOpen(false);
+    }
+  }
+
   function handleMarkReady(runId: string) {
     return handleUpdateRun(runId, { status: 'READY' });
   }
@@ -237,7 +276,10 @@ export default function DeliveryRunsPage() {
     handleReorder(run.runId, arrayMove(orderIds, index, targetIndex));
   }
 
-  const isEmpty = board && board.runs.every((r) => r.cards.length === 0) && board.unassigned.length === 0;
+  // A run existing (even an empty one someone just planned) means the board
+  // is not empty — only fall back to the empty state when there's genuinely
+  // nothing to show.
+  const isEmpty = board && board.runs.length === 0 && board.unassigned.length === 0;
 
   return (
     <>
@@ -272,6 +314,13 @@ export default function DeliveryRunsPage() {
               <div className="hidden md:inline-flex">
                 <BoardViewToggle mode={viewMode} onChange={setViewMode} />
               </div>
+              <button
+                type="button"
+                onClick={() => setCreateRunOpen(true)}
+                className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text transition-colors hover:bg-border/20"
+              >
+                Add run
+              </button>
             </div>
           )}
         />
@@ -297,7 +346,7 @@ export default function DeliveryRunsPage() {
         ) : error ? (
           <ListErrorBanner message={error} />
         ) : !board ? null : isEmpty ? (
-          <DeliveryRunsEmptyState />
+          <DeliveryRunsEmptyState onPlanRun={() => setCreateRunOpen(true)} />
         ) : (
           <div className={`flex min-h-0 flex-1 flex-col ${isRefreshing ? 'opacity-60' : ''}`}>
             {viewMode === 'list' ? (
@@ -337,6 +386,7 @@ export default function DeliveryRunsPage() {
                     onReopen={handleReopen}
                     onSetDriver={handleSetDriver}
                     onChangeDate={setChangeDateOrderId}
+                    onAddRun={() => setCreateRunOpen(true)}
                   />
                 </div>
                 <div data-testid="list-view" className="md:hidden">
@@ -376,6 +426,17 @@ export default function DeliveryRunsPage() {
           />
         );
       })()}
+      {createRunOpen && (
+        <CreateRunDialog
+          existingRouteIds={board?.runs
+            .map((r) => r.routeId)
+            .filter((id): id is string => id !== null) ?? []}
+          selectedDate={selectedDate}
+          submitting={creatingRun}
+          onCancel={() => setCreateRunOpen(false)}
+          onConfirm={handleCreateRun}
+        />
+      )}
     </>
   );
 }

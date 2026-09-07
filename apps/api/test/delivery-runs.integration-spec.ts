@@ -213,6 +213,145 @@ describe('Delivery Runs board (integration)', () => {
     });
   });
 
+  describe('createRun (POST /delivery-runs)', () => {
+    it('creates an empty OPEN run for a route and day, snapshotting the route name, and returns it on the board', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(200);
+      expect(res.body.runs).toHaveLength(1);
+      expect(res.body.runs[0]).toEqual(expect.objectContaining({
+        routeId: route.id, name: 'Yorkshire', status: 'OPEN', version: 0, cards: [], stopCount: 0,
+      }));
+
+      const rows = await prisma.deliveryRun.findMany({ where: { distributorId: DIST_A, routeId: route.id } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].deliveryDate.toISOString().slice(0, 10)).toBe(DELIVERY_DATE);
+    });
+
+    it('makes the run visible on a subsequent getDay (the board is no longer empty)', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/delivery-days/${DELIVERY_DATE}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.runs).toHaveLength(1);
+      expect(res.body.runs[0].routeId).toBe(route.id);
+    });
+
+    it('writes exactly one DeliveryRunCreated outbox event and one DELIVERY_RUN_CREATED audit row', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+      expect(res.status).toBe(200);
+      const runId = res.body.runs[0].runId;
+
+      const outboxEvents = await prisma.outboxEvent.findMany({
+        where: { aggregateType: 'DeliveryRun', aggregateId: runId, eventType: 'DeliveryRunCreated' },
+      });
+      expect(outboxEvents).toHaveLength(1);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { entityId: runId, action: 'DELIVERY_RUN_CREATED' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+
+    it('returns 404, not 403, when the routeId belongs to another distributor', async () => {
+      const routeB = await createRoute(DIST_B, 'B Local');
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: routeB.id, deliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(404);
+      expect(await prisma.deliveryRun.count({ where: { distributorId: DIST_A } })).toBe(0);
+    });
+
+    it('rejects creating a run under another distributor entirely (DistributorAccessGuard)', async () => {
+      const routeA = await createRoute(DIST_A, 'Yorkshire');
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_B}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: routeA.id, deliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 422 as application/problem+json when a run already exists for that route and day', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      const send = () => request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+
+      expect((await send()).status).toBe(200);
+
+      const res = await send();
+      expect(res.status).toBe(422);
+      expect(res.headers['content-type']).toContain('application/problem+json');
+      expect(res.body.detail).toBe('A run for this route already exists on this day');
+    });
+
+    it('returns 422 when the route is inactive', async () => {
+      const route = await prisma.deliveryRoute.create({
+        data: { distributorId: DIST_A, name: 'Retired', active: false },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+
+      expect(res.status).toBe(422);
+      expect(res.body.detail).toBe('Cannot create a run for an inactive route');
+    });
+
+    it('resolves a concurrent create race to exactly one 200 and one 422, with a single run row', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+      const send = () => request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: DELIVERY_DATE });
+
+      const [res1, res2] = await Promise.all([send(), send()]);
+
+      expect([res1.status, res2.status].sort()).toEqual([200, 422]);
+      expect(await prisma.deliveryRun.count({ where: { distributorId: DIST_A, routeId: route.id } })).toBe(1);
+    });
+
+    it('returns 400 for a malformed deliveryDate or a missing routeId', async () => {
+      const route = await createRoute(DIST_A, 'Yorkshire');
+
+      const badDate = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ routeId: route.id, deliveryDate: '2026-8-1' });
+      expect(badDate.status).toBe(400);
+
+      const noRoute = await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/delivery-runs`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ deliveryDate: DELIVERY_DATE });
+      expect(noRoute.status).toBe(400);
+    });
+  });
+
   describe('GET delivery-days (workload strip)', () => {
     it('counts an unassigned ACCEPTED order in its window and pads every date, including zero-count days', async () => {
       await createOrder(DIST_A, CUSTOMER_1);

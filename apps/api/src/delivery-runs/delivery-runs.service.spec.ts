@@ -288,6 +288,83 @@ describe('DeliveryRunsService', () => {
     });
   });
 
+  describe('createRun', () => {
+    const ROUTE = {
+      id: 'route-1', distributorId: 'dist-1', name: 'Yorkshire', code: 'YRK', defaultDriverName: 'Sam Okafor', active: true,
+    };
+
+    beforeEach(() => {
+      prisma.deliveryRoute = { findFirst: jest.fn().mockResolvedValue(ROUTE) };
+      tx.deliveryRun.findUnique = jest.fn().mockResolvedValue(null);
+      tx.deliveryRun.create = jest.fn().mockResolvedValue(makeRun());
+    });
+
+    it('creates the run from the route snapshot and returns the refreshed board', async () => {
+      const result = await service.createRun('dist-1', { routeId: 'route-1', deliveryDate: '2026-08-20' }, 'user-1');
+
+      expect(tx.deliveryRun.create).toHaveBeenCalledWith({
+        data: {
+          distributorId: 'dist-1',
+          routeId: 'route-1',
+          deliveryDate: DAY,
+          name: 'Yorkshire',
+          driverName: 'Sam Okafor',
+        },
+      });
+      expect(result).toEqual(expect.objectContaining({ runs: expect.any(Array), unassigned: expect.any(Array) }));
+    });
+
+    it('writes exactly one DeliveryRunCreated outbox event and one DELIVERY_RUN_CREATED audit row in the transaction', async () => {
+      await service.createRun('dist-1', { routeId: 'route-1', deliveryDate: '2026-08-20' }, 'user-1');
+
+      expect(outbox.writeEvent).toHaveBeenCalledTimes(1);
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        tx, 'DeliveryRun', 'run-1', 'DeliveryRunCreated', expect.objectContaining({ routeId: 'route-1', deliveryDate: '2026-08-20' }),
+      );
+      expect(audit.record).toHaveBeenCalledTimes(1);
+      expect(audit.record).toHaveBeenCalledWith(tx, expect.objectContaining({ action: 'DELIVERY_RUN_CREATED' }));
+    });
+
+    it('throws NotFoundException (never opening a transaction) when the route belongs to another distributor', async () => {
+      prisma.deliveryRoute.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.createRun('dist-1', { routeId: 'route-x', deliveryDate: '2026-08-20' }, 'user-1'),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws UnprocessableEntityException (never opening a transaction) when the route is inactive', async () => {
+      prisma.deliveryRoute.findFirst.mockResolvedValueOnce({ ...ROUTE, active: false });
+
+      await expect(
+        service.createRun('dist-1', { routeId: 'route-1', deliveryDate: '2026-08-20' }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws UnprocessableEntityException without creating anything when a run already exists for that route and day', async () => {
+      tx.deliveryRun.findUnique.mockResolvedValueOnce(makeRun());
+
+      await expect(
+        service.createRun('dist-1', { routeId: 'route-1', deliveryDate: '2026-08-20' }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+      expect(tx.deliveryRun.create).not.toHaveBeenCalled();
+      expect(outbox.writeEvent).not.toHaveBeenCalled();
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('turns a P2002 from a concurrent create into an UnprocessableEntityException', async () => {
+      tx.deliveryRun.create.mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', { code: 'P2002', clientVersion: '6.0.0' }),
+      );
+
+      await expect(
+        service.createRun('dist-1', { routeId: 'route-1', deliveryDate: '2026-08-20' }, 'user-1'),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+  });
+
   describe('assignOrderToRun', () => {
     it('throws NotFoundException when the destination run is not found', async () => {
       prisma.deliveryRun.findFirst.mockResolvedValueOnce(null);

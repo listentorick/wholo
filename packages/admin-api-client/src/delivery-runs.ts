@@ -2,6 +2,7 @@ import type {
   AssignOrderToRunRequest,
   ChangeScheduledDeliveryDateRequest,
   ChangeScheduledDeliveryDateResponse,
+  CreateDeliveryRunRequest,
   DeliveryDayBoard,
   DeliveryDaysListParams,
   DeliveryDaysListResponse,
@@ -20,6 +21,13 @@ export const adminDeliveryRunsApi = {
 
   getDay(date: string, signal?: AbortSignal): Promise<DeliveryDayBoard> {
     return apiFetch<DeliveryDayBoard>(`/api/v1/delivery-days/${date}`, { signal });
+  },
+
+  createRun(req: CreateDeliveryRunRequest): Promise<DeliveryDayBoard> {
+    return apiFetch<DeliveryDayBoard>('/api/v1/delivery-runs', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
   },
 
   assignOrderToRun(runId: string, req: AssignOrderToRunRequest): Promise<DeliveryDayBoard> {

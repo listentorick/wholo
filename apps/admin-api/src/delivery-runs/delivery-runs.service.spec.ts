@@ -35,6 +35,12 @@ describe('DeliveryRunsService (BFF)', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/delivery-days/2026-08-20', 'token-1');
   });
 
+  it('forwards createRun as a POST to the run collection with the request body', async () => {
+    const body = { routeId: 'route-1', deliveryDate: '2026-08-25' };
+    await service.createRun('dist-1', body, 'token-1');
+    expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/delivery-runs', 'token-1', body);
+  });
+
   it('forwards assignOrderToRun as a POST with the request body', async () => {
     const body = { orderId: 'order-1', version: 0 };
     await service.assignOrderToRun('dist-1', 'run-1', body, 'token-1');

@@ -10,6 +10,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { DeliveryRunAllocationService } from '../delivery-run-allocation/delivery-run-allocation.service';
 import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
+import { CreateDeliveryRunDto } from './dto/create-delivery-run.dto';
 import { ReorderRunOrdersDto } from './dto/reorder-run-orders.dto';
 import { UpdateDeliveryRunDto } from './dto/update-delivery-run.dto';
 import { ChangeScheduledDeliveryDateDto } from './dto/change-scheduled-delivery-date.dto';
@@ -206,6 +207,84 @@ export class DeliveryRunsService {
     }
 
     return { data };
+  }
+
+  // Human-triggered version of DeliveryRunAllocationService.findOrCreateRun's
+  // lazy create: makes the empty run for a route + day that no accepted order
+  // has populated yet, so staff can plan deliveries onto it.
+  //
+  // Deliberately NOT routed through findOrCreateRun — that helper is the
+  // shared find-or-return path for the two lazy (order-driven) callers and
+  // has no error contract or events of its own. An explicit admin create
+  // needs to (a) reject with 422 when the run already exists rather than
+  // silently returning it, and (b) write its own outbox event + audit row in
+  // one transaction. The insert itself is small enough to re-state here; the
+  // @@unique constraint is still what settles a concurrent-create race.
+  async createRun(distributorId: string, dto: CreateDeliveryRunDto, actorUserId: string) {
+    const route = await this.prisma.deliveryRoute.findFirst({
+      where: { id: dto.routeId, distributorId },
+    });
+    // 404 not 403 for a route id that resolves to another distributor —
+    // consistent with assignOrderToRun's cross-tenant handling.
+    if (!route) throw new NotFoundException('Delivery route not found');
+    if (!route.active) {
+      throw new UnprocessableEntityException('Cannot create a run for an inactive route');
+    }
+
+    const deliveryDate = new Date(`${dto.deliveryDate}T00:00:00.000Z`);
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.deliveryRun.findUnique({
+          where: {
+            distributorId_routeId_deliveryDate: { distributorId, routeId: route.id, deliveryDate },
+          },
+        });
+        if (existing) {
+          throw new UnprocessableEntityException('A run for this route already exists on this day');
+        }
+
+        const created = await tx.deliveryRun.create({
+          data: {
+            distributorId,
+            routeId: route.id,
+            deliveryDate,
+            // Snapshot the route name — a later rename must not relabel a run
+            // that already happened. Same reasoning as findOrCreateRun.
+            name: route.name,
+            driverName: route.defaultDriverName,
+          },
+        });
+
+        await this.outbox.writeEvent(tx, 'DeliveryRun', created.id, 'DeliveryRunCreated', {
+          runId: created.id,
+          distributorId,
+          routeId: route.id,
+          deliveryDate: dto.deliveryDate,
+          name: route.name,
+          occurredAt: new Date().toISOString(),
+        });
+        await this.audit.record(tx, {
+          distributorId,
+          entityType: 'DELIVERY_RUN',
+          entityId: created.id,
+          action: 'DELIVERY_RUN_CREATED',
+          actorType: ActorType.USER,
+          actorUserId,
+          summary: `Created run ${route.name} for ${dto.deliveryDate}`,
+          changes: { routeId: route.id, deliveryDate: dto.deliveryDate },
+        });
+      });
+    } catch (err) {
+      // Concurrent create settled on the @@unique constraint — tell the loser
+      // the run now exists, same 422 as the explicit check above.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new UnprocessableEntityException('A run for this route already exists on this day');
+      }
+      throw err;
+    }
+
+    return this.getDay(distributorId, dto.deliveryDate);
   }
 
   // Assigns an order into a run — either from Unassigned (no sourceRunId)

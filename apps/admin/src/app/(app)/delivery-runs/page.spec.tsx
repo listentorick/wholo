@@ -31,11 +31,13 @@ vi.mock('@/components/delivery-runs/WorkloadStrip', () => ({
 }));
 
 const mockGetDay = vi.fn();
+const mockCreateRun = vi.fn();
 const mockAssignOrderToRun = vi.fn();
 const mockUnassignOrderFromRun = vi.fn();
 const mockUpdateRun = vi.fn();
 const mockChangeScheduledDeliveryDate = vi.fn();
 const mockGetReschedulePreview = vi.fn();
+const mockListRoutes = vi.fn();
 
 vi.mock('@wholo/admin-api-client', async (importActual) => {
   const actual = await importActual<typeof import('@wholo/admin-api-client')>();
@@ -44,12 +46,17 @@ vi.mock('@wholo/admin-api-client', async (importActual) => {
     adminDeliveryRunsApi: {
       listDays: vi.fn().mockResolvedValue({ data: [] }),
       getDay: (...args: unknown[]) => mockGetDay(...args),
+      createRun: (...args: unknown[]) => mockCreateRun(...args),
       assignOrderToRun: (...args: unknown[]) => mockAssignOrderToRun(...args),
       unassignOrderFromRun: (...args: unknown[]) => mockUnassignOrderFromRun(...args),
       reorderRunOrders: vi.fn(),
       updateRun: (...args: unknown[]) => mockUpdateRun(...args),
       changeScheduledDeliveryDate: (...args: unknown[]) => mockChangeScheduledDeliveryDate(...args),
       getReschedulePreview: (...args: unknown[]) => mockGetReschedulePreview(...args),
+    },
+    // CreateRunDialog lists active routes for its picker.
+    adminDeliveryRoutesApi: {
+      list: (...args: unknown[]) => mockListRoutes(...args),
     },
     // UndatedDeliveriesPanel also mounts on this page and calls this on its
     // own — stubbed so it never hits a real fetch during these tests.
@@ -367,6 +374,106 @@ describe('DeliveryRunsPage — change delivery date flow', () => {
 
     await waitFor(() => expect(screen.getByText('Could not change the delivery date. Please try again.')).toBeInTheDocument());
     expect(mockGetDay).toHaveBeenCalledTimes(1);
+  });
+});
+
+const ROUTE_FIXTURE = {
+  id: 'route-2',
+  distributorId: 'dist-1',
+  name: 'Coast Road',
+  code: null,
+  defaultDriverName: null,
+  active: true,
+  customerCount: 0,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
+describe('DeliveryRunsPage — create run flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetDay.mockResolvedValue(makeBoard());
+    mockListRoutes.mockResolvedValue({ data: [ROUTE_FIXTURE] });
+  });
+
+  it('offers "Plan a run" from the empty state and opens the dialog', async () => {
+    mockGetDay.mockResolvedValue(makeBoard({ runs: [], unassigned: [] }));
+
+    render(<DeliveryRunsPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Plan a run' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Plan a run');
+  });
+
+  it('keeps showing the board (not the empty state) when a day has only an empty run', async () => {
+    mockGetDay.mockResolvedValue(makeBoard({
+      runs: [{
+        runId: 'run-1', routeId: 'route-1', name: 'Yorkshire', driverName: null, status: 'OPEN', version: 0, stopCount: 0, itemCount: 0, cards: [],
+      }],
+      unassigned: [],
+    }));
+
+    render(<DeliveryRunsPage />);
+
+    expect(await screen.findByTestId('board-view')).toBeInTheDocument();
+    expect(screen.queryByText('No deliveries for this day')).not.toBeInTheDocument();
+  });
+
+  it('creates a run from the header button: picks a route and calls createRun for the selected day', async () => {
+    mockCreateRun.mockResolvedValue(makeBoard());
+
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Add run' })[0]);
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvent.selectOptions(await dialog.findByLabelText('Route'), 'route-2');
+    await userEvent.click(dialog.getByRole('button', { name: 'Add run' }));
+
+    await waitFor(() => expect(mockCreateRun).toHaveBeenCalledWith(
+      expect.objectContaining({ routeId: 'route-2', deliveryDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) }),
+    ));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('opens the same dialog from the board\'s "Add run" column', async () => {
+    render(<DeliveryRunsPage />);
+    const boardView = within(await screen.findByTestId('board-view'));
+
+    await userEvent.click(boardView.getByRole('button', { name: 'Add run' }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Plan a run');
+  });
+
+  it('omits routes that already have a run on this day from the picker', async () => {
+    mockListRoutes.mockResolvedValue({
+      data: [{ ...ROUTE_FIXTURE, id: 'route-1', name: 'Yorkshire' }, ROUTE_FIXTURE],
+    });
+
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Add run' })[0]);
+    const dialog = within(await screen.findByRole('dialog'));
+
+    await dialog.findByRole('option', { name: /Coast Road/ });
+    expect(dialog.queryByRole('option', { name: 'Yorkshire' })).not.toBeInTheDocument();
+  });
+
+  it('on 422, shows the server detail and closes the dialog', async () => {
+    const { ApiError } = await import('@wholo/admin-api-client');
+    mockCreateRun.mockRejectedValue(new ApiError({
+      type: 'about:blank', title: 'Unprocessable', status: 422, detail: 'A run for this route already exists on this day',
+    }, 422));
+
+    render(<DeliveryRunsPage />);
+    await screen.findByTestId('board-view');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Add run' })[0]);
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvent.selectOptions(await dialog.findByLabelText('Route'), 'route-2');
+    await userEvent.click(dialog.getByRole('button', { name: 'Add run' }));
+
+    await waitFor(() => expect(screen.getByText('A run for this route already exists on this day')).toBeInTheDocument());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

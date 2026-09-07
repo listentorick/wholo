@@ -1655,6 +1655,14 @@ export interface DeliveryDaysListResponse {
   data: DeliveryDaySummary[];   // no pagination block — bounded, capped window
 }
 
+// Create the empty run a route + day would otherwise only get lazily, once
+// an accepted order auto-allocates onto it. Kept to one run per route/day —
+// the server rejects a duplicate with 422.
+export interface CreateDeliveryRunRequest {
+  routeId: string;
+  deliveryDate: string;   // YYYY-MM-DD
+}
+
 export interface AssignOrderToRunRequest {
   orderId: string;
   version: number;

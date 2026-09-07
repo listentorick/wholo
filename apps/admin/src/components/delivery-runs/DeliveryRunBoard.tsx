@@ -22,6 +22,7 @@ interface DeliveryRunBoardProps {
   onReopen: (runId: string) => Promise<void>;
   onSetDriver: (runId: string, driverName: string | null) => void;
   onChangeDate: (orderId: string) => void;
+  onAddRun: () => void;
 }
 
 function findCard(board: DeliveryDayBoard, orderId: string): DeliveryCardType | null {
@@ -42,7 +43,7 @@ function findCard(board: DeliveryDayBoard, orderId: string): DeliveryCardType | 
 // column, which position) lives in resolveDragEnd, unit-tested separately
 // since dnd-kit's pointer gestures don't simulate reliably in jsdom.
 export function DeliveryRunBoard({
-  board, pendingOrderId, pendingRunId, onMove, onReorder, onMarkReady, onReopen, onSetDriver, onChangeDate,
+  board, pendingOrderId, pendingRunId, onMove, onReorder, onMarkReady, onReopen, onSetDriver, onChangeDate, onAddRun,
 }: DeliveryRunBoardProps) {
   const [activeCard, setActiveCard] = useState<DeliveryCardType | null>(null);
 
@@ -95,6 +96,16 @@ export function DeliveryRunBoard({
               onChangeDate={onChangeDate}
             />
           ))}
+          {/* Plan a run for a route that no accepted order has populated on
+              this day yet — same dialog as the header "Add run" button. */}
+          <button
+            type="button"
+            onClick={onAddRun}
+            className="flex h-full w-[300px] shrink-0 min-h-0 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border text-sm font-medium text-muted transition-colors hover:border-primary hover:text-primary"
+          >
+            <span aria-hidden className="text-lg leading-none">+</span>
+            Add run
+          </button>
         </div>
       </div>
       <DragOverlay>

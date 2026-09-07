@@ -15,6 +15,10 @@ export class DeliveryRunsService {
     return this.api.get(`/distributors/${distributorId}/delivery-days/${date}`, token);
   }
 
+  createRun(distributorId: string, body: unknown, token: string) {
+    return this.api.post(`/distributors/${distributorId}/delivery-runs`, token, body);
+  }
+
   assignOrderToRun(distributorId: string, runId: string, body: unknown, token: string) {
     return this.api.post(`/distributors/${distributorId}/delivery-runs/${runId}/orders`, token, body);
   }
