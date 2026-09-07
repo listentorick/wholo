@@ -126,12 +126,19 @@ describe('AccountingService (BFF)', () => {
     });
   });
 
-  describe('syncContacts', () => {
-    it('posts to the sync route', async () => {
-      mockApi.post.mockResolvedValue({ queued: true });
-      const result = await service.syncContacts('dist-1', 'token-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/contacts/sync', 'token-1');
-      expect(result).toEqual({ queued: true });
+  describe('requestSync', () => {
+    it('posts to the combined sync route', async () => {
+      mockApi.post.mockResolvedValue({ runs: [], lastSucceededAt: null });
+      await service.requestSync('dist-1', 'token-1');
+      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/sync', 'token-1');
+    });
+  });
+
+  describe('getSyncStatus', () => {
+    it('gets the sync status route', async () => {
+      mockApi.get.mockResolvedValue({ runs: [], lastSucceededAt: null });
+      await service.getSyncStatus('dist-1', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/sync/status', 'token-1');
     });
   });
 
@@ -221,15 +228,6 @@ describe('AccountingService (BFF)', () => {
       const result = await service.countProductsNeedingAttention('dist-1', 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/needs-attention-count', 'token-1');
       expect(result).toEqual({ count: 3 });
-    });
-  });
-
-  describe('syncProducts', () => {
-    it('posts to the sync route', async () => {
-      mockApi.post.mockResolvedValue({ queued: true });
-      const result = await service.syncProducts('dist-1', 'token-1');
-      expect(mockApi.post).toHaveBeenCalledWith('/distributors/dist-1/accounting/products/sync', 'token-1');
-      expect(result).toEqual({ queued: true });
     });
   });
 

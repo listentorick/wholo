@@ -56,6 +56,18 @@ export class AccountingController {
     return this.service.disconnect(organisationId, token);
   }
 
+  @Post('sync')
+  requestSync(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.requestSync(organisationId, token);
+  }
+
+  @Get('sync/status')
+  getSyncStatus(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.getSyncStatus(organisationId, token);
+  }
+
   @Get('contacts')
   listContacts(@Query() query: ContactQueryDto, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
@@ -66,12 +78,6 @@ export class AccountingController {
   countContactsNeedingAttention(@Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.countContactsNeedingAttention(organisationId, token);
-  }
-
-  @Post('contacts/sync')
-  syncContacts(@Req() req: Request) {
-    const { organisationId, token } = req.user as { organisationId: string; token: string };
-    return this.service.syncContacts(organisationId, token);
   }
 
   @Post('contacts/:externalContactId/import')
@@ -134,12 +140,6 @@ export class AccountingController {
   countProductsNeedingAttention(@Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.countProductsNeedingAttention(organisationId, token);
-  }
-
-  @Post('products/sync')
-  syncProducts(@Req() req: Request) {
-    const { organisationId, token } = req.user as { organisationId: string; token: string };
-    return this.service.syncProducts(organisationId, token);
   }
 
   @Post('products/:externalProductId/import')
@@ -206,12 +206,6 @@ export class AccountingController {
   countTaxTypesNeedingAttention(@Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.service.countTaxTypesNeedingAttention(organisationId, token);
-  }
-
-  @Post('tax-types/sync')
-  syncTaxTypes(@Req() req: Request) {
-    const { organisationId, token } = req.user as { organisationId: string; token: string };
-    return this.service.syncTaxTypes(organisationId, token);
   }
 
   @Post('tax-types/:externalTaxTypeId/import')

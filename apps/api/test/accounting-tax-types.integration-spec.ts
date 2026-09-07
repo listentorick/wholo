@@ -34,6 +34,7 @@ import { AccountingConnectionService } from '../src/accounting/accounting-connec
 import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting-adapter.registry';
 import { AccountingChangeDetectionService } from '../src/accounting/accounting-change-detection.service';
 import { AccountingTaxTypeMatcherService } from '../src/accounting/matching/accounting-tax-type-matcher.service';
+import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
 import { AccountingExternalTaxRate } from '../src/accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingTaxTypeSyncProcessor } from '../src/accounting-tax-type-sync/accounting-tax-type-sync.processor';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
@@ -85,6 +86,7 @@ describe('Accounting tax type sync (integration)', () => {
       } as unknown as AccountingConnectionService,
       { get: () => ({ listTaxRates }) } as unknown as AccountingAdapterRegistry,
       app.get(AccountingChangeDetectionService),
+      app.get(IngestionRunService),
       app.get(AccountingTaxTypeMatcherService),
     );
 

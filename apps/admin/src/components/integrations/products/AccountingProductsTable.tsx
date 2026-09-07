@@ -78,8 +78,12 @@ export function AccountingProductsTable({
             <path d="M4 7l8 6 8-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         }
-        title={hasFilter ? 'No matching products' : 'No products synced yet'}
-        description={hasFilter ? 'Try adjusting or clearing your filters.' : `Click Sync now to pull products from ${providerLabel}.`}
+        title={hasFilter ? 'No matching products' : 'No products found'}
+        description={
+          hasFilter
+            ? 'Try adjusting or clearing your filters.'
+            : `The last ${providerLabel} sync returned no products.`
+        }
       />
     );
   }

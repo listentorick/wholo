@@ -4,13 +4,15 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useIngestionSync } from '@/lib/ingestion-sync-context';
+import { relativeTime } from '@/lib/date';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
-import { SyncNowButton as ContactsSyncNowButton } from '@/components/integrations/contacts/SyncNowButton';
 import { ProductsTab } from '@/components/integrations/products/ProductsTab';
-import { SyncNowButton as ProductsSyncNowButton } from '@/components/integrations/products/SyncNowButton';
 import { TaxTypesTab } from '@/components/integrations/tax-types/TaxTypesTab';
-import { SyncNowButton as TaxTypesSyncNowButton } from '@/components/integrations/tax-types/SyncNowButton';
 import { AccountingSettingsTab } from '@/components/integrations/AccountingSettingsTab';
+import { SyncWithProviderButton } from '@/components/integrations/SyncWithProviderButton';
+import { IngestionProgressPanel } from '@/components/integrations/IngestionProgressPanel';
+import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { adminAccountingApi } from '@wholo/admin-api-client';
 import type { AccountingConnectionStatusResponse } from '@wholo/types';
 
@@ -28,6 +30,20 @@ const TABS: { key: TabKey; label: string }[] = [
 // provider-neutral in structure, this map is just display copy.
 const PROVIDER_LABELS: Record<string, string> = { XERO: 'Xero' };
 
+// resourceType (IngestionRun) → display label for the progress panel.
+const RESOURCE_LABELS: Record<string, string> = {
+  contact: 'Contacts',
+  product: 'Products',
+  tax_type: 'Tax types',
+};
+
+// resourceType (IngestionRun) → the tab its "Review" link opens.
+const RESOURCE_TAB: Record<string, TabKey> = {
+  contact: 'contacts',
+  product: 'products',
+  tax_type: 'taxTypes',
+};
+
 function Spinner() {
   return (
     <div className="flex h-screen items-center justify-center bg-canvas">
@@ -36,10 +52,58 @@ function Spinner() {
   );
 }
 
+function BackLink() {
+  return (
+    <Link
+      href="/integrations"
+      className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-text"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+        <polyline points="15 18 9 12 15 6" />
+      </svg>
+      Integrations
+    </Link>
+  );
+}
+
 function AccountingPageInner() {
   const { accessToken } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const {
+    runs,
+    isSyncing,
+    hasManualActive,
+    hasEverSynced,
+    lastSucceededAt,
+    reloadSignal,
+    triggerSync,
+  } = useIngestionSync();
+
+  // A manual / first-ever sync shows the full panel and *holds* there after it
+  // finishes — the screen doesn't snap to the listing until the user clicks
+  // "View synced data".
+  const fullPanelNow = isSyncing && (hasManualActive || !hasEverSynced);
+  const [fullPanelHeld, setFullPanelHeld] = useState(false);
+  const [resultsSeen, setResultsSeen] = useState(false);
+  useEffect(() => {
+    if (fullPanelNow) {
+      setFullPanelHeld(true);
+      setResultsSeen(false);
+    }
+  }, [fullPanelNow]);
+  const showFullPanel = (fullPanelNow || fullPanelHeld) && !resultsSeen;
+  // From the "sync complete" panel — dismiss it and land on the listing. A
+  // per-resource "Review" link passes its resourceType so we open that tab;
+  // the footer action passes nothing (default tab). No filtering yet — the
+  // changed rows just sort to the top of the existing table.
+  function handleViewResults(resourceType?: string) {
+    setResultsSeen(true);
+    setFullPanelHeld(false);
+    const tab = resourceType ? RESOURCE_TAB[resourceType] : undefined;
+    if (tab) router.push(`/integrations/accounting?tab=${tab}`);
+  }
 
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null | undefined>(undefined);
   const [needsAttentionCount, setNeedsAttentionCount] = useState(0);
@@ -90,7 +154,13 @@ function AccountingPageInner() {
     fetchNeedsAttentionCount();
     fetchProductsNeedsAttentionCount();
     fetchTaxTypesNeedsAttentionCount();
-  }, [fetchNeedsAttentionCount, fetchProductsNeedsAttentionCount, fetchTaxTypesNeedsAttentionCount]);
+    // reloadSignal bumps when a sync finishes — refresh the badges then too.
+  }, [
+    fetchNeedsAttentionCount,
+    fetchProductsNeedsAttentionCount,
+    fetchTaxTypesNeedsAttentionCount,
+    reloadSignal,
+  ]);
 
   function setTab(key: TabKey) {
     router.push(`/integrations/accounting?tab=${key}`);
@@ -118,35 +188,95 @@ function AccountingPageInner() {
   }
 
   const providerLabel = PROVIDER_LABELS[connection.provider] ?? connection.provider;
+  const lastSyncedAt = lastSucceededAt ?? connection.lastSyncedAt ?? null;
+
+  // A background scheduled sync only shows a non-blocking strip (below).
+  const showEmptyState = !isSyncing && !hasEverSynced && !showFullPanel;
+
+  if (showFullPanel) {
+    return (
+      <>
+        <div className="mb-6">
+          <BackLink />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-xl font-semibold text-text">
+              {providerLabel} — {connection.externalOrganisationName}
+            </h1>
+            <SyncWithProviderButton onClick={triggerSync} disabled={isSyncing} label={`Sync with ${providerLabel}`} />
+          </div>
+        </div>
+        <IngestionProgressPanel
+          runs={runs}
+          providerLabel={providerLabel}
+          labels={RESOURCE_LABELS}
+          onViewResults={handleViewResults}
+        />
+      </>
+    );
+  }
+
+  if (showEmptyState) {
+    return (
+      <>
+        <div className="mb-6">
+          <BackLink />
+          <h1 className="text-xl font-semibold text-text">
+            {providerLabel} — {connection.externalOrganisationName}
+          </h1>
+        </div>
+        <ListEmptyState
+          iconBgClassName="bg-primary/10"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-9 w-9 text-primary" aria-hidden>
+              <ellipse cx="12" cy="5" rx="8" ry="3" />
+              <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+              <path d="M4 11v6c0 1.66 3.58 3 8 3 1.4 0 2.71-.13 3.86-.37" />
+              <path d="M19 15v6M22 18l-3 3-3-3" />
+            </svg>
+          }
+          title={`No ${providerLabel} data has been synced yet`}
+          description={`Pull your contacts, products and tax types from ${connection.externalOrganisationName} so you can review and import them.`}
+          action={
+            <SyncWithProviderButton
+              variant="primary"
+              onClick={triggerSync}
+              label={`Sync with ${providerLabel}`}
+            />
+          }
+        />
+      </>
+    );
+  }
 
   return (
     <>
       <div className="mb-6">
-        <Link
-          href="/integrations"
-          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-text transition-colors mb-3"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          Integrations
-        </Link>
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <BackLink />
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-xl font-semibold text-text">
             {providerLabel} — {connection.externalOrganisationName}
           </h1>
-          {activeTab === 'contacts' && accessToken && (
-            <ContactsSyncNowButton onQueued={fetchNeedsAttentionCount} />
-          )}
-          {activeTab === 'products' && accessToken && (
-            <ProductsSyncNowButton onQueued={fetchProductsNeedsAttentionCount} />
-          )}
-          {activeTab === 'taxTypes' && accessToken && (
-            <TaxTypesSyncNowButton onQueued={fetchTaxTypesNeedsAttentionCount} />
-          )}
+          <div className="flex flex-col items-end gap-1">
+            <SyncWithProviderButton
+              onClick={triggerSync}
+              disabled={isSyncing}
+              label={`Sync with ${providerLabel}`}
+            />
+            {lastSyncedAt && (
+              <span className="text-xs text-muted">Last synced {relativeTime(lastSyncedAt)}</span>
+            )}
+          </div>
         </div>
       </div>
+
+      {isSyncing && (
+        <IngestionProgressPanel
+          runs={runs}
+          providerLabel={providerLabel}
+          labels={RESOURCE_LABELS}
+          variant="strip"
+        />
+      )}
 
       <div className="mb-6 border-b border-border">
         <nav className="-mb-px flex gap-6 overflow-x-auto">
@@ -184,13 +314,25 @@ function AccountingPageInner() {
       </div>
 
       {activeTab === 'contacts' && accessToken && (
-        <ContactsTab providerLabel={providerLabel} onContactsChanged={fetchNeedsAttentionCount} />
+        <ContactsTab
+          providerLabel={providerLabel}
+          onContactsChanged={fetchNeedsAttentionCount}
+          reloadSignal={reloadSignal}
+        />
       )}
       {activeTab === 'products' && accessToken && (
-        <ProductsTab providerLabel={providerLabel} onProductsChanged={fetchProductsNeedsAttentionCount} />
+        <ProductsTab
+          providerLabel={providerLabel}
+          onProductsChanged={fetchProductsNeedsAttentionCount}
+          reloadSignal={reloadSignal}
+        />
       )}
       {activeTab === 'taxTypes' && accessToken && (
-        <TaxTypesTab providerLabel={providerLabel} onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount} />
+        <TaxTypesTab
+          providerLabel={providerLabel}
+          onTaxTypesChanged={fetchTaxTypesNeedsAttentionCount}
+          reloadSignal={reloadSignal}
+        />
       )}
       {activeTab === 'settings' && accessToken && (
         <AccountingSettingsTab connection={connection} onConnectionUpdated={setConnection} />

@@ -278,8 +278,8 @@ describe('AccountingProductsTable', () => {
 
   it('shows the unfiltered empty state pointing at Sync now', () => {
     render(<AccountingProductsTable products={[]} loading={false} hasFilter={false} {...baseProps} />);
-    expect(screen.getByText('No products synced yet')).toBeInTheDocument();
-    expect(screen.getByText(/Click Sync now/)).toBeInTheDocument();
+    expect(screen.getByText('No products found')).toBeInTheDocument();
+    expect(screen.getByText('The last Xero sync returned no products.')).toBeInTheDocument();
   });
 
   it('shows the filtered empty state when a filter is active', () => {

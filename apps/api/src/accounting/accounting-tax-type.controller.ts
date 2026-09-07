@@ -32,12 +32,6 @@ export class AccountingTaxTypeController {
     return { count: await this.service.countNeedsAttention(distributorId) };
   }
 
-  @Post('sync')
-  @ApiOperation({ summary: 'Request a tax type sync — enqueues the same job the scheduled sync uses' })
-  requestManualSync(@Param('distributorId') distributorId: string) {
-    return this.service.requestManualSync(distributorId);
-  }
-
   @Post(':externalTaxTypeId/import')
   @ApiOperation({ summary: 'Import an accounting tax rate as a new Wholo tax type' })
   importAsNewTaxType(

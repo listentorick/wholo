@@ -65,8 +65,12 @@ export function AccountingTaxTypesTable({
             <path d="M9 12h6M9 16h6" strokeLinecap="round" />
           </svg>
         }
-        title={hasFilter ? 'No matching tax types' : 'No tax types synced yet'}
-        description={hasFilter ? 'Try adjusting or clearing your filters.' : `Click Sync now to pull tax types from ${providerLabel}.`}
+        title={hasFilter ? 'No matching tax types' : 'No tax types found'}
+        description={
+          hasFilter
+            ? 'Try adjusting or clearing your filters.'
+            : `The last ${providerLabel} sync returned no tax types.`
+        }
       />
     );
   }

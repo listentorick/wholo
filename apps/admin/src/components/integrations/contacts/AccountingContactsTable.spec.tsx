@@ -52,10 +52,10 @@ describe('AccountingContactsTable', () => {
     expect(screen.queryAllByRole('row')).toHaveLength(0);
   });
 
-  it('shows an unfiltered empty state inviting the user to sync', () => {
+  it('shows the unfiltered empty state for a synced-but-empty result', () => {
     render(<AccountingContactsTable contacts={[]} loading={false} hasFilter={false} {...baseProps} />);
-    expect(screen.getByText('No contacts synced yet')).toBeInTheDocument();
-    expect(screen.getByText('Click Sync now to pull contacts from Xero.')).toBeInTheDocument();
+    expect(screen.getByText('No contacts found')).toBeInTheDocument();
+    expect(screen.getByText('The last Xero sync returned no contacts.')).toBeInTheDocument();
   });
 
   it('shows a filtered empty state when a status filter is active', () => {

@@ -38,6 +38,14 @@ export class AccountingService {
     return this.api.delete(`/distributors/${distributorId}/accounting/connection`, token);
   }
 
+  requestSync(distributorId: string, token: string) {
+    return this.api.post(`/distributors/${distributorId}/accounting/sync`, token);
+  }
+
+  getSyncStatus(distributorId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/accounting/sync/status`, token);
+  }
+
   listContacts(distributorId: string, query: ContactQueryDto, token: string) {
     const params = new URLSearchParams();
     if (query.limit != null) params.set('limit', String(query.limit));
@@ -51,10 +59,6 @@ export class AccountingService {
 
   countContactsNeedingAttention(distributorId: string, token: string) {
     return this.api.get(`/distributors/${distributorId}/accounting/contacts/needs-attention-count`, token);
-  }
-
-  syncContacts(distributorId: string, token: string) {
-    return this.api.post(`/distributors/${distributorId}/accounting/contacts/sync`, token);
   }
 
   importContact(distributorId: string, externalContactId: string, dto: ImportContactDto, token: string) {
@@ -98,10 +102,6 @@ export class AccountingService {
 
   countProductsNeedingAttention(distributorId: string, token: string) {
     return this.api.get(`/distributors/${distributorId}/accounting/products/needs-attention-count`, token);
-  }
-
-  syncProducts(distributorId: string, token: string) {
-    return this.api.post(`/distributors/${distributorId}/accounting/products/sync`, token);
   }
 
   importProduct(distributorId: string, externalProductId: string, dto: ImportProductDto, token: string) {
@@ -150,10 +150,6 @@ export class AccountingService {
 
   countTaxTypesNeedingAttention(distributorId: string, token: string) {
     return this.api.get(`/distributors/${distributorId}/accounting/tax-types/needs-attention-count`, token);
-  }
-
-  syncTaxTypes(distributorId: string, token: string) {
-    return this.api.post(`/distributors/${distributorId}/accounting/tax-types/sync`, token);
   }
 
   importTaxType(distributorId: string, externalTaxTypeId: string, dto: ImportTaxTypeDto, token: string) {

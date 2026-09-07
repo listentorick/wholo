@@ -5,7 +5,17 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingTaxTypeMatcherService } from '../accounting/matching/accounting-tax-type-matcher.service';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingTaxTypeSyncProcessor } from './accounting-tax-type-sync.processor';
+
+const ingestionRunsMock = () => ({
+  ensureRun: jest.fn().mockResolvedValue('run-1'),
+  claim: jest.fn().mockResolvedValue({ id: 'run-1' }),
+  setTotal: jest.fn().mockResolvedValue(undefined),
+  heartbeat: jest.fn().mockResolvedValue(undefined),
+  finalizeSuccess: jest.fn().mockResolvedValue(undefined),
+  finalizeFailure: jest.fn().mockResolvedValue(undefined),
+});
 
 function makeJob(connectionId = 'conn-1'): Job {
   return {
@@ -82,6 +92,7 @@ describe('AccountingTaxTypeSyncProcessor', () => {
       accountingConnectionService as unknown as AccountingConnectionService,
       adapters as unknown as AccountingAdapterRegistry,
       changeDetection as unknown as AccountingChangeDetectionService,
+      ingestionRunsMock() as unknown as IngestionRunService,
       matcher as unknown as AccountingTaxTypeMatcherService,
     );
   });

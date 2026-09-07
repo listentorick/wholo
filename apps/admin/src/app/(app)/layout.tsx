@@ -1,6 +1,7 @@
 'use client';
 
 import { AdminLayout } from '@/components/AdminLayout';
+import { IngestionSyncProvider } from '@/lib/ingestion-sync-context';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 
 /**
@@ -27,5 +28,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // useRequireAuth is redirecting to /login, /onboarding or /access-denied.
   if (!user) return null;
 
-  return <AdminLayout>{children}</AdminLayout>;
+  return (
+    <IngestionSyncProvider>
+      <AdminLayout>{children}</AdminLayout>
+    </IngestionSyncProvider>
+  );
 }

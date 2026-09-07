@@ -12,6 +12,8 @@ import { AccountingProductsTable } from './AccountingProductsTable';
 interface Props {
   providerLabel: string;
   onProductsChanged?: () => void;
+  // Bumped by the page when a sync finishes — forces a fresh, non-appending reload.
+  reloadSignal?: number;
 }
 
 const TYPE_OPTIONS = [
@@ -54,7 +56,7 @@ function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingPro
   return filter;
 }
 
-export function ProductsTab({ providerLabel, onProductsChanged }: Props) {
+export function ProductsTab({ providerLabel, onProductsChanged, reloadSignal }: Props) {
   const filterFields = useMemo<FilterFieldConfig[]>(
     () => [
       { field: 'search', label: 'Name', operators: [{ value: 'contains', label: 'contains' }], valueKind: 'text' },
@@ -90,7 +92,7 @@ export function ProductsTab({ providerLabel, onProductsChanged }: Props) {
     fetchPage: (params) => adminAccountingApi.listProducts(params),
     buildParams,
     errorMessage: 'Failed to load products. Please refresh.',
-    deps: [filters, reloadToken],
+    deps: [filters, reloadToken, reloadSignal],
   });
 
   // Selection is filter-scoped — a new filter invalidates whatever was

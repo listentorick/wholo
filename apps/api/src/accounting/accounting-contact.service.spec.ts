@@ -300,25 +300,6 @@ describe('AccountingContactService', () => {
     });
   });
 
-  describe('requestManualSync', () => {
-    it('writes an AccountingContactSyncRequested outbox event rather than syncing inline', async () => {
-      const result = await service.requestManualSync('dist-1');
-      expect(outbox.writeEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        'AccountingConnection',
-        'conn-1',
-        'AccountingContactSyncRequested',
-        {},
-      );
-      expect(result).toEqual({ queued: true });
-    });
-
-    it('throws when there is no active connection', async () => {
-      prisma.accountingConnection.findFirst.mockResolvedValue(null);
-      await expect(service.requestManualSync('dist-1')).rejects.toThrow(NotFoundException);
-    });
-  });
-
   describe('importAsNewCustomer', () => {
     const cachedContact = {
       id: 'contact-1',

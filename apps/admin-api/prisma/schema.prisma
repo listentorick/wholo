@@ -230,6 +230,18 @@ enum AccountingBulkImportJobStatus {
   FAILED
 }
 
+enum IngestionRunStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum IngestionRunTrigger {
+  MANUAL
+  SCHEDULED
+}
+
 model Organisation {
   id                                String                             @id @default(cuid())
   name                              String
@@ -286,6 +298,7 @@ model Organisation {
   accountingTaxTypeMatchSuggestions AccountingTaxTypeMatchSuggestion[]
   accountingInvoiceExports          AccountingInvoiceExport[]
   accountingBulkImportJobs          AccountingBulkImportJob[]
+  ingestionRuns                     IngestionRun[]
   auditLogs                         AuditLog[]
 
   @@map("organisations")
@@ -1216,6 +1229,51 @@ model AccountingBulkImportJob {
 
   @@index([distributorId, createdAt])
   @@map("accounting_bulk_import_jobs")
+}
+
+// Generic tracking row for one in-progress/last "pull" from an external source
+// into Wholo. Deliberately source-agnostic: sourceType / sourceRef /
+// resourceType are opaque strings so a new ingestion source (delivery, stock,
+// …) reuses this table with no migration. Known values today:
+//   sourceType   "accounting"
+//   sourceRef    AccountingConnection.id
+//   resourceType "contact" | "product" | "tax_type"
+// One row per (sourceType, sourceRef, resourceType) — reset and reused on each
+// run, no history kept (see ADR-061). updatedAt doubles as the processor's
+// crash-recovery heartbeat, exactly like AccountingBulkImportJob.
+model IngestionRun {
+  id               String              @id @default(cuid())
+  distributorId    String
+  sourceType       String
+  sourceRef        String
+  resourceType     String
+  status           IngestionRunStatus  @default(QUEUED)
+  trigger          IngestionRunTrigger
+  recordsTotal     Int?
+  recordsProcessed Int                 @default(0)
+  recordsFailed    Int                 @default(0)
+  // Delta breakdown of recordsProcessed, populated as the run completes and
+  // read by the "sync complete" panel. created + updated + removed + unchanged
+  // does not have to equal recordsProcessed (removed rows are reconciled
+  // separately from the fetched set), so the panel derives "unchanged" as
+  // recordsProcessed - created - updated.
+  recordsCreated   Int                 @default(0)
+  recordsUpdated   Int                 @default(0)
+  recordsRemoved   Int                 @default(0)
+  // Generic secondary counter — for accounting sync this is "match suggestions created".
+  detailCount      Int                 @default(0)
+  errorMessage     String?
+  queuedAt         DateTime            @default(now())
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  distributor Organisation @relation(fields: [distributorId], references: [id])
+
+  @@unique([sourceType, sourceRef, resourceType])
+  @@index([distributorId])
+  @@map("ingestion_runs")
 }
 
 model TraderCustomerSettings {

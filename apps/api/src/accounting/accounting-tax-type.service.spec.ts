@@ -1,7 +1,6 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { AccountingTaxTypeMatchMethod, AccountingTaxTypeMatchStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { OutboxService } from '../outbox/outbox.service';
 import { TaxTypesService } from '../tax-types/tax-types.service';
 import { AccountingTaxTypeService } from './accounting-tax-type.service';
 
@@ -39,17 +38,14 @@ const activeConnection = { id: 'conn-1', distributorId: 'dist-1', status: 'CONNE
 describe('AccountingTaxTypeService', () => {
   let service: AccountingTaxTypeService;
   let prisma: ReturnType<typeof makePrismaMock>;
-  let outbox: { writeEvent: jest.Mock };
   let taxTypes: { create: jest.Mock };
 
   beforeEach(() => {
     prisma = makePrismaMock();
     prisma.accountingConnection.findFirst.mockResolvedValue(activeConnection);
-    outbox = { writeEvent: jest.fn().mockResolvedValue({}) };
     taxTypes = { create: jest.fn().mockResolvedValue({ id: 'tt-new', name: 'Standard rate' }) };
     service = new AccountingTaxTypeService(
       prisma as unknown as PrismaService,
-      outbox as unknown as OutboxService,
       taxTypes as unknown as TaxTypesService,
     );
   });
@@ -175,19 +171,6 @@ describe('AccountingTaxTypeService', () => {
       prisma.externalAccountingTaxType.count.mockResolvedValueOnce(2).mockResolvedValueOnce(3);
       const count = await service.countNeedsAttention('dist-1');
       expect(count).toBe(5);
-    });
-  });
-
-  describe('requestManualSync', () => {
-    it('writes an AccountingTaxTypeSyncRequested outbox event scoped to the connection', async () => {
-      await service.requestManualSync('dist-1');
-      expect(outbox.writeEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        'AccountingConnection',
-        activeConnection.id,
-        'AccountingTaxTypeSyncRequested',
-        {},
-      );
     });
   });
 

@@ -78,6 +78,25 @@ export class AccountingConnectionService {
     return this.toConnectionStatus(updated);
   }
 
+  // The distributor's current connection (CONNECTED or ERROR), or null.
+  // Used by AccountingSyncService.getStatus — a broken connection still shows
+  // its last-synced marker and any runs.
+  getCurrentConnection(distributorId: string) {
+    return this.findCurrentConnection(distributorId);
+  }
+
+  // The distributor's live connection — a sync can only be requested against a
+  // CONNECTED one. Throws if there isn't one.
+  async getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnection> {
+    const connection = await this.prisma.accountingConnection.findFirst({
+      where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+    });
+    if (!connection) {
+      throw new NotFoundException('No active accounting connection for this distributor');
+    }
+    return connection;
+  }
+
   // Include ERROR so a broken connection (e.g. refresh failed, revoked
   // access) is surfaced distinctly rather than looking indistinguishable
   // from "never connected".

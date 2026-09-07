@@ -24,8 +24,10 @@ import { AccountingMatchResult } from '../accounting/matching/accounting-record-
 import {
   AccountingSyncProcessorBase,
   AccountingSyncSuggestionRef,
+  CacheUpsertResult,
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 
 // Consumes AccountingProductSyncRequested — written to the outbox by both
 // AccountingProductSyncScheduler (periodic) and the "Sync now" HTTP endpoint
@@ -38,7 +40,8 @@ import { AccountingChangeDetectionService } from '../accounting/accounting-chang
 // mutated here. If accounting-owned field updates (e.g. price) are ever
 // allowed after linking, that rule would run after upsertCacheRecord for rows
 // with an active mapping — a deliberate product decision, not a default.
-@Processor(ACCOUNTING_PRODUCT_SYNC_QUEUE)
+// concurrency 2 — see AccountingContactSyncProcessor / ADR-061.
+@Processor(ACCOUNTING_PRODUCT_SYNC_QUEUE, { concurrency: 2 })
 export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalProduct,
   ExternalAccountingProduct,
@@ -47,15 +50,17 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
 > {
   protected readonly logger = new Logger(AccountingProductSyncProcessor.name);
   protected readonly recordNoun = 'product';
+  protected readonly resourceType = 'product';
 
   constructor(
     prisma: PrismaService,
     accountingConnectionService: AccountingConnectionService,
     adapters: AccountingAdapterRegistry,
     changeDetection: AccountingChangeDetectionService,
+    ingestionRuns: IngestionRunService,
     protected readonly matcher: AccountingProductMatcherService,
   ) {
-    super(prisma, accountingConnectionService, adapters, changeDetection);
+    super(prisma, accountingConnectionService, adapters, changeDetection, ingestionRuns);
   }
 
   protected fetchExternalRecords(
@@ -66,10 +71,30 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     return adapter.listProducts(tokenSet, externalOrganisationId);
   }
 
+  // Business fields shown in the review table — a move in any of these makes
+  // the row "updated" on the sync-complete panel. isActive is excluded: a flip
+  // to inactive is a removal (handleStaleRecords), and a re-activation reads
+  // naturally as an update via the other fields.
+  private static readonly CHANGE_FIELDS = [
+    'externalProductCode',
+    'displayName',
+    'description',
+    'salesUnitPrice',
+    'purchaseUnitPrice',
+    'taxCode',
+    'accountCode',
+    'purchaseTaxCode',
+    'purchaseAccountCode',
+    'isSold',
+    'isPurchased',
+    'isTracked',
+    'quantityOnHand',
+  ];
+
   protected async upsertCacheRecord(
     connection: AccountingConnection,
     product: AccountingExternalProduct,
-  ): Promise<ExternalAccountingProduct> {
+  ): Promise<CacheUpsertResult<ExternalAccountingProduct>> {
     const shared = {
       externalProductCode: product.code ?? null,
       displayName: product.displayName,
@@ -136,17 +161,21 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
       },
     });
 
-    return updated;
+    return {
+      record: updated,
+      change: this.classifyChange(previous, updated, AccountingProductSyncProcessor.CHANGE_FIELDS),
+    };
   }
 
   // Xero Items carry no archived/deleted flag — a deleted item simply stops
   // appearing in the (always-full) fetch. Absence is therefore the deletion
   // signal: any cache row not in this sync's fetched set is marked inactive.
+  // Returns how many rows were newly deactivated for the sync-complete panel.
   protected async handleStaleRecords(
     connection: AccountingConnection,
     fetched: ExternalAccountingProduct[],
-  ): Promise<void> {
-    await this.prisma.externalAccountingProduct.updateMany({
+  ): Promise<number> {
+    const { count } = await this.prisma.externalAccountingProduct.updateMany({
       where: {
         accountingConnectionId: connection.id,
         id: { notIn: fetched.map((product) => product.id) },
@@ -154,6 +183,7 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
       },
       data: { isActive: false },
     });
+    return count;
   }
 
   protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingProductMatchCandidate[]> {

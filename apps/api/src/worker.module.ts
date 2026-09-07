@@ -18,6 +18,7 @@ import { HealthModule } from './health/health.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { IngestionRunModule } from './ingestion/ingestion-run.module';
 import { OutboxPublisherService } from './outbox/outbox-publisher.service';
 import { PrismaModule } from './prisma/prisma.module';
 import {
@@ -61,9 +62,36 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
           removeOnFail: false,
         },
       },
-      { name: ACCOUNTING_CONTACT_SYNC_QUEUE },
-      { name: ACCOUNTING_PRODUCT_SYNC_QUEUE },
-      { name: ACCOUNTING_TAX_TYPE_SYNC_QUEUE },
+      // Each retry re-runs a FULL provider fetch, so fewer attempts than the
+      // invoice-export queue. Options must live on THIS registration (see the
+      // invoice-export note above). Concurrency is set per @Processor.
+      {
+        name: ACCOUNTING_CONTACT_SYNC_QUEUE,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
+      {
+        name: ACCOUNTING_PRODUCT_SYNC_QUEUE,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
+      {
+        name: ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
       {
         name: ACCOUNTING_BULK_IMPORT_QUEUE,
         // Local DB operations per item, not external API calls — same
@@ -113,6 +141,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AnalyticsFactsModule,
     DeliveryRunAllocationWorkerModule,
     OutboxModule,
+    IngestionRunModule,
     HealthModule,
   ],
   providers: [

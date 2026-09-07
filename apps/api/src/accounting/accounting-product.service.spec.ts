@@ -271,26 +271,6 @@ describe('AccountingProductService', () => {
     });
   });
 
-  describe('requestManualSync', () => {
-    it('writes an AccountingProductSyncRequested outbox event for the active connection', async () => {
-      const result = await service.requestManualSync('dist-1');
-
-      expect(outbox.writeEvent).toHaveBeenCalledWith(
-        expect.anything(),
-        'AccountingConnection',
-        'conn-1',
-        'AccountingProductSyncRequested',
-        {},
-      );
-      expect(result).toEqual({ queued: true });
-    });
-
-    it('throws NotFoundException without an active connection', async () => {
-      prisma.accountingConnection.findFirst.mockResolvedValue(null);
-      await expect(service.requestManualSync('dist-1')).rejects.toThrow(NotFoundException);
-      expect(outbox.writeEvent).not.toHaveBeenCalled();
-    });
-  });
 
   describe('importAsNewProduct', () => {
     beforeEach(() => {

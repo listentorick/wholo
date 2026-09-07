@@ -24,8 +24,10 @@ import { AccountingMatchResult } from '../accounting/matching/accounting-record-
 import {
   AccountingSyncProcessorBase,
   AccountingSyncSuggestionRef,
+  CacheUpsertResult,
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 
 // Consumes AccountingTaxTypeSyncRequested — written to the outbox by both
 // AccountingTaxTypeSyncScheduler (periodic) and the "Sync now" HTTP endpoint
@@ -37,7 +39,8 @@ import { AccountingChangeDetectionService } from '../accounting/accounting-chang
 // Post-link syncs only refresh the cache row; TaxType.ratePercentage is never
 // mutated here — same deliberate rule as products/contacts. A rate change on
 // a mapped row is surfaced via AccountingChangeDetectionService instead.
-@Processor(ACCOUNTING_TAX_TYPE_SYNC_QUEUE)
+// concurrency 2 — see AccountingContactSyncProcessor / ADR-061.
+@Processor(ACCOUNTING_TAX_TYPE_SYNC_QUEUE, { concurrency: 2 })
 export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalTaxRate,
   ExternalAccountingTaxType,
@@ -46,15 +49,17 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
 > {
   protected readonly logger = new Logger(AccountingTaxTypeSyncProcessor.name);
   protected readonly recordNoun = 'tax type';
+  protected readonly resourceType = 'tax_type';
 
   constructor(
     prisma: PrismaService,
     accountingConnectionService: AccountingConnectionService,
     adapters: AccountingAdapterRegistry,
     changeDetection: AccountingChangeDetectionService,
+    ingestionRuns: IngestionRunService,
     protected readonly matcher: AccountingTaxTypeMatcherService,
   ) {
-    super(prisma, accountingConnectionService, adapters, changeDetection);
+    super(prisma, accountingConnectionService, adapters, changeDetection, ingestionRuns);
   }
 
   protected fetchExternalRecords(
@@ -65,10 +70,14 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
     return adapter.listTaxRates(tokenSet, externalOrganisationId);
   }
 
+  // Business fields shown in the review table. isActive is excluded — a flip to
+  // inactive is a removal (handleStaleRecords).
+  private static readonly CHANGE_FIELDS = ['displayName', 'ratePercentage'];
+
   protected async upsertCacheRecord(
     connection: AccountingConnection,
     taxRate: AccountingExternalTaxRate,
-  ): Promise<ExternalAccountingTaxType> {
+  ): Promise<CacheUpsertResult<ExternalAccountingTaxType>> {
     const shared = {
       displayName: taxRate.displayName,
       ratePercentage: new Prisma.Decimal(taxRate.ratePercentage),
@@ -123,7 +132,10 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
       },
     });
 
-    return updated;
+    return {
+      record: updated,
+      change: this.classifyChange(previous, updated, AccountingTaxTypeSyncProcessor.CHANGE_FIELDS),
+    };
   }
 
   // Xero tax rates carry a status field, but a re-sync only sees whatever
@@ -134,8 +146,8 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   protected async handleStaleRecords(
     connection: AccountingConnection,
     fetched: ExternalAccountingTaxType[],
-  ): Promise<void> {
-    await this.prisma.externalAccountingTaxType.updateMany({
+  ): Promise<number> {
+    const { count } = await this.prisma.externalAccountingTaxType.updateMany({
       where: {
         accountingConnectionId: connection.id,
         id: { notIn: fetched.map((taxType) => taxType.id) },
@@ -143,6 +155,7 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
       },
       data: { isActive: false },
     });
+    return count;
   }
 
   protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingTaxTypeMatchCandidate[]> {

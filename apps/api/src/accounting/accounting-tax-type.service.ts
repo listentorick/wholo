@@ -1,7 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountingConnectionStatus, AccountingTaxTypeMatchMethod, AccountingTaxTypeMatchStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { OutboxService } from '../outbox/outbox.service';
 import { TaxTypesService } from '../tax-types/tax-types.service';
 import { TaxTypeQueryDto } from './dto/tax-type-query.dto';
 import { ImportTaxTypeDto } from './dto/import-tax-type.dto';
@@ -38,7 +37,6 @@ export type AccountingTaxTypeStatus =
 export class AccountingTaxTypeService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly outbox: OutboxService,
     private readonly taxTypes: TaxTypesService,
   ) {}
 
@@ -117,14 +115,6 @@ export class AccountingTaxTypeService {
       }),
     ]);
     return suggested + readyToImport;
-  }
-
-  async requestManualSync(distributorId: string): Promise<{ queued: true }> {
-    const connection = await this.getActiveConnection(distributorId);
-    await this.prisma.$transaction((tx) =>
-      this.outbox.writeEvent(tx, 'AccountingConnection', connection.id, 'AccountingTaxTypeSyncRequested', {}),
-    );
-    return { queued: true };
   }
 
   // PBI §2: an imported Xero tax rate can either create a new Stocdup tax

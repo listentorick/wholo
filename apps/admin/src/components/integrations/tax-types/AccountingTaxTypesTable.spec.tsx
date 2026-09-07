@@ -54,8 +54,8 @@ describe('AccountingTaxTypesTable', () => {
 
   it('shows an unfiltered empty state inviting the user to sync', () => {
     render(<AccountingTaxTypesTable taxTypes={[]} loading={false} hasFilter={false} {...baseProps} />);
-    expect(screen.getByText('No tax types synced yet')).toBeInTheDocument();
-    expect(screen.getByText('Click Sync now to pull tax types from Xero.')).toBeInTheDocument();
+    expect(screen.getByText('No tax types found')).toBeInTheDocument();
+    expect(screen.getByText('The last Xero sync returned no tax types.')).toBeInTheDocument();
   });
 
   it('shows a filtered empty state when a filter is active', () => {

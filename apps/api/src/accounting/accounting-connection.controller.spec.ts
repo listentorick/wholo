@@ -2,12 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AccountingConnectionStatus, AccountingProvider } from '@prisma/client';
 import { AccountingConnectionController } from './accounting-connection.controller';
 import { AccountingConnectionService } from './accounting-connection.service';
+import { AccountingSyncService } from './sync/accounting-sync.service';
 
 const mockService = {
   getConnectionStatus: jest.fn(),
   createAuthorizationUrl: jest.fn(),
   updateConnectionSettings: jest.fn(),
   disconnect: jest.fn(),
+};
+
+const mockSyncService = {
+  requestSync: jest.fn(),
+  getStatus: jest.fn(),
 };
 
 function mockResponse() {
@@ -21,7 +27,10 @@ describe('AccountingConnectionController', () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AccountingConnectionController],
-      providers: [{ provide: AccountingConnectionService, useValue: mockService }],
+      providers: [
+        { provide: AccountingConnectionService, useValue: mockService },
+        { provide: AccountingSyncService, useValue: mockSyncService },
+      ],
     }).compile();
     controller = module.get(AccountingConnectionController);
   });
@@ -91,6 +100,20 @@ describe('AccountingConnectionController', () => {
     it('delegates to the service', async () => {
       await controller.disconnect('dist-1');
       expect(mockService.disconnect).toHaveBeenCalledWith('dist-1');
+    });
+  });
+
+  describe('sync', () => {
+    it('requestSync triggers a MANUAL sync for the path distributor', async () => {
+      mockSyncService.requestSync.mockResolvedValue({ runs: [], lastSucceededAt: null });
+      await controller.requestSync('dist-1');
+      expect(mockSyncService.requestSync).toHaveBeenCalledWith('dist-1', 'MANUAL');
+    });
+
+    it('getSyncStatus delegates to the service', async () => {
+      mockSyncService.getStatus.mockResolvedValue({ runs: [], lastSucceededAt: null });
+      await controller.getSyncStatus('dist-1');
+      expect(mockSyncService.getStatus).toHaveBeenCalledWith('dist-1');
     });
   });
 });

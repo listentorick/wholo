@@ -3,6 +3,7 @@ import { AdminCustomersModule } from '../admin-customers/admin-customers.module'
 import { AdminProductsModule } from '../admin-products/admin-products.module';
 import { TaxTypesModule } from '../tax-types/tax-types.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { IngestionRunModule } from '../ingestion/ingestion-run.module';
 import { AuditModule } from '../audit/audit.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { AccountingConnectionController } from './accounting-connection.controller';
@@ -12,6 +13,7 @@ import { AccountingProductController } from './accounting-product.controller';
 import { AccountingTaxTypeController } from './accounting-tax-type.controller';
 import { XeroCallbackController } from './xero-callback.controller';
 import { AccountingConnectionService } from './accounting-connection.service';
+import { AccountingSyncService } from './sync/accounting-sync.service';
 import { AccountingRefreshLockService } from './accounting-refresh-lock.service';
 import { AccountingContactService } from './accounting-contact.service';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
@@ -26,7 +28,15 @@ import { AccountingProductMatcherService } from './matching/accounting-product-m
 import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-matcher.service';
 
 @Module({
-  imports: [AdminCustomersModule, AdminProductsModule, TaxTypesModule, OutboxModule, AuditModule, AdminNotificationsModule],
+  imports: [
+    AdminCustomersModule,
+    AdminProductsModule,
+    TaxTypesModule,
+    OutboxModule,
+    IngestionRunModule,
+    AuditModule,
+    AdminNotificationsModule,
+  ],
   controllers: [
     AccountingConnectionController,
     AccountingContactController,
@@ -37,6 +47,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
   ],
   providers: [
     AccountingConnectionService,
+    AccountingSyncService,
     AccountingRefreshLockService,
     AccountingContactService,
     AccountingInvoiceExportService,
@@ -58,7 +69,11 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
   // are used by AccountingBulkImportProcessor (AccountingBulkImportModule) to
   // reuse the same per-item import/match logic the row actions use.
   exports: [
+    // Re-exported so the worker-side sync processor modules (which import
+    // AccountingModule) can inject IngestionRunService.
+    IngestionRunModule,
     AccountingConnectionService,
+    AccountingSyncService,
     AccountingContactService,
     AccountingProductService,
     AccountingTaxTypeService,

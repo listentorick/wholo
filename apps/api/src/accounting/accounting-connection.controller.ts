@@ -1,10 +1,11 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { AccountingProvider } from '@prisma/client';
+import { AccountingProvider, IngestionRunTrigger } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
 import { AccountingConnectionService } from './accounting-connection.service';
+import { AccountingSyncService } from './sync/accounting-sync.service';
 import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
 
 interface RequestWithUser extends Request {
@@ -17,7 +18,10 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
 @Controller('distributors/:distributorId/accounting')
 export class AccountingConnectionController {
-  constructor(private readonly service: AccountingConnectionService) {}
+  constructor(
+    private readonly service: AccountingConnectionService,
+    private readonly syncService: AccountingSyncService,
+  ) {}
 
   @Get('connection')
   @ApiOperation({ summary: 'Get the distributor\'s current accounting connection status' })
@@ -56,5 +60,17 @@ export class AccountingConnectionController {
   @ApiOperation({ summary: 'Disconnect the distributor\'s active accounting connection' })
   disconnect(@Param('distributorId') distributorId: string) {
     return this.service.disconnect(distributorId);
+  }
+
+  @Post('sync')
+  @ApiOperation({ summary: 'Request a full sync (contacts, products, tax types) from the accounting provider' })
+  requestSync(@Param('distributorId') distributorId: string) {
+    return this.syncService.requestSync(distributorId, IngestionRunTrigger.MANUAL);
+  }
+
+  @Get('sync/status')
+  @ApiOperation({ summary: 'Live status of the current/last accounting sync per resource type, plus lastSucceededAt' })
+  getSyncStatus(@Param('distributorId') distributorId: string) {
+    return this.syncService.getStatus(distributorId);
   }
 }

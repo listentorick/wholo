@@ -9,9 +9,11 @@ import { AccountingTaxTypesTable } from './AccountingTaxTypesTable';
 interface Props {
   providerLabel: string;
   onTaxTypesChanged?: () => void;
+  // Bumped by the page when a sync finishes — forces a fresh, non-appending reload.
+  reloadSignal?: number;
 }
 
-export function TaxTypesTab({ providerLabel, onTaxTypesChanged }: Props) {
+export function TaxTypesTab({ providerLabel, onTaxTypesChanged, reloadSignal }: Props) {
   const [reloadToken, setReloadToken] = useState(0);
 
   const buildParams = useCallback((cursor: string | undefined): AccountingTaxTypeListParams => ({ limit: 20, cursor }), []);
@@ -27,7 +29,7 @@ export function TaxTypesTab({ providerLabel, onTaxTypesChanged }: Props) {
     fetchPage: (params) => adminAccountingApi.listTaxTypes(params),
     buildParams,
     errorMessage: 'Failed to load tax rates. Please refresh.',
-    deps: [reloadToken],
+    deps: [reloadToken, reloadSignal],
   });
 
   function handleActionComplete() {

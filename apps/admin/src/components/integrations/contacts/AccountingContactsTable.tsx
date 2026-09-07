@@ -78,8 +78,12 @@ export function AccountingContactsTable({
             <path d="M4 7l8 6 8-6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         }
-        title={hasFilter ? 'No matching contacts' : 'No contacts synced yet'}
-        description={hasFilter ? 'Try adjusting or clearing your filters.' : `Click Sync now to pull contacts from ${providerLabel}.`}
+        title={hasFilter ? 'No matching contacts' : 'No contacts found'}
+        description={
+          hasFilter
+            ? 'Try adjusting or clearing your filters.'
+            : `The last ${providerLabel} sync returned no contacts.`
+        }
       />
     );
   }

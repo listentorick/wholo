@@ -167,23 +167,7 @@ describe('Accounting product sync routes (integration)', () => {
     });
   });
 
-  describe('POST /products/sync', () => {
-    it('writes an outbox event rather than performing a synchronous sync', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/distributors/${DIST_A}/accounting/products/sync`)
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(201);
-      expect(res.body).toEqual({ queued: true });
-
-      const events = await prisma.outboxEvent.findMany({
-        where: { aggregateType: 'AccountingConnection', aggregateId: connectionA.id },
-      });
-      expect(events).toHaveLength(1);
-      expect(events[0].eventType).toBe('AccountingProductSyncRequested');
-      expect(events[0].status).toBe('PENDING');
-    });
-  });
+  // Sync triggering is exercised in ingestion-sync-run.integration-spec.ts.
 
   describe('import as new product', () => {
     it('creates a DRAFT product seeded from the cache row (price rounded to 2 dp) plus a MANUAL mapping', async () => {

@@ -9,7 +9,6 @@ const mockService = {
   disconnect: jest.fn(),
   listContacts: jest.fn(),
   countContactsNeedingAttention: jest.fn(),
-  syncContacts: jest.fn(),
   importContact: jest.fn(),
   confirmSuggestion: jest.fn(),
   matchContact: jest.fn(),
@@ -19,7 +18,6 @@ const mockService = {
   getContactBulkImportJob: jest.fn(),
   listProducts: jest.fn(),
   countProductsNeedingAttention: jest.fn(),
-  syncProducts: jest.fn(),
   importProduct: jest.fn(),
   confirmProductSuggestion: jest.fn(),
   matchProduct: jest.fn(),
@@ -102,11 +100,6 @@ describe('AccountingController (BFF)', () => {
     expect(mockService.countContactsNeedingAttention).toHaveBeenCalledWith('dist-1', 'token-1');
   });
 
-  it('syncContacts resolves organisationId from req.user, never a client-supplied id', async () => {
-    await controller.syncContacts(mockRequest());
-    expect(mockService.syncContacts).toHaveBeenCalledWith('dist-1', 'token-1');
-  });
-
   it('importContact forwards the contact id and DTO with the resolved organisationId', async () => {
     const dto = { name: 'Blackbird Vine & Co' } as never;
     await controller.importContact('contact-1', dto, mockRequest());
@@ -143,11 +136,6 @@ describe('AccountingController (BFF)', () => {
   it('countProductsNeedingAttention resolves organisationId from req.user', async () => {
     await controller.countProductsNeedingAttention(mockRequest());
     expect(mockService.countProductsNeedingAttention).toHaveBeenCalledWith('dist-1', 'token-1');
-  });
-
-  it('syncProducts resolves organisationId from req.user, never a client-supplied id', async () => {
-    await controller.syncProducts(mockRequest());
-    expect(mockService.syncProducts).toHaveBeenCalledWith('dist-1', 'token-1');
   });
 
   it('importProduct forwards the external product id and DTO with the resolved organisationId', async () => {

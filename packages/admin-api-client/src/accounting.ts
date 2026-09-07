@@ -5,15 +5,13 @@ import type {
   AccountingContactListParams,
   AccountingContactListResponse,
   AccountingContactNeedsAttentionCountResponse,
-  AccountingContactSyncRequestedResponse,
   AccountingProductListParams,
   AccountingProductListResponse,
   AccountingProductNeedsAttentionCountResponse,
-  AccountingProductSyncRequestedResponse,
+  AccountingSyncStatusResponse,
   AccountingTaxTypeListParams,
   AccountingTaxTypeListResponse,
   AccountingTaxTypeNeedsAttentionCountResponse,
-  AccountingTaxTypeSyncRequestedResponse,
   AccountingTaxTypeSummary,
   BulkImportContactSelectionRequest,
   BulkImportJobResponse,
@@ -80,6 +78,17 @@ export const adminAccountingApi = {
     });
   },
 
+  // Trigger a full sync (contacts, products, tax types) and get the resulting
+  // run status back — the run rows are already QUEUED, so the caller can show
+  // "syncing" with no poll gap.
+  requestSync(): Promise<AccountingSyncStatusResponse> {
+    return apiFetch<AccountingSyncStatusResponse>('/api/v1/accounting/sync', { method: 'POST' });
+  },
+
+  getSyncStatus(): Promise<AccountingSyncStatusResponse> {
+    return apiFetch<AccountingSyncStatusResponse>('/api/v1/accounting/sync/status');
+  },
+
   listContacts(params: AccountingContactListParams): Promise<AccountingContactListResponse> {
     return apiFetch<AccountingContactListResponse>(`/api/v1/accounting/contacts${buildListQuery(params)}`);
   },
@@ -90,11 +99,6 @@ export const adminAccountingApi = {
     );
   },
 
-  syncContacts(): Promise<AccountingContactSyncRequestedResponse> {
-    return apiFetch<AccountingContactSyncRequestedResponse>('/api/v1/accounting/contacts/sync', {
-      method: 'POST',
-    });
-  },
 
   importContact(
     externalContactId: string,
@@ -153,12 +157,6 @@ export const adminAccountingApi = {
     return apiFetch<AccountingProductNeedsAttentionCountResponse>(
       '/api/v1/accounting/products/needs-attention-count',
     );
-  },
-
-  syncProducts(): Promise<AccountingProductSyncRequestedResponse> {
-    return apiFetch<AccountingProductSyncRequestedResponse>('/api/v1/accounting/products/sync', {
-      method: 'POST',
-    });
   },
 
   importProduct(
@@ -238,11 +236,6 @@ export const adminAccountingApi = {
     );
   },
 
-  syncTaxTypes(): Promise<AccountingTaxTypeSyncRequestedResponse> {
-    return apiFetch<AccountingTaxTypeSyncRequestedResponse>('/api/v1/accounting/tax-types/sync', {
-      method: 'POST',
-    });
-  },
 
   importTaxType(
     externalTaxTypeId: string,

@@ -33,12 +33,6 @@ export class AccountingContactController {
     return { count: await this.service.countNeedsAttention(distributorId) };
   }
 
-  @Post('sync')
-  @ApiOperation({ summary: 'Request a contact sync — enqueues the same job the scheduled sync uses' })
-  requestManualSync(@Param('distributorId') distributorId: string) {
-    return this.service.requestManualSync(distributorId);
-  }
-
   @Post(':externalContactId/import')
   @ApiOperation({ summary: 'Import an accounting contact as a new Wholo customer (no login user, no invitation)' })
   importAsNewCustomer(

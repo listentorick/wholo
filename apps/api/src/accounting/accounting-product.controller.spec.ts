@@ -5,7 +5,6 @@ import { AccountingProductService } from './accounting-product.service';
 const mockService = {
   listProducts: jest.fn(),
   countNeedsAttention: jest.fn(),
-  requestManualSync: jest.fn(),
   importAsNewProduct: jest.fn(),
   confirmSuggestion: jest.fn(),
   matchToExistingProduct: jest.fn(),
@@ -41,13 +40,6 @@ describe('AccountingProductController', () => {
     mockService.countNeedsAttention.mockResolvedValue(4);
     const result = await controller.countNeedsAttention('dist-1');
     expect(result).toEqual({ count: 4 });
-  });
-
-  it('requestManualSync delegates to the service, never running sync inline', async () => {
-    mockService.requestManualSync.mockResolvedValue({ queued: true });
-    const result = await controller.requestManualSync('dist-1');
-    expect(mockService.requestManualSync).toHaveBeenCalledWith('dist-1');
-    expect(result).toEqual({ queued: true });
   });
 
   it('importAsNewProduct passes the caller sub as the importing user', async () => {

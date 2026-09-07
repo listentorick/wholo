@@ -5,12 +5,22 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingProductMatcherService } from '../accounting/matching/accounting-product-matcher.service';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingProductSyncProcessor } from './accounting-product-sync.processor';
 
-function makeJob(connectionId = 'conn-1'): Job {
+const ingestionRunsMock = () => ({
+  ensureRun: jest.fn().mockResolvedValue('run-1'),
+  claim: jest.fn().mockResolvedValue({ id: 'run-1' }),
+  setTotal: jest.fn().mockResolvedValue(undefined),
+  heartbeat: jest.fn().mockResolvedValue(undefined),
+  finalizeSuccess: jest.fn().mockResolvedValue(undefined),
+  finalizeFailure: jest.fn().mockResolvedValue(undefined),
+});
+
+function makeJob(connectionId = 'conn-1', payload: Record<string, unknown> = {}): Job {
   return {
     name: 'AccountingProductSyncRequested',
-    data: { eventId: 'evt-1', aggregateType: 'AccountingConnection', aggregateId: connectionId, payload: {} },
+    data: { eventId: 'evt-1', aggregateType: 'AccountingConnection', aggregateId: connectionId, payload },
   } as Job;
 }
 
@@ -21,6 +31,7 @@ describe('AccountingProductSyncProcessor', () => {
   let adapters: { get: jest.Mock };
   let matcher: { findBestMatch: jest.Mock };
   let listProducts: jest.Mock;
+  let ingestionRuns: ReturnType<typeof ingestionRunsMock>;
 
   const connection = {
     id: 'conn-1',
@@ -76,12 +87,14 @@ describe('AccountingProductSyncProcessor', () => {
     adapters = { get: jest.fn().mockReturnValue({ listProducts }) };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
+    ingestionRuns = ingestionRunsMock();
 
     processor = new AccountingProductSyncProcessor(
       prisma as unknown as PrismaService,
       accountingConnectionService as unknown as AccountingConnectionService,
       adapters as unknown as AccountingAdapterRegistry,
       changeDetection as unknown as AccountingChangeDetectionService,
+      ingestionRuns as unknown as IngestionRunService,
       matcher as unknown as AccountingProductMatcherService,
     );
   });
@@ -168,6 +181,22 @@ describe('AccountingProductSyncProcessor', () => {
       },
       data: { isActive: false },
     });
+  });
+
+  it('reports the count of rows deactivated this run as removed on the ingestion run', async () => {
+    listProducts.mockResolvedValue([
+      { externalId: 'x-1', code: 'A', displayName: 'A', isSold: true, isPurchased: true, isTracked: false, isActive: true, raw: {} },
+    ]);
+    prisma.externalAccountingProduct.findUnique.mockResolvedValue(null);
+    prisma.externalAccountingProduct.upsert.mockResolvedValue({ ...cachedProductRow, id: 'cached-present' });
+    prisma.externalAccountingProduct.updateMany.mockResolvedValue({ count: 3 });
+
+    await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+    expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
+      'run-7',
+      expect.objectContaining({ recordsCreated: 1, recordsRemoved: 3 }),
+    );
   });
 
   it('does not run the matcher for an inactive product', async () => {

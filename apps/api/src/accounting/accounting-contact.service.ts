@@ -209,14 +209,6 @@ export class AccountingContactService {
     return suggested + readyToImport;
   }
 
-  async requestManualSync(distributorId: string): Promise<{ queued: true }> {
-    const connection = await this.getActiveConnection(distributorId);
-    await this.prisma.$transaction((tx) =>
-      this.outbox.writeEvent(tx, 'AccountingConnection', connection.id, 'AccountingContactSyncRequested', {}),
-    );
-    return { queued: true };
-  }
-
   // Every external id currently matching a filter (status/type/search), with
   // no pagination — the set a "select all N matching filters" bulk import
   // resolves against. Re-run at process time by the bulk-import processor,

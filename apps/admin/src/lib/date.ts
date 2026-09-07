@@ -8,6 +8,27 @@ export function toIso(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 24 * 60 * 60],
+  ['month', 30 * 24 * 60 * 60],
+  ['day', 24 * 60 * 60],
+  ['hour', 60 * 60],
+  ['minute', 60],
+];
+const relativeTimeFormatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+// "3 minutes ago" / "just now" from an ISO timestamp string.
+export function relativeTime(iso: string): string {
+  const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  if (Math.abs(seconds) < 45) return 'just now';
+  for (const [unit, secondsInUnit] of RELATIVE_UNITS) {
+    if (Math.abs(seconds) >= secondsInUnit) {
+      return relativeTimeFormatter.format(Math.round(seconds / secondsInUnit), unit);
+    }
+  }
+  return relativeTimeFormatter.format(seconds, 'second');
+}
+
 // Monday-start week containing `date`, at local midnight.
 export function startOfWeek(date: Date): Date {
   const d = new Date(date);

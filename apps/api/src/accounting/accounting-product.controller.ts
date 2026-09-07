@@ -34,12 +34,6 @@ export class AccountingProductController {
     return { count: await this.service.countNeedsAttention(distributorId) };
   }
 
-  @Post('sync')
-  @ApiOperation({ summary: 'Request a product sync — enqueues the same job the scheduled sync uses' })
-  requestManualSync(@Param('distributorId') distributorId: string) {
-    return this.service.requestManualSync(distributorId);
-  }
-
   @Post(':externalProductId/import')
   @ApiOperation({ summary: 'Import an accounting product as a new Wholo product (DRAFT — needs catalogue setup)' })
   importAsNewProduct(

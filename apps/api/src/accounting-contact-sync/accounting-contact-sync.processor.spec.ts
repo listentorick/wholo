@@ -5,12 +5,13 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingContactMatcherService } from '../accounting/matching/accounting-contact-matcher.service';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingContactSyncProcessor } from './accounting-contact-sync.processor';
 
-function makeJob(connectionId = 'conn-1'): Job {
+function makeJob(connectionId = 'conn-1', payload: Record<string, unknown> = {}): Job {
   return {
     name: 'AccountingContactSyncRequested',
-    data: { eventId: 'evt-1', aggregateType: 'AccountingConnection', aggregateId: connectionId, payload: {} },
+    data: { eventId: 'evt-1', aggregateType: 'AccountingConnection', aggregateId: connectionId, payload },
   } as Job;
 }
 
@@ -21,6 +22,14 @@ describe('AccountingContactSyncProcessor', () => {
   let adapters: { get: jest.Mock };
   let matcher: { findBestMatch: jest.Mock };
   let listContacts: jest.Mock;
+  let ingestionRuns: {
+    ensureRun: jest.Mock;
+    claim: jest.Mock;
+    setTotal: jest.Mock;
+    heartbeat: jest.Mock;
+    finalizeSuccess: jest.Mock;
+    finalizeFailure: jest.Mock;
+  };
 
   const connection = {
     id: 'conn-1',
@@ -78,12 +87,21 @@ describe('AccountingContactSyncProcessor', () => {
     adapters = { get: jest.fn().mockReturnValue({ listContacts }) };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
+    ingestionRuns = {
+      ensureRun: jest.fn().mockResolvedValue('run-1'),
+      claim: jest.fn().mockResolvedValue({ id: 'run-1' }),
+      setTotal: jest.fn().mockResolvedValue(undefined),
+      heartbeat: jest.fn().mockResolvedValue(undefined),
+      finalizeSuccess: jest.fn().mockResolvedValue(undefined),
+      finalizeFailure: jest.fn().mockResolvedValue(undefined),
+    };
 
     processor = new AccountingContactSyncProcessor(
       prisma as unknown as PrismaService,
       accountingConnectionService as unknown as AccountingConnectionService,
       adapters as unknown as AccountingAdapterRegistry,
       changeDetection as unknown as AccountingChangeDetectionService,
+      ingestionRuns as unknown as IngestionRunService,
       matcher as unknown as AccountingContactMatcherService,
     );
   });
@@ -98,6 +116,43 @@ describe('AccountingContactSyncProcessor', () => {
     prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, status: 'DISCONNECTED' });
     await processor.process(makeJob());
     expect(accountingConnectionService.getValidTokenSet).not.toHaveBeenCalled();
+  });
+
+  it('marks the run FAILED when the connection is gone and the job carries a runId', async () => {
+    prisma.accountingConnection.findUnique.mockResolvedValue(null);
+    await processor.process(makeJob('conn-1', { runId: 'run-9' }));
+    expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-9', expect.any(String));
+  });
+
+  it('drives the ingestion run: claim → setTotal → finalizeSuccess', async () => {
+    listContacts.mockResolvedValue([
+      { externalId: 'x-1', displayName: 'Blackbird', isCustomer: true, isSupplier: false, isArchived: false, raw: {} },
+    ]);
+    await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+    expect(ingestionRuns.claim).toHaveBeenCalledWith('run-7');
+    expect(ingestionRuns.ensureRun).not.toHaveBeenCalled();
+    expect(ingestionRuns.setTotal).toHaveBeenCalledWith('run-7', 1);
+    expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object));
+  });
+
+  it('does nothing when the run cannot be claimed (already running or done)', async () => {
+    ingestionRuns.claim.mockResolvedValue(null);
+    await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+    expect(accountingConnectionService.getValidTokenSet).not.toHaveBeenCalled();
+  });
+
+  it('marks the run FAILED and rethrows when the provider fetch throws', async () => {
+    listContacts.mockRejectedValue(new Error('Xero 500'));
+    await expect(processor.process(makeJob('conn-1', { runId: 'run-7' }))).rejects.toThrow('Xero 500');
+    expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero 500');
+  });
+
+  it('recreates a run row for a legacy job with no runId in the payload', async () => {
+    await processor.process(makeJob());
+    expect(ingestionRuns.ensureRun).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceType: 'accounting', sourceRef: 'conn-1', resourceType: 'contact' }),
+    );
+    expect(ingestionRuns.claim).toHaveBeenCalledWith('run-1');
   });
 
   it('fetches a valid token, lists contacts via the resolved adapter, and updates lastSyncedAt', async () => {
@@ -304,6 +359,69 @@ describe('AccountingContactSyncProcessor', () => {
         data: { status: 'SUPERSEDED' },
       });
       expect(prisma.accountingContactMatchSuggestion.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('sync-complete change breakdown', () => {
+    const fetched = (over: Record<string, unknown> = {}) => ({
+      externalId: 'x-1',
+      displayName: 'Blackbird Vine & Co',
+      isCustomer: true,
+      isSupplier: false,
+      isArchived: false,
+      raw: {},
+      ...over,
+    });
+
+    it('counts a contact with no prior cache row as new', async () => {
+      listContacts.mockResolvedValue([fetched()]);
+      prisma.externalAccountingContact.findUnique.mockResolvedValue(null);
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
+        'run-7',
+        expect.objectContaining({ recordsCreated: 1, recordsUpdated: 0, recordsRemoved: 0 }),
+      );
+    });
+
+    it('counts a contact whose stored fields moved as updated', async () => {
+      listContacts.mockResolvedValue([fetched({ displayName: 'Blackbird Wines Ltd' })]);
+      prisma.externalAccountingContact.findUnique.mockResolvedValue({ ...cachedContactRow, displayName: 'Blackbird Vine & Co' });
+      prisma.externalAccountingContact.upsert.mockResolvedValue({ ...cachedContactRow, displayName: 'Blackbird Wines Ltd' });
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
+        'run-7',
+        expect.objectContaining({ recordsCreated: 0, recordsUpdated: 1, recordsRemoved: 0 }),
+      );
+    });
+
+    it('counts a re-seen contact with identical fields as unchanged', async () => {
+      listContacts.mockResolvedValue([fetched()]);
+      prisma.externalAccountingContact.findUnique.mockResolvedValue({ ...cachedContactRow });
+      prisma.externalAccountingContact.upsert.mockResolvedValue({ ...cachedContactRow });
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
+        'run-7',
+        expect.objectContaining({ recordsCreated: 0, recordsUpdated: 0, recordsRemoved: 0 }),
+      );
+    });
+
+    it('counts a contact that flipped to archived in Xero as removed, not updated', async () => {
+      listContacts.mockResolvedValue([fetched({ isArchived: true })]);
+      prisma.externalAccountingContact.findUnique.mockResolvedValue({ ...cachedContactRow, isArchived: false });
+      prisma.externalAccountingContact.upsert.mockResolvedValue({ ...cachedContactRow, isArchived: true });
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
+        'run-7',
+        expect.objectContaining({ recordsCreated: 0, recordsUpdated: 0, recordsRemoved: 1 }),
+      );
     });
   });
 });

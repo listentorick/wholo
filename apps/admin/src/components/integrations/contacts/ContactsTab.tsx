@@ -12,6 +12,8 @@ import { AccountingContactsTable } from './AccountingContactsTable';
 interface Props {
   providerLabel: string;
   onContactsChanged?: () => void;
+  // Bumped by the page when a sync finishes — forces a fresh, non-appending reload.
+  reloadSignal?: number;
 }
 
 const TYPE_OPTIONS = [
@@ -54,7 +56,7 @@ function buildSelectionFilter(filters: ActiveFilter[]): { status?: AccountingCon
   return filter;
 }
 
-export function ContactsTab({ providerLabel, onContactsChanged }: Props) {
+export function ContactsTab({ providerLabel, onContactsChanged, reloadSignal }: Props) {
   const filterFields = useMemo<FilterFieldConfig[]>(
     () => [
       { field: 'search', label: 'Name', operators: [{ value: 'contains', label: 'contains' }], valueKind: 'text' },
@@ -90,7 +92,7 @@ export function ContactsTab({ providerLabel, onContactsChanged }: Props) {
     fetchPage: (params) => adminAccountingApi.listContacts(params),
     buildParams,
     errorMessage: 'Failed to load contacts. Please refresh.',
-    deps: [filters, reloadToken],
+    deps: [filters, reloadToken, reloadSignal],
   });
 
   // Selection is filter-scoped — a new filter invalidates whatever was

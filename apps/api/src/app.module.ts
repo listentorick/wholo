@@ -7,6 +7,7 @@ import { CatalogueModule } from './catalogue/catalogue.module';
 import { CartModule } from './cart/cart.module';
 import { AdminCataloguesModule } from './admin-catalogues/admin-catalogues.module';
 import { OutboxModule } from './outbox/outbox.module';
+import { IngestionRunModule } from './ingestion/ingestion-run.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
 import { TaxTypesModule } from './tax-types/tax-types.module';
@@ -45,6 +46,7 @@ import './asset-images/branding-asset-types';
     CartModule,
     AdminCataloguesModule,
     OutboxModule,
+    IngestionRunModule,
     OrdersModule,
     PriceListsModule,
     TaxTypesModule,

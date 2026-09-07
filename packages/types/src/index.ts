@@ -1078,10 +1078,6 @@ export interface AccountingContactListResponse {
   };
 }
 
-export interface AccountingContactSyncRequestedResponse {
-  queued: true;
-}
-
 export interface AccountingContactNeedsAttentionCountResponse {
   count: number;
 }
@@ -1193,10 +1189,6 @@ export interface AccountingProductListResponse {
   };
 }
 
-export interface AccountingProductSyncRequestedResponse {
-  queued: true;
-}
-
 export interface AccountingProductNeedsAttentionCountResponse {
   count: number;
 }
@@ -1291,10 +1283,6 @@ export interface AccountingTaxTypeListResponse {
   };
 }
 
-export interface AccountingTaxTypeSyncRequestedResponse {
-  queued: true;
-}
-
 export interface AccountingTaxTypeNeedsAttentionCountResponse {
   count: number;
 }
@@ -1372,6 +1360,45 @@ export interface AccountingBulkImportJob {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+// ─── Ingestion runs ───────────────────────────────────────────────────────────
+// A "pull" from an external system into Wholo is tracked as an IngestionRun.
+// The trigger endpoint just queues it; live progress and the "last synced"
+// marker are read back via the sync-status endpoint. Generic — accounting is
+// the first consumer (resourceType "contact" | "product" | "tax_type"), see
+// ADR-061.
+
+export type IngestionRunStatus = 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type IngestionRunTrigger = 'MANUAL' | 'SCHEDULED';
+
+export interface IngestionRunSummary {
+  id: string;
+  sourceType: string;
+  sourceRef: string;
+  resourceType: string;
+  status: IngestionRunStatus;
+  trigger: IngestionRunTrigger;
+  recordsTotal: number | null;
+  recordsProcessed: number;
+  recordsFailed: number;
+  // Delta breakdown of a completed run. "unchanged" is derived by the client as
+  // recordsProcessed - recordsCreated - recordsUpdated.
+  recordsCreated: number;
+  recordsUpdated: number;
+  recordsRemoved: number;
+  detailCount: number;
+  errorMessage: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface AccountingSyncStatusResponse {
+  runs: IngestionRunSummary[];
+  // Most recent COMPLETED run's finishedAt across the resource types, or null
+  // if nothing has ever synced.
+  lastSucceededAt: string | null;
 }
 
 // ─── Asset Images ─────────────────────────────────────────────────────────────

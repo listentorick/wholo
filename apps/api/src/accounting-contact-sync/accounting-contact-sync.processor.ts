@@ -24,8 +24,10 @@ import { AccountingMatchResult } from '../accounting/matching/accounting-record-
 import {
   AccountingSyncProcessorBase,
   AccountingSyncSuggestionRef,
+  CacheUpsertResult,
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
+import { IngestionRunService } from '../ingestion/ingestion-run.service';
 
 // Consumes AccountingContactSyncRequested — written to the outbox by both
 // AccountingContactSyncScheduler (periodic) and the "Sync now" HTTP endpoint
@@ -33,7 +35,10 @@ import { AccountingChangeDetectionService } from '../accounting/accounting-chang
 // (AccountingSyncProcessorBase) pulls contacts from the provider, caches
 // them, and runs the matcher against unmapped Wholo customers. Never writes a
 // CustomerAccountingMapping itself — only ever produces suggestions.
-@Processor(ACCOUNTING_CONTACT_SYNC_QUEUE)
+// concurrency 2: bounds the per-worker DB burst (2 jobs × 25-wide upsert
+// batches vs a 10-connection pool) while letting one slow org not block the
+// queue. See ADR-061 / "Concurrency".
+@Processor(ACCOUNTING_CONTACT_SYNC_QUEUE, { concurrency: 2 })
 export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalContact,
   ExternalAccountingContact,
@@ -42,15 +47,17 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
 > {
   protected readonly logger = new Logger(AccountingContactSyncProcessor.name);
   protected readonly recordNoun = 'contact';
+  protected readonly resourceType = 'contact';
 
   constructor(
     prisma: PrismaService,
     accountingConnectionService: AccountingConnectionService,
     adapters: AccountingAdapterRegistry,
     changeDetection: AccountingChangeDetectionService,
+    ingestionRuns: IngestionRunService,
     protected readonly matcher: AccountingContactMatcherService,
   ) {
-    super(prisma, accountingConnectionService, adapters, changeDetection);
+    super(prisma, accountingConnectionService, adapters, changeDetection, ingestionRuns);
   }
 
   protected fetchExternalRecords(
@@ -61,10 +68,34 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
     return adapter.listContacts(tokenSet, externalOrganisationId);
   }
 
+  // Business fields shown in the review table — a move in any of these makes
+  // the row "updated" on the sync-complete panel.
+  private static readonly CHANGE_FIELDS = [
+    'externalContactCode',
+    'externalAccountNumber',
+    'displayName',
+    'email',
+    'billingLine1',
+    'billingLine2',
+    'billingCity',
+    'billingState',
+    'billingPostcode',
+    'billingCountry',
+    'deliveryLine1',
+    'deliveryLine2',
+    'deliveryCity',
+    'deliveryState',
+    'deliveryPostcode',
+    'deliveryCountry',
+    'isCustomer',
+    'isSupplier',
+    'isArchived',
+  ];
+
   protected async upsertCacheRecord(
     connection: AccountingConnection,
     contact: AccountingExternalContact,
-  ): Promise<ExternalAccountingContact> {
+  ): Promise<CacheUpsertResult<ExternalAccountingContact>> {
     const shared = {
       externalContactCode: contact.code ?? null,
       externalAccountNumber: contact.accountNumber ?? null,
@@ -134,7 +165,14 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
       },
     });
 
-    return updated;
+    // A contact that flipped to archived in Xero this run counts as "removed",
+    // not "updated", on the sync-complete panel.
+    const change =
+      previous && !previous.isArchived && updated.isArchived
+        ? ('removed' as const)
+        : this.classifyChange(previous, updated, AccountingContactSyncProcessor.CHANGE_FIELDS);
+
+    return { record: updated, change };
   }
 
   protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingMatchCandidate[]> {
