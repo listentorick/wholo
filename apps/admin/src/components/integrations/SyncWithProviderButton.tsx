@@ -8,7 +8,7 @@ interface Props {
   // render the disabled "Syncing…" state.
   disabled?: boolean;
   label: string;
-  variant?: 'primary' | 'neutral';
+  variant?: 'primary' | 'secondary';
 }
 
 function Spinner() {
@@ -20,7 +20,7 @@ function Spinner() {
   );
 }
 
-export function SyncWithProviderButton({ onClick, disabled = false, label, variant = 'neutral' }: Props) {
+export function SyncWithProviderButton({ onClick, disabled = false, label, variant = 'secondary' }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isDisabled = disabled || busy;
@@ -40,7 +40,7 @@ export function SyncWithProviderButton({ onClick, disabled = false, label, varia
   const className =
     variant === 'primary'
       ? 'inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'
-      : 'inline-flex items-center justify-center gap-2 rounded-md border border-border bg-white px-3.5 py-2 text-sm font-medium text-text transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60';
+      : 'inline-flex items-center justify-center gap-2 rounded-md border border-primary bg-white px-3.5 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60';
 
   return (
     <div className="flex items-center gap-2">
