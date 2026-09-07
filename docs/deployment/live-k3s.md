@@ -222,6 +222,45 @@ kubectl -n wholo port-forward svc/wholo-plausible 8000:8000
 Add the site (`<domain>`, matching `WWW_PLAUSIBLE_DOMAIN`) in the dashboard
 on first run.
 
+## Order-activity telemetry (ADR-062)
+
+`apps/api` emits two StatsD counters over UDP on every successfully submitted
+order (`stocdup_orders_submitted`, `stocdup_order_value_minor`). In live only
+**Telegraf** runs in-cluster — it forwards to the **InfluxDB 2** and **Grafana**
+already running on the ops monitoring host (`192.168.1.15`). Stocdup holds no
+InfluxDB credentials; the flow can never fail or slow an order.
+
+**values.live.yaml** needs an `appEnv` + `telegraf` block (see
+`values.live.example.yaml`); leave `influxdb.enabled` / `grafana.enabled` false:
+
+- `appEnv: "live"` — becomes the `environment` tag on every metric.
+- `telegraf.enabled: true`, `telegraf.image` — bump alongside the others is not
+  needed (upstream image, not CI-built).
+- `telegraf.influx.url: http://192.168.1.15:8086` — the ops-host InfluxDB.
+- `telegraf.influx.org: stocdup`, `telegraf.influx.bucket: stocdup_metrics`.
+- `telegraf.influx.token` — a write token (see step 3 below); real value goes in
+  the gitignored `values.live.yaml`, not the example.
+
+**One-time infra-owner setup on the ops host:**
+
+1. InfluxDB: ensure org `stocdup`; create bucket `stocdup_metrics` with a `90d`
+   retention period.
+2. Confirm the k3s nodes can reach `192.168.1.15:8086` (it is already the
+   `healthAccess` monitoring peer, but egress ≠ ingress — check the firewall).
+3. InfluxDB: create an API token scoped to **write** `stocdup_metrics` (add read
+   too if the same token backs Grafana). Put it in `values.live.yaml` as
+   `telegraf.influx.token`.
+4. Grafana: add an InfluxDB data source — query language **Flux**, org
+   `stocdup`, default bucket `stocdup_metrics`, token from step 3.
+5. Grafana: Dashboards → Import → paste
+   `helm/wholo/dashboards/stocdup-order-activity.json`, pick the data source from
+   step 4. This is the same file auto-provisioned into the local Grafana; there
+   is no automation for the external instance — re-import on change.
+
+**Verify after deploy:** `kubectl -n wholo logs deploy/wholo-telegraf` shows the
+statsd input + influxdb_v2 output loaded with no write errors; submit a real
+order; the point appears on the ops-host Grafana dashboard within ~15s.
+
 ## Backups
 
 A nightly CronJob (`postgresql.backup.enabled`) runs `pg_dumpall` (captures
@@ -262,4 +301,7 @@ push to R2) is a recommended follow-up.
 4. Trigger any email flow; confirm it lands in MailHog with `https://` links.
 5. `kubectl -n wholo logs deploy/wholo-worker` — queue consumers up, exactly
    1 replica (ADR-047: the outbox relay must be the only publisher).
-6. Run a manual backup job and check a dump appears.
+6. `kubectl -n wholo logs deploy/wholo-telegraf` — statsd + influxdb_v2 loaded,
+   no write errors; submit an order and confirm it lands on the ops Grafana
+   "Stocdup Order Activity" dashboard (ADR-062).
+7. Run a manual backup job and check a dump appears.

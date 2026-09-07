@@ -33,6 +33,7 @@ import { AdminNotificationsModule } from './admin-notifications/admin-notificati
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CustomerHealthModule } from './customer-health/customer-health.module';
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { HealthController } from './health.controller';
 import { HealthModule } from './health/health.module';
 import './admin-products/product-image.asset-config';
@@ -74,6 +75,7 @@ import './asset-images/branding-asset-types';
     AnalyticsModule,
     CustomerHealthModule,
     DeliveryOverviewModule,
+    MetricsModule,
     HealthModule,
   ],
   controllers: [HealthController],

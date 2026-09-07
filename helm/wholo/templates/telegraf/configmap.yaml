@@ -1,0 +1,55 @@
+{{- if .Values.telegraf.enabled }}
+# Order-activity telemetry (ADR-062). Receives InfluxDB-style StatsD counters
+# over UDP from apps/api and forwards them to InfluxDB 2. Environment variables
+# (${INFLUX_*}) are injected by the Deployment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+data:
+  telegraf.conf: |
+    [agent]
+      interval = {{ .Values.telegraf.flushInterval | default "10s" | quote }}
+      round_interval = true
+      metric_batch_size = 1000
+      metric_buffer_limit = 10000
+      flush_interval = {{ .Values.telegraf.flushInterval | default "10s" | quote }}
+      flush_jitter = "2s"
+      omit_hostname = true
+
+    # apps/api sends `name,tag=value,...:N|c` (hand-built InfluxDB-line StatsD).
+    # Telegraf's statsd input parses those tags natively. Counters are dropped
+    # after each flush so a quiet period reports nothing rather than a stale
+    # value.
+    [[inputs.statsd]]
+      protocol = "udp"
+      service_address = ":8125"
+      delete_counters = true
+      delete_gauges = true
+      delete_sets = true
+      delete_timings = true
+      allowed_pending_messages = 10000
+      percentiles = []
+
+    # Telegraf's own buffer / write-error counters — a debugging aid when the
+    # InfluxDB output starts failing.
+    [[inputs.internal]]
+
+    [[outputs.influxdb_v2]]
+      urls = ["${INFLUX_URL}"]
+      token = "${INFLUX_TOKEN}"
+      organization = "${INFLUX_ORG}"
+      bucket = "${INFLUX_BUCKET}"
+      # Write failures log at ERROR to stderr -> pod logs (HTTP status only,
+      # never metric payload text).
+
+    # HTTP 200 while the output buffer is healthy, 503 when it backs up —
+    # drives the Deployment's liveness/readiness probes.
+    [[outputs.health]]
+      service_address = "http://:8080"
+      [[outputs.health.compares]]
+        field = "buffer_size"
+        lt = 10000.0
+{{- end }}

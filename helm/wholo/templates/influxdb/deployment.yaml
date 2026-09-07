@@ -1,0 +1,73 @@
+{{- if .Values.influxdb.enabled }}
+# In-cluster InfluxDB 2 for local dev only (ADR-062). The DOCKER_INFLUXDB_INIT_*
+# vars run the one-time setup on an empty data dir: org, bucket, retention,
+# admin user and admin token. Harmless on restart (skipped once initialised).
+# Re-bootstrap by deleting the PVC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-influxdb
+  labels:
+    app: {{ include "wholo.fullname" . }}-influxdb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-influxdb
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-influxdb
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: influxdb
+          image: {{ .Values.influxdb.image }}
+          ports:
+            - containerPort: 8086
+          env:
+            - name: DOCKER_INFLUXDB_INIT_MODE
+              value: "setup"
+            - name: DOCKER_INFLUXDB_INIT_USERNAME
+              value: {{ .Values.influxdb.adminUser | quote }}
+            - name: DOCKER_INFLUXDB_INIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wholo.fullname" . }}-influxdb
+                  key: INFLUXDB_ADMIN_PASSWORD
+            - name: DOCKER_INFLUXDB_INIT_ORG
+              value: {{ .Values.influxdb.org | quote }}
+            - name: DOCKER_INFLUXDB_INIT_BUCKET
+              value: {{ .Values.influxdb.bucket | quote }}
+            - name: DOCKER_INFLUXDB_INIT_RETENTION
+              value: {{ .Values.influxdb.retention | quote }}
+            - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wholo.fullname" . }}-influxdb
+                  key: INFLUXDB_ADMIN_TOKEN
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/influxdb2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8086
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.influxdb.resources | nindent 12 }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "wholo.fullname" . }}-influxdb
+{{- end }}

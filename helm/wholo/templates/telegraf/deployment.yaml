@@ -1,0 +1,72 @@
+{{- if .Values.telegraf.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-telegraf
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-telegraf
+      annotations:
+        # Roll the pod when the config changes.
+        checksum/config: {{ include (print $.Template.BasePath "/telegraf/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: telegraf
+          image: {{ .Values.telegraf.image }}
+          args: ["--config", "/etc/telegraf/telegraf.conf"]
+          env:
+            - name: INFLUX_URL
+              value: {{ include "wholo.telegraf.influxUrl" . | quote }}
+            - name: INFLUX_ORG
+              value: {{ .Values.telegraf.influx.org | quote }}
+            - name: INFLUX_BUCKET
+              value: {{ .Values.telegraf.influx.bucket | quote }}
+            - name: INFLUX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wholo.fullname" . }}-telegraf
+                  key: INFLUX_TOKEN
+          ports:
+            - name: statsd
+              containerPort: 8125
+              protocol: UDP
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/telegraf/telegraf.conf
+              subPath: telegraf.conf
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.telegraf.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "wholo.fullname" . }}-telegraf
+{{- end }}

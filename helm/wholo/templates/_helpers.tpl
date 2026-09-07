@@ -33,6 +33,35 @@ Expand the name of the chart.
 {{- printf "%s-keycloak" (include "wholo.fullname" .) }}
 {{- end }}
 
+{{- define "wholo.telegraf.host" -}}
+{{- printf "%s-telegraf" (include "wholo.fullname" .) }}
+{{- end }}
+
+{{- define "wholo.influxdb.host" -}}
+{{- printf "%s-influxdb" (include "wholo.fullname" .) }}
+{{- end }}
+
+{{/*
+InfluxDB URL Telegraf writes to: the explicit telegraf.influx.url when set
+(live points this at the external ops-host InfluxDB), otherwise the in-cluster
+InfluxDB service (local dev).
+*/}}
+{{- define "wholo.telegraf.influxUrl" -}}
+{{- if .Values.telegraf.influx.url -}}
+{{- .Values.telegraf.influx.url -}}
+{{- else -}}
+{{- printf "http://%s:8086" (include "wholo.influxdb.host" .) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+InfluxDB token Telegraf authenticates with: the explicit telegraf.influx.token
+when set (live), otherwise the in-cluster InfluxDB admin token (local dev).
+*/}}
+{{- define "wholo.telegraf.influxToken" -}}
+{{- .Values.telegraf.influx.token | default .Values.influxdb.adminToken -}}
+{{- end }}
+
 {{/*
 Pod-spec-level imagePullSecrets block, pre-indented for the standard
 Deployment/Job pod spec depth. Renders nothing when the list is empty.

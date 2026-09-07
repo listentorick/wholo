@@ -195,6 +195,7 @@ Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `loca
 | API (central domain API) | `http://localhost:3001` |
 | Keycloak | `http://localhost:3080` |
 | MailHog UI | `http://localhost:30825` |
+| Grafana (order-activity telemetry, ADR-062 — only when `grafana.enabled`) | `http://localhost:30300` |
 
 #### Local HTTPS (for real Xero OAuth testing only)
 

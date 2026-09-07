@@ -1,0 +1,40 @@
+{{- if .Values.grafana.enabled }}
+# Local in-cluster Grafana provisioning (ADR-062): the InfluxDB datasource and
+# the file-based dashboard provider. The dashboard JSON itself is a separate
+# ConfigMap (configmap-dashboards.yaml) mounted at options.path below.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-grafana-provisioning
+  labels:
+    app: {{ include "wholo.fullname" . }}-grafana
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: InfluxDB
+        uid: stocdup-influx
+        type: influxdb
+        access: proxy
+        url: {{ printf "http://%s:8086" (include "wholo.influxdb.host" .) | quote }}
+        isDefault: true
+        jsonData:
+          version: Flux
+          organization: {{ .Values.influxdb.org | quote }}
+          defaultBucket: {{ .Values.influxdb.bucket | quote }}
+        secureJsonData:
+          token: {{ required "influxdb.adminToken is required when grafana.enabled (used as the Grafana datasource token locally)" .Values.influxdb.adminToken | quote }}
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: Stocdup
+        orgId: 1
+        folder: Stocdup
+        type: file
+        disableDeletion: true
+        allowUiUpdates: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+          foldersFromFilesStructure: false
+{{- end }}

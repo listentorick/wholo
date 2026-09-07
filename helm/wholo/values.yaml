@@ -2,6 +2,10 @@
 # local dev, where images are built straight into the Docker Desktop daemon.
 imagePullSecrets: []
 
+# Deployment environment name. Surfaced to apps/api as APP_ENV and used as the
+# `environment` tag on order-activity metrics (ADR-062). "local" | "live".
+appEnv: "local"
+
 # Browser-facing base URLs for the portal/admin apps — the single source
 # of truth for every consumer that builds a link a browser follows: email
 # links (apps/api), the order-as magic link (admin-api), and Keycloak's
@@ -256,6 +260,77 @@ mailhog:
     limits:
       memory: "128Mi"
       cpu: "100m"
+
+# ── Order-activity telemetry (ADR-062) ──────────────────────────────────────
+# apps/api emits StatsD counters over UDP -> Telegraf aggregates -> InfluxDB 2
+# -> Grafana renders the "Stocdup Order Activity" dashboard.
+#
+#   Live : InfluxDB 2 + Grafana are external (ops monitoring host). Only
+#          Telegraf runs in-cluster; telegraf.influx.url points at the
+#          external InfluxDB. influxdb.enabled / grafana.enabled stay false.
+#   Local: enable all three in values.local.yaml to run the whole pipeline
+#          on Docker Desktop.
+telegraf:
+  enabled: false
+  image: telegraf:1.32-alpine
+  # Documented StatsD aggregation + flush cadence.
+  flushInterval: "10s"
+  influx:
+    # Blank -> the in-cluster InfluxDB service. Live: the ops host, e.g.
+    # http://192.168.1.15:8086
+    url: ""
+    org: "stocdup"
+    bucket: "stocdup_metrics"
+    # Blank -> reuse influxdb.adminToken (local). Live: a write-scoped token,
+    # real value only in the gitignored values.live.yaml.
+    token: ""
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "25m"
+    limits:
+      memory: "192Mi"
+      cpu: "150m"
+
+influxdb:
+  # In-cluster InfluxDB 2 for local dev only. Live uses an external instance.
+  enabled: false
+  image: influxdb:2.7-alpine
+  org: "stocdup"
+  bucket: "stocdup_metrics"
+  retention: "90d"
+  adminUser: "admin"
+  # Set both in values.local.yaml. adminToken also feeds Telegraf and Grafana
+  # locally whenever their own token fields are left blank.
+  adminPassword: ""
+  adminToken: ""
+  storageSize: 1Gi
+  storageClass: ""
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+grafana:
+  # In-cluster Grafana for local dev only. Live uses an external instance --
+  # import helm/wholo/dashboards/stocdup-order-activity.json into it by hand.
+  enabled: false
+  image: grafana/grafana:11.2.0
+  adminUser: "admin"
+  adminPassword: ""
+  service:
+    # NodePort 30300 for the UI in local dev.
+    type: NodePort
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "50m"
+    limits:
+      memory: "384Mi"
+      cpu: "300m"
 
 keycloak:
   image:

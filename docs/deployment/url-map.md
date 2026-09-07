@@ -34,9 +34,13 @@ flowchart LR
         MH["wholo-mailhog :1025 smtp / :8025 ui"]
         PL["wholo-plausible :8000<br/>analytics (no ingress)"]
         CH[("wholo-clickhouse :8123<br/>analytics events")]
+        TG["wholo-telegraf :8125/udp statsd / :8080 health"]
+        IX[("wholo-influxdb :8086<br/>metrics (local only)")]
+        GF["wholo-grafana :3000<br/>dashboards (local only)"]
     end
 
     R2[("Cloudflare R2<br/>public assets")]
+    OPS[("ops host<br/>InfluxDB 2 + Grafana (live)")]
 
     B -->|"pages, POST /api/register, /js/script.js, /api/event"| WWW --> WW
     B -->|"pages + /api/v1/* (same origin)"| P --> PA
@@ -56,6 +60,10 @@ flowchart LR
     W --> PG
     W --> RD
     W -->|"SMTP"| MH
+    C -->|"STATSD_HOST (UDP :8125, order-activity metrics)"| TG
+    TG -->|"influxdb_v2 (local)"| IX
+    TG -.->|"influxdb_v2 (live) :8086"| OPS
+    GF --> IX
     KC -->|"keycloak DB"| PG
     KC -.->|"realm emails"| MH
     WW -->|"PLAUSIBLE_INTERNAL_URL (proxy /js/script.js + /api/event)"| PL
@@ -90,6 +98,9 @@ outside the cluster.
 | admin-api | `http://wholo-api:3001` | `CENTRAL_API_URL` | Same, with JWT relay (ADR-046) |
 | api, portal-api, admin-api | `http://wholo-keycloak:8080` | `KEYCLOAK_URL` | JWKS fetch to validate browser JWTs |
 | api, worker | `wholo-postgresql:5432`, `wholo-redis:6379`, `wholo-mailhog:1025` | `DATABASE_URL`, `REDIS_URL`, `SMTP_HOST` | DB, queues/outbox, mail |
+| api | `wholo-telegraf:8125` (**UDP**) | `STATSD_HOST` / `STATSD_PORT` | Order-activity StatsD counters (ADR-062). Fire-and-forget; unset = no-op. Only set when `telegraf.enabled` |
+| telegraf | `wholo-influxdb:8086` (local) / ops host `192.168.1.15:8086` (live) | `telegraf.influx.url` + `INFLUX_TOKEN` secret | Writes aggregated metrics to InfluxDB 2 (ADR-062). InfluxDB + Grafana are in-cluster locally, external in live |
+| grafana (local only) | `wholo-influxdb:8086` | provisioned datasource | Renders the "Stocdup Order Activity" dashboard. UI on NodePort `30300` |
 | keycloak | `wholo-postgresql:5432`, `wholo-mailhog:1025` | `KC_DB_URL`, realm `smtpServer` | Its own `keycloak` DB; verification emails |
 
 ## Crossover points (public names inside config — the ones that bite)

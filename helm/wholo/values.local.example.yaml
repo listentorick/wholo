@@ -17,3 +17,17 @@ portal:
 
 keycloak:
   adminPassword: admin
+
+# Order-activity telemetry (ADR-062). Locally the whole pipeline runs in-cluster:
+# apps/api -> Telegraf (UDP :8125) -> InfluxDB 2 -> Grafana. Grafana UI:
+#   http://localhost:30300  (admin / grafana.adminPassword)
+appEnv: "local"
+telegraf:
+  enabled: true
+influxdb:
+  enabled: true
+  adminPassword: "local-influx-admin"
+  adminToken: "local-influx-token-change-me"
+grafana:
+  enabled: true
+  adminPassword: "admin"

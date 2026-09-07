@@ -7,6 +7,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';
@@ -22,7 +23,7 @@ function makeAvailability(overrides: Record<string, unknown> = {}) {
 }
 
 function makeDistributor(overrides: Record<string, unknown> = {}) {
-  return { id: DISTRIBUTOR_ID, distributorSettings: null, ...overrides };
+  return { id: DISTRIBUTOR_ID, name: 'Test Distributor', distributorSettings: null, ...overrides };
 }
 
 function makeRelationship(overrides: Record<string, unknown> = {}) {
@@ -67,6 +68,7 @@ describe('OrdersService — delivery date revalidation', () => {
   let prisma: jest.Mocked<PrismaService>;
   let deliveryAvailability: jest.Mocked<DeliveryAvailabilityService>;
   let outbox: jest.Mocked<OutboxService>;
+  let metrics: { increment: jest.Mock };
 
   beforeEach(async () => {
     const mockPrisma = {
@@ -86,10 +88,12 @@ describe('OrdersService — delivery date revalidation', () => {
     const mockAudit = { record: jest.fn() };
     const mockDelivery = { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) };
     const mockR2Storage = { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) };
+    const mockMetrics = { increment: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: mockMetrics },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: mockOutbox },
         { provide: AuditService, useValue: mockAudit },
@@ -102,6 +106,7 @@ describe('OrdersService — delivery date revalidation', () => {
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
     deliveryAvailability = module.get(DeliveryAvailabilityService) as jest.Mocked<DeliveryAvailabilityService>;
     outbox = module.get(OutboxService) as jest.Mocked<OutboxService>;
+    metrics = module.get(MetricsService);
   });
 
   function setupHappyPath() {
@@ -341,6 +346,76 @@ describe('OrdersService — delivery date revalidation', () => {
       expect.objectContaining({ isOrderedByDelegate: true }),
     );
   });
+
+  // Order-activity telemetry (ADR-062) — emitted after the submit transaction
+  // commits, from the same method that writes the OrderSubmitted outbox event.
+  describe('order-activity metrics', () => {
+    it('emits both counters with distributor, source and currency tags', async () => {
+      setupHappyPath();
+      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+      expect(metrics.increment).toHaveBeenCalledWith('stocdup_orders_submitted', 1, {
+        distributor_id: DISTRIBUTOR_ID,
+        distributor_name: 'Test Distributor',
+        source: 'portal',
+        currency: 'GBP',
+      });
+      // cart: 12.23 × 2, no tax → 24.46 → 2446 pence
+      expect(metrics.increment).toHaveBeenCalledWith('stocdup_order_value_minor', 2446, {
+        distributor_id: DISTRIBUTOR_ID,
+        distributor_name: 'Test Distributor',
+        source: 'portal',
+        currency: 'GBP',
+      });
+    });
+
+    it('tags source=on_behalf for an order-as submission', async () => {
+      setupHappyPath();
+      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'stocdup_orders_submitted',
+        1,
+        expect.objectContaining({ source: 'on_behalf' }),
+      );
+    });
+
+    it('emits the value in the currency minor unit (JPY → exponent 0)', async () => {
+      setupHappyPath();
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(
+        makeDistributor({ distributorSettings: { minimumOrderSpend: null, currencyCode: 'JPY' } }),
+      );
+
+      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+
+      expect(metrics.increment).toHaveBeenCalledWith(
+        'stocdup_order_value_minor',
+        24, // 24.46 JPY, exponent 0, rounded
+        expect.objectContaining({ currency: 'JPY' }),
+      );
+    });
+
+    it('does not fail the submission when a metric emit throws', async () => {
+      setupHappyPath();
+      metrics.increment.mockImplementation(() => {
+        throw new Error('statsd boom');
+      });
+
+      await expect(
+        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      ).resolves.toBeDefined();
+    });
+
+    it('emits nothing when submission fails before the transaction', async () => {
+      setupHappyPath();
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
+
+      await expect(
+        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      ).rejects.toThrow();
+      expect(metrics.increment).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('OrdersService — minimum order spend enforcement', () => {
@@ -364,6 +439,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: { increment: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
@@ -482,6 +558,7 @@ describe('OrdersService — tax calculation', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: { increment: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
@@ -631,6 +708,7 @@ describe('OrdersService — listCustomerOrders', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: { increment: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
@@ -757,6 +835,7 @@ describe('OrdersService — getCustomerOrder', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: { increment: jest.fn() } },
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
@@ -917,6 +996,7 @@ describe('OrdersService — cancelCustomerOrder', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        { provide: MetricsService, useValue: { increment: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
         { provide: OutboxService, useValue: outbox },
         { provide: AuditService, useValue: audit },

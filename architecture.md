@@ -536,7 +536,31 @@ Wholo remains responsible for:
 
 ## 7. Observability
 
-Observability is provided by the **Grafana stack**, deployed via Helm charts alongside the application services.
+> **Status:** the service-observability stack below (Prometheus / Loki / Tempo /
+> OpenTelemetry, ADR-015) is a plan, not yet built. The only implemented piece is
+> **business-activity telemetry** (ADR-062) and the health checks.
+
+### Business-activity telemetry (implemented — ADR-062)
+
+Platform-operator view of commercial activity, distinct from the distributor-facing
+TimescaleDB fact pipeline in §6 (that one powers the admin analytics screens and is
+rebuilt from outbox history).
+
+- `apps/api` emits two StatsD counters over **UDP only** on a successfully
+  submitted order — `stocdup_orders_submitted` and `stocdup_order_value_minor`,
+  tagged `environment` / `distributor_id` / `distributor_name` / `source` / `currency`
+  (never order/customer/user ids). Fire-and-forget: it can't fail or slow a
+  submission, and holds no InfluxDB credentials.
+- **Telegraf** (in-cluster, both environments) aggregates and writes to **InfluxDB 2**.
+- **Grafana** renders the "Stocdup Order Activity" dashboard
+  (`helm/wholo/dashboards/stocdup-order-activity.json`).
+- Live: InfluxDB 2 + Grafana are external (ops host); only Telegraf runs in-cluster.
+  Local: all three run in-cluster behind `*.enabled` flags.
+
+### Service observability (planned — ADR-015)
+
+Provided by the **Grafana stack**, to be deployed via Helm charts alongside the
+application services.
 
 | Tool | Role |
 |---|---|

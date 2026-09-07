@@ -13,3 +13,9 @@ For local development with hot-reload, port-forward the infrastructure:
 Then run apps locally:
   pnpm dev:api
   pnpm dev:portal
+{{- if .Values.grafana.enabled }}
+
+Order-activity telemetry (ADR-062):
+  Grafana:  http://localhost:30300  (user: {{ .Values.grafana.adminUser }} / grafana.adminPassword)
+  Dashboard: "Stocdup Order Activity" (folder: Stocdup)
+{{- end }}

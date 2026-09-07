@@ -1,0 +1,22 @@
+{{- if .Values.telegraf.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+spec:
+  # ClusterIP in every environment — only in-cluster services send StatsD.
+  type: ClusterIP
+  selector:
+    app: {{ include "wholo.fullname" . }}-telegraf
+  ports:
+    - name: statsd
+      port: 8125
+      targetPort: 8125
+      protocol: UDP
+    - name: health
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+{{- end }}

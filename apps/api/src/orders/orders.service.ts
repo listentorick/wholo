@@ -25,6 +25,8 @@ import { SubmitOrderDto } from './dto/submit-order.dto';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
 import { calculateLineTax, resolveTaxLabel } from '../common/tax-calculation';
+import { toMinorUnits } from '../common/currency';
+import { MetricsService } from '../metrics/metrics.service';
 
 interface CursorPayload {
   createdAt: string;
@@ -111,6 +113,7 @@ export class OrdersService {
     private audit: AuditService,
     private deliveryAvailability: DeliveryAvailabilityService,
     private r2Storage: R2StorageService,
+    private metrics: MetricsService,
   ) {}
 
   async submitOrder(
@@ -128,7 +131,11 @@ export class OrdersService {
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
       where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true, distributorSettings: { select: { minimumOrderSpend: true, currencyCode: true } } },
+      select: {
+        id: true,
+        name: true,
+        distributorSettings: { select: { minimumOrderSpend: true, currencyCode: true } },
+      },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
@@ -249,6 +256,7 @@ export class OrdersService {
       new Prisma.Decimal(0),
     );
     const totalAmount = subtotalAmount.plus(taxAmount);
+    const currency = distributor.distributorSettings?.currencyCode ?? 'GBP';
 
     const effectiveMinimumOrderSpend = resolveEffectiveMinimumOrderSpend(
       relationship.minimumOrderSpend,
@@ -280,7 +288,7 @@ export class OrdersService {
             isOrderedByDelegate: true,
             delegateAdminUserId: placedByUserId,
           }),
-          currency: distributor.distributorSettings?.currencyCode ?? 'GBP',
+          currency,
           status: isAutoAccept ? OrderStatus.ACCEPTED : OrderStatus.SUBMITTED,
           acceptanceModeSnapshot: mode,
           acceptanceModeSourceSnapshot: source,
@@ -400,6 +408,25 @@ export class OrdersService {
 
       return newOrder;
     });
+
+    // Platform-operator business-activity telemetry (ADR-062). Emitted only
+    // after the submit transaction commits — a rolled-back or rejected order
+    // reaches neither line. Fire-and-forget: non-blocking, never awaited, can
+    // never fail or slow the submission, and logs no order contents. Auto-
+    // accepted orders count too (still a successful submission).
+    try {
+      const metricTags = {
+        distributor_id: distributor.id,
+        distributor_name: distributor.name,
+        source: orderAsSessionToken ? 'on_behalf' : 'portal',
+        currency,
+      };
+      this.metrics.increment('stocdup_orders_submitted', 1, metricTags);
+      this.metrics.increment('stocdup_order_value_minor', toMinorUnits(totalAmount, currency), metricTags);
+    } catch {
+      // Telemetry must never surface as an order-submission failure. MetricsService
+      // is already total; this is belt-and-braces against a future regression.
+    }
 
     return this.formatOrder(order);
   }

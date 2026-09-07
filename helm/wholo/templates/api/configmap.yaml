@@ -7,6 +7,13 @@ metadata:
 data:
   PORT: "3001"
   NODE_ENV: "production"
+  APP_ENV: {{ .Values.appEnv | default "local" | quote }}
+  {{- if .Values.telegraf.enabled }}
+  # Order-activity telemetry (ADR-062). apps/api sends StatsD over UDP to the
+  # in-cluster Telegraf; unset ⇒ MetricsService is a silent no-op.
+  STATSD_HOST: {{ include "wholo.telegraf.host" . | quote }}
+  STATSD_PORT: "8125"
+  {{- end }}
   REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}

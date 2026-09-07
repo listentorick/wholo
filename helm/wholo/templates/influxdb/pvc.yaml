@@ -1,0 +1,17 @@
+{{- if .Values.influxdb.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wholo.fullname" . }}-influxdb
+  labels:
+    app: {{ include "wholo.fullname" . }}-influxdb
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.influxdb.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.influxdb.storageSize }}
+{{- end }}

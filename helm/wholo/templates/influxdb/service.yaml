@@ -1,0 +1,16 @@
+{{- if .Values.influxdb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-influxdb
+  labels:
+    app: {{ include "wholo.fullname" . }}-influxdb
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "wholo.fullname" . }}-influxdb
+  ports:
+    - name: http
+      port: 8086
+      targetPort: 8086
+{{- end }}

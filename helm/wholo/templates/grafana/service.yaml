@@ -1,0 +1,19 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-grafana
+  labels:
+    app: {{ include "wholo.fullname" . }}-grafana
+spec:
+  type: {{ .Values.grafana.service.type | default "NodePort" }}
+  selector:
+    app: {{ include "wholo.fullname" . }}-grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      {{- if eq (.Values.grafana.service.type | default "NodePort") "NodePort" }}
+      nodePort: 30300
+      {{- end }}
+{{- end }}

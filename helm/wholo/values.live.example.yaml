@@ -123,6 +123,23 @@ mailhog:
     #   kubectl -n wholo port-forward svc/wholo-mailhog 8025:8025
     type: ClusterIP
 
+# Order-activity telemetry (ADR-062). InfluxDB 2 + Grafana run on the ops
+# monitoring host, NOT in the cluster — only Telegraf runs here, writing out to
+# the external InfluxDB. One-time infra-owner setup (bucket, retention, write
+# token, Grafana datasource + dashboard import) is in docs/deployment/live-k3s.md.
+appEnv: "live"
+telegraf:
+  enabled: true
+  influx:
+    url: "http://192.168.1.15:8086"   # ops-host InfluxDB 2 (must be reachable from the k3s nodes)
+    org: "stocdup"
+    bucket: "stocdup_metrics"
+    token: "CHANGE_ME_influx_write_token"   # real value only in gitignored values.live.yaml
+influxdb:
+  enabled: false                       # external in live
+grafana:
+  enabled: false                       # external in live
+
 keycloak:
   image:
     repository: ghcr.io/listentorick/wholo/keycloak
