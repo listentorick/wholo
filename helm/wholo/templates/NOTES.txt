@@ -15,7 +15,8 @@ Then run apps locally:
   pnpm dev:portal
 {{- if .Values.grafana.enabled }}
 
-Order-activity telemetry (ADR-062):
+Telemetry (ADR-062 / ADR-063):
   Grafana:  http://localhost:30300  (user: {{ .Values.grafana.adminUser }} / grafana.adminPassword)
-  Dashboard: "Stocdup Order Activity" (folder: Stocdup)
+  Dashboards (folder: Stocdup): "Stocdup Order Activity"
+  {{- if .Values.telegraf.platformHealth.enabled }}, "Stocdup Platform Health"{{- end }}
 {{- end }}

@@ -1,0 +1,43 @@
+{{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+# Core platform-health metrics (PBI-1 / ADR-063). The chart's FIRST RBAC
+# objects: read-only cluster access so the Telegraf Deployment's
+# inputs.kube_inventory can report pod availability, container restarts and
+# node status. ClusterRole (not Role) because kube_inventory lists the
+# cluster-scoped `nodes` resource. The follow-up node-log-shipping PBI can bind
+# its agent to a superset of these rules.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "wholo.fullname" . }}-telegraf
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "wholo.fullname" . }}-telegraf
+    namespace: {{ .Release.Namespace }}
+{{- end }}

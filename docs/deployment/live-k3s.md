@@ -261,6 +261,37 @@ InfluxDB credentials; the flow can never fail or slow an order.
 statsd input + influxdb_v2 output loaded with no write errors; submit a real
 order; the point appears on the ops-host Grafana dashboard within ~15s.
 
+## Core platform-health metrics (ADR-063)
+
+Layered on the same Telegraf → ops-host InfluxDB path. Enabled by
+`telegraf.platformHealth.enabled: true` in `values.live.yaml` (already in
+`values.live.example.yaml`). When on, `helm upgrade` additionally creates:
+
+- a read-only **ClusterRole + ClusterRoleBinding + ServiceAccount**
+  (`wholo-telegraf`) — the chart's first RBAC — so the Telegraf Deployment's
+  `inputs.kube_inventory` can read pod status / restarts and node objects;
+- a **`wholo-telegraf-node` DaemonSet** — one Telegraf per node for node
+  CPU/memory/disk %, with **read-only** hostPath mounts of `/proc` + `/sys`.
+  **Not** privileged, no `securityContext` escalation, **no** kubelet / `:10250`
+  dependency. If a PodSecurity policy is ever enforced on the `wholo` namespace
+  it must allow `hostPath` volumes for this DaemonSet.
+
+The Telegraf Deployment also gains 4 `inputs.http_response` self-checks against
+the in-cluster `/api/v1/health` Services (no egress). Reuses the same
+`telegraf.influx.*` write token — no extra ops-host setup beyond the bucket that
+already exists.
+
+**One-time infra-owner step:** Grafana → Dashboards → Import → paste
+`helm/wholo/dashboards/stocdup-platform-health.json`, pick the same Flux data
+source. Same file auto-provisioned locally; re-import on change.
+
+**Verify after deploy:**
+`kubectl -n wholo logs deploy/wholo-telegraf` shows `inputs.http_response` +
+`inputs.kube_inventory` loaded with **no `forbidden`** lines;
+`kubectl -n wholo logs ds/wholo-telegraf-node` shows `inputs.cpu`/`mem`/`disk`
+loaded; `kubectl auth can-i list pods --as=system:serviceaccount:wholo:wholo-telegraf`
+returns `yes`; the "Stocdup Platform Health" dashboard populates within ~30s.
+
 ## Backups
 
 A nightly CronJob (`postgresql.backup.enabled`) runs `pg_dumpall` (captures
@@ -304,4 +335,8 @@ push to R2) is a recommended follow-up.
 6. `kubectl -n wholo logs deploy/wholo-telegraf` — statsd + influxdb_v2 loaded,
    no write errors; submit an order and confirm it lands on the ops Grafana
    "Stocdup Order Activity" dashboard (ADR-062).
+7. `kubectl -n wholo logs deploy/wholo-telegraf` — `inputs.http_response` +
+   `inputs.kube_inventory` loaded, no `forbidden`; `kubectl -n wholo rollout
+   status ds/wholo-telegraf-node`; the ops Grafana "Stocdup Platform Health"
+   dashboard (ADR-063) shows availability, node CPU/mem/disk and queue depth.
 7. Run a manual backup job and check a dump appears.

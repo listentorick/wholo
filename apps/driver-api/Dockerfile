@@ -7,17 +7,20 @@ WORKDIR /app
 # Install dependencies (layer-cached before copying source)
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/types/package.json ./packages/types/
+COPY packages/nest-telemetry/package.json ./packages/nest-telemetry/
 COPY apps/driver/package.json ./apps/driver/
 COPY apps/driver-api/package.json ./apps/driver-api/
 RUN pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/types ./packages/types
+COPY packages/nest-telemetry ./packages/nest-telemetry
 COPY apps/driver ./apps/driver
 COPY apps/driver-api ./apps/driver-api
 
 # Build shared packages
 RUN pnpm --filter @wholo/types build
+RUN pnpm --filter @wholo/nest-telemetry build
 
 # Build Next.js frontend — no login/no NEXT_PUBLIC_* build-time vars needed
 # this round (driver-api has no authenticated routes; see ADR-059).
@@ -47,6 +50,11 @@ COPY --from=builder /app/apps/driver/next.config.ts ./driver/next.config.ts
 # Shared runtime dependencies
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
+# @wholo/nest-telemetry has runtime exports (unlike the type-only @wholo/types),
+# so it must resolve from node_modules at runtime — pnpm's hoisted linker only
+# symlinks it into apps/<app>/node_modules, which the runner stage does not copy.
+COPY --from=builder /app/packages/nest-telemetry/package.json ./node_modules/@wholo/nest-telemetry/package.json
+COPY --from=builder /app/packages/nest-telemetry/dist ./node_modules/@wholo/nest-telemetry/dist
 
 EXPOSE 3004
 CMD ["node", "dist/main.js"]

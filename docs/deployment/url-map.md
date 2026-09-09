@@ -35,8 +35,10 @@ flowchart LR
         PL["wholo-plausible :8000<br/>analytics (no ingress)"]
         CH[("wholo-clickhouse :8123<br/>analytics events")]
         TG["wholo-telegraf :8125/udp statsd / :8080 health"]
+        TGN["wholo-telegraf-node (DaemonSet)<br/>node cpu/mem/disk (ADR-063)"]
         IX[("wholo-influxdb :8086<br/>metrics (local only)")]
         GF["wholo-grafana :3000<br/>dashboards (local only)"]
+        KAPI["kubernetes.default.svc<br/>API server"]
     end
 
     R2[("Cloudflare R2<br/>public assets")]
@@ -60,7 +62,14 @@ flowchart LR
     W --> PG
     W --> RD
     W -->|"SMTP"| MH
-    C -->|"STATSD_HOST (UDP :8125, order-activity metrics)"| TG
+    C -->|"STATSD_HOST (UDP :8125, order-activity + HTTP metrics)"| TG
+    W -->|"STATSD_HOST (UDP :8125, queue-depth gauges)"| TG
+    AA -->|"STATSD_HOST (UDP :8125, HTTP metrics)"| TG
+    PA -->|"STATSD_HOST (UDP :8125, HTTP metrics)"| TG
+    TG -.->|"http_response /api/v1/health (ADR-063)"| C
+    TG -->|"kube_inventory: pods/nodes/deployments (SA token, ADR-063)"| KAPI
+    TGN -->|"influxdb_v2"| IX
+    TGN -.->|"influxdb_v2 (live) :8086"| OPS
     TG -->|"influxdb_v2 (local)"| IX
     TG -.->|"influxdb_v2 (live) :8086"| OPS
     GF --> IX
@@ -98,9 +107,12 @@ outside the cluster.
 | admin-api | `http://wholo-api:3001` | `CENTRAL_API_URL` | Same, with JWT relay (ADR-046) |
 | api, portal-api, admin-api | `http://wholo-keycloak:8080` | `KEYCLOAK_URL` | JWKS fetch to validate browser JWTs |
 | api, worker | `wholo-postgresql:5432`, `wholo-redis:6379`, `wholo-mailhog:1025` | `DATABASE_URL`, `REDIS_URL`, `SMTP_HOST` | DB, queues/outbox, mail |
-| api | `wholo-telegraf:8125` (**UDP**) | `STATSD_HOST` / `STATSD_PORT` | Order-activity StatsD counters (ADR-062). Fire-and-forget; unset = no-op. Only set when `telegraf.enabled` |
-| telegraf | `wholo-influxdb:8086` (local) / ops host `192.168.1.15:8086` (live) | `telegraf.influx.url` + `INFLUX_TOKEN` secret | Writes aggregated metrics to InfluxDB 2 (ADR-062). InfluxDB + Grafana are in-cluster locally, external in live |
-| grafana (local only) | `wholo-influxdb:8086` | provisioned datasource | Renders the "Stocdup Order Activity" dashboard. UI on NodePort `30300` |
+| api, admin-api, portal-api, driver-api, worker | `wholo-telegraf:8125` (**UDP**) | `STATSD_HOST` / `STATSD_PORT` | Order-activity counters (ADR-062) + per-request HTTP metrics (all 4 APIs) + queue-depth gauges (worker), ADR-063. Fire-and-forget; unset = no-op. Only set when `telegraf.enabled` |
+| telegraf | `wholo-influxdb:8086` (local) / ops host `192.168.1.15:8086` (live) | `telegraf.influx.url` + `INFLUX_TOKEN` secret | Writes aggregated metrics to InfluxDB 2 (ADR-062/063). InfluxDB + Grafana are in-cluster locally, external in live |
+| telegraf | `wholo-{api,admin-api,portal-api,driver-api}:<port>/api/v1/health` | rendered from service ports | `inputs.http_response` availability self-checks (ADR-063). Only when `telegraf.platformHealth.enabled` |
+| telegraf | `https://kubernetes.default.svc` | ServiceAccount token, read-only ClusterRole | `inputs.kube_inventory` — pod status / restarts, node objects (ADR-063). Only when `telegraf.platformHealth.enabled` |
+| telegraf-node (DaemonSet) | host `/proc`, `/sys` (read-only hostPath) → `wholo-influxdb:8086` / ops host | `HOST_PROC` / `HOST_SYS` / `HOST_MOUNT_PREFIX` | Node CPU / memory / disk % (ADR-063). One pod per node; not privileged. Only when `telegraf.platformHealth.enabled` |
+| grafana (local only) | `wholo-influxdb:8086` | provisioned datasource | Renders the "Stocdup Order Activity" + "Stocdup Platform Health" dashboards. UI on NodePort `30300` |
 | keycloak | `wholo-postgresql:5432`, `wholo-mailhog:1025` | `KC_DB_URL`, realm `smtpServer` | Its own `keycloak` DB; verification emails |
 
 ## Crossover points (public names inside config — the ones that bite)

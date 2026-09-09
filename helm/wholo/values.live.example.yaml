@@ -130,6 +130,13 @@ mailhog:
 appEnv: "live"
 telegraf:
   enabled: true
+  # Core platform-health metrics (ADR-063). Adds a read-only ClusterRole/Binding
+  # + a telegraf-node DaemonSet (read-only hostPath, NOT privileged, no
+  # kubelet :10250 dependency). Import helm/wholo/dashboards/
+  # stocdup-platform-health.json into the ops Grafana by hand, same as the
+  # order-activity dashboard. See docs/deployment/live-k3s.md.
+  platformHealth:
+    enabled: true
   influx:
     url: "http://192.168.1.15:8086"   # ops-host InfluxDB 2 (must be reachable from the k3s nodes)
     org: "stocdup"

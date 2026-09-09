@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MetricsModule } from '@wholo/nest-telemetry';
 import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
@@ -33,6 +34,7 @@ import {
   KEYCLOAK_USER_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queues/queue.constants';
+import { QueueMetricsScheduler } from './queues/queue-metrics.scheduler';
 import { redisConnectionFromUrl } from './queues/redis-connection';
 
 // Root module for the wholo-worker process (dist/worker.js) — the single
@@ -159,6 +161,9 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     OutboxModule,
     IngestionRunModule,
     HealthModule,
+    // Platform telemetry (ADR-062 / ADR-063). Plain module, not forRoot() — the
+    // worker has no HTTP layer, only the queue-depth gauges below.
+    MetricsModule,
   ],
   providers: [
     OutboxPublisherService,
@@ -166,6 +171,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingContactSyncScheduler,
     AccountingProductSyncScheduler,
     AccountingTaxTypeSyncScheduler,
+    QueueMetricsScheduler,
   ],
 })
 export class WorkerModule {}

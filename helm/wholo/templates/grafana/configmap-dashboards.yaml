@@ -1,8 +1,8 @@
 {{- if .Values.grafana.enabled }}
-# The canonical "Stocdup Order Activity" dashboard (ADR-062). Single source of
-# truth: helm/wholo/dashboards/stocdup-order-activity.json — the same file the
-# ops team imports into the external Grafana in live. Must live inside the
-# chart dir; .Files.Get cannot read outside the chart root.
+# Every committed dashboard under helm/wholo/dashboards/ (ADR-062 order
+# activity, ADR-063 platform health, …). Each file is the single source of
+# truth — the same JSON the ops team imports into the external Grafana in live.
+# Must live inside the chart dir; .Files.Get cannot read outside the chart root.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,6 +10,8 @@ metadata:
   labels:
     app: {{ include "wholo.fullname" . }}-grafana
 data:
-  stocdup-order-activity.json: |
-{{ .Files.Get "dashboards/stocdup-order-activity.json" | indent 4 }}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
 {{- end }}

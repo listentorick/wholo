@@ -26,7 +26,7 @@ import { OrderQueryDto } from './dto/order-query.dto';
 import { resolveEffectiveMinimumOrderSpend } from '../common/minimum-order-spend';
 import { calculateLineTax, resolveTaxLabel } from '../common/tax-calculation';
 import { toMinorUnits } from '../common/currency';
-import { MetricsService } from '../metrics/metrics.service';
+import { MetricsService } from '@wholo/nest-telemetry';
 
 interface CursorPayload {
   createdAt: string;

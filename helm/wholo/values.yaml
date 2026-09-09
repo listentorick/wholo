@@ -275,6 +275,30 @@ telegraf:
   image: telegraf:1.32-alpine
   # Documented StatsD aggregation + flush cadence.
   flushInterval: "10s"
+  # ── Core platform-health metrics (PBI-1 / ADR-063) ────────────────────────
+  # Layered on the same Telegraf → InfluxDB path. When enabled:
+  #   - the Telegraf Deployment additionally runs inputs.http_response (per-API
+  #     availability self-checks) and inputs.kube_inventory (pod status /
+  #     restarts), which needs the chart's first RBAC — a read-only
+  #     ServiceAccount + ClusterRole (get/list/watch on pods, nodes, namespaces,
+  #     services, and apps/* workloads);
+  #   - a `telegraf-node` DaemonSet runs on every node with read-only hostPath
+  #     mounts (/proc, /sys, rootfs) for node CPU / memory / disk %;
+  #   - Grafana provisions the second committed dashboard,
+  #     stocdup-platform-health.json.
+  # Off by default; enabled in BOTH values.local.yaml and values.live.yaml (it
+  # needs no infra beyond the InfluxDB Telegraf already writes to).
+  platformHealth:
+    enabled: false
+    # DaemonSet image; blank ⇒ reuse telegraf.image.
+    nodeImage: ""
+    nodeResources:
+      requests:
+        memory: "48Mi"
+        cpu: "15m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
   influx:
     # Blank -> the in-cluster InfluxDB service. Live: the ops host, e.g.
     # http://192.168.1.15:8086

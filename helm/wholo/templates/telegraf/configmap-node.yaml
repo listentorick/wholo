@@ -1,0 +1,54 @@
+{{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+# Core platform-health metrics (PBI-1 / ADR-063). Config for the `telegraf-node`
+# DaemonSet: node CPU / memory / disk % read straight from the host's /proc and
+# /sys (mounted read-only at /hostfs). No Kubernetes API access, no privileged
+# securityContext. Writes to the same InfluxDB as the main Telegraf Deployment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf-node
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf-node
+data:
+  telegraf.conf: |
+    [agent]
+      interval = "10s"
+      round_interval = true
+      flush_interval = "10s"
+      flush_jitter = "2s"
+      omit_hostname = true
+
+    [global_tags]
+      environment = {{ .Values.appEnv | default "local" | quote }}
+      node = "${NODE_NAME}"
+
+    # 100 - usage_idle, aggregated across all cores (per-core series would be
+    # unbounded on large nodes and are out of scope).
+    [[inputs.cpu]]
+      percpu = false
+      totalcpu = true
+      report_active = true
+
+    # Exposes `used_percent` directly.
+    [[inputs.mem]]
+
+    # Host filesystems via HOST_MOUNT_PREFIX (set on the container). Pseudo /
+    # container filesystems are ignored so only real node storage is reported;
+    # `used_percent` is ready-made. The dashboard filters to path == "/".
+    [[inputs.disk]]
+      ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs"]
+
+    [[inputs.internal]]
+
+    [[outputs.influxdb_v2]]
+      urls = ["${INFLUX_URL}"]
+      token = "${INFLUX_TOKEN}"
+      organization = "${INFLUX_ORG}"
+      bucket = "${INFLUX_BUCKET}"
+
+    [[outputs.health]]
+      service_address = "http://:8080"
+      [[outputs.health.compares]]
+        field = "buffer_size"
+        lt = 10000.0
+{{- end }}

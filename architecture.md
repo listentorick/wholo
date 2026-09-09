@@ -536,9 +536,11 @@ Wholo remains responsible for:
 
 ## 7. Observability
 
-> **Status:** the service-observability stack below (Prometheus / Loki / Tempo /
-> OpenTelemetry, ADR-015) is a plan, not yet built. The only implemented piece is
-> **business-activity telemetry** (ADR-062) and the health checks.
+> **Status:** the full service-observability stack below (Prometheus / Loki /
+> Tempo / OpenTelemetry, ADR-015) is a plan, not yet built. Implemented today:
+> **business-activity telemetry** (ADR-062), **core platform-health metrics**
+> (ADR-063) and the health checks. Node/pod **log** shipping (→ external Loki)
+> is a separate planned PBI.
 
 ### Business-activity telemetry (implemented — ADR-062)
 
@@ -556,6 +558,26 @@ rebuilt from outbox history).
   (`helm/wholo/dashboards/stocdup-order-activity.json`).
 - Live: InfluxDB 2 + Grafana are external (ops host); only Telegraf runs in-cluster.
   Local: all three run in-cluster behind `*.enabled` flags.
+
+### Core platform-health metrics (implemented — ADR-063)
+
+Layered on the same Telegraf → InfluxDB → Grafana path, behind
+`telegraf.platformHealth.enabled` (on in local and live). One committed
+dashboard, `helm/wholo/dashboards/stocdup-platform-health.json`, filterable by
+`environment` and `service` over 1h / 24h / 7d. No distributor / customer / user
+/ order identifiers as labels.
+
+| Signal | Source |
+|---|---|
+| HTTP request volume, 5xx count + %, p95 latency, per `service` | `MetricsInterceptor` (`@wholo/nest-telemetry`) in all 4 NestJS APIs → StatsD counter + timing; Telegraf `percentiles = [95]` |
+| Per-API availability | Telegraf `inputs.http_response` self-checks each `/api/v1/health` Service |
+| Pod availability + container restarts | Telegraf `inputs.kube_inventory` (chart's first RBAC — read-only ClusterRole) |
+| Node CPU / memory / disk % | `wholo-telegraf-node` DaemonSet — `inputs.cpu`/`mem`/`disk` over read-only hostPath `/proc` + `/sys` |
+| BullMQ failed / waiting / oldest-waiting-age, per queue | `QueueMetricsScheduler` in the worker → StatsD gauges every 15s |
+
+p95 is a windowed percentile-of-percentiles approximation; counts under-report on
+UDP loss — a trend view, consistent with ADR-062. The Telegraf Deployment must
+stay single-replica or counter sums and the p95 fragment.
 
 ### Service observability (planned — ADR-015)
 
@@ -583,9 +605,13 @@ application services.
 
 ### Metrics & alerting
 
-- Prometheus scrapes metrics from all services.
-- Key metrics: API response times, queue depths, job failure rates, Xero sync lag, Postgres connection pool utilisation.
-- Grafana alerts are configured for critical thresholds (error rate spikes, queue backlog, job failures).
+- Prometheus scrapes metrics from all services. *(Not built — ADR-063 covers
+  API response times, 5xx rate, queue depths and job failure rates today via the
+  Telegraf/InfluxDB path instead; Xero sync lag and Postgres pool utilisation
+  remain unmetered.)*
+- Grafana **alerts** are configured for critical thresholds (error rate spikes,
+  queue backlog, job failures). *(Not built — ADR-063 is dashboards only;
+  automated alerts are explicitly out of scope for PBI-1.)*
 
 ### Health checks
 

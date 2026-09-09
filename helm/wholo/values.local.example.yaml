@@ -24,6 +24,10 @@ keycloak:
 appEnv: "local"
 telegraf:
   enabled: true
+  # Core platform-health metrics (ADR-063): RBAC + kube_inventory + http_response
+  # + the telegraf-node DaemonSet + the stocdup-platform-health dashboard.
+  platformHealth:
+    enabled: true
 influxdb:
   enabled: true
   adminPassword: "local-influx-admin"

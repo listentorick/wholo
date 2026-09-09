@@ -8,9 +8,12 @@ data:
   PORT: "3001"
   NODE_ENV: "production"
   APP_ENV: {{ .Values.appEnv | default "local" | quote }}
+  # `service` tag on every metric this process emits (ADR-063).
+  SERVICE_NAME: "api"
   {{- if .Values.telegraf.enabled }}
-  # Order-activity telemetry (ADR-062). apps/api sends StatsD over UDP to the
-  # in-cluster Telegraf; unset ⇒ MetricsService is a silent no-op.
+  # Platform telemetry (ADR-062 / ADR-063). apps/api + the worker send StatsD
+  # over UDP to the in-cluster Telegraf; unset ⇒ MetricsService is a silent
+  # no-op.
   STATSD_HOST: {{ include "wholo.telegraf.host" . | quote }}
   STATSD_PORT: "8125"
   {{- end }}

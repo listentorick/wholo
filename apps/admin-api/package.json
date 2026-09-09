@@ -19,6 +19,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.4.15",
     "@prisma/client": "^6.2.1",
+    "@wholo/nest-telemetry": "workspace:*",
     "@wholo/types": "workspace:*",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",

@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { MetricsModule } from '@wholo/nest-telemetry';
 import { ApiClientModule } from './api-client/api-client.module';
 import { AuthModule } from './auth/auth.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
@@ -14,6 +15,7 @@ import { OrderAsContextMiddleware } from './common/middleware/order-as-context.m
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    MetricsModule.forRoot(),
     ApiClientModule,
     AuthModule,
     CatalogueModule,

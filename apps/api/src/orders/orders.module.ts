@@ -3,12 +3,13 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { AuditModule } from '../audit/audit.module';
 import { DeliveryAvailabilityModule } from '../delivery-availability/delivery-availability.module';
-import { MetricsModule } from '../metrics/metrics.module';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 
+// MetricsService comes from the @Global MetricsModule registered in AppModule /
+// WorkerModule (@wholo/nest-telemetry) — no local import needed.
 @Module({
-  imports: [PrismaModule, OutboxModule, AuditModule, DeliveryAvailabilityModule, MetricsModule],
+  imports: [PrismaModule, OutboxModule, AuditModule, DeliveryAvailabilityModule],
   providers: [OrdersService],
   controllers: [OrdersController],
 })

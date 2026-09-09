@@ -7,6 +7,7 @@ WORKDIR /app
 # Install dependencies (layer-cached before copying source)
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/types/package.json ./packages/types/
+COPY packages/nest-telemetry/package.json ./packages/nest-telemetry/
 COPY packages/admin-api-client/package.json ./packages/admin-api-client/
 COPY apps/admin/package.json ./apps/admin/
 COPY apps/admin-api/package.json ./apps/admin-api/
@@ -14,12 +15,14 @@ RUN pnpm install --frozen-lockfile
 
 # Copy source
 COPY packages/types ./packages/types
+COPY packages/nest-telemetry ./packages/nest-telemetry
 COPY packages/admin-api-client ./packages/admin-api-client
 COPY apps/admin ./apps/admin
 COPY apps/admin-api ./apps/admin-api
 
 # Build shared packages
 RUN pnpm --filter @wholo/types build
+RUN pnpm --filter @wholo/nest-telemetry build
 RUN pnpm --filter @wholo/admin-api-client build
 
 # Build Next.js frontend — NEXT_PUBLIC_* vars must be baked into the bundle at build time
@@ -57,6 +60,11 @@ COPY --from=builder /app/apps/admin/next.config.ts ./admin/next.config.ts
 # Shared runtime dependencies
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
+# @wholo/nest-telemetry has runtime exports (unlike the type-only @wholo/types),
+# so it must resolve from node_modules at runtime — pnpm's hoisted linker only
+# symlinks it into apps/<app>/node_modules, which the runner stage does not copy.
+COPY --from=builder /app/packages/nest-telemetry/package.json ./node_modules/@wholo/nest-telemetry/package.json
+COPY --from=builder /app/packages/nest-telemetry/dist ./node_modules/@wholo/nest-telemetry/dist
 COPY --from=builder /app/packages/admin-api-client/dist ./packages/admin-api-client/dist
 
 EXPOSE 3020

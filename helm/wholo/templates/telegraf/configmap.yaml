@@ -1,7 +1,9 @@
 {{- if .Values.telegraf.enabled }}
-# Order-activity telemetry (ADR-062). Receives InfluxDB-style StatsD counters
-# over UDP from apps/api and forwards them to InfluxDB 2. Environment variables
-# (${INFLUX_*}) are injected by the Deployment.
+# Order-activity telemetry (ADR-062) + core platform-health metrics
+# (PBI-1 / ADR-063). Receives InfluxDB-style StatsD from the apps over UDP and,
+# when platformHealth is on, also polls each API's /health and the Kubernetes
+# API. Forwards everything to InfluxDB 2. Environment variables (${INFLUX_*})
+# are injected by the Deployment.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -19,23 +21,82 @@ data:
       flush_jitter = "2s"
       omit_hostname = true
 
-    # apps/api sends `name,tag=value,...:N|c` (hand-built InfluxDB-line StatsD).
-    # Telegraf's statsd input parses those tags natively. Counters are dropped
-    # after each flush so a quiet period reports nothing rather than a stale
-    # value.
+    # Stamped on every metric that does not already carry it. App-emitted StatsD
+    # lines set their own `environment` tag (from APP_ENV) — Telegraf never
+    # overrides a metric's own tag — so this only fills it in for Telegraf's own
+    # inputs (http_response, kube_inventory).
+    [global_tags]
+      environment = {{ .Values.appEnv | default "local" | quote }}
+
+    # apps/* send `name,tag=value,...:N|c|ms|g` (hand-built InfluxDB-line
+    # StatsD). Telegraf's statsd input parses those tags natively. Counters and
+    # timings are dropped after each flush so a quiet period reports nothing
+    # rather than a stale value; gauges are KEPT (delete_gauges = false) so the
+    # queue-depth series (ADR-063) stay continuous between the worker's 15s
+    # sweeps.
     [[inputs.statsd]]
       protocol = "udp"
       service_address = ":8125"
       delete_counters = true
-      delete_gauges = true
+      delete_gauges = false
       delete_sets = true
       delete_timings = true
       allowed_pending_messages = 10000
-      percentiles = []
+      percentiles = [95]
 
     # Telegraf's own buffer / write-error counters — a debugging aid when the
     # InfluxDB output starts failing.
     [[inputs.internal]]
+{{- if .Values.telegraf.platformHealth.enabled }}
+
+    # ── ADR-063: per-API availability + latency self-checks (no app code) ──────
+    # Polls the Service, so this measures "≥1 ready replica answered". Per-pod
+    # health comes from inputs.kube_inventory below.
+    [[inputs.http_response]]
+      interval = "15s"
+      urls = ["http://{{ include "wholo.fullname" . }}-api:{{ .Values.api.service.port }}/api/v1/health"]
+      method = "GET"
+      response_timeout = "5s"
+      [inputs.http_response.tags]
+        service = "api"
+
+    [[inputs.http_response]]
+      interval = "15s"
+      urls = ["http://{{ include "wholo.fullname" . }}-admin-api:{{ .Values.adminApi.service.port }}/api/v1/health"]
+      method = "GET"
+      response_timeout = "5s"
+      [inputs.http_response.tags]
+        service = "admin-api"
+
+    [[inputs.http_response]]
+      interval = "15s"
+      urls = ["http://{{ include "wholo.fullname" . }}-portal-api:{{ .Values.portalApi.service.port }}/api/v1/health"]
+      method = "GET"
+      response_timeout = "5s"
+      [inputs.http_response.tags]
+        service = "portal-api"
+
+    [[inputs.http_response]]
+      interval = "15s"
+      urls = ["http://{{ include "wholo.fullname" . }}-driver-api:{{ .Values.driverApi.service.port }}/api/v1/health"]
+      method = "GET"
+      response_timeout = "5s"
+      [inputs.http_response.tags]
+        service = "driver-api"
+
+    # ── ADR-063: pod availability + container restarts (Kubernetes API) ───────
+    # Uses the mounted ServiceAccount token; RBAC is telegraf/rbac.yaml.
+    [[inputs.kube_inventory]]
+      interval = "30s"
+      url = "https://kubernetes.default.svc"
+      bearer_token = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      # Verify the API server against the ServiceAccount CA bundle the kubelet
+      # mounts into every pod — no reason to skip TLS verification in-cluster.
+      tls_ca = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+      insecure_skip_verify = false
+      namespace = {{ .Release.Namespace | quote }}
+      resource_include = ["pods", "nodes", "deployments"]
+{{- end }}
 
     [[outputs.influxdb_v2]]
       urls = ["${INFLUX_URL}"]

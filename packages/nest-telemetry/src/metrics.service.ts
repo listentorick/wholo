@@ -2,23 +2,24 @@ import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as dgram from 'node:dgram';
 
+type StatsdType = 'c' | 'ms' | 'g';
+
 /**
- * Platform-operator business-activity telemetry (ADR-062).
+ * Platform telemetry over StatsD (ADR-062 business activity, ADR-063 platform
+ * health).
  *
- * Emits StatsD counters over UDP to the in-cluster Telegraf, which aggregates
- * them and forwards to InfluxDB 2. Stocdup holds no InfluxDB credentials and no
- * InfluxDB/StatsD client library — a single UDP datagram is the whole
- * dependency surface, so we build the wire format by hand.
- *
- * Wire format is the InfluxDB-style StatsD line Telegraf's `inputs.statsd`
- * parses natively:
+ * Emits InfluxDB-style StatsD lines over UDP to the in-cluster Telegraf, which
+ * aggregates them and forwards to InfluxDB 2. Stocdup holds no InfluxDB
+ * credentials and no InfluxDB/StatsD client library — a single UDP datagram is
+ * the whole dependency surface, so we build the wire format by hand:
  *
  *   stocdup_orders_submitted,environment=live,distributor_id=123:1|c
+ *   stocdup_http_request_ms,environment=live,service=api:42|ms
+ *   stocdup_queue_jobs,environment=live,queue=notifications,state=failed:3|g
  *
  * Every call is fire-and-forget: non-blocking, never throws, never awaited. A
- * send failure is logged (message only — never tag values or order data) and
- * dropped. Delivery is deliberately not guaranteed (see ADR-062 / the PBI's
- * out-of-scope list).
+ * send failure is logged (message only — never tag values or payload data) and
+ * dropped. Delivery is deliberately not guaranteed (ADR-062).
  *
  * Disabled (no-op) whenever STATSD_HOST is unset — the default locally and in
  * tests, mirroring how MailService treats an absent SMTP host.
@@ -56,31 +57,52 @@ export class MetricsService implements OnApplicationShutdown {
    * Increment a counter by `value`, tagged with `tags` plus the ambient
    * `environment`. Fire-and-forget: returns immediately, never throws.
    */
-  increment(name: string, value: number, tags: Record<string, string>): void {
-    if (!this.socket || !this.host) return;
-    try {
-      const packet = this.formatCounter(name, value, tags);
-      this.socket.send(packet, this.port, this.host, (err) => {
-        if (err) this.logger.warn(`StatsD send failed for ${name}: ${err.message}`);
-      });
-    } catch (err) {
-      this.logger.warn(`StatsD increment failed for ${name}: ${(err as Error).message}`);
-    }
+  increment(name: string, value: number, tags: Record<string, string> = {}): void {
+    this.emit('c', name, Number.isFinite(value) ? Math.trunc(value) : 0, tags);
+  }
+
+  /**
+   * Record a duration sample in milliseconds. Telegraf's statsd input turns the
+   * stream of samples per tag-set into `_count` / `_mean` / `95_percentile`
+   * fields per flush window. Fire-and-forget.
+   */
+  timing(name: string, ms: number, tags: Record<string, string> = {}): void {
+    this.emit('ms', name, Number.isFinite(ms) ? Math.max(0, Math.round(ms)) : 0, tags);
+  }
+
+  /**
+   * Set an absolute gauge value. Negative values clamp to 0 — a leading `-` is
+   * a StatsD gauge *delta*, which is never what a caller means here.
+   * Fire-and-forget.
+   */
+  gauge(name: string, value: number, tags: Record<string, string> = {}): void {
+    this.emit('g', name, Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0, tags);
   }
 
   onApplicationShutdown(): void {
     this.socket?.close();
   }
 
-  /** `name,tag=value,tag=value:<n>|c`, every segment sanitised to stay on one line. */
-  private formatCounter(name: string, value: number, tags: Record<string, string>): string {
+  private emit(type: StatsdType, name: string, n: number, tags: Record<string, string>): void {
+    if (!this.socket || !this.host) return;
+    try {
+      const packet = this.format(name, n, tags, type);
+      this.socket.send(packet, this.port, this.host, (err) => {
+        if (err) this.logger.warn(`StatsD send failed for ${name}: ${err.message}`);
+      });
+    } catch (err) {
+      this.logger.warn(`StatsD emit failed for ${name}: ${(err as Error).message}`);
+    }
+  }
+
+  /** `name,tag=value,tag=value:<n>|<type>`, every segment sanitised to stay on one line. */
+  private format(name: string, n: number, tags: Record<string, string>, type: StatsdType): string {
     const metric = sanitiseName(name);
     const allTags: Record<string, string> = { environment: this.environment, ...tags };
     const tagPart = Object.entries(allTags)
       .map(([k, v]) => `,${sanitiseName(k)}=${sanitiseTagValue(v)}`)
       .join('');
-    const n = Number.isFinite(value) ? Math.trunc(value) : 0;
-    return `${metric}${tagPart}:${n}|c`;
+    return `${metric}${tagPart}:${n}|${type}`;
   }
 }
 

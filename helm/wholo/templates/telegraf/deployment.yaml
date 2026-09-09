@@ -6,6 +6,9 @@ metadata:
   labels:
     app: {{ include "wholo.fullname" . }}-telegraf
 spec:
+  # Must stay at 1: the statsd input aggregates counters and computes the p95
+  # timing percentile per flush. A second replica would receive a random slice
+  # of the UDP datagrams and fragment both (ADR-063).
   replicas: 1
   selector:
     matchLabels:
@@ -24,6 +27,10 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/telegraf/configmap.yaml") . | sha256sum }}
     spec:
       {{- include "wholo.imagePullSecrets" . }}
+      {{- if .Values.telegraf.platformHealth.enabled }}
+      # Read-only cluster access for inputs.kube_inventory (ADR-063).
+      serviceAccountName: {{ include "wholo.fullname" . }}-telegraf
+      {{- end }}
       containers:
         - name: telegraf
           image: {{ .Values.telegraf.image }}

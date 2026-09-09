@@ -1,0 +1,87 @@
+{{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+# Core platform-health metrics (PBI-1 / ADR-063). One Telegraf per node reading
+# node CPU / memory / disk % from the host's /proc + /sys, mounted read-only at
+# /hostfs. Not privileged; no Kubernetes API access (so no ServiceAccount). It
+# reuses the main Telegraf's `-telegraf` Secret for the InfluxDB write token.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "wholo.fullname" . }}-telegraf-node
+  labels:
+    app: {{ include "wholo.fullname" . }}-telegraf-node
+spec:
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-telegraf-node
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-telegraf-node
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/telegraf/configmap-node.yaml") . | sha256sum }}
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      # Run on every node, control-plane included (k3s servers are schedulable).
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: telegraf
+          image: {{ .Values.telegraf.platformHealth.nodeImage | default .Values.telegraf.image }}
+          args: ["--config", "/etc/telegraf/telegraf.conf"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: HOST_PROC
+              value: /hostfs/proc
+            - name: HOST_SYS
+              value: /hostfs/sys
+            - name: HOST_MOUNT_PREFIX
+              value: /hostfs
+            - name: INFLUX_URL
+              value: {{ include "wholo.telegraf.influxUrl" . | quote }}
+            - name: INFLUX_ORG
+              value: {{ .Values.telegraf.influx.org | quote }}
+            - name: INFLUX_BUCKET
+              value: {{ .Values.telegraf.influx.bucket | quote }}
+            - name: INFLUX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wholo.fullname" . }}-telegraf
+                  key: INFLUX_TOKEN
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/telegraf/telegraf.conf
+              subPath: telegraf.conf
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.telegraf.platformHealth.nodeResources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "wholo.fullname" . }}-telegraf-node
+        - name: hostfs
+          hostPath:
+            path: /
+{{- end }}

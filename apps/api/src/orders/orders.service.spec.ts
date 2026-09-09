@@ -7,7 +7,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
-import { MetricsService } from '../metrics/metrics.service';
+import { MetricsService } from '@wholo/nest-telemetry';
 
 const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';

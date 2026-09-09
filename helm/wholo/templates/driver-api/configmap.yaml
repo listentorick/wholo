@@ -7,5 +7,15 @@ metadata:
 data:
   PORT: "3030"
   NODE_ENV: "production"
+  APP_ENV: {{ .Values.appEnv | default "local" | quote }}
+  # `service` tag on every metric this process emits (ADR-063).
+  SERVICE_NAME: "driver-api"
+  {{- if .Values.telegraf.enabled }}
+  # Platform telemetry (ADR-062 / ADR-063). The BFF sends HTTP request / latency
+  # StatsD over UDP to the in-cluster Telegraf; unset ⇒ MetricsService is a
+  # silent no-op.
+  STATSD_HOST: {{ include "wholo.telegraf.host" . | quote }}
+  STATSD_PORT: "8125"
+  {{- end }}
   CENTRAL_API_URL: {{ .Values.driverApi.centralApiUrl | quote }}
   NEXT_APP_DIR: "/app/driver"

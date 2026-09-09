@@ -111,6 +111,39 @@ describe('MetricsService — enabled', () => {
       service.increment('x', Number.NaN, { distributor_id: 'd', source: 'portal', currency: 'GBP' }),
     ).not.toThrow();
   });
+
+  it('emits a timing sample as |ms with the value rounded', async () => {
+    service.timing('stocdup_http_request_ms', 41.7, { service: 'api' });
+
+    await expect(udp.next()).resolves.toBe('stocdup_http_request_ms,environment=test,service=api:42|ms');
+  });
+
+  it('clamps a negative timing to 0', async () => {
+    service.timing('stocdup_http_request_ms', -5, { service: 'api' });
+
+    await expect(udp.next()).resolves.toBe('stocdup_http_request_ms,environment=test,service=api:0|ms');
+  });
+
+  it('emits a gauge as |g with the value truncated', async () => {
+    service.gauge('stocdup_queue_jobs', 3.9, { queue: 'notifications', state: 'failed' });
+
+    await expect(udp.next()).resolves.toBe(
+      'stocdup_queue_jobs,environment=test,queue=notifications,state=failed:3|g',
+    );
+  });
+
+  it('clamps a negative gauge to 0 (a leading "-" is a StatsD delta)', async () => {
+    service.gauge('stocdup_queue_oldest_waiting_age_ms', -1, { queue: 'notifications' });
+
+    await expect(udp.next()).resolves.toBe(
+      'stocdup_queue_oldest_waiting_age_ms,environment=test,queue=notifications:0|g',
+    );
+  });
+
+  it('never throws from timing / gauge with a non-finite value', () => {
+    expect(() => service.timing('x', Number.NaN, { service: 'api' })).not.toThrow();
+    expect(() => service.gauge('x', Number.POSITIVE_INFINITY, { queue: 'q' })).not.toThrow();
+  });
 });
 
 describe('MetricsService — disabled (STATSD_HOST unset)', () => {
@@ -125,6 +158,8 @@ describe('MetricsService — disabled (STATSD_HOST unset)', () => {
         currency: 'GBP',
       }),
     ).not.toThrow();
+    expect(() => service.timing('stocdup_http_request_ms', 10, { service: 'api' })).not.toThrow();
+    expect(() => service.gauge('stocdup_queue_jobs', 1, { queue: 'q', state: 'failed' })).not.toThrow();
 
     await expect(udp.next(150)).rejects.toThrow('no datagram received');
     service.onApplicationShutdown();
