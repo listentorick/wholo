@@ -74,8 +74,10 @@ export function ShopHeader({ distributor, relationshipStatus, orderCount, onScro
                 {location}
               </span>
             )}
-            {location && distributor.tagline && <span className="text-border">|</span>}
-            {distributor.tagline && <span>{distributor.tagline}</span>}
+            {location && distributor.tagline && (
+              <span className="hidden text-border sm:inline">|</span>
+            )}
+            {distributor.tagline && <span className="w-full sm:w-auto">{distributor.tagline}</span>}
           </div>
         )}
         {orderCount != null && orderCount > 0 && (
