@@ -536,11 +536,11 @@ Wholo remains responsible for:
 
 ## 7. Observability
 
-> **Status:** the full service-observability stack below (Prometheus / Loki /
-> Tempo / OpenTelemetry, ADR-015) is a plan, not yet built. Implemented today:
+> **Status:** the full service-observability stack below (Prometheus / Tempo /
+> OpenTelemetry, ADR-015) is a plan, not yet built. Implemented today:
 > **business-activity telemetry** (ADR-062), **core platform-health metrics**
-> (ADR-063) and the health checks. Node/pod **log** shipping (→ external Loki)
-> is a separate planned PBI.
+> (ADR-063), **log aggregation** (ADR-064) and the health checks. Distributed
+> tracing (Tempo / OTel) is still unbuilt.
 
 ### Business-activity telemetry (implemented — ADR-062)
 
@@ -579,24 +579,52 @@ p95 is a windowed percentile-of-percentiles approximation; counts under-report o
 UDP loss — a trend view, consistent with ADR-062. The Telegraf Deployment must
 stay single-replica or counter sums and the p95 fragment.
 
+### Log aggregation (implemented — ADR-064)
+
+Every pod in the `wholo` namespace has its logs in Loki, viewable in Grafana
+(Explore + the committed `helm/wholo/dashboards/stocdup-logs.json`), filterable
+by `app` / `namespace` / `level` / `environment`.
+
+- The 5 Node processes (`apps/api` + its worker, the 3 BFFs) emit one-line JSON
+  via **`nestjs-pino`** — `level` / `time` / `msg` / `context` / `reqId` +
+  `service` / `environment` — plus a request-completion line (method, path,
+  status, duration; `/api/v1/health*` excluded) and, for the first time, a
+  logged **5xx with stack** from `ProblemDetailsFilter`. `www` / `keycloak` /
+  `postgres` / `redis` / … ship raw with a synthetic `level`.
+- **Fluent Bit** (`wholo-fluent-bit` DaemonSet, one per node) tails
+  `/var/log/containers`, enriches with k8s metadata, parses the JSON body, and
+  pushes to Loki. Its own least-privilege SA + ClusterRole (`pods`,
+  `namespaces`).
+- **Loki** runs in-cluster behind `loki.enabled` for local dev only; in live
+  Fluent Bit pushes to the ops-host Loki (`fluentBit.loki.host`,
+  `192.168.1.15:3100`).
+- Index labels are bounded (`namespace`, `app`, `container`, `node`,
+  `environment`, `job`); `pod` / `level` / `stream` are structured metadata; no
+  ids or PII anywhere. `LOG_LEVEL` (default `info`) is the volume knob.
+
 ### Service observability (planned — ADR-015)
 
 Provided by the **Grafana stack**, to be deployed via Helm charts alongside the
 application services.
 
-| Tool | Role |
-|---|---|
-| Prometheus | Metrics collection from all services |
-| Loki | Log aggregation |
-| Tempo | Distributed tracing |
-| Grafana | Dashboards and alerting across metrics, logs and traces |
+| Tool | Role | Status |
+|---|---|---|
+| Prometheus | Metrics collection from all services | Not built — ADR-063 covers the platform-health metrics via Telegraf/InfluxDB instead |
+| Loki | Log aggregation | **Built — ADR-064** (Fluent Bit, not Promtail) |
+| Tempo | Distributed tracing | Not built |
+| Grafana | Dashboards and alerting across metrics, logs and traces | Dashboards built (ADR-062/063/064); alerting not built |
 
-### Logging
+### Logging (implemented — ADR-064)
 
-- Structured JSON logs from all services are shipped to Loki.
-- Log levels: `error`, `warn`, `info`, `debug`.
-- All HTTP requests logged with method, path, status code, duration and `distributorId` where applicable.
-- Sensitive fields (passwords, tokens) must never be logged.
+- Structured JSON logs from the 5 Node processes (`nestjs-pino`), shipped to
+  Loki by Fluent Bit; `www` / `keycloak` / infra pods ship raw.
+- Log levels: `error`, `warn`, `info`, `debug` — controlled by `LOG_LEVEL`
+  (`logging.level`, default `info`).
+- All `/api/v1/*` requests logged with method, path (query string stripped),
+  status code, duration and `reqId`. `distributorId` and other identifiers are
+  **not** logged (they were removed / demoted to `debug` — see ADR-064).
+- Sensitive fields (`authorization`, `cookie`, `*.password`, `*.token`, …) are
+  redacted by pino; recipient emails are masked.
 
 ### Distributed tracing
 

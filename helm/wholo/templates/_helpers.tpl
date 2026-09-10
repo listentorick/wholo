@@ -41,6 +41,19 @@ Expand the name of the chart.
 {{- printf "%s-influxdb" (include "wholo.fullname" .) }}
 {{- end }}
 
+{{- define "wholo.loki.host" -}}
+{{- printf "%s-loki" (include "wholo.fullname" .) }}
+{{- end }}
+
+{{/*
+Loki host Fluent Bit pushes logs to (ADR-064): the explicit fluentBit.loki.host
+when set (live = the external ops-host Loki), otherwise the in-cluster Loki
+service (local dev). Mirrors wholo.telegraf.influxUrl.
+*/}}
+{{- define "wholo.loki.pushHost" -}}
+{{- .Values.fluentBit.loki.host | default (include "wholo.loki.host" .) -}}
+{{- end }}
+
 {{/*
 InfluxDB URL Telegraf writes to: the explicit telegraf.influx.url when set
 (live points this at the external ops-host InfluxDB), otherwise the in-cluster

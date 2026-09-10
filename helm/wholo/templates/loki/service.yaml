@@ -1,0 +1,16 @@
+{{- if .Values.loki.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-loki
+  labels:
+    app: {{ include "wholo.fullname" . }}-loki
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "wholo.fullname" . }}-loki
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+{{- end }}

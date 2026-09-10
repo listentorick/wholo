@@ -35,3 +35,11 @@ influxdb:
 grafana:
   enabled: true
   adminPassword: "admin"
+
+# Log aggregation (ADR-064): in-cluster Loki + the fluent-bit node DaemonSet +
+# the stocdup-logs dashboard. Grafana -> Explore -> Loki is the primary view.
+loki:
+  enabled: true
+fluentBit:
+  enabled: true
+  multilineParser: "docker"   # Docker Desktop uses cri-dockerd (json-file logs)

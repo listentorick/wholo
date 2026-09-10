@@ -51,7 +51,7 @@ export class OrderAsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Exchange a one-time delivery token for a session token' })
   exchangeToken(@Body() dto: ExchangeTokenDto, @Req() req: RequestWithUser) {
-    this.logger.log(`exchange requested sub=${req.user.sub}`);
+    this.logger.debug(`exchange requested sub=${req.user.sub}`);
     return this.orderAsService.exchangeDeliveryToken(dto.deliveryToken, req.user.sub);
   }
 

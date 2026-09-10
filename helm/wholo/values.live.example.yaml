@@ -147,6 +147,19 @@ influxdb:
 grafana:
   enabled: false                       # external in live
 
+# Log aggregation (ADR-064). Only the fluent-bit DaemonSet runs in-cluster; it
+# pushes to the ops-host Loki. loki.enabled stays false (external). One-time
+# infra-owner setup (run/point Loki, retention, node egress to :3100, Grafana
+# Loki datasource + dashboard import) is in docs/deployment/live-k3s.md.
+loki:
+  enabled: false                       # external in live
+fluentBit:
+  enabled: true
+  loki:
+    host: "192.168.1.15"               # ops-host Loki (must be reachable from the k3s nodes)
+    port: 3100
+    uri: "/loki/api/v1/push"
+
 keycloak:
   image:
     repository: ghcr.io/listentorick/wholo/keycloak

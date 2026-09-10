@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import { PinoAppLogger } from '@wholo/nest-telemetry';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import express, { Request, Response, NextFunction } from 'express';
@@ -24,7 +25,9 @@ async function bootstrap() {
     return nextHandler(req, res);
   });
 
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressServer));
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressServer), { bufferLogs: true });
+  app.useLogger(app.get(PinoAppLogger));
+  app.flushLogs();
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new ProblemDetailsFilter());

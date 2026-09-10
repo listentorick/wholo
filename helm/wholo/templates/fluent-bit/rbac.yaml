@@ -1,0 +1,39 @@
+{{- if .Values.fluentBit.enabled }}
+# Log shipping (ADR-064). Dedicated least-privilege ServiceAccount for Fluent
+# Bit's kubernetes metadata filter (pod labels / namespace). Intentionally NOT
+# bound to the wholo-telegraf ClusterRole (ADR-063): that only exists when
+# telegraf.platformHealth.enabled, and grants nodes/services/apps this agent
+# never reads.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "wholo.fullname" . }}-fluent-bit
+  labels:
+    app: {{ include "wholo.fullname" . }}-fluent-bit
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "wholo.fullname" . }}-fluent-bit
+  labels:
+    app: {{ include "wholo.fullname" . }}-fluent-bit
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "wholo.fullname" . }}-fluent-bit
+  labels:
+    app: {{ include "wholo.fullname" . }}-fluent-bit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "wholo.fullname" . }}-fluent-bit
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "wholo.fullname" . }}-fluent-bit
+    namespace: {{ .Release.Namespace }}
+{{- end }}

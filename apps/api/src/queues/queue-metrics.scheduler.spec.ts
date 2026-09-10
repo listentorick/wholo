@@ -136,6 +136,25 @@ describe('QueueMetricsScheduler', () => {
     expect((metrics.gauge as jest.Mock).mock.calls.length).toBe((queues.length - 1) * 5);
   });
 
+  it('times out a hung queue call and does not leave the sweep wedged', async () => {
+    jest.useFakeTimers();
+    try {
+      const { metrics, scheduler, queues } = build();
+      queues[0].getJobCounts.mockReturnValue(new Promise(() => {})); // never settles
+
+      const swept = scheduler.sweep();
+      await jest.advanceTimersByTimeAsync(11_000); // past REPORT_TIMEOUT_MS
+      await swept;
+
+      // queue 0 timed out, the other 8 still reported
+      expect((metrics.gauge as jest.Mock).mock.calls.length).toBe((queues.length - 1) * 5);
+      // re-entrancy guard released
+      expect((scheduler as unknown as { running: boolean }).running).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('is a no-op while a previous sweep is still running (re-entrancy guard)', async () => {
     const { metrics, scheduler } = build();
     (scheduler as unknown as { running: boolean }).running = true;

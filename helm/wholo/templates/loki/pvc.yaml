@@ -1,0 +1,17 @@
+{{- if .Values.loki.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "wholo.fullname" . }}-loki
+  labels:
+    app: {{ include "wholo.fullname" . }}-loki
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.loki.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.loki.storageSize }}
+{{- end }}

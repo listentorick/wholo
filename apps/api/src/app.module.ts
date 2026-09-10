@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MetricsModule } from '@wholo/nest-telemetry';
+import { LoggingModule, MetricsModule } from '@wholo/nest-telemetry';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -42,6 +42,7 @@ import './asset-images/branding-asset-types';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    LoggingModule,
     PrismaModule,
     AssetImagesModule,
     UsersModule,

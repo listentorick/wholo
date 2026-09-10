@@ -36,6 +36,29 @@ const MONITORED_QUEUES = [
 const REPORTED_STATES = ['waiting', 'active', 'delayed', 'failed'] as const;
 
 const SWEEP_INTERVAL_MS = 15_000;
+// ioredis is created with maxRetriesPerRequest: null, so a Redis outage / TCP
+// black hole leaves getJobCounts pending indefinitely — without this cap a
+// single hung call would keep `running` true forever and silently kill every
+// later sweep.
+const REPORT_TIMEOUT_MS = 10_000;
+
+class ReportTimeout extends Error {}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new ReportTimeout(`timed out after ${ms}ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 /**
  * Platform-health background-job metrics (ADR-063). Worker-process only (the
@@ -75,7 +98,7 @@ export class QueueMetricsScheduler implements OnModuleDestroy {
     try {
       for (const [name, queue] of this.queues) {
         try {
-          await this.report(name, queue);
+          await withTimeout(this.report(name, queue), REPORT_TIMEOUT_MS);
         } catch (err) {
           this.logger.warn(`queue-metrics sweep failed for ${name}: ${(err as Error).message}`);
         }

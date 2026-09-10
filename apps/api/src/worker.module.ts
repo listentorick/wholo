@@ -2,7 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { MetricsModule } from '@wholo/nest-telemetry';
+import { LoggingModule, MetricsModule } from '@wholo/nest-telemetry';
 import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
 import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
@@ -43,6 +43,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    LoggingModule,
     ScheduleModule.forRoot(),
     BullModule.forRootAsync({
       inject: [ConfigService],

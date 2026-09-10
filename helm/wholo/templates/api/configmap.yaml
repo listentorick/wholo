@@ -10,6 +10,8 @@ data:
   APP_ENV: {{ .Values.appEnv | default "local" | quote }}
   # `service` tag on every metric this process emits (ADR-063).
   SERVICE_NAME: "api"
+  # Structured logging level (ADR-064).
+  LOG_LEVEL: {{ .Values.logging.level | default "info" | quote }}
   {{- if .Values.telegraf.enabled }}
   # Platform telemetry (ADR-062 / ADR-063). apps/api + the worker send StatsD
   # over UDP to the in-cluster Telegraf; unset ⇒ MetricsService is a silent

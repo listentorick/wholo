@@ -1,0 +1,62 @@
+{{- if .Values.loki.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-loki
+  labels:
+    app: {{ include "wholo.fullname" . }}-loki
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-loki
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-loki
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/loki/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: loki
+          image: {{ .Values.loki.image }}
+          args: ["-config.file=/etc/loki/loki.yaml"]
+          ports:
+            - name: http
+              containerPort: 3100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/loki/loki.yaml
+              subPath: loki.yaml
+            - name: data
+              mountPath: /loki
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.loki.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "wholo.fullname" . }}-loki
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "wholo.fullname" . }}-loki
+{{- end }}

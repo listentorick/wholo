@@ -292,6 +292,42 @@ source. Same file auto-provisioned locally; re-import on change.
 loaded; `kubectl auth can-i list pods --as=system:serviceaccount:wholo:wholo-telegraf`
 returns `yes`; the "Stocdup Platform Health" dashboard populates within ~30s.
 
+## Log aggregation (ADR-064)
+
+Every pod's logs → Loki on the ops host. Only Fluent Bit runs in-cluster (a
+`wholo-fluent-bit` DaemonSet, one per node, tailing `/var/log/containers`).
+
+**values.live.yaml** (see `values.live.example.yaml`):
+
+- `fluentBit.enabled: true`
+- `fluentBit.loki.host: "192.168.1.15"` (port `3100`, uri `/loki/api/v1/push`)
+- `loki.enabled: false` — Loki is external (the in-cluster single-binary Loki is
+  local-dev only).
+- Optionally `logging.level: "warn"` to cut boot-log noise across the 5 Node
+  processes (default `info`).
+
+`helm upgrade` also creates the chart's second RBAC set (`wholo-fluent-bit` SA +
+a read-only `pods`/`namespaces` ClusterRole) and the DaemonSet, which mounts
+`/var/log/pods` + `/var/log/containers` **read-only** plus a writable
+`/var/lib/wholo-fluent-bit` hostPath for its position DB. Not privileged.
+
+**One-time infra-owner setup on the ops host:**
+
+1. Run Loki (or point at an existing one). Set a retention period; storage
+   backend (filesystem / object store) and sizing are the ops host's call.
+2. Confirm the k3s nodes — **including the schedulable control-plane node** — can
+   reach `192.168.1.15:3100` (egress ≠ ingress; the `healthAccess` allowlist is
+   inbound — check the ops firewall accepts inbound `:3100` from the cluster).
+3. Grafana: add a **Loki** data source, url `http://192.168.1.15:3100`.
+4. Grafana: Dashboards → Import → paste `helm/wholo/dashboards/stocdup-logs.json`,
+   pick the Loki data source. Same file auto-provisioned locally; re-import on
+   change. (Grafana → Explore → Loki is the primary tool.)
+
+**Verify after deploy:** `kubectl -n wholo logs ds/wholo-fluent-bit` shows the
+`loki` output loaded with no repeated `connection refused` / `could not flush`;
+`kubectl -n wholo logs deploy/wholo-api | head` is single-line JSON;
+`{namespace="wholo"}` in the ops Grafana Explore returns lines within ~15s.
+
 ## Backups
 
 A nightly CronJob (`postgresql.backup.enabled`) runs `pg_dumpall` (captures
@@ -339,4 +375,8 @@ push to R2) is a recommended follow-up.
    `inputs.kube_inventory` loaded, no `forbidden`; `kubectl -n wholo rollout
    status ds/wholo-telegraf-node`; the ops Grafana "Stocdup Platform Health"
    dashboard (ADR-063) shows availability, node CPU/mem/disk and queue depth.
-7. Run a manual backup job and check a dump appears.
+8. `kubectl -n wholo logs ds/wholo-fluent-bit` — `loki` output loaded, no
+   `connection refused`; `kubectl -n wholo logs deploy/wholo-api | head` is
+   single-line JSON; `{namespace="wholo"}` in the ops Grafana Explore → Loki
+   returns lines (ADR-064).
+9. Run a manual backup job and check a dump appears.

@@ -1,8 +1,11 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { logHttpException } from '@wholo/nest-telemetry';
 import { Response } from 'express';
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ProblemDetailsFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -23,6 +26,10 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         title = exception.message;
       }
     }
+
+    // ADR-064: this filter is @Catch()-all and writes the response itself, which
+    // pre-empts Nest's built-in exception logging — so log 5xx (with stack) here.
+    logHttpException(this.logger, exception, status, host);
 
     response.status(status).set('Content-Type', 'application/problem+json').json({
       type: `https://wholo.app/errors/${title.toLowerCase().replace(/\s+/g, '-')}`,

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { maskEmail } from '../common/mask-email';
 import { compileMjmlTemplate } from './mail-template';
 
 // Organisation names are set by users — escape anything interpolated into
@@ -211,9 +212,9 @@ export class MailService {
 
     try {
       await this.transporter.sendMail({ from: this.inviteFrom, to, subject, text, html });
-      this.logger.log(`Invite email sent to ${to}`);
+      this.logger.log(`Invite email sent to ${maskEmail(to)}`);
     } catch (err) {
-      this.logger.error(`Failed to send invite email to ${to}: ${(err as Error).message}`);
+      this.logger.error(`Failed to send invite email to ${maskEmail(to)}: ${(err as Error).message}`);
       throw err;
     }
   }
@@ -808,9 +809,9 @@ export class MailService {
   private async send(to: string, subject: string, text: string, html: string, kind: string): Promise<void> {
     try {
       await this.transporter.sendMail({ from: this.from, to, subject, text, html });
-      this.logger.log(`${kind} email sent to ${to}`);
+      this.logger.log(`${kind} email sent to ${maskEmail(to)}`);
     } catch (err) {
-      this.logger.error(`Failed to send ${kind} email to ${to}: ${(err as Error).message}`);
+      this.logger.error(`Failed to send ${kind} email to ${maskEmail(to)}: ${(err as Error).message}`);
       throw err;
     }
   }

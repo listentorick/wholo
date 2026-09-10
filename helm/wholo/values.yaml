@@ -6,6 +6,12 @@ imagePullSecrets: []
 # `environment` tag on order-activity metrics (ADR-062). "local" | "live".
 appEnv: "local"
 
+# Structured logging (ADR-064). pino level for all 5 Node processes — one JSON
+# line per event to stdout, shipped to Loki by Fluent Bit.
+# error | warn | info | debug | trace
+logging:
+  level: "info"
+
 # Browser-facing base URLs for the portal/admin apps — the single source
 # of truth for every consumer that builds a link a browser follows: email
 # links (apps/api), the order-as magic link (admin-api), and Keycloak's
@@ -355,6 +361,52 @@ grafana:
     limits:
       memory: "384Mi"
       cpu: "300m"
+
+# ── Log aggregation (ADR-064) ──────────────────────────────────────────────
+# fluent-bit (a node DaemonSet) tails every pod's container logs in the wholo
+# namespace and pushes them to Loki. The 5 Node processes emit structured JSON
+# (nestjs-pino); www/keycloak/postgres/redis/etc. ship raw, labelled.
+#   Local: loki.enabled + fluentBit.enabled — both in-cluster.
+#   Live : loki.enabled=false; fluentBit.loki.host = the ops host (192.168.1.15).
+
+loki:
+  # In-cluster single-binary Loki for local dev only. Live uses the external
+  # ops-host Loki — keep this false in values.live.yaml.
+  enabled: false
+  image: grafana/loki:3.7.7      # needs >= 3.0 for structured metadata
+  retention: "72h"
+  storageSize: 2Gi
+  storageClass: ""
+  resources:
+    requests:
+      memory: "192Mi"
+      cpu: "50m"
+    limits:
+      memory: "512Mi"
+      cpu: "400m"
+
+fluentBit:
+  # Node log-shipping DaemonSet. Runs in every environment when enabled.
+  enabled: false
+  image: fluent/fluent-bit:5.1.2
+  # Container-log format: "cri" (containerd — live k3s) or "docker" (cri-dockerd
+  # json-file — Docker Desktop). Overridden to "docker" in values.local.yaml.
+  multilineParser: "cri"
+  loki:
+    host: ""                     # blank -> the in-cluster wholo-loki service
+    port: 3100
+    uri: "/loki/api/v1/push"
+    tenantId: ""                 # multi-tenant Loki only
+  # hostPath position DB so tail offsets survive a pod restart (an emptyDir
+  # would re-read every file after each restart -> duplicate lines in Loki).
+  positionsHostPath: "/var/lib/wholo-fluent-bit"
+  resources:
+    requests:
+      memory: "48Mi"
+      cpu: "15m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
 
 keycloak:
   image:

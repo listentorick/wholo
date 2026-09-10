@@ -24,6 +24,16 @@ data:
           defaultBucket: {{ .Values.influxdb.bucket | quote }}
         secureJsonData:
           token: {{ required "influxdb.adminToken is required when grafana.enabled (used as the Grafana datasource token locally)" .Values.influxdb.adminToken | quote }}
+      {{- if .Values.loki.enabled }}
+      - name: Loki
+        uid: stocdup-loki
+        type: loki
+        access: proxy
+        url: {{ printf "http://%s:3100" (include "wholo.loki.host" .) | quote }}
+        isDefault: false
+        jsonData:
+          maxLines: 2000
+      {{- end }}
   dashboards.yaml: |
     apiVersion: 1
     providers:

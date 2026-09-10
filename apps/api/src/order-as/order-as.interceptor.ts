@@ -20,9 +20,9 @@ export class OrderAsInterceptor implements NestInterceptor {
     const sessionToken = request.headers?.['x-order-as-session'] as string | undefined;
 
     if (sessionToken && request.user?.sub) {
-      this.logger.log(`resolving order-as session for sub=${request.user.sub}`);
+      this.logger.debug(`resolving order-as session for sub=${request.user.sub}`);
       const resolved = await this.orderAsService.resolveSession(sessionToken, request.user.sub);
-      this.logger.log(`session resolved: customerId=${resolved.customerId} distributorId=${resolved.distributorId}`);
+      this.logger.debug(`session resolved: customerId=${resolved.customerId} distributorId=${resolved.distributorId}`);
       request[ORDER_AS_CONTEXT_KEY] = { sessionToken, ...resolved } satisfies OrderAsContext;
     }
 

@@ -15,8 +15,13 @@ Then run apps locally:
   pnpm dev:portal
 {{- if .Values.grafana.enabled }}
 
-Telemetry (ADR-062 / ADR-063):
+Telemetry (ADR-062 / ADR-063 / ADR-064):
   Grafana:  http://localhost:30300  (user: {{ .Values.grafana.adminUser }} / grafana.adminPassword)
   Dashboards (folder: Stocdup): "Stocdup Order Activity"
   {{- if .Values.telegraf.platformHealth.enabled }}, "Stocdup Platform Health"{{- end }}
+  {{- if .Values.loki.enabled }}, "Stocdup Logs"{{- end }}
+  {{- if .Values.loki.enabled }}
+
+  Logs: Grafana -> Explore -> Loki  (primary tool), or the "Stocdup Logs" dashboard.
+  {{- end }}
 {{- end }}
