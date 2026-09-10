@@ -50,61 +50,64 @@ export function ShopHeader({ distributor, relationshipStatus, orderCount, onScro
 
   return (
     <>
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 px-4 pb-5 pt-5 sm:flex-row sm:items-center sm:gap-5 md:px-8">
-      <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-surface shadow-sm sm:h-20 sm:w-20">
-        {distributor.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={distributor.logoUrl} alt="" className="h-full w-full object-cover" draggable={false} />
-        ) : (
-          <span className="text-lg font-extrabold tracking-tight text-muted">
-            {distributor.name.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <h1 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-foreground">
-          {distributor.name}
-        </h1>
-        {(location || distributor.tagline) && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-            {location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPinIcon />
-                {location}
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 px-4 pb-5 pt-5 md:flex-row md:items-center md:gap-5 md:px-8">
+        {/* Logo + identity: always a row (beside, not below); `md:contents`
+            dissolves this wrapper on desktop so the logo, the text block and the
+            actions share one flex row. */}
+        <div className="flex items-center gap-4 md:contents">
+          <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-surface shadow-sm md:h-20 md:w-20">
+            {distributor.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={distributor.logoUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+            ) : (
+              <span className="text-lg font-extrabold tracking-tight text-muted">
+                {distributor.name.slice(0, 2).toUpperCase()}
               </span>
             )}
-            {location && distributor.tagline && (
-              <span className="hidden text-border sm:inline">|</span>
-            )}
-            {distributor.tagline && <span className="w-full sm:w-auto">{distributor.tagline}</span>}
-          </div>
-        )}
-        {orderCount != null && orderCount > 0 && (
-          <p className="mt-1.5 text-sm text-muted">
-            {orderCount} {orderCount === 1 ? 'order' : 'orders'} with this supplier
-          </p>
-        )}
-      </div>
+          </span>
 
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-2.5">
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground opacity-60"
-        >
-          <MessageSquare className="h-4 w-4" strokeWidth={1.7} />
-          Message
-        </button>
-        <RelationshipCta
-          distributorName={distributor.name}
-          relationshipStatus={relationshipStatus}
-          variant="header"
-        />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold leading-tight tracking-[-0.02em] text-foreground md:text-2xl">
+              {distributor.name}
+            </h1>
+            {(location || distributor.tagline) && (
+              <p className="mt-1 text-sm leading-snug text-muted">
+                {location && (
+                  <span className="inline-flex items-center gap-1 align-middle">
+                    <MapPinIcon />
+                    {location}
+                  </span>
+                )}
+                {location && distributor.tagline && <span className="mx-1.5">&middot;</span>}
+                {distributor.tagline && <span>{distributor.tagline}</span>}
+              </p>
+            )}
+            {orderCount != null && orderCount > 0 && (
+              <p className="mt-1 text-sm text-muted">
+                {orderCount} {orderCount === 1 ? 'order' : 'orders'} with this supplier
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground opacity-60"
+          >
+            <MessageSquare className="h-4 w-4" strokeWidth={1.7} />
+            Message
+          </button>
+          <RelationshipCta
+            distributorName={distributor.name}
+            relationshipStatus={relationshipStatus}
+            variant="header"
+          />
+        </div>
       </div>
-    </div>
-    <div ref={sentinelRef} aria-hidden="true" className="h-0 w-full" />
+      <div ref={sentinelRef} aria-hidden="true" className="h-0 w-full" />
     </>
   );
 }

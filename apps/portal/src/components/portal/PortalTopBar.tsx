@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ShoppingBasket, Store } from 'lucide-react';
+import { ShoppingBasket } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/lib/auth-context';
 import { useCartSafe } from '@/lib/cart-context';
@@ -68,15 +68,13 @@ export function PortalTopBar({ variant }: { variant: 'account' | 'distributor' }
 
       <PlatformSearchPlaceholder className="mx-auto hidden max-w-xl flex-1 md:flex" />
 
-      {user?.organisationName && (
-        <span className="hidden max-w-[12rem] items-center gap-1.5 truncate text-sm text-muted lg:inline-flex">
-          <Store className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-          <span className="truncate">{user.organisationName}</span>
-        </span>
-      )}
-
-      <div className="ml-auto flex flex-shrink-0 items-center gap-1 md:ml-0">
+      <div className="ml-auto flex flex-shrink-0 items-center gap-2 md:ml-0">
         <BasketButton />
+        {user?.organisationName && (
+          <span className="hidden max-w-[12rem] truncate text-sm text-muted sm:inline">
+            {user.organisationName}
+          </span>
+        )}
         <UserMenuButton />
       </div>
     </header>

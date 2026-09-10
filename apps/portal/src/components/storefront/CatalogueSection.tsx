@@ -28,22 +28,6 @@ interface Props {
   searchTerm: string;
 }
 
-/** Inert sort / stock filters — the catalogue API has no sort or stock param yet. */
-function InertSelect({ label, value }: { label: string; value: string }) {
-  return (
-    <label className="inline-flex items-center gap-1.5 text-xs text-muted">
-      <span className="hidden sm:inline">{label}</span>
-      <select
-        disabled
-        title="Coming soon"
-        className="cursor-not-allowed rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-foreground opacity-70"
-      >
-        <option>{value}</option>
-      </select>
-    </label>
-  );
-}
-
 /**
  * The catalogue block of the storefront — first section, and the scroll target
  * for the "Catalogue" tab. Grid + pagination logic lifted from the old
@@ -94,13 +78,7 @@ export function CatalogueSection({
         }
       `}</style>
 
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <Eyebrow>Catalogue</Eyebrow>
-        <div className="flex flex-shrink-0 gap-2">
-          <InertSelect label="Sort:" value="Best match" />
-          <InertSelect label="In stock:" value="All" />
-        </div>
-      </div>
+      <Eyebrow className="mb-4">Catalogue</Eyebrow>
 
       <SearchInput
         value={search}

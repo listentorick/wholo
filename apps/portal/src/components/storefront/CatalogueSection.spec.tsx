@@ -50,11 +50,10 @@ describe('CatalogueSection', () => {
     expect(screen.getAllByTestId('product')).toHaveLength(2);
   });
 
-  it('shows the inert sort / stock selects', () => {
+  it('has no sort / stock filter controls', () => {
     renderSection();
-    const selects = screen.getAllByRole('combobox');
-    expect(selects).toHaveLength(2);
-    selects.forEach((s) => expect(s).toBeDisabled());
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByText('Best match')).toBeNull();
   });
 
   it('shows a spinner on the first load and the error message on failure', () => {
