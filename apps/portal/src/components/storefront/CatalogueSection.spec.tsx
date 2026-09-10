@@ -14,8 +14,8 @@ const products: CatalogueProduct[] = [
 ];
 
 function renderSection(overrides: Partial<Parameters<typeof CatalogueSection>[0]> = {}) {
-  const onLoadMore = vi.fn();
-  render(
+  const onLoadMore = overrides.onLoadMore ?? vi.fn();
+  const utils = render(
     <CatalogueSection
       slug="winos"
       currencyCode="GBP"
@@ -29,34 +29,20 @@ function renderSection(overrides: Partial<Parameters<typeof CatalogueSection>[0]
       hasMore={false}
       onLoadMore={onLoadMore}
       error={null}
+      search=""
+      onSearchChange={vi.fn()}
+      productCount={2}
       searchActive={false}
       searchTerm=""
       {...overrides}
     />,
   );
-  return onLoadMore;
+  return { onLoadMore, ...utils };
 }
 
 describe('CatalogueSection', () => {
   it('renders the #catalogue scroll section with a 2/4-column grid', () => {
-    const { container } = render(
-      <CatalogueSection
-        slug="winos"
-        currencyCode="GBP"
-        canOrder
-        products={products}
-        quantities={{}}
-        savingItems={new Set()}
-        onQtyChange={vi.fn()}
-        loading={false}
-        loadingMore={false}
-        hasMore={false}
-        onLoadMore={vi.fn()}
-        error={null}
-        searchActive={false}
-        searchTerm=""
-      />,
-    );
+    const { container } = renderSection();
     const section = container.querySelector('section#catalogue');
     expect(section).toHaveAttribute('data-scroll-section');
     expect(container.querySelector('ul')?.className).toContain('grid-cols-2');
@@ -72,24 +58,7 @@ describe('CatalogueSection', () => {
   });
 
   it('shows a spinner on the first load and the error message on failure', () => {
-    const { rerender } = render(
-      <CatalogueSection
-        slug="winos"
-        currencyCode="GBP"
-        canOrder
-        products={[]}
-        quantities={{}}
-        savingItems={new Set()}
-        onQtyChange={vi.fn()}
-        loading
-        loadingMore={false}
-        hasMore={false}
-        onLoadMore={vi.fn()}
-        error={null}
-        searchActive={false}
-        searchTerm=""
-      />,
-    );
+    const { rerender } = renderSection({ products: [], loading: true });
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
     rerender(
       <CatalogueSection
@@ -105,6 +74,9 @@ describe('CatalogueSection', () => {
         hasMore={false}
         onLoadMore={vi.fn()}
         error="Failed to load products. Please try again."
+        search=""
+        onSearchChange={vi.fn()}
+        productCount={2}
         searchActive={false}
         searchTerm=""
       />,
@@ -118,7 +90,7 @@ describe('CatalogueSection', () => {
   });
 
   it('calls onLoadMore from the Load more button when there is more', () => {
-    const onLoadMore = renderSection({ hasMore: true });
+    const { onLoadMore } = renderSection({ hasMore: true });
     fireEvent.click(screen.getByRole('button', { name: 'Load more products' }));
     expect(onLoadMore).toHaveBeenCalledTimes(1);
   });

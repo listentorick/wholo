@@ -74,18 +74,21 @@ export function StickyShopBlock({
       />
 
       <div className="border-b border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-1 px-4 md:flex-row md:items-center md:justify-between md:gap-4 md:px-2">
+        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-4 md:px-2">
           <StorefrontTabs
             slug={slug}
             sections={sections}
             activeSection={activeSection}
             onSelectSection={onSelectSection}
           />
+          {/* Desktop keeps the search in the sticky row (per the mock); mobile
+              gets it at the top of the catalogue section instead, to keep the
+              sticky stack short on a phone. */}
           <SearchInput
             value={search}
             onChange={onSearchChange}
             placeholder={productCount != null ? `Search all ${productCount} products` : 'Search products…'}
-            className="mb-2 w-full md:mb-0 md:max-w-xs"
+            className="hidden w-full max-w-xs flex-shrink-0 md:block"
           />
         </div>
       </div>

@@ -176,6 +176,9 @@ export default function StorefrontPage() {
         hasMore={nextCursor !== null}
         onLoadMore={loadMore}
         error={catalogueError}
+        search={search}
+        onSearchChange={handleSearchChange}
+        productCount={total}
         searchActive={debouncedSearch.length > 0}
         searchTerm={debouncedSearch}
       />

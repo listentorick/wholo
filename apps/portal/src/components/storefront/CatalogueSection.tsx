@@ -4,6 +4,7 @@ import type { CatalogueProduct } from '@wholo/types';
 import { Eyebrow } from '@/components/Eyebrow';
 import { Button } from '@/components/Button';
 import { PageSpinner } from '@/components/PageShell';
+import { SearchInput } from '@/components/SearchInput';
 import { ProductCard } from './ProductCard';
 
 interface Props {
@@ -19,6 +20,10 @@ interface Props {
   hasMore: boolean;
   onLoadMore: () => void;
   error: string | null;
+  /** Search field — rendered here only on mobile; desktop keeps it in the sticky tab row. */
+  search: string;
+  onSearchChange: (value: string) => void;
+  productCount: number | null;
   searchActive: boolean;
   searchTerm: string;
 }
@@ -57,6 +62,9 @@ export function CatalogueSection({
   hasMore,
   onLoadMore,
   error,
+  search,
+  onSearchChange,
+  productCount,
   searchActive,
   searchTerm,
 }: Props) {
@@ -93,6 +101,13 @@ export function CatalogueSection({
           <InertSelect label="In stock:" value="All" />
         </div>
       </div>
+
+      <SearchInput
+        value={search}
+        onChange={onSearchChange}
+        placeholder={productCount != null ? `Search all ${productCount} products` : 'Search products…'}
+        className="mb-5 md:hidden"
+      />
 
       {error ? (
         <p className="py-16 text-center text-sm text-muted">{error}</p>

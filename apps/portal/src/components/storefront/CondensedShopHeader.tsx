@@ -37,11 +37,13 @@ export function CondensedShopHeader({ distributor, relationshipStatus, scrolledP
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
           {distributor.name}
         </span>
-        <RelationshipCta
-          distributorName={distributor.name}
-          relationshipStatus={relationshipStatus}
-          variant="condensed"
-        />
+        <span className="hidden flex-shrink-0 sm:block">
+          <RelationshipCta
+            distributorName={distributor.name}
+            relationshipStatus={relationshipStatus}
+            variant="condensed"
+          />
+        </span>
       </div>
     </div>
   );
