@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { useDistributor, connectCtaKind, type RelationshipStatus } from '@/lib/distributor-context';
 import { RelationshipStatusBadge } from '@/components/RelationshipStatusBadge';
 import { ConnectConfirmationModal } from '@/components/ConnectConfirmationModal';
@@ -72,6 +73,7 @@ export function RelationshipCta({
       <div className="mt-5 border-t border-border pt-4">
         <p className="mb-3 text-sm text-muted">Request access to see your pricing and place orders.</p>
         <Button fullWidth onClick={() => setShowConfirm(true)}>
+          <Plus className="h-4 w-4" strokeWidth={2.25} />
           Add this supplier
         </Button>
         {modal}
@@ -86,6 +88,7 @@ export function RelationshipCta({
         onClick={() => setShowConfirm(true)}
         className={variant === 'header' ? 'flex-1 md:flex-none' : undefined}
       >
+        <Plus className="h-4 w-4" strokeWidth={2.25} />
         Add this supplier
       </Button>
       {modal}

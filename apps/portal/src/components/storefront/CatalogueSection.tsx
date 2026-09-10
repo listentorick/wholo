@@ -56,7 +56,7 @@ export function CatalogueSection({
     <section
       id="catalogue"
       data-scroll-section
-      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 py-8 md:px-8"
+      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 py-8 md:px-8 md:pb-0"
     >
       <style>{`
         .product-img-placeholder {

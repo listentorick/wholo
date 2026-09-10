@@ -21,10 +21,11 @@ export function AboutSection({ distributor, relationshipStatus }: Props) {
     <section
       id="about"
       data-scroll-section
-      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 pt-8 md:px-8 md:py-8"
+      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] border-t border-border bg-surface px-4 pb-0 pt-7 md:border-0 md:bg-transparent md:px-8 md:pb-0 md:pt-8"
     >
-      {/* Card chrome only on desktop — on mobile this and the Delivery section
-          read as one continuous borderless block (per the iteration-mobile mock). */}
+      {/* On mobile the About + Delivery sections share one white block with a
+          single full-width top border (per the iteration-mobile mock); the card
+          chrome only comes back at md. */}
       <div className="md:rounded-lg md:border md:border-border md:bg-surface md:p-6 md:shadow-sm">
         <Eyebrow className="mb-3">About us</Eyebrow>
 

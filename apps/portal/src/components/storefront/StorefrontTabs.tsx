@@ -19,7 +19,7 @@ interface Props {
 // Mobile: tabs split the width evenly (flex-1), no horizontal scroll.
 // Desktop: natural width, left-aligned.
 const TAB_BASE =
-  'flex flex-1 items-center justify-center border-b-[3px] px-2 py-3 text-xs font-medium transition-colors md:flex-none md:justify-start md:px-4 md:text-sm';
+  'flex flex-1 items-center justify-center whitespace-nowrap border-b-[3px] px-1.5 py-3 text-sm font-medium transition-colors md:flex-none md:justify-start md:px-4';
 
 /**
  * The distributor tab bar. Catalogue / About / Delivery & terms are in-page
