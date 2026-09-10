@@ -1,8 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DistributorInfo } from '@wholo/types';
 
 vi.mock('./RelationshipCta', () => ({ RelationshipCta: () => <div data-testid="cta" /> }));
+
+let mockOrderCount: number | null;
+vi.mock('@/lib/hooks/use-viewer-order-count', () => ({ useViewerOrderCount: () => mockOrderCount }));
 
 import { ShopHeader } from './ShopHeader';
 
@@ -29,16 +32,12 @@ const base: DistributorInfo = {
   processingDays: [1, 2, 3, 4, 5],
 };
 
-function renderHeader(overrides: Partial<Parameters<typeof ShopHeader>[0]> = {}) {
-  render(
-    <ShopHeader
-      distributor={base}
-      relationshipStatus={null}
-      orderCount={null}
-      onScrolledPast={vi.fn()}
-      {...overrides}
-    />,
-  );
+beforeEach(() => {
+  mockOrderCount = null;
+});
+
+function renderHeader() {
+  render(<ShopHeader distributor={base} relationshipStatus={null} onScrolledPast={vi.fn()} />);
 }
 
 describe('ShopHeader', () => {
@@ -51,12 +50,14 @@ describe('ShopHeader', () => {
   });
 
   it('shows the order-count line only for a positive count', () => {
-    renderHeader({ orderCount: 7 });
+    mockOrderCount = 7;
+    renderHeader();
     expect(screen.getByText('7 orders with this supplier')).toBeInTheDocument();
   });
 
   it('hides the order-count line at 0 / null', () => {
-    renderHeader({ orderCount: 0 });
+    mockOrderCount = 0;
+    renderHeader();
     expect(screen.queryByText(/with this supplier/)).toBeNull();
   });
 

@@ -1,17 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { formatMoney, type DistributorInfo } from '@wholo/types';
-import type { DeliveryParts } from '@/lib/hooks/use-delivery-parts';
+import { formatMoney } from '@wholo/types';
+import { useDistributor } from '@/lib/distributor-context';
 import { formatProcessingDays } from '@/lib/format-processing-days';
 import { Eyebrow } from '@/components/Eyebrow';
 import { TruckIcon, MapPinIcon, PhoneIcon, MailIcon, WalletIcon, CalendarIcon } from './icons';
-
-interface Props {
-  distributor: DistributorInfo;
-  effectiveMinSpend: number | null;
-  deliveryParts: DeliveryParts | null;
-}
 
 function StatTile({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
   return (
@@ -30,7 +24,10 @@ function StatTile({ icon, value, label }: { icon: ReactNode; value: string; labe
  * page's `KeyInfo` (minimum spend / processing days / delivery cut-off) and
  * `GetInTouch` (address / phone / email) into one section.
  */
-export function DeliveryTermsSection({ distributor, effectiveMinSpend, deliveryParts }: Props) {
+export function DeliveryTermsSection() {
+  const { distributor, effectiveMinSpend, deliveryParts } = useDistributor();
+  if (!distributor) return null;
+
   const minSpend = effectiveMinSpend !== null ? formatMoney(effectiveMinSpend, distributor.currencyCode) : null;
   const processingLabel = formatProcessingDays(distributor.processingDays);
 

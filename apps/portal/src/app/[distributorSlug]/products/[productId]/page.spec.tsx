@@ -22,6 +22,10 @@ vi.mock('@/lib/distributor-context', () => ({
   useDistributor: vi.fn(),
 }));
 
+vi.mock('@/components/storefront/StorefrontChrome', () => ({
+  StorefrontChrome: () => <div data-testid="storefront-chrome" />,
+}));
+
 vi.mock('@wholo/api-client', () => ({
   catalogueApi: {
     getProduct: vi.fn(),

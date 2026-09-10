@@ -12,28 +12,18 @@ let mockUser: unknown = { id: 'u1', organisationId: 'org-1' };
 vi.mock('@/lib/hooks/use-require-auth', () => ({
   useRequireAuth: () => ({ user: mockUser, accessToken: 'tok', isLoading: mockAuthLoading }),
 }));
-vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ orderAsMode: false }) }));
 
 let mockDistributor: DistributorInfo | null;
-const setShopHeaderScrolledPast = vi.fn();
 vi.mock('@/lib/distributor-context', async () => {
   const actual = await vi.importActual<typeof import('@/lib/distributor-context')>('@/lib/distributor-context');
   return {
     ...actual,
-    useDistributor: () => ({
-      distributor: mockDistributor,
-      relationshipStatus: 'ACTIVE',
-      effectiveMinSpend: null,
-      shopHeaderScrolledPast: false,
-      setShopHeaderScrolledPast,
-    }),
+    useDistributor: () => ({ distributor: mockDistributor, relationshipStatus: 'ACTIVE' }),
   };
 });
 vi.mock('@/lib/cart-context', () => ({
-  useCart: () => ({ quantities: {}, savingItems: new Set(), syncItem: vi.fn(), subtotal: 0 }),
+  useCart: () => ({ quantities: {}, savingItems: new Set(), syncItem: vi.fn() }),
 }));
-vi.mock('@/lib/hooks/use-delivery-parts', () => ({ useDeliveryParts: () => null }));
-vi.mock('@/lib/hooks/use-viewer-order-count', () => ({ useViewerOrderCount: () => null }));
 
 const getProducts = vi.fn();
 vi.mock('@wholo/api-client', () => ({
@@ -41,11 +31,17 @@ vi.mock('@wholo/api-client', () => ({
 }));
 
 // Keep the chrome shallow — this spec is about orchestration + data flow.
-vi.mock('@/components/storefront/CoverBanner', () => ({ CoverBanner: () => <div data-testid="cover" /> }));
-vi.mock('@/components/storefront/ShopHeader', () => ({ ShopHeader: () => <div data-testid="shop-header" /> }));
-vi.mock('@/components/storefront/StickyShopBlock', () => ({
-  StickyShopBlock: ({ search, onSearchChange }: { search: string; onSearchChange: (v: string) => void }) => (
-    <input aria-label="in-shop search" value={search} onChange={(e) => onSearchChange(e.target.value)} />
+vi.mock('@/components/storefront/StorefrontChrome', () => ({
+  StorefrontChrome: ({
+    tabs,
+  }: {
+    tabs: { mode: string; search?: string; onSearchChange?: (v: string) => void };
+  }) => (
+    <input
+      aria-label="in-shop search"
+      value={tabs.search ?? ''}
+      onChange={(e) => tabs.onSearchChange?.(e.target.value)}
+    />
   ),
 }));
 vi.mock('@/components/storefront/AboutSection', () => ({

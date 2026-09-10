@@ -1,24 +1,21 @@
 'use client';
 
 import { formatMoney } from '@wholo/types';
-import type { DeliveryParts } from '@/lib/hooks/use-delivery-parts';
 import { useDistributor } from '@/lib/distributor-context';
+import { useCartSafe } from '@/lib/cart-context';
 import { TruckIcon } from './icons';
-
-interface Props {
-  deliveryParts: DeliveryParts | null;
-  subtotal: number;
-  effectiveMinSpend: number | null;
-}
 
 /**
  * The pale-amber bar under the storefront tabs: the delivery cut-off line and,
  * while the customer is below the minimum, a progress bar toward it. Distinct
  * from the solid-amber `OrderAsBanner` (impersonation) that can sit above it.
- * Renders nothing when there's neither a delivery line nor an unmet minimum.
+ * Self-sufficient — reads delivery / minimum / cart context directly so it can
+ * sit in the sticky block on any distributor page. Renders nothing when there's
+ * neither a delivery line nor an unmet minimum.
  */
-export function AmberOrderByBar({ deliveryParts, subtotal, effectiveMinSpend }: Props) {
-  const { distributor } = useDistributor();
+export function AmberOrderByBar() {
+  const { distributor, deliveryParts, effectiveMinSpend } = useDistributor();
+  const subtotal = useCartSafe()?.subtotal ?? 0;
   const currencyCode = distributor?.currencyCode ?? 'GBP';
 
   const showMinBar = effectiveMinSpend !== null && effectiveMinSpend > 0 && subtotal < effectiveMinSpend;

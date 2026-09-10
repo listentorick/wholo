@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import type { DistributorInfo } from '@wholo/types';
 import type { RelationshipStatus } from '@/lib/distributor-context';
+import { useViewerOrderCount } from '@/lib/hooks/use-viewer-order-count';
 import { RelationshipCta } from './RelationshipCta';
 
 function MapPinIcon() {
@@ -18,7 +19,6 @@ function MapPinIcon() {
 interface Props {
   distributor: DistributorInfo;
   relationshipStatus: RelationshipStatus | null;
-  orderCount: number | null;
   /** Fires when the header scrolls up behind the sticky block → reveal the condensed header. */
   onScrolledPast: (past: boolean) => void;
 }
@@ -29,8 +29,9 @@ interface Props {
  * relationship CTA. Its bottom edge carries the sentinel that toggles the
  * condensed sticky header.
  */
-export function ShopHeader({ distributor, relationshipStatus, orderCount, onScrolledPast }: Props) {
+export function ShopHeader({ distributor, relationshipStatus, onScrolledPast }: Props) {
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const orderCount = useViewerOrderCount(distributor.slug);
 
   useEffect(() => {
     const el = sentinelRef.current;

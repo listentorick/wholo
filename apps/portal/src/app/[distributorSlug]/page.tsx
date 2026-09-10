@@ -5,36 +5,25 @@ import { useParams, usePathname } from 'next/navigation';
 import { catalogueApi } from '@wholo/api-client';
 import { TradeRelationshipStatus, type CatalogueProduct } from '@wholo/types';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { useAuth } from '@/lib/auth-context';
 import { useDistributor } from '@/lib/distributor-context';
 import { useCart } from '@/lib/cart-context';
-import { useDeliveryParts } from '@/lib/hooks/use-delivery-parts';
-import { useViewerOrderCount } from '@/lib/hooks/use-viewer-order-count';
 import { useScrollSpy } from '@/lib/hooks/use-scroll-spy';
 import { PageShell, PageSpinner } from '@/components/PageShell';
-import { CoverBanner } from '@/components/storefront/CoverBanner';
-import { ShopHeader } from '@/components/storefront/ShopHeader';
-import { StickyShopBlock } from '@/components/storefront/StickyShopBlock';
+import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
+import { STOREFRONT_SECTIONS } from '@/components/storefront/StorefrontTabs';
 import { CatalogueSection } from '@/components/storefront/CatalogueSection';
 import { AboutSection } from '@/components/storefront/AboutSection';
 import { DeliveryTermsSection } from '@/components/storefront/DeliveryTermsSection';
-import type { StorefrontSection } from '@/components/storefront/StorefrontTabs';
 
-const SECTIONS: StorefrontSection[] = [
-  { id: 'catalogue', label: 'Catalogue' },
-  { id: 'about', label: 'About' },
-  { id: 'delivery', label: 'Delivery & terms', shortLabel: 'Delivery' },
-];
-const SECTION_IDS = SECTIONS.map((s) => s.id);
+const SECTION_IDS = STOREFRONT_SECTIONS.map((s) => s.id);
 const PAGE_SIZE = 24;
 const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * The distributor storefront — one scrolling page. Cover banner + shop header +
- * the sticky shop block (condensed header, tabs, amber order-by bar), then the
- * Catalogue / About / Delivery & terms sections the tabs scroll between.
- * Replaces the old three-route About / Shop / Orders split (Orders stays its own
- * route, linked from the tab bar).
+ * The distributor storefront — one scrolling page. Storefront chrome (cover
+ * banner, shop header, sticky tabs + amber bar) then the Catalogue / About /
+ * Delivery & terms sections the tabs scroll between. Sub-pages (product detail,
+ * …) render the same `StorefrontChrome` with `tabs={{ mode: 'link' }}`.
  */
 export default function StorefrontPage() {
   const params = useParams();
@@ -42,22 +31,10 @@ export default function StorefrontPage() {
   const pathname = usePathname();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
-  const { orderAsMode } = useAuth();
-  const {
-    distributor,
-    relationshipStatus,
-    effectiveMinSpend,
-    shopHeaderScrolledPast,
-    setShopHeaderScrolledPast,
-  } = useDistributor();
-  const { quantities, savingItems, syncItem, subtotal } = useCart();
+  const { distributor, relationshipStatus } = useDistributor();
+  const { quantities, savingItems, syncItem } = useCart();
 
   const isActive = relationshipStatus === TradeRelationshipStatus.ACTIVE;
-  const deliveryParts = useDeliveryParts(distributorSlug, accessToken, {
-    enabled: isActive,
-    refreshKey: orderAsMode,
-  });
-  const orderCount = useViewerOrderCount(distributorSlug);
   const [activeSection, scrollToSection] = useScrollSpy(SECTION_IDS, !!distributor);
 
   const [search, setSearch] = useState('');
@@ -138,29 +115,16 @@ export default function StorefrontPage() {
 
   return (
     <>
-      <CoverBanner bannerUrl={distributor.bannerUrl} />
-
-      <ShopHeader
-        distributor={distributor}
-        relationshipStatus={relationshipStatus}
-        orderCount={orderCount}
-        onScrolledPast={setShopHeaderScrolledPast}
-      />
-
-      <StickyShopBlock
+      <StorefrontChrome
         slug={distributorSlug}
-        distributor={distributor}
-        relationshipStatus={relationshipStatus}
-        scrolledPast={shopHeaderScrolledPast}
-        sections={SECTIONS}
-        activeSection={activeSection}
-        onSelectSection={scrollToSection}
-        search={search}
-        onSearchChange={handleSearchChange}
-        productCount={total}
-        deliveryParts={deliveryParts}
-        subtotal={subtotal}
-        effectiveMinSpend={effectiveMinSpend}
+        tabs={{
+          mode: 'spy',
+          activeSection,
+          onSelectSection: scrollToSection,
+          search,
+          onSearchChange: handleSearchChange,
+          productCount: total,
+        }}
       />
 
       <CatalogueSection
@@ -185,11 +149,7 @@ export default function StorefrontPage() {
 
       <AboutSection distributor={distributor} relationshipStatus={relationshipStatus} />
 
-      <DeliveryTermsSection
-        distributor={distributor}
-        effectiveMinSpend={effectiveMinSpend}
-        deliveryParts={deliveryParts}
-      />
+      <DeliveryTermsSection />
     </>
   );
 }

@@ -13,10 +13,13 @@ import {
   type CatalogueProduct,
   type CatalogueProductDetail,
 } from '@wholo/types';
-import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { Eyebrow } from '@/components/Eyebrow';
+import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
+
+/** Same centred gutter as the storefront sections. */
+const CONTENT = 'mx-auto w-full max-w-[1280px] px-4 py-8 md:px-8';
 
 function formatPrice(
   price: string | null,
@@ -99,10 +102,10 @@ export default function ProductDetailPage() {
   if (error || !product) {
     return (
       <>
-        <PageSubHeader backLabel="Catalogue" backHref={`/${distributorSlug}#catalogue`} title="Product" />
-        <PageShell center className="px-6 text-center">
+        <StorefrontChrome slug={distributorSlug} tabs={{ mode: 'link' }} />
+        <div className={`${CONTENT} text-center`}>
           <p className="text-sm text-muted">{error ?? 'Product not found.'}</p>
-        </PageShell>
+        </div>
       </>
     );
   }
@@ -135,13 +138,9 @@ export default function ProductDetailPage() {
         }
       `}</style>
 
-      <PageSubHeader
-        backLabel="Catalogue"
-        backHref={`/${distributorSlug}#catalogue`}
-        title={product.name}
-      />
+      <StorefrontChrome slug={distributorSlug} tabs={{ mode: 'link' }} />
 
-      <PageShell width="full">
+      <div className={CONTENT}>
         <div className="flex w-full flex-col gap-4 md:gap-5">
 
           {/* Image + ordering panel */}
@@ -230,7 +229,7 @@ export default function ProductDetailPage() {
             </div>
           )}
         </div>
-      </PageShell>
+      </div>
     </>
   );
 }

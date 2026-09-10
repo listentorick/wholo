@@ -5,6 +5,7 @@ import { catalogueApi, portalApi } from '@wholo/api-client';
 import type { DistributorInfo } from '@wholo/types';
 import { TradeRelationshipStatus } from '@wholo/types';
 import { useAuth } from './auth-context';
+import { useDeliveryParts, type DeliveryParts } from './hooks/use-delivery-parts';
 
 export type RelationshipStatus = TradeRelationshipStatus | 'NONE';
 
@@ -35,6 +36,10 @@ interface DistributorContextValue {
   relationshipStatus: RelationshipStatus | null;
   relationshipMinSpend: number | null;
   effectiveMinSpend: number | null;
+  /** Next available delivery date, formatted — shared by every storefront
+   *  surface that shows the "Order by …" line (amber bar, Delivery & terms).
+   *  `null` until an ACTIVE relationship with a delivery profile resolves it. */
+  deliveryParts: DeliveryParts | null;
   refetchRelationship: () => Promise<void>;
   requestAccess: (recentContact: boolean) => Promise<void>;
 }
@@ -46,6 +51,7 @@ const DistributorContext = createContext<DistributorContextValue>({
   relationshipStatus: null,
   relationshipMinSpend: null,
   effectiveMinSpend: null,
+  deliveryParts: null,
   refetchRelationship: async () => {},
   requestAccess: async () => {},
 });
@@ -94,6 +100,11 @@ export function DistributorProvider({
   const effectiveMinSpend =
     relationshipStatus != null ? (relationshipMinSpend ?? distributor?.minimumOrderSpend ?? null) : null;
 
+  const deliveryParts = useDeliveryParts(distributorSlug, accessToken, {
+    enabled: relationshipStatus === TradeRelationshipStatus.ACTIVE,
+    refreshKey: orderAsMode,
+  });
+
   const setShopHeaderScrolledPast = useCallback((past: boolean) => setShopHeaderScrolledPastState(past), []);
 
   const requestAccess = useCallback(
@@ -114,6 +125,7 @@ export function DistributorProvider({
         relationshipStatus,
         relationshipMinSpend,
         effectiveMinSpend,
+        deliveryParts,
         refetchRelationship,
         requestAccess,
       }}

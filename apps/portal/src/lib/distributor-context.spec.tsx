@@ -14,12 +14,13 @@ vi.mock('@wholo/api-client', () => ({
     getDistributorRelationship: vi.fn(),
     requestDistributorAccess: vi.fn(),
   },
+  deliveryApi: { getAvailableDates: vi.fn() },
 }));
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 
 import { useAuth } from './auth-context';
-import { catalogueApi, portalApi } from '@wholo/api-client';
+import { catalogueApi, portalApi, deliveryApi } from '@wholo/api-client';
 
 // ── Test harness ──────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ function renderDistributor(initialDistributor?: any) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(catalogueApi.getDistributor).mockResolvedValue({ id: 'dist-1', name: 'Test Dist' } as any);
+  vi.mocked(deliveryApi.getAvailableDates).mockResolvedValue({ dates: [] } as any);
   vi.mocked(useAuth).mockReturnValue({
     user: { organisationId: 'cust-1' },
     accessToken: 'test-token',
