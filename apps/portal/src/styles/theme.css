@@ -27,6 +27,7 @@
 
   /* Content area */
   --color-surface:         0 0% 100%;     /* card/panel white */
+  --color-page:            210 25% 98%;   /* Warm Off White #FAFBFC — storefront page canvas (sections/cards sit white on top) */
   --color-canvas:          216 24% 96%;   /* Pale Stone #F2F4F7 — page background */
   --color-border:          210 32% 93%;   /* Light Blue Grey #E6ECF2 */
   --color-muted:           213 17% 43%;   /* Slate Blue #5B6B7F */

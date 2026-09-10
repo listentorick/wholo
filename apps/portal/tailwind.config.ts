@@ -61,6 +61,7 @@ const config: Config = {
           hover:     'hsl(var(--color-canvas))',
         },
         canvas: 'hsl(var(--color-canvas))',
+        page: 'hsl(var(--color-page))',
         navy: 'hsl(var(--color-navy))',
         'on-navy': {
           DEFAULT: 'hsl(var(--color-on-navy))',
