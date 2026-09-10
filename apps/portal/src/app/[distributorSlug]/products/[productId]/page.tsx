@@ -99,7 +99,7 @@ export default function ProductDetailPage() {
   if (error || !product) {
     return (
       <>
-        <PageSubHeader backLabel="All products" backHref={`/${distributorSlug}/products`} title="Product" />
+        <PageSubHeader backLabel="Catalogue" backHref={`/${distributorSlug}#catalogue`} title="Product" />
         <PageShell center className="px-6 text-center">
           <p className="text-sm text-muted">{error ?? 'Product not found.'}</p>
         </PageShell>
@@ -136,8 +136,8 @@ export default function ProductDetailPage() {
       `}</style>
 
       <PageSubHeader
-        backLabel="All products"
-        backHref={`/${distributorSlug}/products`}
+        backLabel="Catalogue"
+        backHref={`/${distributorSlug}#catalogue`}
         title={product.name}
       />
 

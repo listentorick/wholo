@@ -1,55 +1,27 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
 import { CartProvider } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
 import { DistributorProvider, useDistributor } from '@/lib/distributor-context';
-import { NavigationSidebar } from '@/components/NavigationSidebar';
-import { DistributorHeader } from '@/components/DistributorHeader';
+import { PortalTopBar } from '@/components/portal/PortalTopBar';
+import { PlatformNavStrip } from '@/components/portal/PlatformNavStrip';
+import { PortalFooter } from '@/components/portal/PortalFooter';
 import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
-import { DistributorNav } from '@/components/DistributorNav';
-import { BrandingBanner } from '@/components/BrandingBanner';
-import { DistributorPageHeader } from '@/components/DistributorPageHeader';
 import type { DistributorInfo } from '@wholo/types';
 
-function DistributorMain({
-  distributorSlug,
-  children,
-}: {
-  distributorSlug: string;
-  children: React.ReactNode;
-}) {
-  const { distributor, setBannerScrolledPast } = useDistributor();
-  const pathname = usePathname();
-  const isAboutPage = pathname === `/${distributorSlug}`;
-  // Order-by-cutoff / minimum-order messaging is only relevant before you've
-  // placed an order — suppress it on the orders list and order detail (invoice) views.
-  const isOrdersPage = /^\/[^/]+\/orders(\/[^/]+)?$/.test(pathname ?? '');
-  // Checkout carries its own order-summary rail (totals, minimum, delivery day),
-  // so the shared sub-header would only duplicate it.
-  const isCheckoutPage = pathname === `/${distributorSlug}/checkout`;
+function DistributorMain({ children }: { children: React.ReactNode }) {
+  const { distributor } = useDistributor();
 
   return (
-    <main className="flex flex-1 flex-col min-h-screen min-w-0 bg-white pt-14 md:pt-0">
-      <DistributorHeader distributorSlug={distributorSlug} />
-      <OrderAsHandler />
+    <div className="flex min-h-screen flex-col bg-page">
       <OrderAsBanner />
-      <DistributorNav distributorSlug={distributorSlug} />
-      {isAboutPage ? (
-        <BrandingBanner
-          logoUrl={distributor?.logoUrl ?? null}
-          bannerUrl={distributor?.bannerUrl ?? null}
-          dominantColor={distributor?.bannerDominantColor ?? null}
-          onScrolledPast={setBannerScrolledPast}
-        />
-      ) : isOrdersPage || isCheckoutPage ? null : (
-        <DistributorPageHeader distributorSlug={distributorSlug} />
-      )}
-      <div className="flex flex-1 flex-col min-w-0">
-        {children}
-      </div>
-    </main>
+      <OrderAsHandler />
+      <PortalTopBar variant="distributor" />
+      <PlatformNavStrip distributorName={distributor?.name} />
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      <PortalFooter />
+    </div>
   );
 }
 
@@ -82,12 +54,7 @@ export function DistributorShell({
   return (
     <DistributorProvider distributorSlug={distributorSlug} initialDistributor={initialDistributor}>
       <CartProvider distributorSlug={distributorSlug}>
-        <div className="flex">
-          <NavigationSidebar distributorSlug={distributorSlug} />
-          <DistributorMain distributorSlug={distributorSlug}>
-            {children}
-          </DistributorMain>
-        </div>
+        <DistributorMain>{children}</DistributorMain>
       </CartProvider>
     </DistributorProvider>
   );

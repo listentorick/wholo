@@ -121,7 +121,7 @@ The system is flat and calm, with **soft corners borrowed from the marketing sit
 Grounded, confident neutrals (Deep Navy, Pale Stone, white) carry the page; Cobalt Blue is spent on exactly one thing at a time; Amber supplies warmth and status without ever being mistaken for the primary action.
 
 ### Primary
-- **Cobalt Blue** (`hsl(220 100% 54%)` / #1565FF): the one color that means "act here" — primary CTAs, the active sidebar item (its left border + tint, not the label), the active tab underline, focus rings, cart-count badge. Also used at 46% lightness (`hsl(220 100% 46%)`) for hover/pressed states, and as 95%/97%-lightness tints (`cobalt-blue-light`, `cobalt-blue-subtle`) for selected/hover backgrounds.
+- **Cobalt Blue** (`hsl(220 100% 54%)` / #1565FF): the one color that means "act here" — primary CTAs, the active tab underline, focus rings, cart-count badge. Also used at 46% lightness (`hsl(220 100% 46%)`) for hover/pressed states, and as 95%/97%-lightness tints (`cobalt-blue-light`, `cobalt-blue-subtle`) for selected/hover backgrounds.
 
 ### Secondary
 - **Amber** (`hsl(21 86% 63%)` / #F2864D): warmth and attention — the eyebrow-kicker dash, the minimum-order progress bar fill, pending/status accents. Never used for a primary action or a navigation state; it marks attention, Cobalt marks action. Tints at 95%/85% lightness (`amber-light`, `amber-border`) back status badges, the below-minimum callout panel, and the eyebrow.
@@ -130,13 +130,13 @@ Grounded, confident neutrals (Deep Navy, Pale Stone, white) carry the page; Coba
 - **Sky Blue** (`hsl(215 90% 70%)` / #6EA8F7): decorative/secondary highlight only — non-interactive. Used with its 96%-lightness tint (`sky-blue-light`) for subtle highlighted card backgrounds (e.g. the user-menu identity panel).
 
 ### Neutral
-- **Deep Navy** (`hsl(217 68% 14%)` / #0B1D3A): primary text color, and — doing double duty — the dark shell of the two deliberately dark surfaces in an otherwise light system: the desktop/mobile sidebar, and the account-home merchandising banner. Light text on navy uses the `on-navy` (white) / `on-navy-muted` (`#AEBAD0` blue-grey) tokens, mirroring the marketing site.
+- **Deep Navy** (`hsl(217 68% 14%)` / #0B1D3A): primary text color, and the dark shell of the account-home merchandising banner. Light text on navy uses the `on-navy` (white) / `on-navy-muted` (`#AEBAD0` blue-grey) tokens, mirroring the marketing site. (The dark sidebar it also used to shell is gone — the shell is a light top bar now.)
 - **Slate Blue** (`hsl(213 17% 43%)` / #5B6B7F): muted/secondary text, and the eyebrow-kicker label.
 - **Pale Stone** (`hsl(216 24% 96%)` / #F2F4F7): page canvas background.
 - **Light Blue Grey** (`hsl(210 32% 93%)` / #E6ECF2): the canonical border/divider token.
-- **Warm Off White** (`hsl(210 25% 98%)` / #FAFBFC): topbar background, distinct from pure white surfaces.
+- **Warm Off White** (`hsl(210 25% 98%)` / #FAFBFC): the `--color-page` canvas — the top bar, and the ground the storefront's white `surface` sections/cards sit on. Distinct from pure white surfaces.
 - **Surface White** (`hsl(0 0% 100%)`): card/panel/modal surfaces.
-- **Near White** (`hsl(0 0% 95%)`): sidebar text on the Deep Navy shell.
+- **Near White** (`hsl(0 0% 95%)`): light text on a Deep Navy surface (the account-home merchandising banner).
 - Semantic: **Success Green** (#16A34A), **Error Red** (#DC2626) — plain literals, not theme-file tokens.
 
 ### Named Rules
@@ -173,15 +173,30 @@ Borrowed from the marketing site: a **short amber dash** (`h-1 w-[22px] rounded-
 
 ## Layout
 
-`PageShell` is the single page-container primitive and it owns the page gutter — **every** top-level distributor page (home, catalogue, product detail, orders list, order detail, checkout, settings) renders its content as `<PageShell width="full">` and nothing else: no `padding="none"`, no hand-rolled `px-*` / `pb-*` gutters, no inner `mx-auto max-w-*` cap, no full-bleed `bg-canvas` band. The shell gives a uniform 20px (`p-5`) gutter on all four sides and lets the content fill the width beside the sidebar; each page manages only its own internal grid. The white `<main>` is the canvas throughout — cards are white `rounded-lg border` surfaces on white, separated by the hairline border, never floated on a Pale Stone field. `PageShell`'s other width modes — **narrow** (480px), **reading** (768px), **wide** (896px) — are centred columns kept for narrow forms / prose pages; `padding="none"` survives only for the `center` loading and error states.
+### The shell
 
-**Checkout** is the exception to the narrow shell. On mobile it is a single-column flow; at `md` and above it becomes a two-column grid — a left column (line items, PO / notes, delivery address) and a `md:sticky` right rail (order summary with the minimum-order line, delivery-day picker, Place Order + the quiet secondary actions). Both columns render as `rounded-lg` bordered surfaces on desktop. The shared `DistributorPageHeader` is suppressed on `/checkout` because the rail already carries the delivery-cutoff and minimum-order context.
+The authenticated shell is a **global top bar** (`PortalTopBar`, `h-14`, Warm Off White) — the hexagon `<Wordmark>` linking home, an inert platform-search placeholder, the acting-organisation chip, a context-aware basket, and the `UserMenuButton` (which owns the Settings / Change password / Sign out links). It is `sticky top-0` in the account area (`(main)/layout.tsx`) and static on a distributor storefront (the storefront's own sticky shop block takes over). On a storefront it's followed by the `PlatformNavStrip` — a `My Suppliers / {distributor}` breadcrumb plus the inert `Discover` / `My Orders` links. The page ends in a minimal `PortalFooter`. There is **no side nav** and no mobile drawer; the shell is one column at every width. The page canvas is Warm Off White (`bg-page`), with white `surface` cards/sections floated on top — a deliberate reversal of the old "white `<main>` is the canvas" rule, needed for the storefront's card-on-canvas layering.
+
+`PageShell` remains the page-container primitive for the **non-storefront** distributor pages (product detail, orders list, order detail, checkout, settings) and the account home — `<PageShell width="full">`, uniform 20px (`p-5`) gutter, content fills the width, each page manages its own internal grid. Its centred width modes — **narrow** (480px), **reading** (768px), **wide** (896px) — are kept for narrow forms / prose; `padding="none"` survives only for the `center` loading/error states. The **storefront** (`/[slug]`) does not use `PageShell` — it is a full-bleed single-scroll page whose sections centre their own content on a `max-w-[1280px]` wrapper with a `px-4 md:px-8` gutter.
+
+### The distributor storefront (`/[slug]`)
+
+One scrolling page — the old About / Shop routes are gone (Shop's `/[slug]/products` is now a client redirect to `/[slug]#catalogue`; Orders stays its own route, reached from the tab bar). Top to bottom:
+
+1. **Cover banner** (`CoverBanner`) — the distributor's image (or the gradient + grain fallback), `300px` desktop / `150px` mobile. It **collapses on scroll**: a passive rAF-throttled listener maps the first ~220px of scroll onto a `--cover-h` custom property (down to ~72/56px); `prefers-reduced-motion` skips it and the banner just scrolls away.
+2. **Shop header** (`ShopHeader`) — round logo, name (Title step), `{city, country} · {tagline}`, the viewer's `{N} orders with this supplier` line, an inert `Message` button, and the relationship CTA. A sentinel at its bottom edge drives `shopHeaderScrolledPast`.
+3. **Sticky shop block** (`StickyShopBlock`, `sticky top-[var(--orderas-h,0px)]`) — the persistent chrome once the shop header scrolls away: a `CondensedShopHeader` (logo + name + CTA, revealed by `shopHeaderScrolledPast`), then the tab row (`StorefrontTabs` + the in-shop `SearchInput`), then the amber order-by bar. It publishes its own height as `--sticky-stack-h`, which every section consumes as `scroll-margin-top` so a tab click lands flush under the sticky chrome.
+4. **Sections** — `#catalogue` (grid + cursor "Load more"; no "Featured" yet), `#about` (tagline + `aboutText` + CTA), `#delivery` (minimum spend / processing days / delivery cut-off + get-in-touch). The tab bar is a **scroll-spy**: `useScrollSpy` tracks which section is under the sticky block and Cobalt-underlines its tab; the tab buttons smooth-scroll to their section (Orders is a plain route link).
+
+**Two amber bars can stack.** `OrderAsBanner` (impersonation — solid `bg-amber`, navy `amber-fg` text, `sticky top-0 z-40`, publishes `--orderas-h`) sits above everything; the storefront's own order-by bar (pale `bg-amber-light/70`, inside the sticky shop block) sits below the white tab chrome. Solid = "you are acting as someone else"; pale = "delivery cut-off / minimum order". They never touch.
+
+### Checkout
+
+**Checkout** is the exception to the narrow shell. On mobile it is a single-column flow; at `md` and above it becomes a two-column grid — a left column (line items, PO / notes, delivery address) and a `md:sticky` right rail (order summary with the minimum-order line, delivery-day picker, Place Order + the quiet secondary actions). Both columns render as `rounded-lg` bordered surfaces on desktop.
 
 **The account home (`/`, "Our Suppliers")** is the other two-column page. `md` and above: a fixed ~420px **left** column — greeting, then the eyebrow-only "Your suppliers" section (a vertical stack of full-width `DistributorCard` rows, each with a trailing chevron and the big right-aligned order count; a dashed "empty slot" cue when the customer has only 1–3 suppliers; then an inert "Find new suppliers" card) — and a fluid **right** column for discovery (a prominent but non-functional "Search products or suppliers" bar, a Deep-Navy merchandising banner — condensed uppercase headline with an amber highlight box (`bg-amber` fill / navy `amber-fg` text, like the marketing site's `<Mark>`), `on-navy-muted` subcopy, one Cobalt CTA that isn't wired yet — and the `RecommendedSuppliers` example carousel). Mobile collapses to one column via the same `contents` / `order-*` pattern as checkout, ordered greeting → suppliers → search → merch band → recommended. The discovery surfaces are placeholders until a marketplace directory exists.
 
-The structural mobile/desktop pivot is the `md` breakpoint (768px) throughout — not `sm`/`lg`, which are reserved for finer adjustments like the catalogue's column count (1-column row list on mobile → 2/3/4-column grid at `sm`/`lg`/`xl`). Below `md`, the authenticated shell is a fixed light-colored top bar (56px / `h-14`) plus an off-canvas dark sidebar (80% viewport width, slides in via `translate-x` over 300ms). At `md` and above, the sidebar becomes a persistent static column that smoothly resizes between 256px (`w-64`, expanded) and 64px (`w-16`, collapsed) over 300ms, with state remembered in `localStorage`.
-
-Within a distributor's context, chrome stacks vertically and stays sticky: a 56px distributor header (`sticky top-0`), then a tab bar (`sticky top-14`) sitting directly beneath it — so both remain visible while the page content scrolls underneath.
+The structural mobile/desktop pivot is the `md` breakpoint (768px) throughout — not `sm`/`lg`, which are reserved for finer adjustments like the catalogue grid (2-column on mobile → 4-column at `lg`). The `h-14` top bar is the same at every width; the storefront's shop header stacks its logo/name over the actions below `sm`, and the sticky shop block stacks the tabs over the search and the amber bar's two lines on mobile — always within a ≥16px side gutter, never by clipping `overflow` on a sticky ancestor.
 
 ## Elevation & Depth
 
@@ -243,8 +258,9 @@ Use the shared `<Button>` component (`variant="primary" | "secondary" | "ghost"`
 - **Error/Disabled:** not yet established anywhere in the codebase — treat as undecided rather than inventing a pattern.
 
 ### Navigation
-- **Sidebar (authenticated shell):** persistent dark Deep Navy panel on desktop, collapsible between 256px and 64px with an animated width transition; the logo strip at the top sits on Warm Off White and carries the hexagon mark + "stocd**up**" wordmark. Active item = 2px Cobalt left border + a 20%-opacity Cobalt tint background + a near-white, semibold label and icon (Cobalt text on the navy shell fails contrast) + `aria-current="page"`; inactive = 70%-opacity white text, hover = a darker navy tint. On mobile the same content becomes a full off-canvas drawer (80% width, slide transform), triggered from a separate **light** top bar — the two-tone contrast (light mobile chrome, dark drawer content) is deliberate.
-- **Distributor tab bar:** light underline tabs, 3px bottom border; active = Deep Navy text + **Cobalt** underline; inactive = muted grey text; sticky directly beneath the distributor header. (Amber never marks the active tab.)
+- **Global top bar (`PortalTopBar`):** the `h-14` shell header on Warm Off White — hexagon `<Wordmark>` (→ home), an inert platform-search placeholder, the acting-organisation chip, a context-aware basket button (hidden outside a distributor context), and the `UserMenuButton` popover (Settings / Change password / Sign out — the links the old sidebar carried). `sticky top-0` in the account area; static on a storefront. Same at every width — no collapse, no drawer.
+- **Platform nav strip (`PlatformNavStrip`):** thin white bar under the top bar on a storefront — a `My Suppliers / {distributor}` breadcrumb (left) and the inert `Discover` / `My Orders` placeholders (right, `aria-disabled`, no marketplace / cross-supplier order view exists yet).
+- **Distributor tab bar (`StorefrontTabs`):** light underline tabs, 3px bottom border; active = Deep Navy text + **Cobalt** underline (Amber never marks a nav state); inactive = muted grey. Catalogue / About / Delivery & terms are `<button>`s driving the scroll-spy; Orders is a route `<Link>`. Lives inside the sticky shop block.
 
 ### Modal (confirmation dialogs)
 - 8px corners (`rounded-lg`), Surface White, `shadow-xl`, centered over a 40%-opacity black backdrop, 24px (`p-6`) padding, stacked full-width action buttons rather than a side-by-side pair.

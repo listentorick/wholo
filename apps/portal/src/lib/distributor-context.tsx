@@ -28,10 +28,10 @@ export function connectCtaKind(status: RelationshipStatus | null): ConnectCtaKin
 
 interface DistributorContextValue {
   distributor: DistributorInfo | null;
-  bannerScrolledPast: boolean;
-  setBannerScrolledPast: (past: boolean) => void;
-  minOrderBarScrolledPast: boolean;
-  setMinOrderBarScrolledPast: (past: boolean) => void;
+  /** True once the full shop header (logo, name, CTA) has scrolled up behind the
+   *  sticky shop block — drives the condensed-header reveal in `StickyShopBlock`. */
+  shopHeaderScrolledPast: boolean;
+  setShopHeaderScrolledPast: (past: boolean) => void;
   relationshipStatus: RelationshipStatus | null;
   relationshipMinSpend: number | null;
   effectiveMinSpend: number | null;
@@ -41,10 +41,8 @@ interface DistributorContextValue {
 
 const DistributorContext = createContext<DistributorContextValue>({
   distributor: null,
-  bannerScrolledPast: false,
-  setBannerScrolledPast: () => {},
-  minOrderBarScrolledPast: false,
-  setMinOrderBarScrolledPast: () => {},
+  shopHeaderScrolledPast: false,
+  setShopHeaderScrolledPast: () => {},
   relationshipStatus: null,
   relationshipMinSpend: null,
   effectiveMinSpend: null,
@@ -64,8 +62,7 @@ export function DistributorProvider({
 }) {
   const { user, accessToken, orderAsMode, orderAsCustomerId } = useAuth();
   const [distributor, setDistributor] = useState<DistributorInfo | null>(initialDistributor);
-  const [bannerScrolledPast, setBannerScrolledPastState] = useState(false);
-  const [minOrderBarScrolledPast, setMinOrderBarScrolledPastState] = useState(false);
+  const [shopHeaderScrolledPast, setShopHeaderScrolledPastState] = useState(false);
   const [relationshipStatus, setRelationshipStatus] = useState<RelationshipStatus | null>(null);
   const [relationshipMinSpend, setRelationshipMinSpend] = useState<number | null>(null);
 
@@ -97,8 +94,7 @@ export function DistributorProvider({
   const effectiveMinSpend =
     relationshipStatus != null ? (relationshipMinSpend ?? distributor?.minimumOrderSpend ?? null) : null;
 
-  const setBannerScrolledPast = useCallback((past: boolean) => setBannerScrolledPastState(past), []);
-  const setMinOrderBarScrolledPast = useCallback((past: boolean) => setMinOrderBarScrolledPastState(past), []);
+  const setShopHeaderScrolledPast = useCallback((past: boolean) => setShopHeaderScrolledPastState(past), []);
 
   const requestAccess = useCallback(
     async (recentContact: boolean) => {
@@ -113,10 +109,8 @@ export function DistributorProvider({
     <DistributorContext.Provider
       value={{
         distributor,
-        bannerScrolledPast,
-        setBannerScrolledPast,
-        minOrderBarScrolledPast,
-        setMinOrderBarScrolledPast,
+        shopHeaderScrolledPast,
+        setShopHeaderScrolledPast,
         relationshipStatus,
         relationshipMinSpend,
         effectiveMinSpend,

@@ -1,227 +1,28 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import CataloguePage from './page';
+import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ── Module mocks ──────────────────────────────────────────────────────────────
+const mockReplace = vi.fn();
 
 vi.mock('next/navigation', () => ({
-  useParams: vi.fn(),
-  usePathname: vi.fn(),
-  useRouter: vi.fn(() => ({ push: vi.fn(), replace: vi.fn() })),
+  useParams: () => ({ distributorSlug: 'winos' }),
+  useRouter: () => ({ replace: mockReplace }),
 }));
 
-vi.mock('@/lib/hooks/use-require-auth', () => ({
-  useRequireAuth: vi.fn(),
-}));
-
-vi.mock('@/lib/cart-context', () => ({
-  useCart: vi.fn(),
-}));
-
-vi.mock('@/lib/distributor-context', () => ({
-  useDistributor: vi.fn(),
-}));
-
-vi.mock('@wholo/api-client', () => ({
-  catalogueApi: {
-    getProducts: vi.fn(),
-  },
-}));
-
-// ── Imports after mocks ───────────────────────────────────────────────────────
-
-import { useParams, usePathname } from 'next/navigation';
-import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { useCart } from '@/lib/cart-context';
-import { useDistributor } from '@/lib/distributor-context';
-import { catalogueApi } from '@wholo/api-client';
-
-// ── Fixtures ──────────────────────────────────────────────────────────────────
-
-const mockUser = {
-  id: 'user-1',
-  email: 'test@example.com',
-  firstName: 'Test',
-  lastName: 'User',
-  role: 'TRADE_CUSTOMER' as const,
-  organisationId: 'org-1',
-  organisationName: 'Test Org',
-};
-
-const makeProduct = (id: string, name: string) => ({
-  id,
-  name,
-  description: null,
-  sku: `SKU-${id}`,
-  price: '10.00',
-  resolvedPrice: null,
-  productType: null,
-  thumbnailUrl: null,
-});
-
-const makeResponse = (products: ReturnType<typeof makeProduct>[]) => ({
-  distributor: { id: 'dist-1', name: 'Test Distributor' },
-  data: products,
-  pagination: { nextCursor: null, hasMore: false, total: products.length },
-});
-
-const mockCart = {
-  quantities: {},
-  savingItems: new Set<string>(),
-  cartCount: 0,
-  syncItem: vi.fn(),
-};
-
-// ── Setup ─────────────────────────────────────────────────────────────────────
+import ProductsRedirect from './page';
 
 beforeEach(() => {
   vi.clearAllMocks();
-
-  (useParams as ReturnType<typeof vi.fn>).mockReturnValue({ distributorSlug: 'test-dist' });
-  (usePathname as ReturnType<typeof vi.fn>).mockReturnValue('/test-dist/products');
-  (useRequireAuth as ReturnType<typeof vi.fn>).mockReturnValue({
-    user: mockUser,
-    accessToken: 'test-token',
-    isLoading: false,
-  });
-  (useCart as ReturnType<typeof vi.fn>).mockReturnValue(mockCart);
-  (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'ACTIVE' });
-  (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue(
-    makeResponse([makeProduct('prod-1', 'Egg tarts'), makeProduct('prod-2', 'Custard buns')]),
-  );
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
-describe('CataloguePage', () => {
-  it('shows loading spinner while auth is loading', () => {
-    (useRequireAuth as ReturnType<typeof vi.fn>).mockReturnValue({
-      user: null,
-      accessToken: null,
-      isLoading: true,
-    });
-
-    render(<CataloguePage />);
-
-    expect(document.querySelector('.animate-spin')).toBeTruthy();
+describe('ProductsRedirect', () => {
+  it('redirects to the storefront catalogue anchor', () => {
+    render(<ProductsRedirect />);
+    expect(mockReplace).toHaveBeenCalledWith('/winos#catalogue');
   });
 
-  it('shows loading spinner on initial fetch', () => {
-    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
-
-    render(<CataloguePage />);
-
-    expect(document.querySelector('.animate-spin')).toBeTruthy();
-  });
-
-  it('renders products with name, sku and price after load', async () => {
-    render(<CataloguePage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Egg tarts')).toBeTruthy();
-      expect(screen.getByText('Custard buns')).toBeTruthy();
-      expect(screen.getByText('SKU-prod-1')).toBeTruthy();
-      expect(screen.getAllByText('£10.00 per item · excl. VAT')).toHaveLength(2);
-    });
-  });
-
-  it('renders prices in the distributor currency', async () => {
-    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({
-      relationshipStatus: 'ACTIVE',
-      distributor: { currencyCode: 'USD' },
-    });
-
-    render(<CataloguePage />);
-
-    await waitFor(() => {
-      expect(screen.getAllByText('$10.00 per item · excl. VAT')).toHaveLength(2);
-    });
-  });
-
-  it('lays the list out as a responsive grid above mobile', async () => {
-    render(<CataloguePage />);
-
-    await waitFor(() => screen.getByText('Egg tarts'));
-
-    const list = document.querySelector('ul');
-    expect(list?.className).toContain('sm:grid-cols-2');
-    expect(list?.className).toContain('lg:grid-cols-3');
-  });
-
-  it('refetches with the search param after typing (debounced)', async () => {
-    render(<CataloguePage />);
-    await waitFor(() => screen.getByText('Egg tarts'));
-
-    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeResponse([makeProduct('prod-1', 'Egg tarts')]),
-    );
-
-    fireEvent.change(screen.getByPlaceholderText('Search products…'), {
-      target: { value: 'egg' },
-    });
-
-    await waitFor(() => {
-      expect(catalogueApi.getProducts).toHaveBeenLastCalledWith('test-dist', {
-        search: 'egg',
-      });
-    });
-    await waitFor(() => {
-      expect(screen.queryByText('Custard buns')).toBeNull();
-      expect(screen.getByText('Egg tarts')).toBeTruthy();
-    });
-  });
-
-  it('shows a search-specific empty state when nothing matches', async () => {
-    render(<CataloguePage />);
-    await waitFor(() => screen.getByText('Egg tarts'));
-
-    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue(makeResponse([]));
-
-    fireEvent.change(screen.getByPlaceholderText('Search products…'), {
-      target: { value: 'zzz' },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/No products match/)).toBeTruthy();
-      expect(screen.getByText(/zzz/)).toBeTruthy();
-    });
-  });
-
-  it('shows the plain empty state when the catalogue has no products', async () => {
-    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockResolvedValue(makeResponse([]));
-
-    render(<CataloguePage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('No products available.')).toBeTruthy();
-    });
-  });
-
-  it('shows error state when fetch fails', async () => {
-    (catalogueApi.getProducts as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
-
-    render(<CataloguePage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load products. Please try again.')).toBeTruthy();
-    });
-  });
-
-  it('calls syncItem with the incremented absolute quantity when the increase stepper is clicked', async () => {
-    render(<CataloguePage />);
-    await waitFor(() => screen.getByText('Egg tarts'));
-
-    fireEvent.click(screen.getAllByLabelText(/Increase quantity/)[0]);
-
-    expect(mockCart.syncItem).toHaveBeenCalledWith('prod-1', 1);
-  });
-
-  it('hides stepper when no active trade relationship', async () => {
-    (useDistributor as ReturnType<typeof vi.fn>).mockReturnValue({ relationshipStatus: 'NONE' });
-
-    render(<CataloguePage />);
-    await waitFor(() => screen.getByText('Egg tarts'));
-
-    expect(screen.queryByLabelText(/Increase quantity/)).toBeNull();
+  it('shows a spinner, not a product grid', () => {
+    render(<ProductsRedirect />);
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(screen.queryByRole('list')).toBeNull();
   });
 });

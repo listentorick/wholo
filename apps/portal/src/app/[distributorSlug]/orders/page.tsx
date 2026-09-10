@@ -269,7 +269,7 @@ export default function OrdersPage() {
                   <p className="text-xs text-foreground-tertiary">Place your first order to get started</p>
                 </div>
                 <button
-                  onClick={() => router.push(`/${distributorSlug}/products`)}
+                  onClick={() => router.push(`/${distributorSlug}#catalogue`)}
                   className="rounded-md border-[1.5px] border-primary px-7 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary transition-colors hover:bg-accent-subtle"
                 >
                   Start an Order

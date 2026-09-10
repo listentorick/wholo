@@ -141,7 +141,7 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <>
-        <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
+        <PageSubHeader backLabel="Catalogue" backHref={`/${distributorSlug}#catalogue`} title="Checkout" />
         <style>{`
           @keyframes co-fade-up { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
           .co-empty { animation: co-fade-up 0.4s ease both 0.1s; }
@@ -159,7 +159,7 @@ export default function CheckoutPage() {
             <p className="text-xs text-muted">Add products to get started</p>
           </div>
           <button
-            onClick={() => router.push(`/${distributorSlug}/products`)}
+            onClick={() => router.push(`/${distributorSlug}#catalogue`)}
             className="rounded-md border-[1.5px] border-primary px-7 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-primary transition-colors hover:bg-accent-subtle"
           >
             Browse Products
@@ -176,7 +176,7 @@ export default function CheckoutPage() {
         .co-card { animation: co-fade 0.3s ease both; }
       `}</style>
 
-      <PageSubHeader backLabel="Products" backHref={`/${distributorSlug}/products`} title="Checkout" />
+      <PageSubHeader backLabel="Catalogue" backHref={`/${distributorSlug}#catalogue`} title="Checkout" />
 
       <PageShell width="full">
         {/*
