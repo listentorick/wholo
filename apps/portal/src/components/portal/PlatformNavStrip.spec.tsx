@@ -16,9 +16,14 @@ describe('PlatformNavStrip', () => {
     expect(screen.getByText('My Suppliers').closest('a')).toHaveAttribute('href', '/');
   });
 
-  it('shows the distributor name in the breadcrumb', () => {
+  it('links the distributor name in the breadcrumb to its storefront root', () => {
+    render(<PlatformNavStrip slug="mere-wine-co" distributorName="Mere Wine Co" />);
+    expect(screen.getByText('Mere Wine Co').closest('a')).toHaveAttribute('href', '/mere-wine-co');
+  });
+
+  it('renders the distributor name as plain text when no slug is given', () => {
     render(<PlatformNavStrip distributorName="Mere Wine Co" />);
-    expect(screen.getByText('Mere Wine Co')).toBeInTheDocument();
+    expect(screen.getByText('Mere Wine Co').closest('a')).toBeNull();
   });
 
   it('omits the breadcrumb separator when there is no distributor name', () => {

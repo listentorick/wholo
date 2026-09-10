@@ -4,7 +4,6 @@ import { useEffect, useRef } from 'react';
 
 interface Props {
   bannerUrl: string | null;
-  dominantColor: string | null;
 }
 
 const FULL_DESKTOP = 300;
@@ -14,15 +13,13 @@ const MIN_MOBILE = 56;
 const COLLAPSE_DISTANCE = 220;
 
 /**
- * The distributor's cover image. Replaces `BrandingBanner` — same gradient +
- * grain fallback, but no hanging logo circle (identity moved into `ShopHeader` /
- * `CondensedShopHeader`) and the height collapses on scroll via a `--cover-h`
- * custom property. `prefers-reduced-motion` skips the collapse (the banner just
- * scrolls away).
+ * The distributor's cover image. Renders nothing when the distributor hasn't set
+ * a banner — the shop header just sits directly under the platform nav strip.
+ * When present, the height collapses on scroll (a plain `style.height` write per
+ * frame); `prefers-reduced-motion` skips the collapse and the banner scrolls away.
  */
-export function CoverBanner({ bannerUrl, dominantColor }: Props) {
+export function CoverBanner({ bannerUrl }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const gradientStart = dominantColor ?? '#e8ddd0';
 
   useEffect(() => {
     const el = ref.current;
@@ -49,45 +46,28 @@ export function CoverBanner({ bannerUrl, dominantColor }: Props) {
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('resize', onScroll);
     };
-  }, []);
+  }, [bannerUrl]);
+
+  if (!bannerUrl) return null;
 
   return (
-    <div
-      ref={ref}
-      className="cover-banner relative w-full overflow-hidden border-b border-border"
-    >
+    <div ref={ref} className="cover-banner relative w-full overflow-hidden border-b border-border">
       <style>{`
         .cover-banner { height: ${FULL_MOBILE}px; }
         @media (min-width: 768px) { .cover-banner { height: ${FULL_DESKTOP}px; } }
       `}</style>
 
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={bannerUrl}
+        alt=""
+        className="absolute inset-0 h-full w-full bg-canvas object-cover"
+        draggable={false}
+      />
       <div
         className="absolute inset-0"
-        style={{ background: `linear-gradient(160deg, ${gradientStart} 0%, #d4c5b0 40%, #c9b99a 100%)` }}
+        style={{ background: 'linear-gradient(to bottom, transparent 55%, rgba(0,0,0,0.22) 100%)' }}
       />
-      <svg className="absolute inset-0 h-full w-full opacity-[0.18]" xmlns="http://www.w3.org/2000/svg">
-        <filter id="cover-grain">
-          <feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="4" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#cover-grain)" />
-      </svg>
-
-      {bannerUrl && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={bannerUrl}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            draggable={false}
-          />
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(to bottom, transparent 55%, rgba(0,0,0,0.22) 100%)' }}
-          />
-        </>
-      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ import Link from 'next/link';
 export interface StorefrontSection {
   id: string;
   label: string;
+  /** Shorter label used where space is tight (mobile). Falls back to `label`. */
+  shortLabel?: string;
 }
 
 interface Props {
@@ -14,8 +16,10 @@ interface Props {
   onSelectSection: (id: string) => void;
 }
 
+// Mobile: tabs split the width evenly (flex-1), no horizontal scroll.
+// Desktop: natural width, left-aligned.
 const TAB_BASE =
-  'inline-flex flex-shrink-0 items-center border-b-[3px] px-4 py-3 text-sm font-medium transition-colors';
+  'flex flex-1 items-center justify-center border-b-[3px] px-2 py-3 text-xs font-medium transition-colors md:flex-none md:justify-start md:px-4 md:text-sm';
 
 /**
  * The distributor tab bar. Catalogue / About / Delivery & terms are in-page
@@ -25,7 +29,7 @@ const TAB_BASE =
  */
 export function StorefrontTabs({ slug, sections, activeSection, onSelectSection }: Props) {
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] items-center overflow-x-auto whitespace-nowrap px-1 md:px-6">
+    <div className="mx-auto flex w-full max-w-[1280px] items-center md:px-6">
       {sections.map((section) => {
         const active = activeSection === section.id;
         return (
@@ -40,7 +44,14 @@ export function StorefrontTabs({ slug, sections, activeSection, onSelectSection 
                 : 'border-transparent text-muted hover:text-foreground'
             }`}
           >
-            {section.label}
+            {section.shortLabel && section.shortLabel !== section.label ? (
+              <>
+                <span className="md:hidden">{section.shortLabel}</span>
+                <span className="hidden md:inline">{section.label}</span>
+              </>
+            ) : (
+              section.label
+            )}
           </button>
         );
       })}

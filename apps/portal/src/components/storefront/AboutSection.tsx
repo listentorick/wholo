@@ -21,9 +21,11 @@ export function AboutSection({ distributor, relationshipStatus }: Props) {
     <section
       id="about"
       data-scroll-section
-      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 py-8 md:px-8"
+      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 pt-8 md:px-8 md:py-8"
     >
-      <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
+      {/* Card chrome only on desktop — on mobile this and the Delivery section
+          read as one continuous borderless block (per the iteration-mobile mock). */}
+      <div className="md:rounded-lg md:border md:border-border md:bg-surface md:p-6 md:shadow-sm">
         <Eyebrow className="mb-3">About us</Eyebrow>
 
         {distributor.tagline && (

@@ -90,12 +90,12 @@ export function ShopHeader({ distributor, relationshipStatus, orderCount, onScro
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2.5">
+        <div className="flex w-full items-center gap-2.5 md:w-auto md:flex-shrink-0">
           <button
             type="button"
             disabled
             title="Coming soon"
-            className="inline-flex cursor-not-allowed items-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground opacity-60"
+            className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-foreground opacity-60 md:flex-none"
           >
             <MessageSquare className="h-4 w-4" strokeWidth={1.7} />
             Message

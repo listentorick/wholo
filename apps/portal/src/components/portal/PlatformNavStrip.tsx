@@ -21,7 +21,13 @@ function InertNavItem({ label }: { label: string }) {
  * account-level links on the right. "Discover" and "My Orders" are inert
  * placeholders (no marketplace directory / cross-supplier order view exists yet).
  */
-export function PlatformNavStrip({ distributorName }: { distributorName?: string | null }) {
+export function PlatformNavStrip({
+  slug,
+  distributorName,
+}: {
+  slug?: string;
+  distributorName?: string | null;
+}) {
   return (
     <nav className="flex h-11 items-center justify-between gap-4 border-b border-border bg-surface px-4 text-sm md:px-6">
       <span className="flex min-w-0 items-center gap-2">
@@ -33,7 +39,13 @@ export function PlatformNavStrip({ distributorName }: { distributorName?: string
             <span className="flex-shrink-0 text-muted/60" aria-hidden="true">
               /
             </span>
-            <span className="truncate font-semibold text-foreground">{distributorName}</span>
+            {slug ? (
+              <Link href={`/${slug}`} className="truncate font-semibold text-foreground hover:text-primary">
+                {distributorName}
+              </Link>
+            ) : (
+              <span className="truncate font-semibold text-foreground">{distributorName}</span>
+            )}
           </>
         )}
       </span>

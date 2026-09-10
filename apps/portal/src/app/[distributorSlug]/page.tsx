@@ -23,7 +23,7 @@ import type { StorefrontSection } from '@/components/storefront/StorefrontTabs';
 const SECTIONS: StorefrontSection[] = [
   { id: 'catalogue', label: 'Catalogue' },
   { id: 'about', label: 'About' },
-  { id: 'delivery', label: 'Delivery & terms' },
+  { id: 'delivery', label: 'Delivery & terms', shortLabel: 'Delivery' },
 ];
 const SECTION_IDS = SECTIONS.map((s) => s.id);
 const PAGE_SIZE = 24;
@@ -138,7 +138,7 @@ export default function StorefrontPage() {
 
   return (
     <>
-      <CoverBanner bannerUrl={distributor.bannerUrl} dominantColor={distributor.bannerDominantColor} />
+      <CoverBanner bannerUrl={distributor.bannerUrl} />
 
       <ShopHeader
         distributor={distributor}

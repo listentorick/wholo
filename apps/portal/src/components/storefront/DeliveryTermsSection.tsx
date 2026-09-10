@@ -46,9 +46,11 @@ export function DeliveryTermsSection({ distributor, effectiveMinSpend, deliveryP
     <section
       id="delivery"
       data-scroll-section
-      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 py-8 md:px-8"
+      className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] px-4 pb-8 pt-6 md:px-8 md:py-8"
     >
-      <div className="grid gap-6 rounded-lg border border-border bg-surface p-6 shadow-sm md:grid-cols-2">
+      {/* Card chrome only on desktop — on mobile this continues the borderless
+          block started by the About section. */}
+      <div className="grid gap-6 md:grid-cols-2 md:rounded-lg md:border md:border-border md:bg-surface md:p-6 md:shadow-sm">
         <div>
           <Eyebrow className="mb-4">Delivery &amp; terms</Eyebrow>
           <div className="flex flex-col gap-4">

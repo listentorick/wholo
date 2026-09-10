@@ -10,7 +10,7 @@ import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
 import type { DistributorInfo } from '@wholo/types';
 
-function DistributorMain({ children }: { children: React.ReactNode }) {
+function DistributorMain({ distributorSlug, children }: { distributorSlug: string; children: React.ReactNode }) {
   const { distributor } = useDistributor();
 
   return (
@@ -18,7 +18,7 @@ function DistributorMain({ children }: { children: React.ReactNode }) {
       <OrderAsBanner />
       <OrderAsHandler />
       <PortalTopBar variant="distributor" />
-      <PlatformNavStrip distributorName={distributor?.name} />
+      <PlatformNavStrip slug={distributorSlug} distributorName={distributor?.name} />
       <main className="flex min-w-0 flex-1 flex-col">{children}</main>
       <PortalFooter />
     </div>
@@ -54,7 +54,7 @@ export function DistributorShell({
   return (
     <DistributorProvider distributorSlug={distributorSlug} initialDistributor={initialDistributor}>
       <CartProvider distributorSlug={distributorSlug}>
-        <DistributorMain>{children}</DistributorMain>
+        <DistributorMain distributorSlug={distributorSlug}>{children}</DistributorMain>
       </CartProvider>
     </DistributorProvider>
   );

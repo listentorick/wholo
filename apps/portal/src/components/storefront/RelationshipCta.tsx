@@ -81,7 +81,11 @@ export function RelationshipCta({
 
   return (
     <>
-      <Button variant="primary" onClick={() => setShowConfirm(true)}>
+      <Button
+        variant="primary"
+        onClick={() => setShowConfirm(true)}
+        className={variant === 'header' ? 'flex-1 md:flex-none' : undefined}
+      >
         Add this supplier
       </Button>
       {modal}
