@@ -22,22 +22,25 @@ function StatTile({ icon, value, label }: { icon: ReactNode; value: string; labe
 /**
  * "Delivery & terms" block — scroll target for that tab. Merges the old About
  * page's `KeyInfo` (minimum spend / processing days / delivery cut-off) and
- * `GetInTouch` (address / phone / email) into one section.
+ * `GetInTouch` (address / phone / email) into one section. Always renders its
+ * `<section>` shell so the scroll-spy has a target before the distributor loads.
  */
 export function DeliveryTermsSection() {
   const { distributor, effectiveMinSpend, deliveryParts } = useDistributor();
-  if (!distributor) return null;
 
-  const minSpend = effectiveMinSpend !== null ? formatMoney(effectiveMinSpend, distributor.currencyCode) : null;
-  const processingLabel = formatProcessingDays(distributor.processingDays);
+  const minSpend =
+    distributor && effectiveMinSpend !== null ? formatMoney(effectiveMinSpend, distributor.currencyCode) : null;
+  const processingLabel = distributor ? formatProcessingDays(distributor.processingDays) : null;
 
-  const addressParts = [
-    distributor.addressLine1,
-    distributor.addressLine2,
-    [distributor.addressCity, distributor.addressState, distributor.addressPostcode].filter(Boolean).join(' '),
-    distributor.addressCountry,
-  ].filter(Boolean);
-  const hasContact = addressParts.length > 0 || distributor.phone || distributor.email;
+  const addressParts = distributor
+    ? [
+        distributor.addressLine1,
+        distributor.addressLine2,
+        [distributor.addressCity, distributor.addressState, distributor.addressPostcode].filter(Boolean).join(' '),
+        distributor.addressCountry,
+      ].filter(Boolean)
+    : [];
+  const hasContact = addressParts.length > 0 || distributor?.phone || distributor?.email;
 
   return (
     <section
@@ -45,8 +48,9 @@ export function DeliveryTermsSection() {
       data-scroll-section
       className="mx-auto w-full max-w-[1280px] scroll-mt-[var(--sticky-stack-h,0px)] bg-surface px-4 pb-10 pt-6 md:bg-transparent md:px-8 md:pb-8 md:pt-8"
     >
-      {/* No top border on mobile — this continues the white block started by the
-          About section. Card chrome comes back at md. */}
+      {distributor && (
+      /* No top border on mobile — this continues the white block started by the
+          About section. Card chrome comes back at md. */
       <div className="grid gap-6 md:grid-cols-2 md:rounded-lg md:border md:border-border md:bg-surface md:p-6 md:shadow-sm">
         <div>
           <Eyebrow className="mb-4">Delivery &amp; terms</Eyebrow>
@@ -120,6 +124,7 @@ export function DeliveryTermsSection() {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }

@@ -16,9 +16,9 @@ import {
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { QuantityStepper } from '@/components/QuantityStepper';
 import { Eyebrow } from '@/components/Eyebrow';
-import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
 
-/** Same centred gutter as the storefront sections. */
+/** Same centred gutter as the storefront sections (the storefront chrome above
+ *  this content is rendered by the distributor layout). */
 const CONTENT = 'mx-auto w-full max-w-[1280px] px-4 py-8 md:px-8';
 
 function formatPrice(
@@ -101,12 +101,9 @@ export default function ProductDetailPage() {
 
   if (error || !product) {
     return (
-      <>
-        <StorefrontChrome slug={distributorSlug} mode="link" />
-        <div className={`${CONTENT} text-center`}>
-          <p className="text-sm text-muted">{error ?? 'Product not found.'}</p>
-        </div>
-      </>
+      <div className={`${CONTENT} text-center`}>
+        <p className="text-sm text-muted">{error ?? 'Product not found.'}</p>
+      </div>
     );
   }
 
@@ -137,8 +134,6 @@ export default function ProductDetailPage() {
           -webkit-mask-position: center; mask-position: center;
         }
       `}</style>
-
-      <StorefrontChrome slug={distributorSlug} mode="link" />
 
       <div className={CONTENT}>
         <div className="flex w-full flex-col gap-4 md:gap-5">

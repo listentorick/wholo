@@ -1,22 +1,20 @@
 'use client';
 
 import ReactMarkdown from 'react-markdown';
-import type { DistributorInfo } from '@wholo/types';
-import type { RelationshipStatus } from '@/lib/distributor-context';
+import { useDistributor } from '@/lib/distributor-context';
 import { Eyebrow } from '@/components/Eyebrow';
 import { RelationshipCta } from './RelationshipCta';
-
-interface Props {
-  distributor: DistributorInfo;
-  relationshipStatus: RelationshipStatus | null;
-}
 
 /**
  * "About" block of the storefront — scroll target for the About tab. Content
  * lifted from the old About page's `AboutBox`: tagline (brand-voice cobalt),
- * `aboutText` markdown, and the relationship CTA.
+ * `aboutText` markdown, and the relationship CTA. Reads the distributor from
+ * context, and always renders its `<section>` shell so the scroll-spy has a
+ * target even before the distributor resolves.
  */
-export function AboutSection({ distributor, relationshipStatus }: Props) {
+export function AboutSection() {
+  const { distributor, relationshipStatus } = useDistributor();
+
   return (
     <section
       id="about"
@@ -27,23 +25,27 @@ export function AboutSection({ distributor, relationshipStatus }: Props) {
           single full-width top border (per the iteration-mobile mock); the card
           chrome only comes back at md. */}
       <div className="md:rounded-lg md:border md:border-border md:bg-surface md:p-6 md:shadow-sm">
-        <Eyebrow className="mb-3">About us</Eyebrow>
+        {distributor && (
+          <>
+            <Eyebrow className="mb-3">About us</Eyebrow>
 
-        {distributor.tagline && (
-          <p className="text-sm font-medium text-primary">{distributor.tagline}</p>
+            {distributor.tagline && (
+              <p className="text-sm font-medium text-primary">{distributor.tagline}</p>
+            )}
+
+            {distributor.aboutText && (
+              <div className="prose prose-sm prose-gray mt-4 max-w-[68ch]">
+                <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
+              </div>
+            )}
+
+            <RelationshipCta
+              distributorName={distributor.name}
+              relationshipStatus={relationshipStatus}
+              variant="section"
+            />
+          </>
         )}
-
-        {distributor.aboutText && (
-          <div className="prose prose-sm prose-gray mt-4 max-w-[68ch]">
-            <ReactMarkdown>{distributor.aboutText}</ReactMarkdown>
-          </div>
-        )}
-
-        <RelationshipCta
-          distributorName={distributor.name}
-          relationshipStatus={relationshipStatus}
-          variant="section"
-        />
       </div>
     </section>
   );

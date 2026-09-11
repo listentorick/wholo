@@ -78,9 +78,11 @@ describe('DeliveryTermsSection', () => {
     expect(screen.queryByText('£150.00')).toBeNull();
   });
 
-  it('renders nothing when the distributor is not loaded', () => {
+  it('renders the empty #delivery section shell while the distributor is not loaded', () => {
     mockCtx.distributor = null;
     const { container } = render(<DeliveryTermsSection />);
-    expect(container.firstChild).toBeNull();
+    const section = container.querySelector('section#delivery');
+    expect(section).toHaveAttribute('data-scroll-section');
+    expect(section?.querySelector('div')).toBeNull(); // no inner card yet
   });
 });

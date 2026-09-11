@@ -8,8 +8,7 @@ import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useDistributor } from '@/lib/distributor-context';
 import { useCart } from '@/lib/cart-context';
 import { useStorefrontSearch } from '@/lib/storefront-search';
-import { PageShell, PageSpinner } from '@/components/PageShell';
-import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
+import { PageSpinner } from '@/components/PageShell';
 import { CatalogueSection } from '@/components/storefront/CatalogueSection';
 import { AboutSection } from '@/components/storefront/AboutSection';
 import { DeliveryTermsSection } from '@/components/storefront/DeliveryTermsSection';
@@ -19,7 +18,9 @@ const PAGE_SIZE = 24;
 /**
  * The distributor storefront — one scrolling page: Catalogue / About /
  * Delivery & terms. The storefront chrome (cover banner, shop header, sticky
- * tabs + amber bar) is rendered by the distributor layout, not here.
+ * tabs + amber bar) is rendered by the distributor layout, not here. The three
+ * `<section>`s always render (spinner overlaid, not a replacement) so the
+ * layout's scroll-spy always has its targets.
  */
 export default function StorefrontPage() {
   const params = useParams();
@@ -84,22 +85,16 @@ export default function StorefrontPage() {
     }
   }, [distributorSlug, nextCursor, loadingMore, debouncedSearch]);
 
-  if (authLoading || !distributor) {
-    return (
-      <PageShell center>
-        <PageSpinner />
-      </PageShell>
-    );
-  }
-  if (!user) return null;
+  // Redirecting to login — render nothing.
+  if (!user && !authLoading) return null;
+
+  const showOverlay = authLoading || !distributor;
 
   return (
     <>
-      <StorefrontChrome slug={distributorSlug} mode="spy" />
-
       <CatalogueSection
         slug={distributorSlug}
-        currencyCode={distributor.currencyCode ?? 'GBP'}
+        currencyCode={distributor?.currencyCode ?? 'GBP'}
         canOrder={isActive}
         products={products}
         quantities={quantities}
@@ -112,9 +107,15 @@ export default function StorefrontPage() {
         error={catalogueError}
       />
 
-      <AboutSection distributor={distributor} relationshipStatus={relationshipStatus} />
+      <AboutSection />
 
       <DeliveryTermsSection />
+
+      {showOverlay && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-start justify-center pt-[35vh]">
+          <PageSpinner />
+        </div>
+      )}
     </>
   );
 }

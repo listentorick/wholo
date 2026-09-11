@@ -33,10 +33,8 @@ vi.mock('@wholo/api-client', () => ({
   catalogueApi: { getProducts: (...args: unknown[]) => getProducts(...args) },
 }));
 
-// Keep the chrome + sections shallow — this spec is about orchestration + data flow.
-vi.mock('@/components/storefront/StorefrontChrome', () => ({
-  StorefrontChrome: ({ mode }: { mode: string }) => <div data-testid="chrome">{mode}</div>,
-}));
+// Sections shallow — this spec is about orchestration + data flow. (The chrome
+// is rendered by the layout, not this page.)
 vi.mock('@/components/storefront/AboutSection', () => ({
   AboutSection: () => <div data-testid="about-section" data-order="2" />,
 }));
@@ -76,19 +74,26 @@ beforeEach(() => {
 });
 
 describe('StorefrontPage', () => {
-  it('shows a full-page spinner while the distributor is still loading', async () => {
+  it('overlays a spinner while the distributor is still loading, but keeps the section shells mounted', async () => {
     mockDistributor = null;
     getProducts.mockReturnValue(new Promise(() => {}));
     render(<StorefrontPage />);
     expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
-    expect(screen.queryByTestId('catalogue-section')).toBeNull();
+    // sections stay in the DOM so the layout's scroll-spy always has targets
+    expect(screen.getByTestId('catalogue-section')).toBeInTheDocument();
+    expect(screen.getByTestId('about-section')).toBeInTheDocument();
     await Promise.resolve();
   });
 
-  it('renders the chrome (spy mode) then the bands in order: catalogue → about → delivery', async () => {
+  it('does not overlay the spinner once the distributor has loaded', async () => {
     render(<StorefrontPage />);
     await waitFor(() => expect(screen.getByText('Pinot Noir')).toBeInTheDocument());
-    expect(screen.getByTestId('chrome')).toHaveTextContent('spy');
+    expect(screen.queryByRole('status', { name: 'Loading' })).toBeNull();
+  });
+
+  it('renders the bands in order: catalogue → about → delivery', async () => {
+    render(<StorefrontPage />);
+    await waitFor(() => expect(screen.getByText('Pinot Noir')).toBeInTheDocument());
     const orders = screen.getAllByTestId(/section$/).map((el) => el.getAttribute('data-order'));
     expect(orders).toEqual(['1', '2', '3']);
   });

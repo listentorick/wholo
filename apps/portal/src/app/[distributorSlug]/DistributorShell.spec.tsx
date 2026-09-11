@@ -2,16 +2,20 @@ import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 let mockAuth: { authError: string | null; logout: () => void };
+let mockPathname: string;
+
+vi.mock('next/navigation', () => ({ usePathname: () => mockPathname }));
 
 vi.mock('@/lib/cart-context', () => ({
   CartProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-
 vi.mock('@/lib/auth-context', () => ({ useAuth: () => mockAuth }));
-
 vi.mock('@/lib/distributor-context', () => ({
   DistributorProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useDistributor: () => ({ distributor: { name: 'Fine Wines Co' } }),
+}));
+vi.mock('@/lib/storefront-search', () => ({
+  StorefrontSearchProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('@/components/portal/PortalTopBar', () => ({
@@ -25,13 +29,17 @@ vi.mock('@/components/portal/PlatformNavStrip', () => ({
 vi.mock('@/components/portal/PortalFooter', () => ({ PortalFooter: () => <div data-testid="footer" /> }));
 vi.mock('@/components/OrderAsBanner', () => ({ OrderAsBanner: () => <div data-testid="order-as-banner" /> }));
 vi.mock('@/components/OrderAsHandler', () => ({ OrderAsHandler: () => <div data-testid="order-as-handler" /> }));
+vi.mock('@/components/storefront/StorefrontChrome', () => ({
+  StorefrontChrome: ({ mode }: { mode: string }) => <div data-testid="chrome">{mode}</div>,
+}));
 
 import { DistributorShell } from './DistributorShell';
 
 const slug = 'fine-wines-co';
 const initialDistributor = { id: 'd1', slug, name: 'Fine Wines Co' } as any;
 
-function renderShell() {
+function renderShell(pathname = `/${slug}`) {
+  mockPathname = pathname;
   return render(
     <DistributorShell distributorSlug={slug} initialDistributor={initialDistributor}>
       <div>content</div>
@@ -45,7 +53,7 @@ describe('DistributorShell', () => {
     mockAuth = { authError: null, logout: vi.fn() };
   });
 
-  it('renders the distributor-variant top bar, platform strip, order-as chrome, footer and children', () => {
+  it('renders the persistent chrome (top bar, platform strip, order-as, footer) + children', () => {
     renderShell();
     expect(screen.getByTestId('top-bar')).toHaveTextContent('distributor');
     expect(screen.getByTestId('nav-strip')).toHaveTextContent('Fine Wines Co');
@@ -55,13 +63,22 @@ describe('DistributorShell', () => {
     expect(screen.getByText('content')).toBeInTheDocument();
   });
 
-  it('does not render any of the removed chrome components', () => {
-    renderShell();
-    expect(screen.queryByTestId('nav-sidebar')).toBeNull();
-    expect(screen.queryByTestId('distributor-header')).toBeNull();
-    expect(screen.queryByTestId('distributor-nav')).toBeNull();
-    expect(screen.queryByTestId('branding-banner')).toBeNull();
-    expect(screen.queryByTestId('page-header')).toBeNull();
+  it('renders the storefront chrome in spy mode on the storefront route', () => {
+    renderShell(`/${slug}`);
+    expect(screen.getByTestId('chrome')).toHaveTextContent('spy');
+  });
+
+  it('renders the storefront chrome in link mode on a product-detail route', () => {
+    renderShell(`/${slug}/products/prod-1`);
+    expect(screen.getByTestId('chrome')).toHaveTextContent('link');
+  });
+
+  it('does NOT render the storefront chrome on orders / checkout / the products redirect', () => {
+    for (const path of [`/${slug}/orders`, `/${slug}/orders/o1`, `/${slug}/checkout`, `/${slug}/products`]) {
+      const { unmount } = renderShell(path);
+      expect(screen.queryByTestId('chrome')).toBeNull();
+      unmount();
+    }
   });
 
   it('shows the sign-in error screen when authError is set', () => {
