@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useAuth } from '@/lib/auth-context';
@@ -51,6 +51,8 @@ export default function CheckoutPage() {
   const [availableDates, setAvailableDates] = useState<AvailableDeliveryDate[]>([]);
   const [loadingDates, setLoadingDates] = useState(true);
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<string | null>(null);
+  const [deliveryDateAttempted, setDeliveryDateAttempted] = useState(false);
+  const deliveryDateGroupRef = useRef<HTMLDivElement>(null);
 
   const [deliveryAddress, setDeliveryAddress] = useState<AddressSnapshot | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(true);
@@ -80,7 +82,12 @@ export default function CheckoutPage() {
   }, [accessToken, customerId, distributorSlug]);
 
   const handlePlaceOrder = async () => {
-    if (!accessToken || submitting) return;
+    if (!accessToken || submitting || belowMinimum) return;
+    if (!selectedDeliveryDate) {
+      setDeliveryDateAttempted(true);
+      deliveryDateGroupRef.current?.focus();
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -88,7 +95,7 @@ export default function CheckoutPage() {
         distributorSlug,
         customerReference: poNumber || undefined,
         notes: comment || undefined,
-        requestedDeliveryDate: selectedDeliveryDate ?? undefined,
+        requestedDeliveryDate: selectedDeliveryDate,
       });
       if (orderAsMode) {
         // Session was consumed atomically with order creation — clear it from storage
@@ -127,6 +134,9 @@ export default function CheckoutPage() {
   const freight = 0;
   const fmt = (n: number) => formatMoney(n, distributor?.currencyCode ?? 'GBP');
   const belowMinimum = effectiveMinSpend != null && subtotal < effectiveMinSpend;
+  const noDeliveryDate = !selectedDeliveryDate;
+  const deliveryDateInvalid = deliveryDateAttempted && noDeliveryDate;
+  const deliveryDateErrorId = 'delivery-date-error';
 
   if (authLoading || cartLoading) {
     return (
@@ -276,44 +286,61 @@ export default function CheckoutPage() {
                 </div>
               )}
 
-              <Eyebrow className="mb-3">Delivery day</Eyebrow>
-              {loadingDates ? (
-                <div className="flex justify-center py-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
-                </div>
-              ) : availableDates.length === 0 ? (
-                <p className="text-xs text-muted">
-                  No delivery dates available right now. Please contact your distributor.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {availableDates.map((d) => {
-                    const isSelected = selectedDeliveryDate === d.date;
-                    const deliveryDate = new Date(d.date + 'T00:00:00');
-                    const cutoff = new Date(d.cutoffDeadline);
-                    const cutoffLabel = cutoff.toLocaleString('en-GB', {
-                      weekday: 'long', day: 'numeric', month: 'long',
-                      hour: 'numeric', minute: '2-digit', hour12: true,
-                    });
-                    return (
-                      <button
-                        key={d.date}
-                        type="button"
-                        onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
-                        className={[
-                          'flex w-full flex-col gap-0.5 rounded-md border-[1.5px] px-3.5 py-3 text-left transition-colors',
-                          isSelected ? 'border-primary bg-accent-subtle' : 'border-border hover:border-muted',
-                        ].join(' ')}
-                      >
-                        <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
-                          {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-                        </span>
-                        <span className="text-xs text-muted">Order by {cutoffLabel}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+              <div
+                ref={deliveryDateGroupRef}
+                role="group"
+                aria-invalid={deliveryDateInvalid}
+                aria-describedby={deliveryDateInvalid ? deliveryDateErrorId : undefined}
+                tabIndex={-1}
+                className={[
+                  '-mx-3 rounded-md border-[1.5px] px-3 py-2.5 transition-colors',
+                  deliveryDateInvalid ? 'border-error/40 bg-error/5' : 'border-transparent',
+                ].join(' ')}
+              >
+                <Eyebrow className="mb-3">Delivery day</Eyebrow>
+                {loadingDates ? (
+                  <div className="flex justify-center py-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-primary" />
+                  </div>
+                ) : availableDates.length === 0 ? (
+                  <p className="text-xs text-muted">
+                    No delivery dates available right now. Please contact your distributor.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {availableDates.map((d) => {
+                      const isSelected = selectedDeliveryDate === d.date;
+                      const deliveryDate = new Date(d.date + 'T00:00:00');
+                      const cutoff = new Date(d.cutoffDeadline);
+                      const cutoffLabel = cutoff.toLocaleString('en-GB', {
+                        weekday: 'long', day: 'numeric', month: 'long',
+                        hour: 'numeric', minute: '2-digit', hour12: true,
+                      });
+                      return (
+                        <button
+                          key={d.date}
+                          type="button"
+                          onClick={() => setSelectedDeliveryDate(isSelected ? null : d.date)}
+                          className={[
+                            'flex w-full flex-col gap-0.5 rounded-md border-[1.5px] px-3.5 py-3 text-left transition-colors',
+                            isSelected ? 'border-primary bg-accent-subtle' : 'border-border hover:border-muted',
+                          ].join(' ')}
+                        >
+                          <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                            {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                          </span>
+                          <span className="text-xs text-muted">Order by {cutoffLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {deliveryDateInvalid && (
+                  <p id={deliveryDateErrorId} aria-live="polite" className="mt-2 text-xs text-error">
+                    Please select a delivery date
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -353,10 +380,11 @@ export default function CheckoutPage() {
                 )}
                 {submitting ? 'Placing Order…' : 'Place Order'}
               </button>
-              {belowMinimum && !submitError && (
+              {submitError ? (
+                <p className="text-center text-xs text-error">{submitError}</p>
+              ) : belowMinimum ? (
                 <p className="text-center text-xs text-error">Minimum order value not yet met</p>
-              )}
-              {submitError && <p className="text-center text-xs text-error">{submitError}</p>}
+              ) : null}
               <div className="flex justify-center gap-5 pt-1">
                 <button type="button" disabled className="text-xs text-muted disabled:opacity-50">
                   Add to favourites

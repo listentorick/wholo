@@ -97,13 +97,21 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     mockRefreshCart.mockResolvedValue(undefined);
     mockEffectiveMinSpend = null;
     mockQuantities = { p1: 1 };
+    mockGetAvailableDates.mockResolvedValue({
+      dates: [{ date: '2026-08-15', cutoffDeadline: '2026-08-14T17:00:00Z' }],
+    });
   });
+
+  async function selectDeliveryDate() {
+    fireEvent.click(await screen.findByText('Saturday 15 August'));
+  }
 
   it('calls clearOrderAsSession (not refreshCart) when order-as mode is active', async () => {
     mockOrderAsMode = true;
     mockSubmitOrder.mockResolvedValue({ id: 'ord-1' });
 
     render(<CheckoutPage />);
+    await selectDeliveryDate();
     fireEvent.click(screen.getByText('Place Order'));
 
     await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalled());
@@ -117,11 +125,45 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     mockSubmitOrder.mockResolvedValue({ id: 'ord-1' });
 
     render(<CheckoutPage />);
+    await selectDeliveryDate();
     fireEvent.click(screen.getByText('Place Order'));
 
     await waitFor(() => expect(mockRefreshCart).toHaveBeenCalled());
     expect(mockClearOrderAsSession).not.toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith('/winos/orders/ord-1');
+  });
+
+  it('does not disable Place Order just because no delivery date has been selected', async () => {
+    render(<CheckoutPage />);
+
+    const button = await screen.findByText('Place Order');
+    expect(button.closest('button')).not.toBeDisabled();
+  });
+
+  it('shows no delivery-date error before any submit attempt', async () => {
+    render(<CheckoutPage />);
+    await screen.findByText('Place Order');
+
+    expect(screen.queryByText('Please select a delivery date')).not.toBeInTheDocument();
+  });
+
+  it('clicking Place Order with no delivery date selected does not submit and reveals the inline error', async () => {
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+
+    expect(await screen.findByText('Please select a delivery date')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockSubmitOrder).not.toHaveBeenCalled();
+  });
+
+  it('selecting a date after a failed attempt clears the inline error', async () => {
+    render(<CheckoutPage />);
+    fireEvent.click(await screen.findByText('Place Order'));
+    expect(await screen.findByText('Please select a delivery date')).toBeInTheDocument();
+
+    await selectDeliveryDate();
+
+    expect(screen.queryByText('Please select a delivery date')).not.toBeInTheDocument();
   });
 });
 

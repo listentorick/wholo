@@ -25,6 +25,16 @@ const CUSTOMER      = 'integ-orders-customer';
 const CUSTOMER_USER = 'integ-orders-customer-user';
 const CUSTOMER_KEYCLOAK_ID = 'kc-integ-orders-customer-user';
 
+// requestedDeliveryDate is now required on every submission — this needs to
+// resolve as "available" against the real DeliveryAvailabilityService, so
+// each test seeds a wide-open delivery profile (see beforeEach) and sends
+// tomorrow's date, mirroring the provider's own candidate-date computation.
+function tomorrowIso(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 describe('Orders submission (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -84,6 +94,8 @@ describe('Orders submission (integration)', () => {
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
     await prisma.cartOrderLine.deleteMany({ where: { order: { distributorId: DIST } } });
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
+    await prisma.traderCustomerSettings.deleteMany({ where: { tradeRelationship: { distributorId: DIST } } });
+    await prisma.deliveryProfile.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
     await prisma.taxType.deleteMany({ where: { distributorId: DIST } });
@@ -101,6 +113,8 @@ describe('Orders submission (integration)', () => {
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
     await prisma.cartOrderLine.deleteMany({ where: { order: { distributorId: DIST } } });
     await prisma.cartOrder.deleteMany({ where: { distributorId: DIST } });
+    await prisma.traderCustomerSettings.deleteMany({ where: { tradeRelationship: { distributorId: DIST } } });
+    await prisma.deliveryProfile.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
     await prisma.taxType.deleteMany({ where: { distributorId: DIST } });
@@ -115,6 +129,21 @@ describe('Orders submission (integration)', () => {
       data: { distributorId: DIST, customerId: CUSTOMER, status: TradeRelationshipStatus.ACTIVE },
     });
     relationshipId = relationship.id;
+
+    // Wide-open delivery availability so requestedDeliveryDate: tomorrowIso()
+    // always passes the real DeliveryAvailabilityService revalidation.
+    const deliveryProfile = await prisma.deliveryProfile.create({
+      data: {
+        distributorId: DIST,
+        name: 'Integration Orders Availability',
+        defaultWeekdays: [0, 1, 2, 3, 4, 5, 6],
+        defaultCutoffTime: '00:00',
+        defaultCutoffProcessingDays: 0,
+      },
+    });
+    await prisma.traderCustomerSettings.create({
+      data: { tradeRelationshipId: relationshipId, deliveryProfileId: deliveryProfile.id },
+    });
   });
 
   async function seedCart() {
@@ -139,7 +168,7 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(201);
       expect(res.body.distributorId).toBe(DIST);
@@ -160,7 +189,7 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(403);
 
@@ -177,7 +206,7 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(403);
     });
@@ -192,7 +221,7 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(422);
       expect(res.body.detail).toMatch(/minimum order value/);
@@ -214,7 +243,7 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(422);
     });
@@ -229,9 +258,23 @@ describe('Orders submission (integration)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(201);
+    });
+
+    it('returns 400 when requestedDeliveryDate is missing', async () => {
+      await seedCart();
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ distributorSlug: DIST_SLUG });
+
+      expect(res.status).toBe(400);
+
+      const orders = await prisma.order.findMany({ where: { distributorId: DIST, traderCustomerId: CUSTOMER } });
+      expect(orders).toHaveLength(0);
     });
   });
 
@@ -257,7 +300,7 @@ describe('Orders submission (integration)', () => {
       const submitRes = await request(app.getHttpServer())
         .post('/api/v1/orders')
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
       expect(submitRes.status).toBe(201);
       const orderId = submitRes.body.id;
       expect(submitRes.body.taxAmount).toBe('4.00');

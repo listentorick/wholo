@@ -180,12 +180,10 @@ export class OrdersService {
     const { mode, source } = await this.resolveAcceptanceMode(distributor.id, relationship.traderCustomerSettings);
 
     // Revalidate requested delivery date against availability
-    if (dto.requestedDeliveryDate) {
-      const availability = await this.deliveryAvailability.getAvailableDates(distributor.id, traderCustomerId);
-      const isAvailable = availability.dates.some((d) => d.date === dto.requestedDeliveryDate);
-      if (!isAvailable) {
-        throw new UnprocessableEntityException('Requested delivery date is no longer available');
-      }
+    const availability = await this.deliveryAvailability.getAvailableDates(distributor.id, traderCustomerId);
+    const isAvailable = availability.dates.some((d) => d.date === dto.requestedDeliveryDate);
+    if (!isAvailable) {
+      throw new UnprocessableEntityException('Requested delivery date is no longer available');
     }
 
     // Snapshot addresses: billing from Organisation, delivery from TradeRelationship
@@ -290,7 +288,7 @@ export class OrdersService {
           totalAmount,
           billingAddressSnapshot,
           deliveryAddressSnapshot,
-          requestedDeliveryDate: dto.requestedDeliveryDate ? new Date(dto.requestedDeliveryDate) : null,
+          requestedDeliveryDate: new Date(dto.requestedDeliveryDate),
           customerReference: dto.customerReference ?? null,
           notes: dto.notes ?? null,
           submittedAt: now,

@@ -278,7 +278,7 @@ export interface SubmitOrderRequest {
   distributorSlug: string;
   customerReference?: string;
   notes?: string;
-  requestedDeliveryDate?: string;
+  requestedDeliveryDate: string;
 }
 
 export interface AcceptOrderRequest {

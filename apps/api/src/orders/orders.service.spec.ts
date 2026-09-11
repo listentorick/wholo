@@ -11,6 +11,15 @@ import { R2StorageService } from '../asset-images/r2-storage.service';
 const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';
 const USER_ID = 'user-1';
+const AVAILABLE_DATE = '2024-06-14';
+
+function makeAvailability(overrides: Record<string, unknown> = {}) {
+  return {
+    profileId: 'profile-1',
+    dates: [{ date: AVAILABLE_DATE, cutoffDeadline: '2024-06-12T17:00:00.000Z' }],
+    ...overrides,
+  };
+}
 
 function makeDistributor(overrides: Record<string, unknown> = {}) {
   return { id: DISTRIBUTOR_ID, distributorSettings: null, ...overrides };
@@ -75,7 +84,7 @@ describe('OrdersService — delivery date revalidation', () => {
 
     const mockOutbox = { writeEvent: jest.fn() };
     const mockAudit = { record: jest.fn() };
-    const mockDelivery = { getAvailableDates: jest.fn() };
+    const mockDelivery = { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) };
     const mockR2Storage = { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -115,12 +124,6 @@ describe('OrdersService — delivery date revalidation', () => {
       }),
     );
   }
-
-  it('skips delivery revalidation when no requestedDeliveryDate is provided', async () => {
-    setupHappyPath();
-    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: undefined }, USER_ID, CUSTOMER_ID);
-    expect(deliveryAvailability.getAvailableDates).not.toHaveBeenCalled();
-  });
 
   it('accepts order when requested date is in available dates', async () => {
     setupHappyPath();
@@ -162,7 +165,7 @@ describe('OrdersService — delivery date revalidation', () => {
   it('throws NotFoundException when distributor slug is not found', async () => {
     (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
     await expect(
-      service.submitOrder({ distributorSlug: 'bad-slug' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'bad-slug', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).rejects.toThrow(NotFoundException);
   });
 
@@ -172,14 +175,14 @@ describe('OrdersService — delivery date revalidation', () => {
     (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, 'other-dist-id'),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID, undefined, 'other-dist-id'),
     ).rejects.toThrow(ForbiddenException);
   });
 
   it('does not throw when order-as distributorId matches cart distributorId', async () => {
     setupHappyPath();
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, undefined, DISTRIBUTOR_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID, undefined, DISTRIBUTOR_ID),
     ).resolves.toBeDefined();
   });
 
@@ -215,7 +218,7 @@ describe('OrdersService — delivery date revalidation', () => {
       }),
     );
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(orderCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ currency: 'USD' }) }),
@@ -251,7 +254,7 @@ describe('OrdersService — delivery date revalidation', () => {
       }),
     );
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(capturedData?.currency).toBe('GBP');
   });
@@ -261,7 +264,7 @@ describe('OrdersService — delivery date revalidation', () => {
     (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).rejects.toThrow(ForbiddenException);
     expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
   });
@@ -273,7 +276,7 @@ describe('OrdersService — delivery date revalidation', () => {
       (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(makeRelationship({ status }));
 
       await expect(
-        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+        service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
     },
@@ -282,13 +285,13 @@ describe('OrdersService — delivery date revalidation', () => {
   it('succeeds when the relationship is ACTIVE', async () => {
     setupHappyPath();
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).resolves.toBeDefined();
   });
 
   it('writes an OrderSubmitted event with tenant, placing user and acceptance context', async () => {
     setupHappyPath();
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(outbox.writeEvent).toHaveBeenCalledWith(
       expect.anything(),
@@ -314,7 +317,7 @@ describe('OrdersService — delivery date revalidation', () => {
   // already in scope at this exact point (see orders.service.ts submit()).
   it('snapshots order total, currency and item count onto the OrderSubmitted event', async () => {
     setupHappyPath();
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(outbox.writeEvent).toHaveBeenCalledWith(
       expect.anything(),
@@ -334,7 +337,7 @@ describe('OrdersService — delivery date revalidation', () => {
 
   it('flags isOrderedByDelegate in the OrderSubmitted event for order-as submissions', async () => {
     setupHappyPath();
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
 
     expect(outbox.writeEvent).toHaveBeenCalledWith(
       expect.anything(),
@@ -370,7 +373,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
-        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();
@@ -409,7 +412,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     );
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).rejects.toThrow(UnprocessableEntityException);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -421,7 +424,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     );
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).rejects.toThrow(UnprocessableEntityException);
   });
 
@@ -435,7 +438,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     );
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).resolves.toBeDefined();
   });
 
@@ -446,7 +449,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     );
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).resolves.toBeDefined();
   });
 
@@ -454,7 +457,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     setupHappyPath();
 
     await expect(
-      service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+      service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
     ).resolves.toBeDefined();
   });
 });
@@ -489,7 +492,7 @@ describe('OrdersService — tax calculation', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
-        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();
@@ -545,7 +548,7 @@ describe('OrdersService — tax calculation', () => {
       { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD' },
     ]);
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(orderLineCreateManyData[0].subtotalAmount.toFixed(2)).toBe('20.00');
     expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('4.00');
@@ -566,7 +569,7 @@ describe('OrdersService — tax calculation', () => {
       { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD', ratePercentage: new Prisma.Decimal('5.00') },
     ]);
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('2.00'); // 20% of £10, not 5%
   });
@@ -579,7 +582,7 @@ describe('OrdersService — tax calculation', () => {
       { id: 'tax-zero', name: 'Zero-rated', classification: 'ZERO_RATED' },
     ]);
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('0.00');
     expect(orderLineCreateManyData[0].taxClassificationSnapshot).toBe('ZERO_RATED');
@@ -597,7 +600,7 @@ describe('OrdersService — tax calculation', () => {
       { id: 'tax-1', name: 'Standard rate', classification: 'STANDARD' },
     ]);
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     // line-1: £20 net @ 20% = £4 tax; line-2: £5 net @ 20% = £1 tax -> order total £5
     expect(orderCreateData.taxAmount.toFixed(2)).toBe('5.00');
@@ -608,7 +611,7 @@ describe('OrdersService — tax calculation', () => {
   it('does not query TaxType at all when no cart line has a taxTypeId', async () => {
     (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
 
-    await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+    await service.submitOrder({ distributorSlug: 'dist', requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
     expect(prisma.taxType.findMany).not.toHaveBeenCalled();
     expect(orderLineCreateManyData[0].taxAmount.toFixed(2)).toBe('0.00');
@@ -639,7 +642,7 @@ describe('OrdersService — listCustomerOrders', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
-        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();
@@ -780,7 +783,7 @@ describe('OrdersService — getCustomerOrder', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: OutboxService, useValue: { writeEvent: jest.fn() } },
         { provide: AuditService, useValue: { record: jest.fn() } },
-        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();
@@ -940,7 +943,7 @@ describe('OrdersService — cancelCustomerOrder', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: OutboxService, useValue: outbox },
         { provide: AuditService, useValue: audit },
-        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn() } },
+        { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
       ],
     }).compile();

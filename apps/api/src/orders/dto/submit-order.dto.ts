@@ -12,7 +12,6 @@ export class SubmitOrderDto {
   @IsString()
   notes?: string;
 
-  @IsOptional()
   @IsDateString()
-  requestedDeliveryDate?: string;
+  requestedDeliveryDate: string;
 }

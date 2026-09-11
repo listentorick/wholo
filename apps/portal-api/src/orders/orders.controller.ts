@@ -1,7 +1,24 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+export class SubmitOrderDto {
+  @IsString()
+  distributorSlug: string;
+
+  @IsOptional()
+  @IsString()
+  customerReference?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsDateString()
+  requestedDeliveryDate: string;
+}
 
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
@@ -9,9 +26,9 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  submitOrder(@Body() body: unknown, @Req() req: Request) {
+  submitOrder(@Body() dto: SubmitOrderDto, @Req() req: Request) {
     const { token } = req['user'] as { token: string };
-    return this.ordersService.submitOrder(body, token);
+    return this.ordersService.submitOrder(dto, token);
   }
 
   @Get()
