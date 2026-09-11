@@ -29,7 +29,7 @@ export type StorefrontTabsConfig =
       activeSection: string;
       onSelectSection: (id: string) => void;
     }
-  | { mode: 'link' };
+  | { mode: 'link'; activeSection?: string };
 
 interface Props {
   slug: string;
@@ -62,11 +62,17 @@ export function StorefrontTabs({ slug, sections, tabs }: Props) {
     <div className="mx-auto flex w-full max-w-[1280px] items-center md:px-6">
       {sections.map((section) => {
         if (tabs.mode === 'link') {
+          const active = tabs.activeSection === section.id;
           return (
             <Link
               key={section.id}
               href={`/${slug}#${section.id}`}
-              className={`${TAB_BASE} border-transparent text-muted hover:text-foreground`}
+              aria-current={active ? 'true' : undefined}
+              className={`${TAB_BASE} ${
+                active
+                  ? 'border-accent text-foreground'
+                  : 'border-transparent text-muted hover:text-foreground'
+              }`}
             >
               <TabLabel section={section} />
             </Link>

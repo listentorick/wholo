@@ -2,8 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('next/link', () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
-    <a href={href} className={className}>
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode } & Record<string, unknown>) => (
+    <a href={href} {...rest}>
       {children}
     </a>
   ),
@@ -70,5 +70,24 @@ describe('StorefrontTabs — link mode', () => {
     expect(tab('About')).toHaveAttribute('href', '/winos#about');
     expect(tab('Delivery & terms')).toHaveAttribute('href', '/winos#delivery');
     expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/winos/orders');
+  });
+
+  it('has no active tab when no activeSection is given', () => {
+    render(<StorefrontTabs slug="winos" sections={STOREFRONT_SECTIONS} tabs={{ mode: 'link' }} />);
+    expect(tab('Catalogue').className).toContain('border-transparent');
+  });
+
+  it('marks the given activeSection with the cobalt underline and no other', () => {
+    render(
+      <StorefrontTabs
+        slug="winos"
+        sections={STOREFRONT_SECTIONS}
+        tabs={{ mode: 'link', activeSection: 'catalogue' }}
+      />,
+    );
+    expect(tab('Catalogue').className).toContain('border-accent');
+    expect(tab('Catalogue')).toHaveAttribute('aria-current', 'true');
+    expect(tab('About').className).toContain('border-transparent');
+    expect(tab('About')).not.toHaveAttribute('aria-current');
   });
 });

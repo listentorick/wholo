@@ -25,10 +25,12 @@ export function StorefrontChrome({ slug, mode }: { slug: string; mode: 'spy' | '
 
   if (!distributor) return null;
 
+  // In link mode (product detail) there's no scroll to spy on, but a product
+  // page still belongs to the catalogue — highlight that tab statically.
   const tabs: StorefrontTabsConfig =
     mode === 'spy'
       ? { mode: 'spy', activeSection, onSelectSection: scrollToSection }
-      : { mode: 'link' };
+      : { mode: 'link', activeSection: 'catalogue' };
 
   return (
     <>

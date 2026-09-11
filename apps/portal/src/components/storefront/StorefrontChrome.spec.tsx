@@ -19,7 +19,11 @@ vi.mock('@/lib/hooks/use-scroll-spy', () => ({ useScrollSpy: (a: string[], b: bo
 vi.mock('./CoverBanner', () => ({ CoverBanner: () => <div data-testid="cover" /> }));
 vi.mock('./ShopHeader', () => ({ ShopHeader: () => <div data-testid="shop-header" /> }));
 vi.mock('./StickyShopBlock', () => ({
-  StickyShopBlock: ({ tabs }: { tabs: { mode: string } }) => <div data-testid="sticky-block">{tabs.mode}</div>,
+  StickyShopBlock: ({ tabs }: { tabs: { mode: string; activeSection?: string } }) => (
+    <div data-testid="sticky-block" data-active-section={tabs.activeSection}>
+      {tabs.mode}
+    </div>
+  ),
 }));
 
 import { StorefrontChrome } from './StorefrontChrome';
@@ -42,6 +46,11 @@ describe('StorefrontChrome', () => {
     expect(screen.getByTestId('shop-header')).toBeInTheDocument();
     expect(screen.getByTestId('sticky-block')).toHaveTextContent('link');
     expect(useScrollSpy).toHaveBeenCalledWith(['catalogue', 'about', 'delivery'], false);
+  });
+
+  it('highlights the Catalogue tab in link mode — a product page belongs to the catalogue', () => {
+    render(<StorefrontChrome slug="winos" mode="link" />);
+    expect(screen.getByTestId('sticky-block')).toHaveAttribute('data-active-section', 'catalogue');
   });
 
   it('runs the scroll-spy and passes spy tabs in spy mode', () => {
