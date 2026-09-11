@@ -102,7 +102,7 @@ export default function ProductDetailPage() {
   if (error || !product) {
     return (
       <>
-        <StorefrontChrome slug={distributorSlug} tabs={{ mode: 'link' }} />
+        <StorefrontChrome slug={distributorSlug} mode="link" />
         <div className={`${CONTENT} text-center`}>
           <p className="text-sm text-muted">{error ?? 'Product not found.'}</p>
         </div>
@@ -138,7 +138,7 @@ export default function ProductDetailPage() {
         }
       `}</style>
 
-      <StorefrontChrome slug={distributorSlug} tabs={{ mode: 'link' }} />
+      <StorefrontChrome slug={distributorSlug} mode="link" />
 
       <div className={CONTENT}>
         <div className="flex w-full flex-col gap-4 md:gap-5">

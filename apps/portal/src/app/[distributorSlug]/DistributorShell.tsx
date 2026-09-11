@@ -3,6 +3,7 @@
 import { CartProvider } from '@/lib/cart-context';
 import { useAuth } from '@/lib/auth-context';
 import { DistributorProvider, useDistributor } from '@/lib/distributor-context';
+import { StorefrontSearchProvider } from '@/lib/storefront-search';
 import { PortalTopBar } from '@/components/portal/PortalTopBar';
 import { PlatformNavStrip } from '@/components/portal/PlatformNavStrip';
 import { PortalFooter } from '@/components/portal/PortalFooter';
@@ -19,7 +20,9 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
       <OrderAsHandler />
       <PortalTopBar variant="distributor" />
       <PlatformNavStrip slug={distributorSlug} distributorName={distributor?.name} />
-      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      <StorefrontSearchProvider>
+        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      </StorefrontSearchProvider>
       <PortalFooter />
     </div>
   );

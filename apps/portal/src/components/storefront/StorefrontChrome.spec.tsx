@@ -9,10 +9,13 @@ let mockCtx: {
   setShopHeaderScrolledPast: () => void;
 };
 
+const useScrollSpy = vi.fn((_a: string[], _b: boolean) => ['catalogue', vi.fn()]);
+
 vi.mock('@/lib/distributor-context', async () => {
   const actual = await vi.importActual<typeof import('@/lib/distributor-context')>('@/lib/distributor-context');
   return { ...actual, useDistributor: () => mockCtx };
 });
+vi.mock('@/lib/hooks/use-scroll-spy', () => ({ useScrollSpy: (a: string[], b: boolean) => useScrollSpy(a, b) }));
 vi.mock('./CoverBanner', () => ({ CoverBanner: () => <div data-testid="cover" /> }));
 vi.mock('./ShopHeader', () => ({ ShopHeader: () => <div data-testid="shop-header" /> }));
 vi.mock('./StickyShopBlock', () => ({
@@ -22,6 +25,8 @@ vi.mock('./StickyShopBlock', () => ({
 import { StorefrontChrome } from './StorefrontChrome';
 
 beforeEach(() => {
+  vi.clearAllMocks();
+  useScrollSpy.mockReturnValue(['catalogue', vi.fn()]);
   mockCtx = {
     distributor: { name: 'Winos', bannerUrl: null } as DistributorInfo,
     relationshipStatus: 'ACTIVE',
@@ -31,16 +36,23 @@ beforeEach(() => {
 });
 
 describe('StorefrontChrome', () => {
-  it('renders the cover banner, shop header and sticky block', () => {
-    render(<StorefrontChrome slug="winos" tabs={{ mode: 'link' }} />);
+  it('renders the cover banner, shop header and sticky block; link mode disables the spy', () => {
+    render(<StorefrontChrome slug="winos" mode="link" />);
     expect(screen.getByTestId('cover')).toBeInTheDocument();
     expect(screen.getByTestId('shop-header')).toBeInTheDocument();
     expect(screen.getByTestId('sticky-block')).toHaveTextContent('link');
+    expect(useScrollSpy).toHaveBeenCalledWith(['catalogue', 'about', 'delivery'], false);
+  });
+
+  it('runs the scroll-spy and passes spy tabs in spy mode', () => {
+    render(<StorefrontChrome slug="winos" mode="spy" />);
+    expect(useScrollSpy).toHaveBeenCalledWith(['catalogue', 'about', 'delivery'], true);
+    expect(screen.getByTestId('sticky-block')).toHaveTextContent('spy');
   });
 
   it('renders nothing until the distributor is loaded', () => {
     mockCtx.distributor = null;
-    const { container } = render(<StorefrontChrome slug="winos" tabs={{ mode: 'link' }} />);
+    const { container } = render(<StorefrontChrome slug="winos" mode="link" />);
     expect(container.firstChild).toBeNull();
   });
 });

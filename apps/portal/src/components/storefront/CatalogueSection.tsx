@@ -1,11 +1,12 @@
 'use client';
 
 import type { CatalogueProduct } from '@wholo/types';
+import { useStorefrontSearch } from '@/lib/storefront-search';
 import { Eyebrow } from '@/components/Eyebrow';
 import { Button } from '@/components/Button';
 import { PageSpinner } from '@/components/PageShell';
-import { SearchInput } from '@/components/SearchInput';
 import { ProductCard } from './ProductCard';
+import { CatalogueSearchField } from './CatalogueSearchField';
 
 interface Props {
   slug: string;
@@ -20,12 +21,6 @@ interface Props {
   hasMore: boolean;
   onLoadMore: () => void;
   error: string | null;
-  /** Search field — rendered here only on mobile; desktop keeps it in the sticky tab row. */
-  search: string;
-  onSearchChange: (value: string) => void;
-  productCount: number | null;
-  searchActive: boolean;
-  searchTerm: string;
 }
 
 /**
@@ -46,12 +41,10 @@ export function CatalogueSection({
   hasMore,
   onLoadMore,
   error,
-  search,
-  onSearchChange,
-  productCount,
-  searchActive,
-  searchTerm,
 }: Props) {
+  const { debouncedSearch } = useStorefrontSearch();
+  const searchActive = debouncedSearch.length > 0;
+
   return (
     <section
       id="catalogue"
@@ -80,12 +73,7 @@ export function CatalogueSection({
 
       <Eyebrow className="mb-4">Catalogue</Eyebrow>
 
-      <SearchInput
-        value={search}
-        onChange={onSearchChange}
-        placeholder={productCount != null ? `Search all ${productCount} products` : 'Search products…'}
-        className="mb-5 md:hidden"
-      />
+      <CatalogueSearchField className="mb-5 md:hidden" />
 
       {error ? (
         <p className="py-16 text-center text-sm text-muted">{error}</p>
@@ -97,7 +85,7 @@ export function CatalogueSection({
         <div className="py-16 text-center">
           {searchActive ? (
             <>
-              <p className="text-sm font-medium text-foreground">No products match &ldquo;{searchTerm}&rdquo;</p>
+              <p className="text-sm font-medium text-foreground">No products match &ldquo;{debouncedSearch}&rdquo;</p>
               <p className="mt-1 text-xs text-muted">Try a different search term</p>
             </>
           ) : (

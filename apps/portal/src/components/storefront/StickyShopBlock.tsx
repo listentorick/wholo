@@ -5,25 +5,17 @@ import Link from 'next/link';
 import { Search } from 'lucide-react';
 import type { DistributorInfo } from '@wholo/types';
 import type { RelationshipStatus } from '@/lib/distributor-context';
-import { SearchInput } from '@/components/SearchInput';
 import { CondensedShopHeader } from './CondensedShopHeader';
 import { StorefrontTabs, STOREFRONT_SECTIONS, type StorefrontTabsConfig } from './StorefrontTabs';
+import { CatalogueSearchField } from './CatalogueSearchField';
 import { AmberOrderByBar } from './AmberOrderByBar';
-
-export type StickyBlockTabs =
-  | (Extract<StorefrontTabsConfig, { mode: 'spy' }> & {
-      search: string;
-      onSearchChange: (value: string) => void;
-      productCount: number | null;
-    })
-  | Extract<StorefrontTabsConfig, { mode: 'link' }>;
 
 interface Props {
   slug: string;
   distributor: DistributorInfo;
   relationshipStatus: RelationshipStatus | null;
   scrolledPast: boolean;
-  tabs: StickyBlockTabs;
+  tabs: StorefrontTabsConfig;
 }
 
 /**
@@ -32,8 +24,8 @@ interface Props {
  * search → the amber order-by bar. Publishes its own height as `--sticky-stack-h`
  * so the sections can set `scroll-margin-top` and land in the right place.
  *
- * Shared by the storefront (tabs scroll-spy) and its sub-pages like product
- * detail (tabs link back to `/{slug}#…`).
+ * Shared by the storefront (tabs scroll-spy, real search) and its sub-pages like
+ * product detail (tabs link back to `/{slug}#…`, search is a link to the catalogue).
  */
 export function StickyShopBlock({ slug, distributor, relationshipStatus, scrolledPast, tabs }: Props) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,11 +44,6 @@ export function StickyShopBlock({ slug, distributor, relationshipStatus, scrolle
     };
   }, []);
 
-  const tabsConfig: StorefrontTabsConfig =
-    tabs.mode === 'spy'
-      ? { mode: 'spy', activeSection: tabs.activeSection, onSelectSection: tabs.onSelectSection }
-      : { mode: 'link' };
-
   return (
     <div ref={ref} className="sticky top-[var(--orderas-h,0px)] z-30 bg-page">
       <CondensedShopHeader
@@ -67,20 +54,13 @@ export function StickyShopBlock({ slug, distributor, relationshipStatus, scrolle
 
       <div className="border-b border-border bg-surface">
         <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-4 md:px-2">
-          <StorefrontTabs slug={slug} sections={STOREFRONT_SECTIONS} tabs={tabsConfig} />
+          <StorefrontTabs slug={slug} sections={STOREFRONT_SECTIONS} tabs={tabs} />
 
           {/* Desktop keeps the search in the sticky row (per the mock); mobile
               gets it at the top of the catalogue section instead. On sub-pages
               the field is a link back to the catalogue. */}
           {tabs.mode === 'spy' ? (
-            <SearchInput
-              value={tabs.search}
-              onChange={tabs.onSearchChange}
-              placeholder={
-                tabs.productCount != null ? `Search all ${tabs.productCount} products` : 'Search products…'
-              }
-              className="hidden w-full max-w-xs flex-shrink-0 md:block"
-            />
+            <CatalogueSearchField className="hidden w-full max-w-xs flex-shrink-0 md:block" />
           ) : (
             <Link
               href={`/${slug}#catalogue`}

@@ -1,24 +1,34 @@
 'use client';
 
 import { useDistributor } from '@/lib/distributor-context';
+import { useScrollSpy } from '@/lib/hooks/use-scroll-spy';
 import { CoverBanner } from './CoverBanner';
 import { ShopHeader } from './ShopHeader';
-import { StickyShopBlock, type StickyBlockTabs } from './StickyShopBlock';
+import { StickyShopBlock } from './StickyShopBlock';
+import { STOREFRONT_SECTIONS, type StorefrontTabsConfig } from './StorefrontTabs';
+
+const SECTION_IDS = STOREFRONT_SECTIONS.map((s) => s.id);
 
 /**
  * The distributor storefront chrome — cover banner, shop header, and the sticky
- * block (condensed header + tabs + amber order-by bar). Shared by the storefront
- * page (tabs scroll-spy) and its sub-pages like product detail (tabs link back
- * to `/{slug}#…`) so every distributor page reads as the same storefront.
+ * block (condensed header + tabs + amber order-by bar). Rendered once in the
+ * distributor layout (`DistributorMain`) so it persists across storefront ⇄
+ * product navigation without remounting.
  *
- * Reads the distributor / relationship / scroll context itself; the caller only
- * decides how the tabs behave.
+ * - `mode="spy"`  — on the storefront route: tabs scroll-spy the in-page sections.
+ * - `mode="link"` — on sub-pages (product detail): tabs link back to `/{slug}#…`.
  */
-export function StorefrontChrome({ slug, tabs }: { slug: string; tabs: StickyBlockTabs }) {
+export function StorefrontChrome({ slug, mode }: { slug: string; mode: 'spy' | 'link' }) {
   const { distributor, relationshipStatus, shopHeaderScrolledPast, setShopHeaderScrolledPast } =
     useDistributor();
+  const [activeSection, scrollToSection] = useScrollSpy(SECTION_IDS, mode === 'spy');
 
   if (!distributor) return null;
+
+  const tabs: StorefrontTabsConfig =
+    mode === 'spy'
+      ? { mode: 'spy', activeSection, onSelectSection: scrollToSection }
+      : { mode: 'link' };
 
   return (
     <>

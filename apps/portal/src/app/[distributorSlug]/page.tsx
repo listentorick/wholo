@@ -7,23 +7,19 @@ import { TradeRelationshipStatus, type CatalogueProduct } from '@wholo/types';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { useDistributor } from '@/lib/distributor-context';
 import { useCart } from '@/lib/cart-context';
-import { useScrollSpy } from '@/lib/hooks/use-scroll-spy';
+import { useStorefrontSearch } from '@/lib/storefront-search';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
-import { STOREFRONT_SECTIONS } from '@/components/storefront/StorefrontTabs';
 import { CatalogueSection } from '@/components/storefront/CatalogueSection';
 import { AboutSection } from '@/components/storefront/AboutSection';
 import { DeliveryTermsSection } from '@/components/storefront/DeliveryTermsSection';
 
-const SECTION_IDS = STOREFRONT_SECTIONS.map((s) => s.id);
 const PAGE_SIZE = 24;
-const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * The distributor storefront — one scrolling page. Storefront chrome (cover
- * banner, shop header, sticky tabs + amber bar) then the Catalogue / About /
- * Delivery & terms sections the tabs scroll between. Sub-pages (product detail,
- * …) render the same `StorefrontChrome` with `tabs={{ mode: 'link' }}`.
+ * The distributor storefront — one scrolling page: Catalogue / About /
+ * Delivery & terms. The storefront chrome (cover banner, shop header, sticky
+ * tabs + amber bar) is rendered by the distributor layout, not here.
  */
 export default function StorefrontPage() {
   const params = useParams();
@@ -33,23 +29,15 @@ export default function StorefrontPage() {
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}`);
   const { distributor, relationshipStatus } = useDistributor();
   const { quantities, savingItems, syncItem } = useCart();
+  const { debouncedSearch, setProductCount } = useStorefrontSearch();
 
   const isActive = relationshipStatus === TradeRelationshipStatus.ACTIVE;
-  const [activeSection, scrollToSection] = useScrollSpy(SECTION_IDS, !!distributor);
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [products, setProducts] = useState<CatalogueProduct[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [catalogueLoading, setCatalogueLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [catalogueError, setCatalogueError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [search]);
 
   useEffect(() => {
     if (!user || !accessToken) return;
@@ -64,7 +52,7 @@ export default function StorefrontPage() {
       .then((res) => {
         if (cancelled) return;
         setProducts(res.data);
-        setTotal(res.pagination.total);
+        setProductCount(res.pagination.total);
         setNextCursor(res.pagination.hasMore ? res.pagination.nextCursor : null);
       })
       .catch(() => {
@@ -76,7 +64,7 @@ export default function StorefrontPage() {
     return () => {
       cancelled = true;
     };
-  }, [distributorSlug, user, accessToken, debouncedSearch]);
+  }, [distributorSlug, user, accessToken, debouncedSearch, setProductCount]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
@@ -96,14 +84,6 @@ export default function StorefrontPage() {
     }
   }, [distributorSlug, nextCursor, loadingMore, debouncedSearch]);
 
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearch(value);
-      if (value && activeSection !== 'catalogue') scrollToSection('catalogue');
-    },
-    [activeSection, scrollToSection],
-  );
-
   if (authLoading || !distributor) {
     return (
       <PageShell center>
@@ -115,17 +95,7 @@ export default function StorefrontPage() {
 
   return (
     <>
-      <StorefrontChrome
-        slug={distributorSlug}
-        tabs={{
-          mode: 'spy',
-          activeSection,
-          onSelectSection: scrollToSection,
-          search,
-          onSearchChange: handleSearchChange,
-          productCount: total,
-        }}
-      />
+      <StorefrontChrome slug={distributorSlug} mode="spy" />
 
       <CatalogueSection
         slug={distributorSlug}
@@ -140,11 +110,6 @@ export default function StorefrontPage() {
         hasMore={nextCursor !== null}
         onLoadMore={loadMore}
         error={catalogueError}
-        search={search}
-        onSearchChange={handleSearchChange}
-        productCount={total}
-        searchActive={debouncedSearch.length > 0}
-        searchTerm={debouncedSearch}
       />
 
       <AboutSection distributor={distributor} relationshipStatus={relationshipStatus} />

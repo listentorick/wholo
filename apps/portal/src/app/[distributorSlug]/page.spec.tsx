@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { DistributorInfo } from '@wholo/types';
 
@@ -25,24 +25,17 @@ vi.mock('@/lib/cart-context', () => ({
   useCart: () => ({ quantities: {}, savingItems: new Set(), syncItem: vi.fn() }),
 }));
 
+let mockSearch: { debouncedSearch: string; setProductCount: ReturnType<typeof vi.fn> };
+vi.mock('@/lib/storefront-search', () => ({ useStorefrontSearch: () => mockSearch }));
+
 const getProducts = vi.fn();
 vi.mock('@wholo/api-client', () => ({
   catalogueApi: { getProducts: (...args: unknown[]) => getProducts(...args) },
 }));
 
-// Keep the chrome shallow — this spec is about orchestration + data flow.
+// Keep the chrome + sections shallow — this spec is about orchestration + data flow.
 vi.mock('@/components/storefront/StorefrontChrome', () => ({
-  StorefrontChrome: ({
-    tabs,
-  }: {
-    tabs: { mode: string; search?: string; onSearchChange?: (v: string) => void };
-  }) => (
-    <input
-      aria-label="in-shop search"
-      value={tabs.search ?? ''}
-      onChange={(e) => tabs.onSearchChange?.(e.target.value)}
-    />
-  ),
+  StorefrontChrome: ({ mode }: { mode: string }) => <div data-testid="chrome">{mode}</div>,
 }));
 vi.mock('@/components/storefront/AboutSection', () => ({
   AboutSection: () => <div data-testid="about-section" data-order="2" />,
@@ -62,13 +55,20 @@ vi.mock('@/components/storefront/CatalogueSection', () => ({
 
 import StorefrontPage from './page';
 
-const distributor = { id: 'd1', name: 'Winos', slug: 'winos', currencyCode: 'GBP', bannerUrl: null, bannerDominantColor: null } as DistributorInfo;
+const distributor = {
+  id: 'd1',
+  name: 'Winos',
+  slug: 'winos',
+  currencyCode: 'GBP',
+  bannerUrl: null,
+} as DistributorInfo;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuthLoading = false;
   mockUser = { id: 'u1', organisationId: 'org-1' };
   mockDistributor = distributor;
+  mockSearch = { debouncedSearch: '', setProductCount: vi.fn() };
   getProducts.mockResolvedValue({
     data: [{ id: 'p1', name: 'Pinot Noir' }],
     pagination: { total: 1, hasMore: false, nextCursor: null },
@@ -85,19 +85,21 @@ describe('StorefrontPage', () => {
     await Promise.resolve();
   });
 
-  it('renders the bands in order: catalogue → about → delivery', async () => {
+  it('renders the chrome (spy mode) then the bands in order: catalogue → about → delivery', async () => {
     render(<StorefrontPage />);
     await waitFor(() => expect(screen.getByText('Pinot Noir')).toBeInTheDocument());
-    const orders = screen
-      .getAllByTestId(/section$/)
-      .map((el) => el.getAttribute('data-order'));
+    expect(screen.getByTestId('chrome')).toHaveTextContent('spy');
+    const orders = screen.getAllByTestId(/section$/).map((el) => el.getAttribute('data-order'));
     expect(orders).toEqual(['1', '2', '3']);
   });
 
-  it('loads the first catalogue page and re-queries on debounced search', async () => {
-    render(<StorefrontPage />);
+  it('loads the first catalogue page, publishes the total, and re-queries on debounced search', async () => {
+    const { rerender } = render(<StorefrontPage />);
     await waitFor(() => expect(getProducts).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText('in-shop search'), { target: { value: 'rioja' } });
+    await waitFor(() => expect(mockSearch.setProductCount).toHaveBeenCalledWith(1));
+
+    mockSearch = { ...mockSearch, debouncedSearch: 'rioja' };
+    rerender(<StorefrontPage />);
     await waitFor(() =>
       expect(getProducts).toHaveBeenLastCalledWith('winos', expect.objectContaining({ search: 'rioja' })),
     );
