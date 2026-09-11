@@ -90,4 +90,32 @@ describe('StorefrontTabs — link mode', () => {
     expect(tab('About').className).toContain('border-transparent');
     expect(tab('About')).not.toHaveAttribute('aria-current');
   });
+
+  it('marks the Orders link active when activeSection is "orders", and no section tab is active', () => {
+    render(
+      <StorefrontTabs
+        slug="winos"
+        sections={STOREFRONT_SECTIONS}
+        tabs={{ mode: 'link', activeSection: 'orders' }}
+      />,
+    );
+    const ordersLink = screen.getByRole('link', { name: 'Orders' });
+    expect(ordersLink.className).toContain('border-accent');
+    expect(ordersLink).toHaveAttribute('aria-current', 'true');
+    expect(tab('Catalogue').className).toContain('border-transparent');
+    expect(tab('Catalogue')).not.toHaveAttribute('aria-current');
+  });
+
+  it('leaves the Orders link inactive when activeSection is "catalogue"', () => {
+    render(
+      <StorefrontTabs
+        slug="winos"
+        sections={STOREFRONT_SECTIONS}
+        tabs={{ mode: 'link', activeSection: 'catalogue' }}
+      />,
+    );
+    const ordersLink = screen.getByRole('link', { name: 'Orders' });
+    expect(ordersLink.className).toContain('border-transparent');
+    expect(ordersLink).not.toHaveAttribute('aria-current');
+  });
 });

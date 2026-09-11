@@ -75,8 +75,16 @@ describe('DistributorShell', () => {
     expect(screen.getByTestId('chrome')).toHaveTextContent('link');
   });
 
-  it('does NOT render the storefront chrome on orders / checkout / the products redirect', () => {
-    for (const path of [`/${slug}/orders`, `/${slug}/orders/o1`, `/${slug}/checkout`, `/${slug}/products`]) {
+  it('renders the storefront chrome in link mode on orders routes', () => {
+    for (const path of [`/${slug}/orders`, `/${slug}/orders/o1`]) {
+      const { unmount } = renderShell(path);
+      expect(screen.getByTestId('chrome')).toHaveTextContent('link');
+      unmount();
+    }
+  });
+
+  it('does NOT render the storefront chrome on checkout or the bare products redirect', () => {
+    for (const path of [`/${slug}/checkout`, `/${slug}/products`]) {
       const { unmount } = renderShell(path);
       expect(screen.queryByTestId('chrome')).toBeNull();
       unmount();

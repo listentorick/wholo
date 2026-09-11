@@ -53,6 +53,11 @@ describe('StorefrontChrome', () => {
     expect(screen.getByTestId('sticky-block')).toHaveAttribute('data-active-section', 'catalogue');
   });
 
+  it('highlights the Orders tab in link mode when activeTab="orders"', () => {
+    render(<StorefrontChrome slug="winos" mode="link" activeTab="orders" />);
+    expect(screen.getByTestId('sticky-block')).toHaveAttribute('data-active-section', 'orders');
+  });
+
   it('runs the scroll-spy and passes spy tabs in spy mode', () => {
     render(<StorefrontChrome slug="winos" mode="spy" />);
     expect(useScrollSpy).toHaveBeenCalledWith(['catalogue', 'about', 'delivery'], true);

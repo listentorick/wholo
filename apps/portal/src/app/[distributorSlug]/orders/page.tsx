@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
-import { Hash, Calendar, Truck, FileText, Banknote, CircleDot } from 'lucide-react';
+import { Calendar, Truck } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { ordersApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
@@ -10,6 +10,10 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { OrderStatusBadge } from '@/components/OrderStatusBadge';
 import { OrderStatus, formatMoney } from '@wholo/types';
 import type { OrderSummary, OrderInvoiceSummary } from '@wholo/types';
+
+/** Same centred gutter as the storefront sections (the storefront chrome above
+ *  this content is rendered by the distributor layout). */
+const CONTENT = 'mx-auto w-full max-w-[1280px] px-4 py-8 md:px-8';
 
 const STATUS_FILTERS: { label: string; value: OrderStatus | null }[] = [
   { label: 'All', value: null },
@@ -31,40 +35,18 @@ function invoiceStatusLabel(summary: OrderInvoiceSummary | null | undefined) {
   }
 }
 
-function invoiceStatusColor(summary: OrderInvoiceSummary | null | undefined) {
-  if (!summary) return '#D1D5DB';
-  switch (summary.status) {
-    case 'COMPLETED':
-      return 'hsl(var(--color-success))';
-    case 'FAILED':
-      return '#DC2626';
-    default:
-      return '#F59E0B';
-  }
-}
-
 function InvoiceCell({ summary }: { summary: OrderInvoiceSummary | null | undefined }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-xs text-foreground-tertiary">
-      <span
-        style={{ width: 6, height: 6, borderRadius: 9999, background: invoiceStatusColor(summary), flexShrink: 0 }}
-        aria-hidden="true"
-      />
-      {invoiceStatusLabel(summary)}
-    </span>
-  );
+  return <span className="text-sm text-foreground-tertiary">{invoiceStatusLabel(summary)}</span>;
 }
 
-function Th({ icon, align = 'left', children }: { icon: React.ReactNode; align?: 'left' | 'right'; children: React.ReactNode }) {
+function Th({ align = 'left', children }: { align?: 'left' | 'right'; children: React.ReactNode }) {
   return (
     <th
-      className={`px-3 py-2.5 ${align === 'right' ? 'text-right' : 'text-left'}`}
-      style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#9CA3AF' }}
+      className={`px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-foreground-tertiary ${
+        align === 'right' ? 'text-right' : 'text-left'
+      }`}
     >
-      <span className={`inline-flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}>
-        {icon}
-        {children}
-      </span>
+      {children}
     </th>
   );
 }
@@ -192,7 +174,7 @@ export default function OrdersPage() {
         .ol-row:hover { background: hsl(var(--color-primary-subtle)); }
       `}</style>
 
-      <PageShell width="full">
+      <div className={CONTENT}>
         <div className="flex flex-1 flex-col gap-4">
           <Eyebrow>Order history</Eyebrow>
 
@@ -284,12 +266,12 @@ export default function OrdersPage() {
                       <OrdersColGroup />
                       <thead>
                         <tr className="border-b border-border bg-topbar-bg">
-                          <Th icon={<Hash className="h-3.5 w-3.5" strokeWidth={1.5} />}>Order</Th>
-                          <Th icon={<Calendar className="h-3.5 w-3.5" strokeWidth={1.5} />}>Order Date</Th>
-                          <Th icon={<Truck className="h-3.5 w-3.5" strokeWidth={1.5} />}>Delivery Date</Th>
-                          <Th icon={<FileText className="h-3.5 w-3.5" strokeWidth={1.5} />}>Invoice</Th>
-                          <Th icon={<Banknote className="h-3.5 w-3.5" strokeWidth={1.5} />} align="right">Amount</Th>
-                          <Th icon={<CircleDot className="h-3.5 w-3.5" strokeWidth={1.5} />}>Status</Th>
+                          <Th>Order</Th>
+                          <Th>Order Date</Th>
+                          <Th>Delivery Date</Th>
+                          <Th>Invoice</Th>
+                          <Th align="right">Amount</Th>
+                          <Th>Status</Th>
                         </tr>
                       </thead>
                       <tbody>
@@ -305,10 +287,10 @@ export default function OrdersPage() {
                               <td className="truncate px-3 py-3 text-sm font-medium text-foreground">
                                 {order.orderNumber}
                               </td>
-                              <td className="px-3 py-3 text-xs text-foreground-tertiary">
+                              <td className="px-3 py-3 text-sm text-foreground-tertiary">
                                 {fmtDate(order.submittedAt ?? order.createdAt)}
                               </td>
-                              <td className="px-3 py-3 text-xs text-foreground-tertiary">
+                              <td className="px-3 py-3 text-sm text-foreground-tertiary">
                                 {order.requestedDeliveryDate ? fmtDate(order.requestedDeliveryDate) : '—'}
                               </td>
                               <td className="px-3 py-3">
@@ -379,7 +361,7 @@ export default function OrdersPage() {
               </>
             )}
         </div>
-      </PageShell>
+      </div>
     </>
   );
 }

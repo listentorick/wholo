@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import { Truck } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
-import { PageSubHeader } from '@/components/PageSubHeader';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { Eyebrow } from '@/components/Eyebrow';
 import { ordersApi, ApiError } from '@wholo/api-client';
@@ -15,12 +14,16 @@ import { formatAddress } from '@/lib/format-address';
 /** White 8px card — matches the checkout / product-detail restyle language. */
 const CARD = 'od-section rounded-lg border border-border bg-surface p-5 shadow-sm';
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
-  SUBMITTED: { color: 'hsl(var(--color-accent))', bg: 'hsl(var(--color-accent-light))', border: 'hsl(var(--color-accent-border))', label: 'Awaiting Confirmation' },
-  ACCEPTED:  { color: '#16A34A', bg: '#DCFCE7', border: '#BBF7D0', label: 'Confirmed'   },
-  REJECTED:  { color: '#DC2626', bg: '#FEE2E2', border: '#FECACA', label: 'Rejected'    },
-  CANCELLED: { color: '#6B7280', bg: '#F3F4F6', border: '#E5E7EB', label: 'Cancelled'   },
-  COMPLETED: { color: '#2563EB', bg: '#DBEAFE', border: '#BFDBFE', label: 'Completed'   },
+/** Same centred gutter as the storefront sections (the storefront chrome above
+ *  this content is rendered by the distributor layout). */
+const CONTENT = 'mx-auto w-full max-w-[1280px] px-4 py-8 md:px-8';
+
+const STATUS_CONFIG: Record<string, { text: string; bg: string; border: string; label: string }> = {
+  SUBMITTED: { text: 'text-amber',   bg: 'bg-amber-light',       border: 'border-amber-border', label: 'Awaiting Confirmation' },
+  ACCEPTED:  { text: 'text-success', bg: 'bg-success/10',        border: 'border-success/30',   label: 'Confirmed'   },
+  REJECTED:  { text: 'text-error',   bg: 'bg-error/10',          border: 'border-error/30',     label: 'Rejected'    },
+  CANCELLED: { text: 'text-muted',   bg: 'bg-canvas',            border: 'border-border',       label: 'Cancelled'   },
+  COMPLETED: { text: 'text-navy',    bg: 'bg-surface-highlight', border: 'border-highlight',    label: 'Completed'   },
 };
 
 function fmtDate(iso: string | null | undefined) {
@@ -91,12 +94,9 @@ export default function OrderDetailPage() {
 
   if (error || !order) {
     return (
-      <>
-        <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title="Order" />
-        <PageShell center className="px-6 text-center">
-          <p className="text-sm text-foreground-tertiary">{error ?? 'Order not found'}</p>
-        </PageShell>
-      </>
+      <div className={`${CONTENT} text-center`}>
+        <p className="text-sm text-foreground-tertiary">{error ?? 'Order not found'}</p>
+      </div>
     );
   }
 
@@ -132,23 +132,18 @@ export default function OrderDetailPage() {
         }
       `}</style>
 
-      <PageSubHeader backLabel="Orders" backHref={`/${distributorSlug}/orders`} title={order.orderNumber} />
-
-      <PageShell width="full">
+      <div className={CONTENT}>
         <div className="flex w-full flex-col gap-4 md:gap-5">
 
           {/* Status banner */}
           <div
-            className="od-section rounded-lg border px-4 py-3.5"
-            style={{ animationDelay: '0.05s', background: sc.bg, borderColor: sc.border }}
+            className={`od-section rounded-lg border px-4 py-3.5 ${sc.bg} ${sc.border}`}
+            style={{ animationDelay: '0.05s' }}
           >
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.1em]"
-              style={{ color: sc.color }}
-            >
+            <p className={`text-[10px] font-bold uppercase tracking-[0.1em] ${sc.text}`}>
               {sc.label}
             </p>
-            <p className="mt-1 text-[13px]" style={{ color: sc.color, opacity: 0.85 }}>
+            <p className={`mt-1 text-[13px] opacity-[0.85] ${sc.text}`}>
               {order.status === 'SUBMITTED' && 'Awaiting confirmation from the distributor'}
               {order.status === 'ACCEPTED' && `Confirmed on ${fmtDate(order.acceptedAt)}`}
               {order.status === 'REJECTED' && (
@@ -295,7 +290,7 @@ export default function OrderDetailPage() {
           )}
 
         </div>
-      </PageShell>
+      </div>
     </>
   );
 }

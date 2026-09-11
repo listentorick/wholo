@@ -18,19 +18,29 @@ const SECTION_IDS = STOREFRONT_SECTIONS.map((s) => s.id);
  * - `mode="spy"`  — on the storefront route: tabs scroll-spy the in-page sections.
  * - `mode="link"` — on sub-pages (product detail): tabs link back to `/{slug}#…`.
  */
-export function StorefrontChrome({ slug, mode }: { slug: string; mode: 'spy' | 'link' }) {
+export function StorefrontChrome({
+  slug,
+  mode,
+  activeTab = 'catalogue',
+}: {
+  slug: string;
+  mode: 'spy' | 'link';
+  /** Which tab to statically highlight in link mode: product detail belongs to
+   *  the catalogue, orders pages highlight the Orders tab instead. */
+  activeTab?: 'catalogue' | 'orders';
+}) {
   const { distributor, relationshipStatus, shopHeaderScrolledPast, setShopHeaderScrolledPast } =
     useDistributor();
   const [activeSection, scrollToSection] = useScrollSpy(SECTION_IDS, mode === 'spy');
 
   if (!distributor) return null;
 
-  // In link mode (product detail) there's no scroll to spy on, but a product
-  // page still belongs to the catalogue — highlight that tab statically.
+  // In link mode there's no scroll to spy on, so the caller tells us statically
+  // which tab the current sub-page belongs to (defaults to catalogue).
   const tabs: StorefrontTabsConfig =
     mode === 'spy'
       ? { mode: 'spy', activeSection, onSelectSection: scrollToSection }
-      : { mode: 'link', activeSection: 'catalogue' };
+      : { mode: 'link', activeSection: activeTab };
 
   return (
     <>

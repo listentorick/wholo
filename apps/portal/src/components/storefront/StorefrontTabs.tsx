@@ -58,6 +58,8 @@ function TabLabel({ section }: { section: StorefrontSection }) {
  * active anchor gets the Cobalt underline (never amber — the Warm Spark Rule).
  */
 export function StorefrontTabs({ slug, sections, tabs }: Props) {
+  const ordersActive = tabs.mode === 'link' && tabs.activeSection === 'orders';
+
   return (
     <div className="mx-auto flex w-full max-w-[1280px] items-center md:px-6">
       {sections.map((section) => {
@@ -97,7 +99,12 @@ export function StorefrontTabs({ slug, sections, tabs }: Props) {
       })}
       <Link
         href={`/${slug}/orders`}
-        className={`${TAB_BASE} border-transparent text-muted hover:text-foreground`}
+        aria-current={ordersActive ? 'true' : undefined}
+        className={`${TAB_BASE} ${
+          ordersActive
+            ? 'border-accent text-foreground'
+            : 'border-transparent text-muted hover:text-foreground'
+        }`}
       >
         Orders
       </Link>

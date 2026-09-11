@@ -23,11 +23,12 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
   const pathname = usePathname() ?? '';
 
   // The storefront chrome lives here (not in the pages) so it never remounts when
-  // navigating between the storefront and a product page. Shown on those two
-  // routes only; orders / checkout stay bare.
+  // navigating between the storefront, a product page, and orders. Shown on
+  // those routes; checkout stays bare.
   const isStorefront = pathname === `/${distributorSlug}`;
   const isProductDetail = new RegExp(`^/${escapeRe(distributorSlug)}/products/[^/]+$`).test(pathname);
-  const showChrome = isStorefront || isProductDetail;
+  const isOrders = new RegExp(`^/${escapeRe(distributorSlug)}/orders(/[^/]+)?$`).test(pathname);
+  const showChrome = isStorefront || isProductDetail || isOrders;
 
   return (
     <div className="flex min-h-screen flex-col bg-page">
@@ -38,7 +39,11 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
       <PlatformNavStrip slug={distributorSlug} distributorName={distributor?.name} />
       <StorefrontSearchProvider>
         {showChrome && (
-          <StorefrontChrome slug={distributorSlug} mode={isStorefront ? 'spy' : 'link'} />
+          <StorefrontChrome
+            slug={distributorSlug}
+            mode={isStorefront ? 'spy' : 'link'}
+            activeTab={isOrders ? 'orders' : 'catalogue'}
+          />
         )}
         <main className="flex min-w-0 flex-1 flex-col">{children}</main>
       </StorefrontSearchProvider>

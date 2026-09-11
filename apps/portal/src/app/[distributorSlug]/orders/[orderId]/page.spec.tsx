@@ -100,11 +100,12 @@ describe('OrderDetailPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders full-width (not the narrow commerce shell)', async () => {
+  it('renders content at the storefront width (1280px), not the narrow commerce shell', async () => {
     mockGetOrder.mockResolvedValue(makeOrder());
     const { container } = render(<OrderDetailPage />);
     await waitFor(() => expect(screen.getAllByText('ORD-2026-00001').length).toBeGreaterThan(0));
-    const shell = container.querySelector('.flex.w-full.flex-1.flex-col');
+    const shell = container.querySelector('.max-w-\\[1280px\\]');
+    expect(shell).not.toBeNull();
     expect(shell?.className).not.toContain('max-w-[480px]');
   });
 
