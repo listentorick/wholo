@@ -29,6 +29,7 @@ vi.mock('@/components/portal/PlatformNavStrip', () => ({
 vi.mock('@/components/portal/PortalFooter', () => ({ PortalFooter: () => <div data-testid="footer" /> }));
 vi.mock('@/components/OrderAsBanner', () => ({ OrderAsBanner: () => <div data-testid="order-as-banner" /> }));
 vi.mock('@/components/OrderAsHandler', () => ({ OrderAsHandler: () => <div data-testid="order-as-handler" /> }));
+vi.mock('@/components/portal/ScrollReset', () => ({ ScrollReset: () => <div data-testid="scroll-reset" /> }));
 vi.mock('@/components/storefront/StorefrontChrome', () => ({
   StorefrontChrome: ({ mode }: { mode: string }) => <div data-testid="chrome">{mode}</div>,
 }));
@@ -59,6 +60,7 @@ describe('DistributorShell', () => {
     expect(screen.getByTestId('nav-strip')).toHaveTextContent('Fine Wines Co');
     expect(screen.getByTestId('order-as-banner')).toBeInTheDocument();
     expect(screen.getByTestId('order-as-handler')).toBeInTheDocument();
+    expect(screen.getByTestId('scroll-reset')).toBeInTheDocument();
     expect(screen.getByTestId('footer')).toBeInTheDocument();
     expect(screen.getByText('content')).toBeInTheDocument();
   });

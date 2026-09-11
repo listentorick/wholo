@@ -10,6 +10,7 @@ import { PlatformNavStrip } from '@/components/portal/PlatformNavStrip';
 import { PortalFooter } from '@/components/portal/PortalFooter';
 import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
+import { ScrollReset } from '@/components/portal/ScrollReset';
 import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
 import type { DistributorInfo } from '@wholo/types';
 
@@ -32,6 +33,7 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
     <div className="flex min-h-screen flex-col bg-page">
       <OrderAsBanner />
       <OrderAsHandler />
+      <ScrollReset />
       <PortalTopBar variant="distributor" />
       <PlatformNavStrip slug={distributorSlug} distributorName={distributor?.name} />
       <StorefrontSearchProvider>
