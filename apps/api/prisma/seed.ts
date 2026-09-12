@@ -1,4 +1,4 @@
-import { PrismaClient, OrganisationType, Role } from '@prisma/client';
+import { PrismaClient, OrganisationType, Role, TaxClassification } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -408,6 +408,24 @@ async function main() {
     { id: 'seed-prod-na-8', typeId: 'seed-pt-non-alc', supplierId: 'seed-sup-3', name: 'Sparkling Grape Juice', sku: 'NA-008', price: '3.00', description: 'Sparkling pressed grape juice, alcohol-free.' },
   ];
 
+  const standardVatTaxType = await prisma.taxType.upsert({
+    where: { id: 'seed-tax-standard-vat' },
+    update: {
+      name: 'Standard VAT (20%)',
+      classification: TaxClassification.STANDARD,
+      ratePercentage: 20,
+      active: true,
+    },
+    create: {
+      id: 'seed-tax-standard-vat',
+      distributorId: distributor.id,
+      name: 'Standard VAT (20%)',
+      classification: TaxClassification.STANDARD,
+      ratePercentage: 20,
+      active: true,
+    },
+  });
+
   for (const p of productData) {
     await prisma.product.upsert({
       where: { id: p.id },
@@ -419,6 +437,7 @@ async function main() {
         price: p.price,
         productTypeId: p.typeId,
         supplierId: p.supplierId,
+        taxTypeId: standardVatTaxType.id,
       },
       create: {
         id: p.id,
@@ -430,6 +449,7 @@ async function main() {
         sku: p.sku,
         status: 'ACTIVE',
         price: p.price,
+        taxTypeId: standardVatTaxType.id,
       },
     });
   }
