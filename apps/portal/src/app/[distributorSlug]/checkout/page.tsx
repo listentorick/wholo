@@ -22,7 +22,7 @@ const CARD = 'co-card rounded-lg border border-border bg-surface p-5 shadow-sm';
 
 function TrashIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-[15px] w-[15px]">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
       <polyline points="3 6 5 6 21 6" />
       <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
       <path d="M10 11v6M14 11v6" />
@@ -233,7 +233,7 @@ export default function CheckoutPage() {
                       aria-label="Remove item"
                       disabled={saving}
                       onClick={() => handleRemove(item.productId)}
-                      className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-border transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      className="flex h-[30px] w-[30px] items-center justify-center rounded-md text-muted transition-colors hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <TrashIcon />
                     </button>
