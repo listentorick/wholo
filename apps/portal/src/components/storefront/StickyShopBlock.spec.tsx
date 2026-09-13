@@ -57,6 +57,17 @@ describe('StickyShopBlock', () => {
     expect(screen.queryByRole('link', { name: /Search products/ })).toBeNull();
   });
 
+  it('lets the search field shrink instead of overflowing the row (no flex-shrink-0)', () => {
+    renderBlock('spy');
+    expect(screen.getByTestId('search-field').className).not.toContain('flex-shrink-0');
+  });
+
+  it('aligns the row padding with the rest of the storefront content', () => {
+    const { container } = renderBlock('spy');
+    const row = screen.getByTestId('tabs').closest('div.mx-auto') as HTMLElement;
+    expect(row.className).toContain('md:px-8');
+  });
+
   it('renders a link back to the catalogue instead of the search field in link mode', () => {
     renderBlock('link');
     expect(screen.getByTestId('tabs')).toHaveTextContent('link');

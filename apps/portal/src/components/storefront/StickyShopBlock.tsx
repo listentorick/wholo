@@ -53,18 +53,18 @@ export function StickyShopBlock({ slug, distributor, relationshipStatus, scrolle
       />
 
       <div className="border-b border-border bg-surface">
-        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-4 md:px-2">
+        <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between gap-4 px-4 md:px-8">
           <StorefrontTabs slug={slug} sections={STOREFRONT_SECTIONS} tabs={tabs} />
 
           {/* Desktop keeps the search in the sticky row (per the mock); mobile
               gets it at the top of the catalogue section instead. On sub-pages
               the field is a link back to the catalogue. */}
           {tabs.mode === 'spy' ? (
-            <CatalogueSearchField className="hidden w-full max-w-xs flex-shrink-0 md:block" />
+            <CatalogueSearchField className="hidden w-full max-w-xs md:block" />
           ) : (
             <Link
               href={`/${slug}#catalogue`}
-              className="hidden w-full max-w-xs flex-shrink-0 items-center gap-2.5 rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-muted transition-colors hover:border-muted md:flex"
+              className="hidden w-full max-w-xs items-center gap-2.5 rounded-md border border-border bg-white px-3.5 py-2.5 text-sm text-muted transition-colors hover:border-muted md:flex"
             >
               <Search className="h-4 w-4 flex-shrink-0" strokeWidth={1.8} />
               Search products

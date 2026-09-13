@@ -60,6 +60,17 @@ describe('StorefrontTabs — spy mode', () => {
     expect(container.firstElementChild?.className).not.toContain('overflow-x-auto');
     expect(tab('Catalogue').className).toContain('flex-1');
   });
+
+  it('does not own its own width constraint/padding — the parent row does', () => {
+    const { container } = render(
+      <StorefrontTabs
+        slug="winos"
+        sections={STOREFRONT_SECTIONS}
+        tabs={{ mode: 'spy', activeSection: 'catalogue', onSelectSection: vi.fn() }}
+      />,
+    );
+    expect(container.firstElementChild?.className).not.toContain('max-w-[1280px]');
+  });
 });
 
 describe('StorefrontTabs — link mode', () => {

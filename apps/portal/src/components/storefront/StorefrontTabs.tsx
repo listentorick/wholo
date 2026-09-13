@@ -61,7 +61,7 @@ export function StorefrontTabs({ slug, sections, tabs }: Props) {
   const ordersActive = tabs.mode === 'link' && tabs.activeSection === 'orders';
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] items-center md:px-6">
+    <div className="flex items-center">
       {sections.map((section) => {
         if (tabs.mode === 'link') {
           const active = tabs.activeSection === section.id;
