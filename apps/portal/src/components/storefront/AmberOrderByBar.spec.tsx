@@ -45,15 +45,19 @@ describe('AmberOrderByBar', () => {
     expect(screen.getByText(/Add/)).toHaveTextContent('Add £120.00 more to reach the £150.00 minimum');
   });
 
-  it('renders nothing when there is no delivery line and the minimum is met or unset', () => {
-    mockDistributor.effectiveMinSpend = 150;
-    mockSubtotal = 200;
-    const { container: met } = render(<AmberOrderByBar />);
-    expect(met.firstChild).toBeNull();
-
+  it('renders nothing when there is no delivery line and no minimum is set', () => {
     mockDistributor.effectiveMinSpend = null;
     mockSubtotal = 0;
-    const { container: none } = render(<AmberOrderByBar />);
-    expect(none.firstChild).toBeNull();
+    const { container } = render(<AmberOrderByBar />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('shows a met message with the total and minimum once the minimum is reached', () => {
+    mockDistributor.effectiveMinSpend = 150;
+    mockSubtotal = 200;
+    render(<AmberOrderByBar />);
+    expect(screen.getByText(/Minimum order met/)).toHaveTextContent(
+      'Minimum order met — order total £200.00, minimum order value £150.00',
+    );
   });
 });
