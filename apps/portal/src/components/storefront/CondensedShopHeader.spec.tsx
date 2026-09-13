@@ -3,6 +3,11 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DistributorInfo } from '@wholo/types';
 
 vi.mock('./RelationshipCta', () => ({ RelationshipCta: () => <div data-testid="cta" /> }));
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ distributorSlug: 'winos' }),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+vi.mock('@/lib/cart-context', () => ({ useCartSafe: () => ({ cartCount: 2 }) }));
 
 import { CondensedShopHeader } from './CondensedShopHeader';
 
@@ -27,5 +32,12 @@ describe('CondensedShopHeader', () => {
     expect(wrap.className).toContain('opacity-100');
     expect(wrap).toHaveAttribute('aria-hidden', 'false');
     expect(screen.getByText('Mere Wine Co')).toBeInTheDocument();
+  });
+
+  it('always shows the basket, unlike the relationship CTA which is hidden below sm', () => {
+    render(<CondensedShopHeader distributor={distributor} relationshipStatus={null} scrolledPast />);
+    const basket = screen.getByLabelText('Basket, 2 items');
+    expect(basket.className).not.toMatch(/\bhidden\b/);
+    expect(basket.parentElement?.className).not.toMatch(/\bhidden\b/);
   });
 });

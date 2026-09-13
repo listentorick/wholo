@@ -2,6 +2,7 @@
 
 import type { DistributorInfo } from '@wholo/types';
 import type { RelationshipStatus } from '@/lib/distributor-context';
+import { BasketButton } from './BasketButton';
 import { RelationshipCta } from './RelationshipCta';
 
 interface Props {
@@ -12,8 +13,8 @@ interface Props {
 
 /**
  * The compact distributor identity row that appears inside the sticky shop block
- * once the full {@link ShopHeader} has scrolled away — keeps the logo, name and
- * relationship CTA on screen while browsing the catalogue.
+ * once the full {@link ShopHeader} has scrolled away — keeps the logo, name,
+ * relationship CTA and basket on screen while browsing the catalogue.
  */
 export function CondensedShopHeader({ distributor, relationshipStatus, scrolledPast }: Props) {
   return (
@@ -44,6 +45,7 @@ export function CondensedShopHeader({ distributor, relationshipStatus, scrolledP
             variant="condensed"
           />
         </span>
+        <BasketButton />
       </div>
     </div>
   );
