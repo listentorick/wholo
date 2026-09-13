@@ -46,15 +46,86 @@ describe('useScrollSpy', () => {
     expect(result.current[0]).toBe('about');
   });
 
-  it('scrollToSection sets the active id, scrolls and updates the hash', () => {
-    const scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+  it('scrollToSection sets the active id and updates the hash', () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.spyOn(document.getElementById('delivery')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
     const replaceState = vi.spyOn(history, 'replaceState');
+
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('delivery'));
+
     expect(result.current[0]).toBe('delivery');
-    expect(scrollIntoView).toHaveBeenCalled();
     expect(replaceState).toHaveBeenCalledWith(null, '', '#delivery');
+  });
+
+  it('scrolls straight to the raw target when there is no cover banner on the page', () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.spyOn(document.getElementById('delivery')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('delivery'));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+  });
+
+  it('corrects the target downward when the banner will finish collapsing further', () => {
+    // Matches the hand-derived worked example: banner currently at full
+    // desktop height (300), raw target 500 → the banner will end up at min
+    // (72) once scrolled there, so the true resting position is 272, not 500.
+    Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    document.body.appendChild(document.createElement('div')).className = 'cover-banner';
+    vi.spyOn(document.querySelector('.cover-banner')!, 'getBoundingClientRect').mockReturnValue({
+      height: 300,
+    } as DOMRect);
+    vi.spyOn(document.getElementById('about')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('about'));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 272, behavior: 'smooth' });
+  });
+
+  it('corrects the target upward (toward the resting expanded height) when the banner will re-expand', () => {
+    // Mirror-image worked example: banner currently collapsed (72, since the
+    // page is already scrolled down), raw target 50 (near the top) — the
+    // banner will partially re-expand by the time the page rests there.
+    Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    document.body.appendChild(document.createElement('div')).className = 'cover-banner';
+    vi.spyOn(document.querySelector('.cover-banner')!, 'getBoundingClientRect').mockReturnValue({
+      height: 72,
+    } as DOMRect);
+    vi.spyOn(document.getElementById('catalogue')!, 'getBoundingClientRect').mockReturnValue({ top: 50 } as DOMRect);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('catalogue'));
+
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    const [[arg]] = scrollTo.mock.calls;
+    expect(arg.behavior).toBe('smooth');
+    expect(arg.top).toBeCloseTo(136.5, 1);
+  });
+
+  it('jumps straight to the corrected target under prefers-reduced-motion, without animating', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    );
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    vi.spyOn(document.getElementById('about')!, 'getBoundingClientRect').mockReturnValue({ top: 240 } as DOMRect);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('about'));
+
+    expect(result.current[0]).toBe('about');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith(0, 240);
   });
 
   it('does not observe until ready is true', () => {

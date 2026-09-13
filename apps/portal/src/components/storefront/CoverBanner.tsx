@@ -6,11 +6,13 @@ interface Props {
   bannerUrl: string | null;
 }
 
-const FULL_DESKTOP = 300;
-const FULL_MOBILE = 150;
-const MIN_DESKTOP = 72;
-const MIN_MOBILE = 56;
-const COLLAPSE_DISTANCE = 220;
+// Exported so use-scroll-spy.ts can predict the banner's resting height when
+// computing a nav-click scroll target, without duplicating these numbers.
+export const FULL_DESKTOP = 300;
+export const FULL_MOBILE = 150;
+export const MIN_DESKTOP = 72;
+export const MIN_MOBILE = 56;
+export const COLLAPSE_DISTANCE = 220;
 
 /**
  * The distributor's cover image. Renders nothing when the distributor hasn't set

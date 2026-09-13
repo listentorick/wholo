@@ -1,6 +1,38 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE } from '@/components/storefront/CoverBanner';
+
+/**
+ * The cover banner's height is a function of scroll position (see
+ * CoverBanner.tsx), so scrolling to a section changes the banner's height
+ * mid-flight, which shifts every section below it — a fixed scroll target
+ * (e.g. native scrollIntoView) overshoots or undershoots as a result. Solve
+ * for the scroll position whose resulting banner height is self-consistent
+ * with that position: `finalY = rawTargetY - (currentBannerHeight - heightAt(finalY))`.
+ * Because `heightAt` is monotonic and full > min, this has exactly one root;
+ * find it by checking which of its three linear pieces it falls in. Depends
+ * on CoverBanner writing `el.style.height` directly with no CSS transition —
+ * a transition would make the live height read reflect an in-progress value
+ * instead of the settled one.
+ */
+function correctedTargetY(rawTargetY: number): number {
+  const banner = document.querySelector<HTMLElement>('.cover-banner');
+  if (!banner) return rawTargetY;
+  const currentBannerHeight = banner.getBoundingClientRect().height;
+
+  const mobile = window.innerWidth < 768;
+  const full = mobile ? FULL_MOBILE : FULL_DESKTOP;
+  const min = mobile ? MIN_MOBILE : MIN_DESKTOP;
+
+  const belowZero = rawTargetY - currentBannerHeight + full;
+  if (belowZero < 0) return belowZero;
+
+  const inBand = (rawTargetY - currentBannerHeight + full) / (1 + (full - min) / COLLAPSE_DISTANCE);
+  if (inBand >= 0 && inBand < COLLAPSE_DISTANCE) return inBand;
+
+  return rawTargetY - currentBannerHeight + min;
+}
 
 /**
  * Scroll-spy for the single-page storefront. Given the section ids in document
@@ -21,8 +53,17 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     const el = document.getElementById(id);
     if (!el) return;
     setActiveId(id);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (typeof history !== 'undefined') history.replaceState(null, '', `#${id}`);
+
+    const marginTop = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+    const rawTargetY = window.scrollY + el.getBoundingClientRect().top - marginTop;
+    const targetY = correctedTargetY(rawTargetY);
+
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      window.scrollTo(0, targetY);
+      return;
+    }
+    window.scrollTo({ top: targetY, behavior: 'smooth' });
   }, []);
 
   useEffect(() => {
