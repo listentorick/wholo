@@ -53,4 +53,19 @@ describe('ProblemDetailsFilter', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 400 }));
   });
+
+  it('still writes the response when logging throws (logging must never block the response)', () => {
+    errorSpy.mockImplementation(() => {
+      throw new Error('pino down');
+    });
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { host, res } = fakeHost({ method: 'GET', url: '/api/v1/x' });
+
+    expect(() => filter.catch(new InternalServerErrorException('boom'), host)).not.toThrow();
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.set).toHaveBeenCalledWith('Content-Type', 'application/problem+json');
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
+    expect(consoleSpy).toHaveBeenCalled();
+  });
 });

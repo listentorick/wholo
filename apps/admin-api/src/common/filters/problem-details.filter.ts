@@ -29,7 +29,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
 
     // ADR-064: this filter is @Catch()-all and writes the response itself, which
     // pre-empts Nest's built-in exception logging — so log 5xx (with stack) here.
-    logHttpException(this.logger, exception, status, host);
+    // Logged BEFORE the response so a failure writing the response is still
+    // captured; guarded so a failure logging can never block the response.
+    try {
+      logHttpException(this.logger, exception, status, host);
+    } catch (logErr) {
+      // eslint-disable-next-line no-console
+      console.error('ProblemDetailsFilter: logging failed', logErr);
+    }
 
     response.status(status).set('Content-Type', 'application/problem+json').json({
       type: `https://wholo.app/errors/${title.toLowerCase().replace(/\s+/g, '-')}`,
