@@ -193,7 +193,7 @@ export default function HomePage() {
       `}</style>
 
       <PageShell width="full">
-        <div className="flex w-full flex-col gap-8 md:grid md:grid-cols-[420px_minmax(0,1fr)] md:items-start md:gap-10">
+        <div className="flex w-full flex-col gap-8 md:grid md:grid-cols-2 md:items-start md:gap-10">
 
           {/* LEFT — the customer's own account */}
           <div className="contents md:flex md:min-w-0 md:flex-col md:gap-8">
