@@ -36,21 +36,35 @@ export function ShopHeader({ distributor, relationshipStatus, onScrolledPast }: 
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
-    // Geometry only — not `entry.isIntersecting`, which is ambiguous for a
-    // genuinely zero-height/zero-area sentinel right at the crossing point.
-    // The `< 2` tolerance (not a strict `< 0`) absorbs a landing jump that
-    // settles the sentinel a px or two short of exactly 0 — the same
-    // "couple of px" rationale `use-scroll-spy.ts`'s own boundary check
-    // uses. Without it, a target that sits immediately after the sticky
-    // stack (no section/content between them) lands the sentinel at exactly
-    // `top: 0`, which used to read as "not yet scrolled past".
-    const observer = new IntersectionObserver(
-      ([entry]) => onScrolledPast(entry.boundingClientRect.top < 2),
-      { threshold: 0 },
-    );
-    observer.observe(el);
+    // A plain scroll/resize listener, not IntersectionObserver — the same
+    // technique CoverBanner and use-scroll-spy.ts's applyActive already use.
+    // IntersectionObserver looked right (it's the purpose-built API for
+    // "has this element crossed a boundary"), and a `< 2` tolerance on its
+    // entry geometry fixed the reproducible case at the time, but a
+    // zero-height sentinel landing within a fraction of a pixel of the
+    // viewport's top edge turned out to be a genuinely degenerate case that
+    // real Chrome doesn't reliably renotify for at all — confirmed by a
+    // landing that visibly worked in one browser (a fresh IntersectionObserver
+    // callback fired, `top < 2` matched) while staying stuck indefinitely in
+    // another (no further callback ever arrived, however long you waited).
+    // Reading the sentinel's own live geometry on every scroll sidesteps
+    // IntersectionObserver's notification semantics entirely — no threshold,
+    // no isIntersecting, just "where is it right now".
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      onScrolledPast(el.getBoundingClientRect().top < 2);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(check);
+    };
+    check();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
     return () => {
-      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
       onScrolledPast(false);
     };
   }, [onScrolledPast]);

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DistributorInfo } from '@wholo/types';
 
@@ -32,22 +32,44 @@ const base: DistributorInfo = {
   processingDays: [1, 2, 3, 4, 5],
 };
 
-let observerCallback: (entries: Pick<IntersectionObserverEntry, 'boundingClientRect'>[]) => void;
+let sentinelTop = 500;
+let rafCallbacks: FrameRequestCallback[];
 
 beforeEach(() => {
   mockOrderCount = null;
+  sentinelTop = 500;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    () => ({ top: sentinelTop }) as DOMRect,
+  );
+  rafCallbacks = [];
   vi.stubGlobal(
-    'IntersectionObserver',
-    vi.fn((cb: typeof observerCallback) => {
-      observerCallback = cb;
-      return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(), takeRecords: vi.fn(() => []) };
+    'requestAnimationFrame',
+    vi.fn((cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
     }),
   );
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
 });
+
+function flushRaf() {
+  const pending = rafCallbacks;
+  rafCallbacks = [];
+  pending.forEach((cb) => cb(0));
+}
 
 function renderHeader(onScrolledPast = vi.fn()) {
   render(<ShopHeader distributor={base} relationshipStatus={null} onScrolledPast={onScrolledPast} />);
   return onScrolledPast;
+}
+
+/** Simulates a scroll settling with the sentinel at `top`, the same way the
+ *  real scroll/resize listener reacts: a 'scroll' event, throttled to one
+ *  rAF-scheduled recheck. */
+function scrollSentinelTo(top: number) {
+  sentinelTop = top;
+  window.dispatchEvent(new Event('scroll'));
+  flushRaf();
 }
 
 describe('ShopHeader', () => {
@@ -77,24 +99,53 @@ describe('ShopHeader', () => {
   });
 
   describe('scrolled-past sentinel', () => {
-    it('reports scrolled-past once the sentinel reaches the viewport top, not only once strictly negative', () => {
-      const onScrolledPast = renderHeader();
+    it('reports not-scrolled-past on mount, before any scroll', () => {
+      const onScrolledPast = renderHeader(); // default sentinelTop = 500, far below the viewport top
+      expect(onScrolledPast).toHaveBeenLastCalledWith(false);
+    });
 
-      observerCallback([{ boundingClientRect: { top: 0 } as DOMRect }]);
+    it('reports scrolled-past once a scroll settles with the sentinel at the viewport top, not only once strictly negative', () => {
+      const onScrolledPast = renderHeader();
+      scrollSentinelTo(0);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(true);
+    });
+
+    it('reports scrolled-past for the exact sub-pixel value a real landing settled at on one machine (a regression case)', () => {
+      // IntersectionObserver's own crossing-notification was tried here first and
+      // dropped: a landing this close to the boundary is a genuinely degenerate
+      // case some browsers never renotify for at all, however long you wait —
+      // this direct-geometry-on-scroll approach has no such gap.
+      const onScrolledPast = renderHeader();
+      scrollSentinelTo(0.2);
       expect(onScrolledPast).toHaveBeenLastCalledWith(true);
     });
 
     it('reports scrolled-past when comfortably past', () => {
       const onScrolledPast = renderHeader();
-
-      observerCallback([{ boundingClientRect: { top: -50 } as DOMRect }]);
+      scrollSentinelTo(-50);
       expect(onScrolledPast).toHaveBeenLastCalledWith(true);
     });
 
     it('reports not-scrolled-past when comfortably before', () => {
       const onScrolledPast = renderHeader();
+      scrollSentinelTo(40);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(false);
+    });
 
-      observerCallback([{ boundingClientRect: { top: 40 } as DOMRect }]);
+    it('re-checks on resize as well as scroll', () => {
+      const onScrolledPast = renderHeader();
+      sentinelTop = -10;
+      window.dispatchEvent(new Event('resize'));
+      flushRaf();
+      expect(onScrolledPast).toHaveBeenLastCalledWith(true);
+    });
+
+    it('resets to not-scrolled-past on unmount', () => {
+      const onScrolledPast = renderHeader();
+      scrollSentinelTo(-50);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(true);
+
+      cleanup();
       expect(onScrolledPast).toHaveBeenLastCalledWith(false);
     });
   });
