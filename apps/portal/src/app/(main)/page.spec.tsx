@@ -174,13 +174,6 @@ describe('HomePage — discovery placeholders', () => {
     expect(screen.getByText('Marketplace')).toBeInTheDocument();
   });
 
-  it('renders the search bar as an inert placeholder', async () => {
-    render(<HomePage />);
-    expect(await screen.findByText('Search products or suppliers')).toBeInTheDocument();
-    expect(screen.queryByRole('searchbox')).toBeNull();
-    expect(screen.queryByRole('textbox')).toBeNull();
-  });
-
   it('renders the merchandising banner with an inert CTA', async () => {
     render(<HomePage />);
     expect(await screen.findByText('Fresh ranges.')).toBeInTheDocument();

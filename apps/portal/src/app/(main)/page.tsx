@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import clsx from 'clsx';
-import { ChevronRight, Compass, Search } from 'lucide-react';
+import { ChevronRight, Compass } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
 import { DistributorCard } from '@/components/DistributorCard';
 import { RecommendedSuppliers } from '@/components/home/RecommendedSuppliers';
@@ -16,33 +16,6 @@ import type { PortalDistributorSummary } from '@wholo/types';
 
 /** Above this many suppliers, offer the small name filter over the stack. */
 const SECONDARY_FILTER_THRESHOLD = 6;
-
-/**
- * The prominent discovery search from the design. Product + supplier search is a
- * greenfield feature, so this is a deliberately inert stand-in — a styled `<div>`,
- * never an `<input>`, so it cannot be focused, typed into, or submitted.
- */
-function SupplierSearchPlaceholder({ className }: { className?: string }) {
-  return (
-    <div
-      className={clsx('hm-rise flex items-stretch gap-2', className)}
-      style={{ animationDelay: '0.06s' }}
-      aria-hidden="true"
-    >
-      <div className="relative flex-1">
-        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-          <Search className="h-4 w-4" />
-        </span>
-        <div className="w-full rounded-md border border-border bg-surface py-2.5 pl-10 pr-4 text-sm text-muted">
-          Search products or suppliers
-        </div>
-      </div>
-      <div className="flex w-11 items-center justify-center rounded-md bg-accent text-white">
-        <Search className="h-4 w-4" />
-      </div>
-    </div>
-  );
-}
 
 /**
  * Merchandising slot — styled as a Deep-Navy marketing banner (after the marketing
@@ -248,7 +221,6 @@ export default function HomePage() {
 
           {/* RIGHT — discovery (placeholders until the marketplace exists) */}
           <div className="contents md:flex md:min-w-0 md:flex-col md:gap-6">
-            <SupplierSearchPlaceholder className="order-3 md:order-none" />
             <MerchandisingBand className="order-4 md:order-none" />
             <RecommendedSuppliers className="order-5 md:order-none" />
           </div>
