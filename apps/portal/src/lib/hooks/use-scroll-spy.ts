@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE } from '@/components/storefront/CoverBanner';
 
 /**
@@ -45,16 +45,21 @@ function stickyStackHeight(): number {
  * `scrollToSection` that smooth-scrolls to one (the landing offset is pure CSS —
  * `scroll-margin-top: var(--sticky-stack-h)` on the section).
  *
- * Uses one `IntersectionObserver`; the active section is the topmost one
- * intersecting the band just below the sticky chrome — the band's top edge is
- * `--sticky-stack-h` itself, so it always matches the same live height the
- * sections' `scroll-margin-top` uses. A short last section that can't reach
- * the top of the viewport is handled by a bottom-of-page fallback.
+ * The active section is the last one (in document order) whose top has
+ * scrolled up to/past `--sticky-stack-h` — the same boundary `scrollToSection`
+ * targets via `scroll-margin-top`, so the two stay consistent by construction.
+ * (An `IntersectionObserver`'s "is this section's top edge past the sticky
+ * stack" can't be answered by `isIntersecting` alone: adjacent sections share
+ * a boundary with no gap, so right after landing on one, the previous section
+ * can still have a sliver of overlap and remains "intersecting" too — picking
+ * the first such match by document order then keeps the *previous* section
+ * active. Measuring `getBoundingClientRect().top` directly avoids that.) A
+ * short last section that can't reach the top of the viewport is handled by a
+ * bottom-of-page fallback.
  */
 export function useScrollSpy(ids: string[], ready = true): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(ids[0] ?? '');
   const idsKey = ids.join('|');
-  const visible = useRef<Set<string>>(new Set());
 
   const scrollToSection = useCallback((id: string) => {
     const el = document.getElementById(id);
@@ -76,11 +81,11 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
   useEffect(() => {
     if (!ready) return;
     const orderedIds = idsKey ? idsKey.split('|') : [];
-    const els = orderedIds
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el != null);
-    if (els.length === 0) return;
+    if (orderedIds.length === 0) return;
 
+    // A couple of px of tolerance absorbs the sub-pixel gap a settled smooth
+    // scroll can leave short of the exact boundary (float rounding in the
+    // scroll math), so the section it just landed on still counts as current.
     const recompute = () => {
       // Bottom of the page → force the last section (it may be too short to
       // ever occupy the top of the viewport).
@@ -88,43 +93,30 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
         setActiveId(orderedIds[orderedIds.length - 1]);
         return;
       }
-      const topmost = orderedIds.find((id) => visible.current.has(id));
-      if (topmost) setActiveId(topmost);
+      const boundary = stickyStackHeight() + 2;
+      let current = orderedIds[0];
+      for (const id of orderedIds) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= boundary) current = id;
+      }
+      setActiveId(current);
     };
 
-    let observer: IntersectionObserver;
-    const setupObserver = () => {
-      observer?.disconnect();
-      visible.current = new Set();
-      observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            const id = entry.target.id;
-            if (entry.isIntersecting) visible.current.add(id);
-            else visible.current.delete(id);
-          }
-          recompute();
-        },
-        { rootMargin: `-${stickyStackHeight()}px 0px -55% 0px`, threshold: 0 },
-      );
-      els.forEach((el) => observer.observe(el));
-      recompute();
-    };
-
-    setupObserver();
+    recompute();
     window.addEventListener('scroll', recompute, { passive: true });
+    window.addEventListener('resize', recompute);
 
-    // --sticky-stack-h can change without ids/ready changing (e.g. the amber
-    // order-by bar's min-spend message toggling on) — a stale band silently
-    // stops the true topmost section from ever registering as active, so
-    // rebuild the observer whenever StickyShopBlock republishes the height.
-    const heightObserver = new MutationObserver(setupObserver);
+    // --sticky-stack-h can change independent of scrolling (e.g. the amber
+    // order-by bar's min-spend message toggling on, or the condensed header
+    // phasing in) — StickyShopBlock republishes it via a style mutation on
+    // <html>, so recompute then too; `boundary` above always reads it live.
+    const heightObserver = new MutationObserver(recompute);
     heightObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 
     return () => {
-      observer.disconnect();
-      heightObserver.disconnect();
       window.removeEventListener('scroll', recompute);
+      window.removeEventListener('resize', recompute);
+      heightObserver.disconnect();
     };
   }, [idsKey, ready]);
 

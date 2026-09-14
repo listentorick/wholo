@@ -1,56 +1,89 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useScrollSpy } from './use-scroll-spy';
 
-type IOCallback = (entries: Array<{ target: Element; isIntersecting: boolean }>) => void;
-let ioCallback: IOCallback;
-const observed: Element[] = [];
+function setTop(id: string, top: number) {
+  vi.spyOn(document.getElementById(id)!, 'getBoundingClientRect').mockReturnValue({ top } as DOMRect);
+}
 
 beforeEach(() => {
-  observed.length = 0;
-  vi.stubGlobal(
-    'IntersectionObserver',
-    vi.fn((cb: IOCallback) => {
-      ioCallback = cb;
-      return {
-        observe: (el: Element) => observed.push(el),
-        unobserve: vi.fn(),
-        disconnect: vi.fn(),
-      };
-    }),
-  );
   document.body.innerHTML = `
     <div id="catalogue"></div>
     <div id="about"></div>
     <div id="delivery"></div>
   `;
+  Object.defineProperty(window, 'innerHeight', { value: 900, configurable: true });
   Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
   Object.defineProperty(document.documentElement, 'scrollHeight', { value: 5000, configurable: true });
   document.documentElement.style.removeProperty('--sticky-stack-h');
 });
 
-import { useScrollSpy } from './use-scroll-spy';
-
 describe('useScrollSpy', () => {
-  it('observes each section element', () => {
-    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
-    expect(observed.map((el) => el.id)).toEqual(['catalogue', 'about', 'delivery']);
+  it('activates the last section whose top has crossed the sticky boundary, not the first still barely overlapping it', () => {
+    // Regression for a real production bug: adjacent sections share a
+    // boundary with no gap, so right after landing on "about", "catalogue"'s
+    // bottom edge can sit a hair short of the boundary too. The active
+    // section must resolve to "about" — the last one to have crossed — not
+    // "catalogue" just because it's still technically touching the band.
+    document.documentElement.style.setProperty('--sticky-stack-h', '143px');
+    setTop('catalogue', -3000);
+    setTop('about', 143.3); // 0.3px short of the exact boundary, as a settled smooth-scroll left it
+    setTop('delivery', 900);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+
+    expect(result.current[0]).toBe('about');
   });
 
-  it('activates the topmost intersecting section', () => {
+  it('falls back to the earliest section when none have crossed the boundary yet', () => {
+    setTop('catalogue', 400);
+    setTop('about', 900);
+    setTop('delivery', 1400);
+
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
-    act(() => {
-      ioCallback([
-        { target: document.getElementById('about')!, isIntersecting: true },
-        { target: document.getElementById('delivery')!, isIntersecting: true },
-      ]);
+
+    expect(result.current[0]).toBe('catalogue');
+  });
+
+  it('forces the last section at the bottom of the page, even if too short to reach the boundary', () => {
+    Object.defineProperty(window, 'scrollY', { value: 4100, configurable: true }); // 4100 + 900 >= 5000 - 2
+    setTop('catalogue', -4000);
+    setTop('about', -1000);
+    setTop('delivery', 50);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+
+    expect(result.current[0]).toBe('delivery');
+  });
+
+  it('recomputes when --sticky-stack-h changes after mount, without needing a scroll event', async () => {
+    setTop('catalogue', -3000);
+    setTop('about', 100);
+    setTop('delivery', 900);
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    expect(result.current[0]).toBe('catalogue');
+
+    await act(async () => {
+      document.documentElement.style.setProperty('--sticky-stack-h', '150px');
+      await Promise.resolve(); // MutationObserver callbacks fire as a microtask
     });
+
     expect(result.current[0]).toBe('about');
+  });
+
+  it('does nothing until ready is true', () => {
+    setTop('about', 100);
+    document.documentElement.style.setProperty('--sticky-stack-h', '150px');
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery'], false));
+
+    expect(result.current[0]).toBe('catalogue');
   });
 
   it('scrollToSection sets the active id and updates the hash', () => {
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);
-    vi.spyOn(document.getElementById('delivery')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
+    setTop('delivery', 500);
     const replaceState = vi.spyOn(history, 'replaceState');
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
@@ -63,7 +96,7 @@ describe('useScrollSpy', () => {
   it('scrolls straight to the raw target when there is no cover banner on the page', () => {
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);
-    vi.spyOn(document.getElementById('delivery')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
+    setTop('delivery', 500);
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('delivery'));
@@ -82,7 +115,7 @@ describe('useScrollSpy', () => {
     vi.spyOn(document.querySelector('.cover-banner')!, 'getBoundingClientRect').mockReturnValue({
       height: 300,
     } as DOMRect);
-    vi.spyOn(document.getElementById('about')!, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
+    setTop('about', 500);
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('about'));
@@ -101,7 +134,7 @@ describe('useScrollSpy', () => {
     vi.spyOn(document.querySelector('.cover-banner')!, 'getBoundingClientRect').mockReturnValue({
       height: 72,
     } as DOMRect);
-    vi.spyOn(document.getElementById('catalogue')!, 'getBoundingClientRect').mockReturnValue({ top: 50 } as DOMRect);
+    setTop('catalogue', 50);
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('catalogue'));
@@ -119,7 +152,7 @@ describe('useScrollSpy', () => {
     );
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);
-    vi.spyOn(document.getElementById('about')!, 'getBoundingClientRect').mockReturnValue({ top: 240 } as DOMRect);
+    setTop('about', 240);
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('about'));
@@ -127,33 +160,5 @@ describe('useScrollSpy', () => {
     expect(result.current[0]).toBe('about');
     expect(scrollTo).toHaveBeenCalledTimes(1);
     expect(scrollTo).toHaveBeenCalledWith(0, 240);
-  });
-
-  it('does not observe until ready is true', () => {
-    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery'], false));
-    expect(observed).toHaveLength(0);
-  });
-
-  it('bands the observer to the live --sticky-stack-h, not a guessed constant', () => {
-    document.documentElement.style.setProperty('--sticky-stack-h', '180px');
-    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
-
-    const IO = window.IntersectionObserver as unknown as { mock: { calls: unknown[][] } };
-    const [, options] = IO.mock.calls.at(-1)!;
-    expect((options as IntersectionObserverInit).rootMargin).toBe('-180px 0px -55% 0px');
-  });
-
-  it('rebuilds the intersection band when --sticky-stack-h changes after mount', async () => {
-    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
-    const IO = window.IntersectionObserver as unknown as { mock: { calls: unknown[][] } };
-    expect((IO.mock.calls.at(-1)![1] as IntersectionObserverInit).rootMargin).toBe('-0px 0px -55% 0px');
-
-    await act(async () => {
-      document.documentElement.style.setProperty('--sticky-stack-h', '96px');
-      // MutationObserver callbacks fire as a microtask.
-      await Promise.resolve();
-    });
-
-    expect((IO.mock.calls.at(-1)![1] as IntersectionObserverInit).rootMargin).toBe('-96px 0px -55% 0px');
   });
 });
