@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useScrollSpy } from './use-scroll-spy';
 
 function setTop(id: string, top: number) {
@@ -18,7 +18,60 @@ beforeEach(() => {
   document.documentElement.style.removeProperty('--sticky-stack-h');
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('useScrollSpy', () => {
+  it('pins the clicked tab active through the scroll animation, ignoring mid-flight geometry', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('scrollTo', vi.fn());
+    // "catalogue" has already crossed the boundary and "about" hasn't — this
+    // is what live geometry says mid-animation, right after clicking About.
+    setTop('catalogue', -3000);
+    setTop('about', 500);
+    setTop('delivery', 1000);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    expect(result.current[0]).toBe('catalogue');
+
+    act(() => result.current[1]('about'));
+    expect(result.current[0]).toBe('about');
+
+    // An in-flight `scroll` event during the animation reports the same
+    // mid-transit geometry — the pin must hold, not revert to "catalogue".
+    act(() => {
+      window.dispatchEvent(new Event('scroll'));
+    });
+    expect(result.current[0]).toBe('about');
+
+    act(() => {
+      vi.advanceTimersByTime(100); // short of the settle debounce
+    });
+    expect(result.current[0]).toBe('about');
+  });
+
+  it('hands control back to live scroll-tracking once the click-triggered scroll actually settles', () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('scrollTo', vi.fn());
+    setTop('catalogue', -3000);
+    setTop('about', 500);
+    setTop('delivery', 1000);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('about'));
+    act(() => window.dispatchEvent(new Event('scroll')));
+    expect(result.current[0]).toBe('about');
+
+    // By the time scrolling truly stops, the user has manually scrolled on
+    // to Delivery — once the debounce elapses with no further scroll events,
+    // live tracking should take back over and reflect that.
+    setTop('delivery', 0);
+    act(() => {
+      vi.advanceTimersByTime(130); // past the 120ms debounce
+    });
+    expect(result.current[0]).toBe('delivery');
+  });
   it('activates the last section whose top has crossed the sticky boundary, not the first still barely overlapping it', () => {
     // Regression for a real production bug: adjacent sections share a
     // boundary with no gap, so right after landing on "about", "catalogue"'s

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE } from '@/components/storefront/CoverBanner';
 
 /**
@@ -56,15 +56,24 @@ function stickyStackHeight(): number {
  * active. Measuring `getBoundingClientRect().top` directly avoids that.) A
  * short last section that can't reach the top of the viewport is handled by a
  * bottom-of-page fallback.
+ *
+ * A click pins its target active immediately and holds it there for the
+ * whole scroll gesture that follows — without this, the boundary-crossing
+ * check above (correctly) reports the section still mid-transit during the
+ * animation, which would flip the highlight back and forth until it lands.
  */
 export function useScrollSpy(ids: string[], ready = true): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(ids[0] ?? '');
   const idsKey = ids.join('|');
+  // True while a click-triggered scroll is still settling; cleared once
+  // `scroll` events stop arriving (see the debounce in the effect below).
+  const suppressRef = useRef(false);
 
   const scrollToSection = useCallback((id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
     setActiveId(id);
+    suppressRef.current = true;
     if (typeof history !== 'undefined') history.replaceState(null, '', `#${id}`);
 
     const marginTop = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
@@ -86,7 +95,7 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     // A couple of px of tolerance absorbs the sub-pixel gap a settled smooth
     // scroll can leave short of the exact boundary (float rounding in the
     // scroll math), so the section it just landed on still counts as current.
-    const recompute = () => {
+    const applyActive = () => {
       // Bottom of the page → force the last section (it may be too short to
       // ever occupy the top of the viewport).
       if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
@@ -102,6 +111,23 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       setActiveId(current);
     };
 
+    // While a click-triggered scroll is in flight, `applyActive` is
+    // geometrically correct about the mid-transit position — which is
+    // exactly what we don't want shown. Hold it off, re-arming a short
+    // debounce on every `scroll` event, until scrolling actually stops.
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const recompute = () => {
+      if (suppressRef.current) {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          suppressRef.current = false;
+          applyActive();
+        }, 120);
+        return;
+      }
+      applyActive();
+    };
+
     recompute();
     window.addEventListener('scroll', recompute, { passive: true });
     window.addEventListener('resize', recompute);
@@ -114,6 +140,7 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     heightObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 
     return () => {
+      clearTimeout(settleTimer);
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
       heightObserver.disconnect();
