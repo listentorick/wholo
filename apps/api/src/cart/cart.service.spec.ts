@@ -129,6 +129,24 @@ describe('CartService', () => {
       await expect(service.getCart('bad-slug', CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
     });
 
+    it('throws ForbiddenException when the order-as session is bound to a different distributor', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+
+      await expect(
+        service.getCart('dist-slug', CUSTOMER_ID, USER_ID, 'some-other-distributor'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when the order-as session distributor matches the requested distributor', async () => {
+      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
+      (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
+
+      await expect(
+        service.getCart('dist-slug', CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
+      ).resolves.toBeDefined();
+    });
+
     it('returns empty cart when no lines exist', async () => {
       (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));

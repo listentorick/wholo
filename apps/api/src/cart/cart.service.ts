@@ -34,8 +34,13 @@ export class CartService {
     private priceResolution: PriceResolutionService,
   ) {}
 
-  async getCart(distributorSlug: string, customerId: string, userId: string) {
+  async getCart(distributorSlug: string, customerId: string, userId: string, orderAsDistributorId?: string) {
     const distributor = await this.resolveDistributor(distributorSlug);
+
+    if (orderAsDistributorId && distributor.id !== orderAsDistributorId) {
+      throw new ForbiddenException('Order-as session is not authorised for this distributor');
+    }
+
     const order = await this.findDraft(distributor.id, customerId, userId);
     return this.formatCart(order ?? { id: null, lines: [] });
   }

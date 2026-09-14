@@ -23,9 +23,10 @@ export class CartController {
   getCart(
     @Query('distributorSlug') distributorSlug: string,
     @ActingCustomerId() customerId: string,
+    @OrderAsSession() orderAs: OrderAsContext | undefined,
     @Req() req: RequestWithUser,
   ) {
-    return this.cartService.getCart(distributorSlug, customerId, req.user.sub);
+    return this.cartService.getCart(distributorSlug, customerId, req.user.sub, orderAs?.distributorId);
   }
 
   @Put('items')
