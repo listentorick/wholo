@@ -34,6 +34,11 @@ function correctedTargetY(rawTargetY: number): number {
   return rawTargetY - currentBannerHeight + min;
 }
 
+/** Live `--sticky-stack-h` (published by StickyShopBlock's ResizeObserver), in px. */
+function stickyStackHeight(): number {
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sticky-stack-h')) || 0;
+}
+
 /**
  * Scroll-spy for the single-page storefront. Given the section ids in document
  * order, returns the id currently under the sticky shop block and a
@@ -41,8 +46,10 @@ function correctedTargetY(rawTargetY: number): number {
  * `scroll-margin-top: var(--sticky-stack-h)` on the section).
  *
  * Uses one `IntersectionObserver`; the active section is the topmost one
- * intersecting the band just below the sticky chrome. A short last section that
- * can't reach the top of the viewport is handled by a bottom-of-page fallback.
+ * intersecting the band just below the sticky chrome — the band's top edge is
+ * `--sticky-stack-h` itself, so it always matches the same live height the
+ * sections' `scroll-margin-top` uses. A short last section that can't reach
+ * the top of the viewport is handled by a bottom-of-page fallback.
  */
 export function useScrollSpy(ids: string[], ready = true): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(ids[0] ?? '');
@@ -74,8 +81,6 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       .filter((el): el is HTMLElement => el != null);
     if (els.length === 0) return;
 
-    visible.current = new Set();
-
     const recompute = () => {
       // Bottom of the page → force the last section (it may be too short to
       // ever occupy the top of the viewport).
@@ -87,24 +92,38 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       if (topmost) setActiveId(topmost);
     };
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          const id = entry.target.id;
-          if (entry.isIntersecting) visible.current.add(id);
-          else visible.current.delete(id);
-        }
-        recompute();
-      },
-      { rootMargin: '-140px 0px -55% 0px', threshold: 0 },
-    );
+    let observer: IntersectionObserver;
+    const setupObserver = () => {
+      observer?.disconnect();
+      visible.current = new Set();
+      observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const id = entry.target.id;
+            if (entry.isIntersecting) visible.current.add(id);
+            else visible.current.delete(id);
+          }
+          recompute();
+        },
+        { rootMargin: `-${stickyStackHeight()}px 0px -55% 0px`, threshold: 0 },
+      );
+      els.forEach((el) => observer.observe(el));
+      recompute();
+    };
 
-    els.forEach((el) => observer.observe(el));
+    setupObserver();
     window.addEventListener('scroll', recompute, { passive: true });
-    recompute();
+
+    // --sticky-stack-h can change without ids/ready changing (e.g. the amber
+    // order-by bar's min-spend message toggling on) — a stale band silently
+    // stops the true topmost section from ever registering as active, so
+    // rebuild the observer whenever StickyShopBlock republishes the height.
+    const heightObserver = new MutationObserver(setupObserver);
+    heightObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] });
 
     return () => {
       observer.disconnect();
+      heightObserver.disconnect();
       window.removeEventListener('scroll', recompute);
     };
   }, [idsKey, ready]);

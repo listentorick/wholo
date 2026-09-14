@@ -25,6 +25,7 @@ beforeEach(() => {
   `;
   Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
   Object.defineProperty(document.documentElement, 'scrollHeight', { value: 5000, configurable: true });
+  document.documentElement.style.removeProperty('--sticky-stack-h');
 });
 
 import { useScrollSpy } from './use-scroll-spy';
@@ -131,5 +132,28 @@ describe('useScrollSpy', () => {
   it('does not observe until ready is true', () => {
     renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery'], false));
     expect(observed).toHaveLength(0);
+  });
+
+  it('bands the observer to the live --sticky-stack-h, not a guessed constant', () => {
+    document.documentElement.style.setProperty('--sticky-stack-h', '180px');
+    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+
+    const IO = window.IntersectionObserver as unknown as { mock: { calls: unknown[][] } };
+    const [, options] = IO.mock.calls.at(-1)!;
+    expect((options as IntersectionObserverInit).rootMargin).toBe('-180px 0px -55% 0px');
+  });
+
+  it('rebuilds the intersection band when --sticky-stack-h changes after mount', async () => {
+    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    const IO = window.IntersectionObserver as unknown as { mock: { calls: unknown[][] } };
+    expect((IO.mock.calls.at(-1)![1] as IntersectionObserverInit).rootMargin).toBe('-0px 0px -55% 0px');
+
+    await act(async () => {
+      document.documentElement.style.setProperty('--sticky-stack-h', '96px');
+      // MutationObserver callbacks fire as a microtask.
+      await Promise.resolve();
+    });
+
+    expect((IO.mock.calls.at(-1)![1] as IntersectionObserverInit).rootMargin).toBe('-96px 0px -55% 0px');
   });
 });
