@@ -61,6 +61,15 @@ function stickyStackHeight(): number {
  * whole scroll gesture that follows — without this, the boundary-crossing
  * check above (correctly) reports the section still mid-transit during the
  * animation, which would flip the highlight back and forth until it lands.
+ *
+ * Arriving here fresh with a URL hash (a cross-route `<Link href="/{slug}#about">`
+ * from a sub-page like Orders, `StorefrontTabs`'s `mode: 'link'`) can't rely
+ * on the browser's native one-shot hash-scroll: it fires before the cover
+ * banner's scroll-driven collapse and Catalogue's async product fetch have
+ * settled, targeting a layout that's about to change size by thousands of
+ * pixels with nothing to correct it afterwards. Land the same way a same-page
+ * click already does instead — via `scrollToSection` — and keep re-landing
+ * while the page is still visibly growing, until it stops.
  */
 export function useScrollSpy(ids: string[], ready = true): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(ids[0] ?? '');
@@ -128,7 +137,33 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       applyActive();
     };
 
-    recompute();
+    // See the doc comment above: a hash naming one of our sections means this
+    // is a fresh cross-route arrival that needs the same banner-aware landing
+    // a same-page click gets, kept up to date while Catalogue's product grid
+    // (or anything else) is still changing the page's height.
+    let layoutObserver: ResizeObserver | undefined;
+    let layoutSettleTimer: ReturnType<typeof setTimeout> | undefined;
+    let layoutMaxTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopCorrectingLayout = () => layoutObserver?.disconnect();
+
+    const hashId = window.location.hash.slice(1);
+    if (orderedIds.includes(hashId)) {
+      scrollToSection(hashId);
+      layoutObserver = new ResizeObserver(() => {
+        scrollToSection(hashId);
+        clearTimeout(layoutSettleTimer);
+        layoutSettleTimer = setTimeout(stopCorrectingLayout, 200);
+      });
+      layoutObserver.observe(document.body);
+      // A genuine user scroll takes precedence over this correction.
+      window.addEventListener('wheel', stopCorrectingLayout, { once: true, passive: true });
+      window.addEventListener('touchstart', stopCorrectingLayout, { once: true, passive: true });
+      // Safety net: never keep correcting indefinitely if layout never settles.
+      layoutMaxTimer = setTimeout(stopCorrectingLayout, 3000);
+    } else {
+      recompute();
+    }
+
     window.addEventListener('scroll', recompute, { passive: true });
     window.addEventListener('resize', recompute);
 
@@ -141,11 +176,16 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
 
     return () => {
       clearTimeout(settleTimer);
+      clearTimeout(layoutSettleTimer);
+      clearTimeout(layoutMaxTimer);
+      layoutObserver?.disconnect();
+      window.removeEventListener('wheel', stopCorrectingLayout);
+      window.removeEventListener('touchstart', stopCorrectingLayout);
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
       heightObserver.disconnect();
     };
-  }, [idsKey, ready]);
+  }, [idsKey, ready, scrollToSection]);
 
   return [activeId, scrollToSection];
 }

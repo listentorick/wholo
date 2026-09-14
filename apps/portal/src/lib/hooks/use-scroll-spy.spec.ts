@@ -6,6 +6,13 @@ function setTop(id: string, top: number) {
   vi.spyOn(document.getElementById(id)!, 'getBoundingClientRect').mockReturnValue({ top } as DOMRect);
 }
 
+interface FakeResizeObserver {
+  callback: () => void;
+  observe: (el: Element) => void;
+  disconnect: () => void;
+}
+let roInstances: FakeResizeObserver[] = [];
+
 beforeEach(() => {
   document.body.innerHTML = `
     <div id="catalogue"></div>
@@ -16,6 +23,17 @@ beforeEach(() => {
   Object.defineProperty(window, 'scrollY', { value: 0, configurable: true });
   Object.defineProperty(document.documentElement, 'scrollHeight', { value: 5000, configurable: true });
   document.documentElement.style.removeProperty('--sticky-stack-h');
+  window.location.hash = '';
+
+  roInstances = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn((callback: () => void) => {
+      const instance: FakeResizeObserver = { callback, observe: vi.fn(), disconnect: vi.fn() };
+      roInstances.push(instance);
+      return instance;
+    }),
+  );
 });
 
 afterEach(() => {
@@ -122,6 +140,64 @@ describe('useScrollSpy', () => {
     });
 
     expect(result.current[0]).toBe('about');
+  });
+
+  it('lands on the section named by a URL hash on arrival, instead of trusting the browser\'s own hash-scroll', () => {
+    // Regression for a real production bug: a cross-route <Link href="/{slug}#about">
+    // (StorefrontTabs' `mode: 'link'`, e.g. from the Orders page) relies on
+    // the browser's native one-shot hash-scroll, which fires before layout
+    // has settled and leaves the page stranded mid-Catalogue. On arrival with
+    // a matching hash, land via the same banner-aware scrollToSection a
+    // same-page click already uses.
+    window.location.hash = '#about';
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    setTop('about', 500);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+
+    expect(result.current[0]).toBe('about');
+    expect(scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+  });
+
+  it('keeps re-landing on the hash target while the page is still growing, then stops', () => {
+    window.location.hash = '#about';
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    setTop('about', 3000); // "about" hasn't rendered its final position yet
+
+    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+
+    // Catalogue's product grid finishes loading and pushes "about" further down.
+    setTop('about', 143);
+    roInstances[0].callback();
+
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 143, behavior: 'smooth' });
+  });
+
+  it('stops correcting the hash landing once the user manually scrolls', () => {
+    window.location.hash = '#about';
+    vi.stubGlobal('scrollTo', vi.fn());
+    setTop('about', 3000);
+
+    renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    window.dispatchEvent(new Event('wheel'));
+
+    expect(roInstances[0].disconnect).toHaveBeenCalled();
+  });
+
+  it('does not treat an absent or unrecognised hash as a landing target', () => {
+    window.location.hash = '#not-a-real-section';
+    setTop('catalogue', -3000);
+    setTop('about', 900);
+    setTop('delivery', 1400);
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+
+    expect(result.current[0]).toBe('catalogue'); // ordinary boundary-crossing recompute ran instead
+    expect(roInstances).toHaveLength(0);
   });
 
   it('does nothing until ready is true', () => {
