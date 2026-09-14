@@ -11,6 +11,7 @@ const mockProfile = {
 
 const mockApiClient = {
   get: jest.fn(),
+  post: jest.fn(),
 };
 
 describe('AuthService (portal-api)', () => {
@@ -36,6 +37,26 @@ describe('AuthService (portal-api)', () => {
 
       expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', 'some-token');
       expect(result).toEqual(mockProfile);
+    });
+  });
+
+  describe('endOrderAsSession', () => {
+    it('proxies POST /order-as/sessions/end with the session token and bearer token', async () => {
+      mockApiClient.post.mockResolvedValue(undefined);
+
+      await service.endOrderAsSession('sess-1', 'some-token');
+
+      expect(mockApiClient.post).toHaveBeenCalledWith(
+        '/order-as/sessions/end',
+        'some-token',
+        { sessionToken: 'sess-1' },
+      );
+    });
+
+    it('propagates a failure from apps/api', async () => {
+      mockApiClient.post.mockRejectedValue(new Error('boom'));
+
+      await expect(service.endOrderAsSession('sess-1', 'some-token')).rejects.toThrow('boom');
     });
   });
 });

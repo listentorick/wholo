@@ -49,7 +49,7 @@ export function OrderAsHandler() {
           customerId: data.customerId,
           customerName: data.customerName,
           distributorId: data.distributorId,
-          returnUrl: document.referrer || window.location.origin + window.location.pathname,
+          distributorSlug: data.distributorSlug,
         });
       })
       .catch((err: unknown) => {

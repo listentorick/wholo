@@ -5,6 +5,7 @@ import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard'
 import { OrderAsService } from './order-as.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ExchangeTokenDto } from './dto/exchange-token.dto';
+import { EndSessionDto } from './dto/end-session.dto';
 
 interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
@@ -46,5 +47,14 @@ export class OrderAsController {
   exchangeToken(@Body() dto: ExchangeTokenDto, @Req() req: RequestWithUser) {
     this.logger.log(`exchange requested sub=${req.user.sub}`);
     return this.orderAsService.exchangeDeliveryToken(dto.deliveryToken, req.user.sub);
+  }
+
+  @Post('sessions/end')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'End an order-as session' })
+  endSession(@Body() dto: EndSessionDto, @Req() req: RequestWithUser) {
+    return this.orderAsService.deleteSession(dto.sessionToken, req.user.sub);
   }
 }

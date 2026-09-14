@@ -20,7 +20,7 @@ function makeAuth(overrides: Partial<ReturnType<typeof useAuth>>) {
     registerWithRedirect: vi.fn(),
     logout: vi.fn(),
     setOrderAsSession: vi.fn(),
-    clearOrderAsSession: vi.fn(),
+    endOrderAsSession: vi.fn(),
     ...overrides,
   };
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 
 /**
@@ -10,8 +10,9 @@ import { useAuth } from '@/lib/auth-context';
  * as `--orderas-h` so the shop block can offset itself beneath it.
  */
 export function OrderAsBanner() {
-  const { orderAsMode, orderAsCustomerName, clearOrderAsSession } = useAuth();
+  const { orderAsMode, orderAsCustomerName, endOrderAsSession } = useAuth();
   const ref = useRef<HTMLDivElement>(null);
+  const [ending, setEnding] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -39,10 +40,14 @@ export function OrderAsBanner() {
     >
       <span className="truncate">Ordering on behalf of {orderAsCustomerName}</span>
       <button
-        onClick={clearOrderAsSession}
-        className="flex-shrink-0 rounded border border-amber-fg/40 px-3 py-1 text-xs transition-colors hover:bg-amber-fg/10"
+        disabled={ending}
+        onClick={() => {
+          setEnding(true);
+          endOrderAsSession().catch(() => {}).finally(() => setEnding(false));
+        }}
+        className="flex-shrink-0 rounded border border-amber-fg/40 px-3 py-1 text-xs transition-colors hover:bg-amber-fg/10 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        End session
+        {ending ? 'Ending…' : 'End session'}
       </button>
     </div>
   );

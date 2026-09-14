@@ -10,6 +10,12 @@ class ExchangeOrderAsTokenDto {
   deliveryToken: string;
 }
 
+class EndOrderAsSessionDto {
+  @IsString()
+  @IsNotEmpty()
+  sessionToken: string;
+}
+
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
@@ -29,5 +35,14 @@ export class AuthController {
     this.logger.log('order-as exchange received');
     const { token } = req['user'] as { token: string };
     return this.authService.exchangeOrderAsToken(dto.deliveryToken, token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('order-as/end')
+  @HttpCode(200)
+  endOrderAsSession(@Body() dto: EndOrderAsSessionDto, @Req() req: Request) {
+    this.logger.log('order-as end received');
+    const { token } = req['user'] as { token: string };
+    return this.authService.endOrderAsSession(dto.sessionToken, token);
   }
 }

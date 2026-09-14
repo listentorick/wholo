@@ -327,11 +327,6 @@ export class OrdersService {
       await tx.cartOrderLine.deleteMany({ where: { orderId: cart.id } });
       await tx.cartOrder.delete({ where: { id: cart.id } });
 
-      // End order-as session atomically with order creation
-      if (orderAsSessionToken) {
-        await tx.orderAsSession.deleteMany({ where: { id: orderAsSessionToken, adminUserId: placedByUserId } });
-      }
-
       // Outbox events
       const basePayload = {
         orderId: newOrder.id,

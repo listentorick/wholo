@@ -14,13 +14,9 @@ vi.mock('@/lib/hooks/use-require-auth', () => ({
   useRequireAuth: () => ({ user: { id: 'u1', organisationId: 'org-1' }, accessToken: 'tok', isLoading: false }),
 }));
 
-const mockClearOrderAsSession = vi.fn();
-let mockOrderAsMode = false;
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({
-    orderAsMode: mockOrderAsMode,
     orderAsCustomerId: null,
-    clearOrderAsSession: mockClearOrderAsSession,
   }),
   ApiError: class extends Error {},
 }));
@@ -106,22 +102,7 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     fireEvent.click(await screen.findByText('Saturday 15 August'));
   }
 
-  it('calls clearOrderAsSession (not refreshCart) when order-as mode is active', async () => {
-    mockOrderAsMode = true;
-    mockSubmitOrder.mockResolvedValue({ id: 'ord-1' });
-
-    render(<CheckoutPage />);
-    await selectDeliveryDate();
-    fireEvent.click(screen.getByText('Place Order'));
-
-    await waitFor(() => expect(mockSubmitOrder).toHaveBeenCalled());
-    expect(mockClearOrderAsSession).toHaveBeenCalled();
-    expect(mockRefreshCart).not.toHaveBeenCalled();
-    expect(mockRouterPush).not.toHaveBeenCalled();
-  });
-
-  it('calls refreshCart and router.push when not in order-as mode', async () => {
-    mockOrderAsMode = false;
+  it('calls refreshCart and router.push to the order confirmation page on success', async () => {
     mockSubmitOrder.mockResolvedValue({ id: 'ord-1' });
 
     render(<CheckoutPage />);
@@ -129,7 +110,6 @@ describe('CheckoutPage — handlePlaceOrder', () => {
     fireEvent.click(screen.getByText('Place Order'));
 
     await waitFor(() => expect(mockRefreshCart).toHaveBeenCalled());
-    expect(mockClearOrderAsSession).not.toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith('/winos/orders/ord-1');
   });
 
@@ -170,7 +150,6 @@ describe('CheckoutPage — handlePlaceOrder', () => {
 describe('CheckoutPage — delivery address', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockGetAvailableDates.mockResolvedValue({ dates: [] });
     mockQuantities = { p1: 1 };
@@ -214,7 +193,6 @@ describe('CheckoutPage — delivery address', () => {
 describe('CheckoutPage — delivery day', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockGetMyDeliveryAddress.mockResolvedValue({ deliveryAddress: null });
     mockQuantities = { p1: 1 };
@@ -258,7 +236,6 @@ describe('CheckoutPage — delivery day', () => {
 describe('CheckoutPage — minimum order spend', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockQuantities = { p1: 1 };
   });
@@ -301,7 +278,6 @@ describe('CheckoutPage — minimum order spend', () => {
 describe('CheckoutPage — quantity stepper', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockOrderAsMode = false;
     mockEffectiveMinSpend = null;
     mockQuantities = { p1: 1 };
   });

@@ -38,7 +38,7 @@ export default function CheckoutPage() {
   const router = useRouter();
 
   const { user, accessToken, isLoading: authLoading } = useRequireAuth(pathname ?? `/${distributorSlug}/checkout`);
-  const { orderAsMode, orderAsCustomerId, clearOrderAsSession } = useAuth();
+  const { orderAsCustomerId } = useAuth();
   const { cartLoading, items, quantities, subtotal, taxAmount, taxLabel, total, savingItems, syncItem, refreshCart } = useCart();
   const { effectiveMinSpend, distributor } = useDistributor();
 
@@ -97,15 +97,8 @@ export default function CheckoutPage() {
         notes: comment || undefined,
         requestedDeliveryDate: selectedDeliveryDate,
       });
-      if (orderAsMode) {
-        // Session was consumed atomically with order creation — clear it from storage
-        // before any further requests fire (those would 401 with the stale token).
-        // Admin belongs back in the admin portal now.
-        clearOrderAsSession();
-      } else {
-        await refreshCart(); // re-sync from server (server cleared the cart on submission)
-        router.push(`/${distributorSlug}/orders/${order.id}`);
-      }
+      await refreshCart(); // re-sync from server (server cleared the cart on submission)
+      router.push(`/${distributorSlug}/orders/${order.id}`);
     } catch (err) {
       if (err instanceof ApiError && err.problem.status === 422) {
         // Delivery date no longer valid — re-fetch available dates and prompt reselection

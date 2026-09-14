@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 vi.mock('@wholo/api-client', () => ({
   authApi: { me: vi.fn() },
+  orderAsApi: { end: vi.fn() },
   setTokenProvider: vi.fn(),
   ApiError: class ApiError extends Error {
     problem: { type: string; title: string; status: number; detail?: string };
@@ -40,7 +41,7 @@ vi.mock('keycloak-js', () => ({
   }),
 }));
 
-import { authApi, ApiError, setTokenProvider } from '@wholo/api-client';
+import { authApi, orderAsApi, ApiError, setTokenProvider } from '@wholo/api-client';
 
 type AuthContextModule = typeof import('./auth-context');
 
@@ -166,5 +167,87 @@ describe('AuthProvider', () => {
 
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(kc.updateToken.mock.calls.length).toBe(updateCallsBefore);
+  });
+});
+
+describe('AuthProvider — order-as session', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sessionStorage.clear();
+    (authApi.me as any).mockResolvedValue({ id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B' });
+  });
+
+  function ProbeButtons({ ctx }: { ctx: ReturnType<AuthContextModule['useAuth']> }) {
+    return (
+      <>
+        <div data-testid="mode">{ctx.orderAsMode ? 'on' : 'off'}</div>
+        <button onClick={() => ctx.setOrderAsSession({
+          sessionToken: 'sess-1', customerId: 'cust-1', customerName: 'The Roebuck Inn', distributorId: 'dist-1', distributorSlug: 'winos',
+        })}>start</button>
+        <button onClick={() => ctx.endOrderAsSession()}>end</button>
+      </>
+    );
+  }
+
+  it('setOrderAsSession stores the session token in sessionStorage and flips orderAsMode on', async () => {
+    const mod = await loadContext();
+    renderWithProbe(mod, (ctx) => <ProbeButtons ctx={ctx} />);
+
+    fireEvent.click(screen.getByText('start'));
+
+    expect(screen.getByTestId('mode').textContent).toBe('on');
+    expect(sessionStorage.getItem('orderAs_session')).toBe('sess-1');
+  });
+
+  it('endOrderAsSession clears local state even when the best-effort server call rejects', async () => {
+    (orderAsApi.end as any).mockRejectedValue(new Error('network error'));
+    const mod = await loadContext();
+    renderWithProbe(mod, (ctx) => <ProbeButtons ctx={ctx} />);
+
+    fireEvent.click(screen.getByText('start'));
+    expect(screen.getByTestId('mode').textContent).toBe('on');
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('end'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(orderAsApi.end).toHaveBeenCalledWith('sess-1');
+    expect(sessionStorage.getItem('orderAs_session')).toBeNull();
+    expect(screen.getByTestId('mode').textContent).toBe('off');
+  });
+
+  it('endOrderAsSession redirects using orderAsState.distributorSlug, not the current pathname', async () => {
+    const originalLocation = window.location;
+    const hrefSetter = vi.fn();
+    // jsdom's real Location doesn't implement full navigation (and its `href`
+    // property isn't spy-configurable) — swap in a plain object so we can
+    // observe exactly what URL endOrderAsSession tries to navigate to.
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        pathname: '/', // not a distributor route — proves the slug isn't read from here
+        set href(url: string) { hrefSetter(url); },
+      },
+    });
+
+    (orderAsApi.end as any).mockResolvedValue(undefined);
+
+    const mod = await loadContext();
+    renderWithProbe(mod, (ctx) => <ProbeButtons ctx={ctx} />);
+
+    fireEvent.click(screen.getByText('start'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('end'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(hrefSetter).toHaveBeenCalledWith('/winos/order-as-ended?customer=The%20Roebuck%20Inn');
+
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
   });
 });

@@ -22,4 +22,16 @@ export class AuthService {
       throw err;
     }
   }
+
+  async endOrderAsSession(sessionToken: string, bearerToken: string) {
+    this.logger.log('forwarding order-as end to apps/api');
+    try {
+      const result = await this.api.post('/order-as/sessions/end', bearerToken, { sessionToken });
+      this.logger.log('end succeeded');
+      return result;
+    } catch (err) {
+      this.logger.error(`end failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
+    }
+  }
 }

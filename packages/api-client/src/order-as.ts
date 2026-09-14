@@ -15,4 +15,10 @@ export const orderAsApi = {
       body: JSON.stringify({ deliveryToken }),
     });
   },
+  end(sessionToken: string): Promise<void> {
+    return apiFetch<void>('/api/v1/auth/order-as/end', {
+      method: 'POST',
+      body: JSON.stringify({ sessionToken }),
+    });
+  },
 };

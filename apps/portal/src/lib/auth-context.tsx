@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { authApi, ApiError } from '@wholo/api-client';
+import { authApi, orderAsApi, ApiError } from '@wholo/api-client';
 import type { AuthUser } from '@wholo/types';
 import { ensureKeycloak, getKeycloak } from './keycloak';
 import {
@@ -17,8 +17,8 @@ interface OrderAsState {
   sessionToken: string;
   customerId: string;
   customerName: string;
-  returnUrl: string;
   distributorId: string;
+  distributorSlug: string;
 }
 
 interface AuthContextValue {
@@ -40,7 +40,7 @@ interface AuthContextValue {
   /** Re-fetch the profile (e.g. right after an action that just created it, like accepting an invite). */
   refreshSession: () => Promise<void>;
   setOrderAsSession: (data: OrderAsState) => void;
-  clearOrderAsSession: () => void;
+  endOrderAsSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -145,11 +145,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOrderAsStateInternal(data);
   }, []);
 
-  const clearOrderAsSession = useCallback(() => {
-    const returnUrl = orderAsState?.returnUrl ?? '/';
+  const endOrderAsSession = useCallback(async () => {
+    const token = sessionStorage.getItem(ORDER_AS_STORAGE_KEY);
+    const customerName = orderAsState?.customerName ?? '';
+    if (token) {
+      // Best-effort — local cleanup below must proceed either way.
+      await orderAsApi.end(token).catch(() => {});
+    }
+    const slug = orderAsState?.distributorSlug;
     sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
     setOrderAsStateInternal(null);
-    window.location.href = returnUrl;
+    window.location.href = `/${slug}/order-as-ended?customer=${encodeURIComponent(customerName)}`;
   }, [orderAsState]);
 
   return (
@@ -170,7 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshSession,
       setOrderAsSession,
-      clearOrderAsSession,
+      endOrderAsSession,
     }}>
       {children}
       {sessionExpired && <SessionExpiredOverlay onSignIn={() => login()} />}
