@@ -140,11 +140,16 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       cancelSettleRef.current(); // a new click supersedes any correction still in flight
       if (!landOn(id)) return;
 
-      let layoutObserver: ResizeObserver | undefined;
-      let settleTimer: ReturnType<typeof setTimeout> | undefined; // "stop correcting" — resets on every resize
-      let maxTimer: ReturnType<typeof setTimeout> | undefined; // absolute cap, in case layout never stops changing
+      // "stop correcting" — resets on every resize. Declared before `cancel`
+      // (which needs to clear it) since it's genuinely reassigned each time.
+      let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+      // References `layoutObserver`/`maxTimer` below despite being declared
+      // first — safe because `cancel` is only ever invoked later (via a
+      // timeout, event, or the observer callback), never synchronously during
+      // this function's own execution, so both are already assigned by then.
       const cancel = () => {
-        layoutObserver?.disconnect();
+        layoutObserver.disconnect();
         clearTimeout(settleTimer);
         clearTimeout(maxTimer);
         window.removeEventListener('wheel', cancel);
@@ -154,7 +159,7 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       // <body>'s size is a reasonable, cheap proxy for "has anything on the
       // page grown or shrunk" — we don't know in advance which element (the
       // sticky header, a section, an image) might change size next.
-      layoutObserver = new ResizeObserver(() => {
+      const layoutObserver = new ResizeObserver(() => {
         landOn(id);
         clearTimeout(settleTimer);
         settleTimer = setTimeout(cancel, 200); // 200ms of no further resizes = settled
@@ -165,7 +170,7 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       window.addEventListener('wheel', cancel, { once: true, passive: true });
       window.addEventListener('touchstart', cancel, { once: true, passive: true });
       // Safety net: never keep correcting indefinitely if layout never settles.
-      maxTimer = setTimeout(cancel, 3000);
+      const maxTimer = setTimeout(cancel, 3000);
       cancelSettleRef.current = cancel;
     },
     [landOn],
