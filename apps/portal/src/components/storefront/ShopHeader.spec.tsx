@@ -32,12 +32,22 @@ const base: DistributorInfo = {
   processingDays: [1, 2, 3, 4, 5],
 };
 
+let observerCallback: (entries: Pick<IntersectionObserverEntry, 'boundingClientRect'>[]) => void;
+
 beforeEach(() => {
   mockOrderCount = null;
+  vi.stubGlobal(
+    'IntersectionObserver',
+    vi.fn((cb: typeof observerCallback) => {
+      observerCallback = cb;
+      return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn(), takeRecords: vi.fn(() => []) };
+    }),
+  );
 });
 
-function renderHeader() {
-  render(<ShopHeader distributor={base} relationshipStatus={null} onScrolledPast={vi.fn()} />);
+function renderHeader(onScrolledPast = vi.fn()) {
+  render(<ShopHeader distributor={base} relationshipStatus={null} onScrolledPast={onScrolledPast} />);
+  return onScrolledPast;
 }
 
 describe('ShopHeader', () => {
@@ -64,5 +74,28 @@ describe('ShopHeader', () => {
   it('renders an inert (disabled) Message button', () => {
     renderHeader();
     expect(screen.getByRole('button', { name: 'Message' })).toBeDisabled();
+  });
+
+  describe('scrolled-past sentinel', () => {
+    it('reports scrolled-past once the sentinel reaches the viewport top, not only once strictly negative', () => {
+      const onScrolledPast = renderHeader();
+
+      observerCallback([{ boundingClientRect: { top: 0 } as DOMRect }]);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(true);
+    });
+
+    it('reports scrolled-past when comfortably past', () => {
+      const onScrolledPast = renderHeader();
+
+      observerCallback([{ boundingClientRect: { top: -50 } as DOMRect }]);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(true);
+    });
+
+    it('reports not-scrolled-past when comfortably before', () => {
+      const onScrolledPast = renderHeader();
+
+      observerCallback([{ boundingClientRect: { top: 40 } as DOMRect }]);
+      expect(onScrolledPast).toHaveBeenLastCalledWith(false);
+    });
   });
 });

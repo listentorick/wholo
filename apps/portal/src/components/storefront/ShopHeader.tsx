@@ -36,8 +36,16 @@ export function ShopHeader({ distributor, relationshipStatus, onScrolledPast }: 
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
+    // Geometry only — not `entry.isIntersecting`, which is ambiguous for a
+    // genuinely zero-height/zero-area sentinel right at the crossing point.
+    // The `< 2` tolerance (not a strict `< 0`) absorbs a landing jump that
+    // settles the sentinel a px or two short of exactly 0 — the same
+    // "couple of px" rationale `use-scroll-spy.ts`'s own boundary check
+    // uses. Without it, a target that sits immediately after the sticky
+    // stack (no section/content between them) lands the sentinel at exactly
+    // `top: 0`, which used to read as "not yet scrolled past".
     const observer = new IntersectionObserver(
-      ([entry]) => onScrolledPast(!entry.isIntersecting && entry.boundingClientRect.top < 0),
+      ([entry]) => onScrolledPast(entry.boundingClientRect.top < 2),
       { threshold: 0 },
     );
     observer.observe(el);
