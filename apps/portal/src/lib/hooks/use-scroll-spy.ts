@@ -5,9 +5,11 @@ import { FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE }
 
 /**
  * The cover banner's height is a function of scroll position (see
- * CoverBanner.tsx), so scrolling to a section changes the banner's height
- * mid-flight, which shifts every section below it — a fixed scroll target
- * (e.g. native scrollIntoView) overshoots or undershoots as a result. Solve
+ * CoverBanner.tsx) — it's read fresh off a 'scroll' listener, a tick behind
+ * whatever we just set `window.scrollY` to. So even an instant jump computed
+ * from the *current* (pre-jump) banner height lands wrong: by the time the
+ * banner catches up to the new scroll position, its height (and so every
+ * section's position below it) has changed out from under the target. Solve
  * for the scroll position whose resulting banner height is self-consistent
  * with that position: `finalY = rawTargetY - (currentBannerHeight - heightAt(finalY))`.
  * Because `heightAt` is monotonic and full > min, this has exactly one root;
@@ -42,8 +44,11 @@ function stickyStackHeight(): number {
 /**
  * Scroll-spy for the single-page storefront. Given the section ids in document
  * order, returns the id currently under the sticky shop block and a
- * `scrollToSection` that smooth-scrolls to one (the landing offset is pure CSS —
- * `scroll-margin-top: var(--sticky-stack-h)` on the section).
+ * `scrollToSection` that jumps straight to one, instantly — no scroll
+ * animation (the landing offset is pure CSS — `scroll-margin-top:
+ * var(--sticky-stack-h)` on the section). Manual scrolling is unaffected and
+ * still drives the active section live, with the cover banner's own
+ * scroll-position-driven collapse animating as usual.
  *
  * The active section is the last one (in document order) whose top has
  * scrolled up to/past `--sticky-stack-h` — the same boundary `scrollToSection`
@@ -57,10 +62,11 @@ function stickyStackHeight(): number {
  * short last section that can't reach the top of the viewport is handled by a
  * bottom-of-page fallback.
  *
- * A click pins its target active immediately and holds it there for the
- * whole scroll gesture that follows — without this, the boundary-crossing
- * check above (correctly) reports the section still mid-transit during the
- * animation, which would flip the highlight back and forth until it lands.
+ * A click pins its target active immediately — the jump is instant, but the
+ * cover banner's own height still updates a scroll-listener tick later (see
+ * `correctedTargetY` below), so there's a brief window where the
+ * boundary-crossing check above would otherwise read stale geometry and
+ * flicker the highlight; the pin covers that gap.
  *
  * Arriving here fresh with a URL hash (a cross-route `<Link href="/{slug}#about">`
  * from a sub-page like Orders, `StorefrontTabs`'s `mode: 'link'`) can't rely
@@ -89,11 +95,7 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     const rawTargetY = window.scrollY + el.getBoundingClientRect().top - marginTop;
     const targetY = correctedTargetY(rawTargetY);
 
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      window.scrollTo(0, targetY);
-      return;
-    }
-    window.scrollTo({ top: targetY, behavior: 'smooth' });
+    window.scrollTo(0, targetY);
   }, []);
 
   useEffect(() => {
@@ -101,9 +103,9 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     const orderedIds = idsKey ? idsKey.split('|') : [];
     if (orderedIds.length === 0) return;
 
-    // A couple of px of tolerance absorbs the sub-pixel gap a settled smooth
-    // scroll can leave short of the exact boundary (float rounding in the
-    // scroll math), so the section it just landed on still counts as current.
+    // A couple of px of tolerance absorbs the sub-pixel gap a settled jump
+    // can leave short of the exact boundary (float rounding in the scroll
+    // math), so the section it just landed on still counts as current.
     const applyActive = () => {
       // Bottom of the page → force the last section (it may be too short to
       // ever occupy the top of the viewport).
@@ -120,10 +122,10 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       setActiveId(current);
     };
 
-    // While a click-triggered scroll is in flight, `applyActive` is
-    // geometrically correct about the mid-transit position — which is
-    // exactly what we don't want shown. Hold it off, re-arming a short
-    // debounce on every `scroll` event, until scrolling actually stops.
+    // Right after a click-triggered jump, `applyActive` can be geometrically
+    // correct about a stale, pre-banner-catch-up layout — which is exactly
+    // what we don't want shown. Hold it off, re-arming a short debounce on
+    // every `scroll` event, until things actually stop moving.
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const recompute = () => {
       if (suppressRef.current) {

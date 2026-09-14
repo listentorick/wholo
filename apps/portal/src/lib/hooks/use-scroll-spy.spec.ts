@@ -41,11 +41,12 @@ afterEach(() => {
 });
 
 describe('useScrollSpy', () => {
-  it('pins the clicked tab active through the scroll animation, ignoring mid-flight geometry', () => {
+  it('pins the clicked tab active immediately, ignoring stale geometry from the banner catch-up tick', () => {
     vi.useFakeTimers();
     vi.stubGlobal('scrollTo', vi.fn());
     // "catalogue" has already crossed the boundary and "about" hasn't — this
-    // is what live geometry says mid-animation, right after clicking About.
+    // is what live geometry says right after the click, before the cover
+    // banner's own scroll listener has caught up to the new position.
     setTop('catalogue', -3000);
     setTop('about', 500);
     setTop('delivery', 1000);
@@ -56,8 +57,8 @@ describe('useScrollSpy', () => {
     act(() => result.current[1]('about'));
     expect(result.current[0]).toBe('about');
 
-    // An in-flight `scroll` event during the animation reports the same
-    // mid-transit geometry — the pin must hold, not revert to "catalogue".
+    // A `scroll` event fired before the banner catches up reports the same
+    // stale geometry — the pin must hold, not revert to "catalogue".
     act(() => {
       window.dispatchEvent(new Event('scroll'));
     });
@@ -69,7 +70,7 @@ describe('useScrollSpy', () => {
     expect(result.current[0]).toBe('about');
   });
 
-  it('hands control back to live scroll-tracking once the click-triggered scroll actually settles', () => {
+  it('hands control back to live scroll-tracking once things actually settle', () => {
     vi.useFakeTimers();
     vi.stubGlobal('scrollTo', vi.fn());
     setTop('catalogue', -3000);
@@ -98,7 +99,7 @@ describe('useScrollSpy', () => {
     // "catalogue" just because it's still technically touching the band.
     document.documentElement.style.setProperty('--sticky-stack-h', '143px');
     setTop('catalogue', -3000);
-    setTop('about', 143.3); // 0.3px short of the exact boundary, as a settled smooth-scroll left it
+    setTop('about', 143.3); // 0.3px short of the exact boundary, as a settled jump left it
     setTop('delivery', 900);
 
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
@@ -157,7 +158,7 @@ describe('useScrollSpy', () => {
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
 
     expect(result.current[0]).toBe('about');
-    expect(scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 500);
   });
 
   it('keeps re-landing on the hash target while the page is still growing, then stops', () => {
@@ -174,7 +175,7 @@ describe('useScrollSpy', () => {
     roInstances[0].callback();
 
     expect(scrollTo).toHaveBeenCalledTimes(2);
-    expect(scrollTo).toHaveBeenLastCalledWith({ top: 143, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 143);
   });
 
   it('stops correcting the hash landing once the user manually scrolls', () => {
@@ -222,7 +223,7 @@ describe('useScrollSpy', () => {
     expect(replaceState).toHaveBeenCalledWith(null, '', '#delivery');
   });
 
-  it('scrolls straight to the raw target when there is no cover banner on the page', () => {
+  it('jumps straight to the raw target when there is no cover banner on the page', () => {
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);
     setTop('delivery', 500);
@@ -230,7 +231,7 @@ describe('useScrollSpy', () => {
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('delivery'));
 
-    expect(scrollTo).toHaveBeenCalledWith({ top: 500, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 500);
   });
 
   it('corrects the target downward when the banner will finish collapsing further', () => {
@@ -249,7 +250,7 @@ describe('useScrollSpy', () => {
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('about'));
 
-    expect(scrollTo).toHaveBeenCalledWith({ top: 272, behavior: 'smooth' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 272);
   });
 
   it('corrects the target upward (toward the resting expanded height) when the banner will re-expand', () => {
@@ -269,25 +270,8 @@ describe('useScrollSpy', () => {
     act(() => result.current[1]('catalogue'));
 
     expect(scrollTo).toHaveBeenCalledTimes(1);
-    const [[arg]] = scrollTo.mock.calls;
-    expect(arg.behavior).toBe('smooth');
-    expect(arg.top).toBeCloseTo(136.5, 1);
-  });
-
-  it('jumps straight to the corrected target under prefers-reduced-motion, without animating', () => {
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-    );
-    const scrollTo = vi.fn();
-    vi.stubGlobal('scrollTo', scrollTo);
-    setTop('about', 240);
-
-    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
-    act(() => result.current[1]('about'));
-
-    expect(result.current[0]).toBe('about');
-    expect(scrollTo).toHaveBeenCalledTimes(1);
-    expect(scrollTo).toHaveBeenCalledWith(0, 240);
+    const [[left, top]] = scrollTo.mock.calls;
+    expect(left).toBe(0);
+    expect(top).toBeCloseTo(136.5, 1);
   });
 });
