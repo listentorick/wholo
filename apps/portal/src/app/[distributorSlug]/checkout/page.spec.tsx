@@ -99,7 +99,7 @@ describe('CheckoutPage — handlePlaceOrder', () => {
   });
 
   async function selectDeliveryDate() {
-    fireEvent.click(await screen.findByText('Saturday 15 August'));
+    fireEvent.click(await screen.findByText('Saturday 15th August'));
   }
 
   it('calls refreshCart and router.push to the order confirmation page on success', async () => {
@@ -226,7 +226,8 @@ describe('CheckoutPage — delivery day', () => {
 
     render(<CheckoutPage />);
 
-    expect(await screen.findByText('Saturday 15 August')).toBeInTheDocument();
+    expect(await screen.findByText('Saturday 15th August')).toBeInTheDocument();
+    expect(await screen.findByText(/Order by: \w+ 14th August,/)).toBeInTheDocument();
     expect(
       screen.queryByText('No delivery dates available right now. Please contact your distributor.'),
     ).not.toBeInTheDocument();

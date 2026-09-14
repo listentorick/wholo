@@ -21,14 +21,24 @@ function getOrdinalSuffix(n: number): string {
   }
 }
 
-export function formatDeliveryParts(dateStr: string, cutoffDeadline: string): DeliveryParts {
-  const cutoff = new Date(cutoffDeadline);
-
-  const hours = cutoff.getHours();
-  const minutes = cutoff.getMinutes().toString().padStart(2, '0');
+export function formatTime(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes().toString().padStart(2, '0');
   const ampm = hours >= 12 ? 'pm' : 'am';
   const hour12 = hours % 12 || 12;
-  const time = `${hour12}:${minutes}${ampm}`;
+  return `${hour12}:${minutes}${ampm}`;
+}
+
+export function formatOrdinalDate(date: Date): { dayName: string; dayOrdinal: string; monthName: string } {
+  const dayName = date.toLocaleDateString(undefined, { weekday: 'long' });
+  const dayNum = date.getDate();
+  const monthName = date.toLocaleDateString(undefined, { month: 'long' });
+  return { dayName, dayOrdinal: `${dayNum}${getOrdinalSuffix(dayNum)}`, monthName };
+}
+
+export function formatDeliveryParts(dateStr: string, cutoffDeadline: string): DeliveryParts {
+  const cutoff = new Date(cutoffDeadline);
+  const time = formatTime(cutoff);
 
   const cutoffLocalMidnight = new Date(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate());
   const todayMidnight = new Date();
@@ -47,10 +57,9 @@ export function formatDeliveryParts(dateStr: string, cutoffDeadline: string): De
 
   const [year, month, day] = dateStr.split('-').map(Number);
   const deliveryDate = new Date(year, month - 1, day);
-  const dayName = deliveryDate.toLocaleDateString(undefined, { weekday: 'long' });
-  const dayNum = deliveryDate.getDate();
+  const { dayName, dayOrdinal } = formatOrdinalDate(deliveryDate);
 
-  return { time, cutoffDayLabel, dayName, dayOrdinal: `${dayNum}${getOrdinalSuffix(dayNum)}` };
+  return { time, cutoffDayLabel, dayName, dayOrdinal };
 }
 
 /**

@@ -16,6 +16,7 @@ import { ordersApi, deliveryApi, portalApi, ApiError } from '@wholo/api-client';
 import { formatMoney } from '@wholo/types';
 import type { AddressSnapshot, AvailableDeliveryDate } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
+import { formatOrdinalDate, formatTime } from '@/lib/hooks/use-delivery-parts';
 
 /** 8px bordered card — the restyle's resting-surface treatment. */
 const CARD = 'co-card rounded-lg border border-border bg-surface p-5 shadow-sm';
@@ -305,10 +306,9 @@ export default function CheckoutPage() {
                       const isSelected = selectedDeliveryDate === d.date;
                       const deliveryDate = new Date(d.date + 'T00:00:00');
                       const cutoff = new Date(d.cutoffDeadline);
-                      const cutoffLabel = cutoff.toLocaleString('en-GB', {
-                        weekday: 'long', day: 'numeric', month: 'long',
-                        hour: 'numeric', minute: '2-digit', hour12: true,
-                      });
+                      const deliveryParts = formatOrdinalDate(deliveryDate);
+                      const cutoffParts = formatOrdinalDate(cutoff);
+                      const cutoffTime = formatTime(cutoff);
                       return (
                         <button
                           key={d.date}
@@ -320,9 +320,11 @@ export default function CheckoutPage() {
                           ].join(' ')}
                         >
                           <span className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
-                            {deliveryDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            {deliveryParts.dayName} {deliveryParts.dayOrdinal} {deliveryParts.monthName}
                           </span>
-                          <span className="text-xs text-muted">Order by {cutoffLabel}</span>
+                          <span className="text-xs text-muted">
+                            Order by: {cutoffParts.dayName} {cutoffParts.dayOrdinal} {cutoffParts.monthName}, {cutoffTime}
+                          </span>
                         </button>
                       );
                     })}

@@ -6,7 +6,7 @@ vi.mock('@wholo/api-client', () => ({
 }));
 
 import { deliveryApi } from '@wholo/api-client';
-import { useDeliveryParts, formatDeliveryParts } from './use-delivery-parts';
+import { useDeliveryParts, formatDeliveryParts, formatOrdinalDate, formatTime } from './use-delivery-parts';
 
 const slug = 'fine-wines-co';
 
@@ -79,5 +79,48 @@ describe('formatDeliveryParts', () => {
   it('returns 21st ordinal for day 21', () => {
     const parts = formatDeliveryParts('2026-07-21', '2026-07-20T10:00:00.000Z');
     expect(parts.dayOrdinal).toBe('21st');
+  });
+});
+
+describe('formatOrdinalDate', () => {
+  it('returns dayName, dayOrdinal, and monthName', () => {
+    const parts = formatOrdinalDate(new Date(2026, 8, 15));
+    expect(parts.dayName).toBe('Tuesday');
+    expect(parts.dayOrdinal).toBe('15th');
+    expect(parts.monthName).toBe('September');
+  });
+
+  it('returns 1st ordinal for day 1', () => {
+    expect(formatOrdinalDate(new Date(2026, 6, 1)).dayOrdinal).toBe('1st');
+  });
+
+  it('returns 2nd ordinal for day 2', () => {
+    expect(formatOrdinalDate(new Date(2026, 6, 2)).dayOrdinal).toBe('2nd');
+  });
+
+  it('returns 11th ordinal for day 11 (special case)', () => {
+    expect(formatOrdinalDate(new Date(2026, 6, 11)).dayOrdinal).toBe('11th');
+  });
+
+  it('returns 21st ordinal for day 21', () => {
+    expect(formatOrdinalDate(new Date(2026, 6, 21)).dayOrdinal).toBe('21st');
+  });
+});
+
+describe('formatTime', () => {
+  it('formats afternoon times as h:mmpm', () => {
+    expect(formatTime(new Date(2026, 8, 14, 18, 0))).toBe('6:00pm');
+  });
+
+  it('formats morning times as h:mmam', () => {
+    expect(formatTime(new Date(2026, 8, 14, 9, 5))).toBe('9:05am');
+  });
+
+  it('formats midnight as 12:00am', () => {
+    expect(formatTime(new Date(2026, 8, 14, 0, 0))).toBe('12:00am');
+  });
+
+  it('formats noon as 12:00pm', () => {
+    expect(formatTime(new Date(2026, 8, 14, 12, 0))).toBe('12:00pm');
   });
 });
