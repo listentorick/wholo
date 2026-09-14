@@ -23,16 +23,39 @@ function correctedTargetY(rawTargetY: number): number {
   if (!banner) return rawTargetY;
   const currentBannerHeight = banner.getBoundingClientRect().height;
 
+  // These are CoverBanner.tsx's own numbers (imported, not re-guessed) — but
+  // the linear-interpolation *shape* below is a second, independent
+  // implementation of its collapse curve. If CoverBanner ever changes how it
+  // interpolates (easing, a non-linear curve, a different COLLAPSE_DISTANCE
+  // basis), this stops matching it and this function silently goes stale.
   const mobile = window.innerWidth < 768;
   const full = mobile ? FULL_MOBILE : FULL_DESKTOP;
   const min = mobile ? MIN_MOBILE : MIN_DESKTOP;
 
-  const belowZero = rawTargetY - currentBannerHeight + full;
-  if (belowZero < 0) return belowZero;
+  // heightAt(y) — the banner's height once settled at scroll position y — is:
+  //   y <= 0                      → full
+  //   0 < y < COLLAPSE_DISTANCE   → full - (full-min) * y/COLLAPSE_DISTANCE
+  //   y >= COLLAPSE_DISTANCE      → min
+  // We want finalY solving `finalY = rawTargetY - currentBannerHeight + heightAt(finalY)`
+  // (the self-consistency equation from the doc comment above). Since we
+  // don't know in advance which of the 3 pieces the true finalY falls into,
+  // try each assumption in turn and keep the first whose own result is
+  // consistent with the range it assumed.
 
-  const inBand = (rawTargetY - currentBannerHeight + full) / (1 + (full - min) / COLLAPSE_DISTANCE);
-  if (inBand >= 0 && inBand < COLLAPSE_DISTANCE) return inBand;
+  // Assume heightAt(finalY) = full (piece 1) → finalY = rawTargetY - currentBannerHeight + full.
+  // Consistent with that assumption only if the result is <= 0.
+  const assumingFull = rawTargetY - currentBannerHeight + full;
+  if (assumingFull < 0) return assumingFull;
 
+  // Assume finalY lands inside the collapsing band (piece 2). Substituting
+  // heightAt's middle piece into the equation and solving for finalY gives:
+  //   finalY = (rawTargetY - currentBannerHeight + full) / (1 + (full-min)/COLLAPSE_DISTANCE)
+  // Consistent only if that result actually falls in [0, COLLAPSE_DISTANCE).
+  const assumingBand = (rawTargetY - currentBannerHeight + full) / (1 + (full - min) / COLLAPSE_DISTANCE);
+  if (assumingBand >= 0 && assumingBand < COLLAPSE_DISTANCE) return assumingBand;
+
+  // Otherwise: heightAt(finalY) = min (piece 3, the common case — landing
+  // anywhere past the collapse zone, e.g. any section click from near the top).
   return rawTargetY - currentBannerHeight + min;
 }
 
@@ -91,6 +114,11 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
   // `scrollToSection` call, if any (a new click supersedes it).
   const cancelSettleRef = useRef<() => void>(() => {});
 
+  // One-shot: compute where `id` should be right now and jump there. Called
+  // both directly and repeatedly by scrollToSection's settle loop below —
+  // each call re-reads live geometry, so calling it again after the page has
+  // changed size naturally corrects for that change. Returns false (and does
+  // nothing) if `id` isn't in the DOM, e.g. a stale id from a previous route.
   const landOn = useCallback((id: string): boolean => {
     const el = document.getElementById(id);
     if (!el) return false;
@@ -106,14 +134,20 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     return true;
   }, []);
 
+  // Lands on `id`, then keeps re-landing while the page's height is still
+  // visibly changing underneath it — e.g. ShopHeader's sentinel flips
+  // `scrolledPast` once we scroll past it, revealing CondensedShopHeader and
+  // growing --sticky-stack-h *after* landOn's first jump already used the
+  // smaller, pre-reveal value (see the doc comment above for the full story,
+  // including the cross-route hash-arrival case this also covers).
   const scrollToSection = useCallback(
     (id: string) => {
-      cancelSettleRef.current();
+      cancelSettleRef.current(); // a new click supersedes any correction still in flight
       if (!landOn(id)) return;
 
       let layoutObserver: ResizeObserver | undefined;
-      let settleTimer: ReturnType<typeof setTimeout> | undefined;
-      let maxTimer: ReturnType<typeof setTimeout> | undefined;
+      let settleTimer: ReturnType<typeof setTimeout> | undefined; // "stop correcting" — resets on every resize
+      let maxTimer: ReturnType<typeof setTimeout> | undefined; // absolute cap, in case layout never stops changing
       const cancel = () => {
         layoutObserver?.disconnect();
         clearTimeout(settleTimer);
@@ -122,13 +156,17 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
         window.removeEventListener('touchstart', cancel);
         cancelSettleRef.current = () => {};
       };
+      // <body>'s size is a reasonable, cheap proxy for "has anything on the
+      // page grown or shrunk" — we don't know in advance which element (the
+      // sticky header, a section, an image) might change size next.
       layoutObserver = new ResizeObserver(() => {
         landOn(id);
         clearTimeout(settleTimer);
-        settleTimer = setTimeout(cancel, 200);
+        settleTimer = setTimeout(cancel, 200); // 200ms of no further resizes = settled
       });
       layoutObserver.observe(document.body);
-      // A genuine user scroll takes precedence over this correction.
+      // A genuine user scroll/touch takes precedence over this correction —
+      // don't fight someone who's already decided to scroll elsewhere.
       window.addEventListener('wheel', cancel, { once: true, passive: true });
       window.addEventListener('touchstart', cancel, { once: true, passive: true });
       // Safety net: never keep correcting indefinitely if layout never settles.
