@@ -272,7 +272,11 @@ describe('useScrollSpy', () => {
     const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
     act(() => result.current[1]('about'));
 
-    expect(scrollTo).toHaveBeenCalledWith(0, 272);
+    // Bisection, not exact algebra — converges to within a fraction of a px.
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    const [[left, top]] = scrollTo.mock.calls;
+    expect(left).toBe(0);
+    expect(top).toBeCloseTo(272, 3);
   });
 
   it('corrects the target upward (toward the resting expanded height) when the banner will re-expand', () => {

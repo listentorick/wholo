@@ -1,12 +1,42 @@
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CoverBanner } from './CoverBanner';
+import { CoverBanner, heightAt, FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE } from './CoverBanner';
 
 beforeEach(() => {
   vi.stubGlobal(
     'matchMedia',
     vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
   );
+});
+
+describe('heightAt', () => {
+  // The single source of truth for the collapse curve — use-scroll-spy's
+  // correctedTargetY inverts this by bisection, so it must stay a genuine
+  // monotonic, bounded function of scroll position for that to work.
+  it('is full height at or above the top of the page', () => {
+    expect(heightAt(0, false)).toBe(FULL_DESKTOP);
+    expect(heightAt(-50, false)).toBe(FULL_DESKTOP);
+    expect(heightAt(0, true)).toBe(FULL_MOBILE);
+  });
+
+  it('is min height at or past the collapse distance', () => {
+    expect(heightAt(COLLAPSE_DISTANCE, false)).toBe(MIN_DESKTOP);
+    expect(heightAt(COLLAPSE_DISTANCE + 500, false)).toBe(MIN_DESKTOP);
+    expect(heightAt(COLLAPSE_DISTANCE, true)).toBe(MIN_MOBILE);
+  });
+
+  it('interpolates linearly in between', () => {
+    expect(heightAt(COLLAPSE_DISTANCE / 2, false)).toBeCloseTo((FULL_DESKTOP + MIN_DESKTOP) / 2, 5);
+  });
+
+  it('is monotonically non-increasing everywhere', () => {
+    let previous = heightAt(-100, false);
+    for (let y = -100; y <= COLLAPSE_DISTANCE + 100; y += 10) {
+      const current = heightAt(y, false);
+      expect(current).toBeLessThanOrEqual(previous);
+      previous = current;
+    }
+  });
 });
 
 describe('CoverBanner', () => {

@@ -1,62 +1,57 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FULL_DESKTOP, FULL_MOBILE, MIN_DESKTOP, MIN_MOBILE, COLLAPSE_DISTANCE } from '@/components/storefront/CoverBanner';
+import { heightAt } from '@/components/storefront/CoverBanner';
 
 /**
- * The cover banner's height is a function of scroll position (see
+ * The cover banner's height is a function of scroll position (`heightAt` in
  * CoverBanner.tsx) — it's read fresh off a 'scroll' listener, a tick behind
  * whatever we just set `window.scrollY` to. So even an instant jump computed
  * from the *current* (pre-jump) banner height lands wrong: by the time the
  * banner catches up to the new scroll position, its height (and so every
- * section's position below it) has changed out from under the target. Solve
- * for the scroll position whose resulting banner height is self-consistent
- * with that position: `finalY = rawTargetY - (currentBannerHeight - heightAt(finalY))`.
- * Because `heightAt` is monotonic and full > min, this has exactly one root;
- * find it by checking which of its three linear pieces it falls in. Depends
- * on CoverBanner writing `el.style.height` directly with no CSS transition —
- * a transition would make the live height read reflect an in-progress value
- * instead of the settled one.
+ * section's position below it) has changed out from under the target.
+ *
+ * Solve for the scroll position whose resulting banner height is
+ * self-consistent with that position:
+ *   finalY = rawTargetY - currentBannerHeight + heightAt(finalY)
+ * finalY appears on both sides — `heightAt(finalY)` is what we're trying to
+ * find `finalY` from — so this doesn't reduce to plugging in a value. Rewrite
+ * it as `g(finalY) = 0` where `g(y) = y - (rawTargetY - currentBannerHeight) - heightAt(y)`.
+ * `heightAt` is monotonically non-increasing in `y` (CoverBanner.tsx clamps
+ * it between two endpoints), so `g` is monotonically non-decreasing and has
+ * exactly one zero — bisection finds it without needing to know `heightAt`'s
+ * shape (linear, eased, anything), only that it's monotonic and bounded. This
+ * intentionally avoids a naive fixed-point loop (`y = offset + heightAt(y)`
+ * repeated): `heightAt`'s slope can exceed 1 in magnitude within its
+ * collapsing band, which would make that loop diverge instead of converge.
+ * Depends on CoverBanner writing `el.style.height` directly with no CSS
+ * transition — a transition would make the live height read reflect an
+ * in-progress value instead of the settled one.
  */
 function correctedTargetY(rawTargetY: number): number {
   const banner = document.querySelector<HTMLElement>('.cover-banner');
   if (!banner) return rawTargetY;
   const currentBannerHeight = banner.getBoundingClientRect().height;
-
-  // These are CoverBanner.tsx's own numbers (imported, not re-guessed) — but
-  // the linear-interpolation *shape* below is a second, independent
-  // implementation of its collapse curve. If CoverBanner ever changes how it
-  // interpolates (easing, a non-linear curve, a different COLLAPSE_DISTANCE
-  // basis), this stops matching it and this function silently goes stale.
   const mobile = window.innerWidth < 768;
-  const full = mobile ? FULL_MOBILE : FULL_DESKTOP;
-  const min = mobile ? MIN_MOBILE : MIN_DESKTOP;
 
-  // heightAt(y) — the banner's height once settled at scroll position y — is:
-  //   y <= 0                      → full
-  //   0 < y < COLLAPSE_DISTANCE   → full - (full-min) * y/COLLAPSE_DISTANCE
-  //   y >= COLLAPSE_DISTANCE      → min
-  // We want finalY solving `finalY = rawTargetY - currentBannerHeight + heightAt(finalY)`
-  // (the self-consistency equation from the doc comment above). Since we
-  // don't know in advance which of the 3 pieces the true finalY falls into,
-  // try each assumption in turn and keep the first whose own result is
-  // consistent with the range it assumed.
+  const offset = rawTargetY - currentBannerHeight;
+  const g = (y: number) => y - offset - heightAt(y, mobile);
 
-  // Assume heightAt(finalY) = full (piece 1) → finalY = rawTargetY - currentBannerHeight + full.
-  // Consistent with that assumption only if the result is <= 0.
-  const assumingFull = rawTargetY - currentBannerHeight + full;
-  if (assumingFull < 0) return assumingFull;
+  // heightAt is bounded (it clamps between its full/min endpoints), so a
+  // sufficiently wide bracket around `offset` always contains the root; widen
+  // further only as a guard against a future heightAt with a wider range,
+  // capped so a broken (non-monotonic or unbounded) heightAt can't hang this.
+  let lo = offset - 1000;
+  let hi = offset + 1000;
+  for (let guard = 0; guard < 10 && g(lo) > 0; guard++) lo -= 1000;
+  for (let guard = 0; guard < 10 && g(hi) < 0; guard++) hi += 1000;
 
-  // Assume finalY lands inside the collapsing band (piece 2). Substituting
-  // heightAt's middle piece into the equation and solving for finalY gives:
-  //   finalY = (rawTargetY - currentBannerHeight + full) / (1 + (full-min)/COLLAPSE_DISTANCE)
-  // Consistent only if that result actually falls in [0, COLLAPSE_DISTANCE).
-  const assumingBand = (rawTargetY - currentBannerHeight + full) / (1 + (full - min) / COLLAPSE_DISTANCE);
-  if (assumingBand >= 0 && assumingBand < COLLAPSE_DISTANCE) return assumingBand;
-
-  // Otherwise: heightAt(finalY) = min (piece 3, the common case — landing
-  // anywhere past the collapse zone, e.g. any section click from near the top).
-  return rawTargetY - currentBannerHeight + min;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (g(mid) < 0) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
 }
 
 /** Live `--sticky-stack-h` (published by StickyShopBlock's ResizeObserver), in px. */

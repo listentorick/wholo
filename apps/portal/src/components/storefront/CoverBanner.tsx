@@ -6,13 +6,29 @@ interface Props {
   bannerUrl: string | null;
 }
 
-// Exported so use-scroll-spy.ts can predict the banner's resting height when
-// computing a nav-click scroll target, without duplicating these numbers.
 export const FULL_DESKTOP = 300;
 export const FULL_MOBILE = 150;
 export const MIN_DESKTOP = 72;
 export const MIN_MOBILE = 56;
 export const COLLAPSE_DISTANCE = 220;
+
+/**
+ * The banner's settled height at scroll position `y`: linearly interpolating
+ * from `full` at y=0 down to `min` at y=COLLAPSE_DISTANCE, clamped flat
+ * outside that range. Exported as the single source of truth for this curve —
+ * this component's own render loop below calls it, and so does
+ * use-scroll-spy's `correctedTargetY` (by bisection, since it needs to invert
+ * this to compute a scroll target). Sharing the function itself, not just its
+ * endpoint constants, means a future change to *how* the banner collapses
+ * (easing, a different curve) can't silently desync the two — the scroll
+ * target math stays correct for whatever this returns, unchanged.
+ */
+export function heightAt(y: number, mobile: boolean): number {
+  const full = mobile ? FULL_MOBILE : FULL_DESKTOP;
+  const min = mobile ? MIN_MOBILE : MIN_DESKTOP;
+  const t = Math.min(1, Math.max(0, y / COLLAPSE_DISTANCE));
+  return full - (full - min) * t;
+}
 
 /**
  * The distributor's cover image. Renders nothing when the distributor hasn't set
@@ -31,11 +47,7 @@ export function CoverBanner({ bannerUrl }: Props) {
     let frame = 0;
     const update = () => {
       frame = 0;
-      const mobile = window.innerWidth < 768;
-      const full = mobile ? FULL_MOBILE : FULL_DESKTOP;
-      const min = mobile ? MIN_MOBILE : MIN_DESKTOP;
-      const t = Math.min(1, Math.max(0, window.scrollY / COLLAPSE_DISTANCE));
-      el.style.height = `${Math.round(full - (full - min) * t)}px`;
+      el.style.height = `${Math.round(heightAt(window.scrollY, window.innerWidth < 768))}px`;
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
