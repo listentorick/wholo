@@ -210,6 +210,28 @@ describe('useScrollSpy', () => {
     expect(result.current[0]).toBe('catalogue');
   });
 
+  it('keeps re-landing after a same-page click too, e.g. when the sticky header grows past its sentinel', () => {
+    // Regression for a real production bug: clicking "About" from the top of
+    // the page (banner expanded, CondensedShopHeader not yet revealed) lands
+    // far enough down to pass ShopHeader's sentinel, which reveals
+    // CondensedShopHeader and grows --sticky-stack-h *after* the jump already
+    // used the smaller, pre-reveal value — undershooting the target. Not just
+    // hash-arrivals need the settle-correction loop; every click does.
+    const scrollTo = vi.fn();
+    vi.stubGlobal('scrollTo', scrollTo);
+    setTop('about', 3000); // undershot — sticky header hasn't grown yet
+
+    const { result } = renderHook(() => useScrollSpy(['catalogue', 'about', 'delivery']));
+    act(() => result.current[1]('about'));
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+
+    setTop('about', 143); // the sticky header has now grown, shifting the true target
+    act(() => roInstances[0].callback());
+
+    expect(scrollTo).toHaveBeenCalledTimes(2);
+    expect(scrollTo).toHaveBeenLastCalledWith(0, 143);
+  });
+
   it('scrollToSection sets the active id and updates the hash', () => {
     const scrollTo = vi.fn();
     vi.stubGlobal('scrollTo', scrollTo);

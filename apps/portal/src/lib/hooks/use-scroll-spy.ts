@@ -68,14 +68,18 @@ function stickyStackHeight(): number {
  * boundary-crossing check above would otherwise read stale geometry and
  * flicker the highlight; the pin covers that gap.
  *
- * Arriving here fresh with a URL hash (a cross-route `<Link href="/{slug}#about">`
- * from a sub-page like Orders, `StorefrontTabs`'s `mode: 'link'`) can't rely
- * on the browser's native one-shot hash-scroll: it fires before the cover
- * banner's scroll-driven collapse and Catalogue's async product fetch have
- * settled, targeting a layout that's about to change size by thousands of
- * pixels with nothing to correct it afterwards. Land the same way a same-page
- * click already does instead — via `scrollToSection` — and keep re-landing
- * while the page is still visibly growing, until it stops.
+ * `scrollToSection` keeps re-landing (via a `ResizeObserver` on `<body>`,
+ * debounced, stopping early on a genuine user scroll) while the page is still
+ * visibly changing size after the jump — not just for the async, multi-second
+ * settling of a fresh cross-route arrival (a `<Link href="/{slug}#about">`
+ * from a sub-page like Orders can't rely on the browser's native one-shot
+ * hash-scroll, which fires before Catalogue's product fetch has resolved),
+ * but for same-page clicks too: landing far enough down the page to pass
+ * `ShopHeader`'s sentinel flips `scrolledPast` true, revealing
+ * `CondensedShopHeader` and growing `--sticky-stack-h` by its height *after*
+ * the jump already used the smaller, pre-reveal value — a one-shot jump from
+ * the very top of the page (banner still expanded) reliably undershoots by
+ * exactly that gap without this.
  */
 export function useScrollSpy(ids: string[], ready = true): [string, (id: string) => void] {
   const [activeId, setActiveId] = useState(ids[0] ?? '');
@@ -83,10 +87,13 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
   // True while a click-triggered scroll is still settling; cleared once
   // `scroll` events stop arriving (see the debounce in the effect below).
   const suppressRef = useRef(false);
+  // Cancels the in-flight settle-correction loop from the previous
+  // `scrollToSection` call, if any (a new click supersedes it).
+  const cancelSettleRef = useRef<() => void>(() => {});
 
-  const scrollToSection = useCallback((id: string) => {
+  const landOn = useCallback((id: string): boolean => {
     const el = document.getElementById(id);
-    if (!el) return;
+    if (!el) return false;
     setActiveId(id);
     suppressRef.current = true;
     if (typeof history !== 'undefined') history.replaceState(null, '', `#${id}`);
@@ -96,7 +103,40 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
     const targetY = correctedTargetY(rawTargetY);
 
     window.scrollTo(0, targetY);
+    return true;
   }, []);
+
+  const scrollToSection = useCallback(
+    (id: string) => {
+      cancelSettleRef.current();
+      if (!landOn(id)) return;
+
+      let layoutObserver: ResizeObserver | undefined;
+      let settleTimer: ReturnType<typeof setTimeout> | undefined;
+      let maxTimer: ReturnType<typeof setTimeout> | undefined;
+      const cancel = () => {
+        layoutObserver?.disconnect();
+        clearTimeout(settleTimer);
+        clearTimeout(maxTimer);
+        window.removeEventListener('wheel', cancel);
+        window.removeEventListener('touchstart', cancel);
+        cancelSettleRef.current = () => {};
+      };
+      layoutObserver = new ResizeObserver(() => {
+        landOn(id);
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(cancel, 200);
+      });
+      layoutObserver.observe(document.body);
+      // A genuine user scroll takes precedence over this correction.
+      window.addEventListener('wheel', cancel, { once: true, passive: true });
+      window.addEventListener('touchstart', cancel, { once: true, passive: true });
+      // Safety net: never keep correcting indefinitely if layout never settles.
+      maxTimer = setTimeout(cancel, 3000);
+      cancelSettleRef.current = cancel;
+    },
+    [landOn],
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -139,29 +179,13 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
       applyActive();
     };
 
-    // See the doc comment above: a hash naming one of our sections means this
-    // is a fresh cross-route arrival that needs the same banner-aware landing
-    // a same-page click gets, kept up to date while Catalogue's product grid
-    // (or anything else) is still changing the page's height.
-    let layoutObserver: ResizeObserver | undefined;
-    let layoutSettleTimer: ReturnType<typeof setTimeout> | undefined;
-    let layoutMaxTimer: ReturnType<typeof setTimeout> | undefined;
-    const stopCorrectingLayout = () => layoutObserver?.disconnect();
-
+    // A URL hash naming one of our sections on arrival (a fresh cross-route
+    // <Link href="/{slug}#about">, e.g. from Orders) needs the same landing +
+    // settle-correction a same-page click gets — see the doc comment above —
+    // so just route through `scrollToSection` rather than duplicating it.
     const hashId = window.location.hash.slice(1);
     if (orderedIds.includes(hashId)) {
       scrollToSection(hashId);
-      layoutObserver = new ResizeObserver(() => {
-        scrollToSection(hashId);
-        clearTimeout(layoutSettleTimer);
-        layoutSettleTimer = setTimeout(stopCorrectingLayout, 200);
-      });
-      layoutObserver.observe(document.body);
-      // A genuine user scroll takes precedence over this correction.
-      window.addEventListener('wheel', stopCorrectingLayout, { once: true, passive: true });
-      window.addEventListener('touchstart', stopCorrectingLayout, { once: true, passive: true });
-      // Safety net: never keep correcting indefinitely if layout never settles.
-      layoutMaxTimer = setTimeout(stopCorrectingLayout, 3000);
     } else {
       recompute();
     }
@@ -178,14 +202,10 @@ export function useScrollSpy(ids: string[], ready = true): [string, (id: string)
 
     return () => {
       clearTimeout(settleTimer);
-      clearTimeout(layoutSettleTimer);
-      clearTimeout(layoutMaxTimer);
-      layoutObserver?.disconnect();
-      window.removeEventListener('wheel', stopCorrectingLayout);
-      window.removeEventListener('touchstart', stopCorrectingLayout);
       window.removeEventListener('scroll', recompute);
       window.removeEventListener('resize', recompute);
       heightObserver.disconnect();
+      cancelSettleRef.current();
     };
   }, [idsKey, ready, scrollToSection]);
 
