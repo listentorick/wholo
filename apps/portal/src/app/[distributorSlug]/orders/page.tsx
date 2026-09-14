@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { Calendar, Truck } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/use-require-auth';
+import { distributorOrdersHref } from '@/lib/distributor-routes';
 import { ordersApi } from '@wholo/api-client';
 import { PageShell, PageSpinner } from '@/components/PageShell';
 import { Eyebrow } from '@/components/Eyebrow';
@@ -102,7 +103,9 @@ export default function OrdersPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { user, accessToken, isLoading: authLoading, orderAsMode } = useRequireAuth(pathname ?? `/${distributorSlug}/orders`);
+  const { user, accessToken, isLoading: authLoading, orderAsMode } = useRequireAuth(
+    pathname ?? distributorOrdersHref(distributorSlug),
+  );
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);

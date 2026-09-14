@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { distributorOrdersHref } from '@/lib/distributor-routes';
 
 export interface StorefrontSection {
   id: string;
@@ -58,7 +59,10 @@ function TabLabel({ section }: { section: StorefrontSection }) {
  * active anchor gets the Cobalt underline (never amber — the Warm Spark Rule).
  */
 export function StorefrontTabs({ slug, sections, tabs }: Props) {
-  const ordersActive = tabs.mode === 'link' && tabs.activeSection === 'orders';
+  // Spy mode's `activeSection` is always one of `sections`' own ids, never
+  // 'orders' — so this needs no `mode` check, unlike the per-section `active`
+  // checks below (which only apply in link mode).
+  const ordersActive = tabs.activeSection === 'orders';
 
   return (
     <div className="flex items-center">
@@ -98,7 +102,7 @@ export function StorefrontTabs({ slug, sections, tabs }: Props) {
         );
       })}
       <Link
-        href={`/${slug}/orders`}
+        href={distributorOrdersHref(slug)}
         aria-current={ordersActive ? 'true' : undefined}
         className={`${TAB_BASE} ${
           ordersActive

@@ -12,11 +12,8 @@ import { OrderAsBanner } from '@/components/OrderAsBanner';
 import { OrderAsHandler } from '@/components/OrderAsHandler';
 import { ScrollReset } from '@/components/portal/ScrollReset';
 import { StorefrontChrome } from '@/components/storefront/StorefrontChrome';
+import { STOREFRONT_MAIN_ID, isOrdersRoute, isProductDetailRoute, isStorefrontRoute } from '@/lib/distributor-routes';
 import type { DistributorInfo } from '@wholo/types';
-
-function escapeRe(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function DistributorMain({ distributorSlug, children }: { distributorSlug: string; children: React.ReactNode }) {
   const { distributor } = useDistributor();
@@ -25,16 +22,16 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
   // The storefront chrome lives here (not in the pages) so it never remounts when
   // navigating between the storefront, a product page, and orders. Shown on
   // those routes; checkout stays bare.
-  const isStorefront = pathname === `/${distributorSlug}`;
-  const isProductDetail = new RegExp(`^/${escapeRe(distributorSlug)}/products/[^/]+$`).test(pathname);
-  const isOrders = new RegExp(`^/${escapeRe(distributorSlug)}/orders(/[^/]+)?$`).test(pathname);
+  const isStorefront = isStorefrontRoute(distributorSlug, pathname);
+  const isProductDetail = isProductDetailRoute(distributorSlug, pathname);
+  const isOrders = isOrdersRoute(distributorSlug, pathname);
   const showChrome = isStorefront || isProductDetail || isOrders;
 
   return (
     <div className="flex min-h-screen flex-col bg-page">
       <OrderAsBanner />
       <OrderAsHandler />
-      <ScrollReset />
+      <ScrollReset distributorSlug={distributorSlug} />
       <PortalTopBar variant="distributor" />
       <PlatformNavStrip slug={distributorSlug} distributorName={distributor?.name} />
       <StorefrontSearchProvider>
@@ -45,7 +42,12 @@ function DistributorMain({ distributorSlug, children }: { distributorSlug: strin
             activeTab={isOrders ? 'orders' : 'catalogue'}
           />
         )}
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+        <main
+          id={STOREFRONT_MAIN_ID}
+          className="flex min-w-0 flex-1 flex-col scroll-mt-[var(--sticky-stack-h,0px)]"
+        >
+          {children}
+        </main>
       </StorefrontSearchProvider>
       <PortalFooter />
     </div>

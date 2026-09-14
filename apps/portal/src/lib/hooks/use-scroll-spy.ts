@@ -28,7 +28,7 @@ import { heightAt } from '@/components/storefront/CoverBanner';
  * transition — a transition would make the live height read reflect an
  * in-progress value instead of the settled one.
  */
-function correctedTargetY(rawTargetY: number): number {
+export function correctedTargetY(rawTargetY: number): number {
   const banner = document.querySelector<HTMLElement>('.cover-banner');
   if (!banner) return rawTargetY;
   const currentBannerHeight = banner.getBoundingClientRect().height;
