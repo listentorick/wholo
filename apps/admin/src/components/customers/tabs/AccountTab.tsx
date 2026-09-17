@@ -79,7 +79,7 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
     setApiError(null);
     setAccountNumberError(null);
     try {
-      await adminCustomersApi.update(customer.id, {
+      await adminCustomersApi.update(customer.organisationId, {
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
         minimumOrderSpend: data.minimumOrderSpend || undefined,

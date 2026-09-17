@@ -125,9 +125,9 @@ export class AdminCustomersService {
     };
   }
 
-  async findOne(id: string, distributorId: string) {
+  async findOne(customerId: string, distributorId: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { id, distributorId, deletedAt: null },
+      where: { customerId, distributorId, deletedAt: null },
       include: relationshipInclude,
     });
     if (!rel) throw new NotFoundException('Customer not found');
@@ -256,16 +256,16 @@ export class AdminCustomersService {
     return this.formatCustomer(rel);
   }
 
-  async update(id: string, distributorId: string, dto: UpdateCustomerDto) {
+  async update(customerId: string, distributorId: string, dto: UpdateCustomerDto) {
     const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { id, distributorId, deletedAt: null },
-      select: { id: true, customerId: true },
+      where: { customerId, distributorId, deletedAt: null },
+      select: { id: true },
     });
     if (!rel) throw new NotFoundException('Customer not found');
 
     if (dto.accountNumber) {
       const conflict = await this.prisma.tradeRelationship.findFirst({
-        where: { distributorId, accountNumber: dto.accountNumber, deletedAt: null, id: { not: id } },
+        where: { distributorId, accountNumber: dto.accountNumber, deletedAt: null, id: { not: rel.id } },
         select: { id: true },
       });
       if (conflict) {
@@ -275,7 +275,7 @@ export class AdminCustomersService {
 
     await this.prisma.$transaction([
       this.prisma.organisation.update({
-        where: { id: rel.customerId },
+        where: { id: customerId },
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.email !== undefined && { email: dto.email }),
@@ -289,7 +289,7 @@ export class AdminCustomersService {
         },
       }),
       this.prisma.tradeRelationship.update({
-        where: { id },
+        where: { id: rel.id },
         data: {
           ...(dto.accountNumber !== undefined && { accountNumber: dto.accountNumber }),
           ...(dto.creditLimit !== undefined && {
@@ -312,24 +312,24 @@ export class AdminCustomersService {
       }),
     ]);
 
-    return this.findOne(id, distributorId);
+    return this.findOne(customerId, distributorId);
   }
 
-  async remove(id: string, distributorId: string) {
+  async remove(customerId: string, distributorId: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { id, distributorId, deletedAt: null },
+      where: { customerId, distributorId, deletedAt: null },
       select: { id: true },
     });
     if (!rel) throw new NotFoundException('Customer not found');
     await this.prisma.tradeRelationship.update({
-      where: { id },
+      where: { id: rel.id },
       data: { deletedAt: new Date() },
     });
   }
 
-  async invite(id: string, distributorId: string, email?: string) {
+  async invite(customerId: string, distributorId: string, email?: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { id, distributorId, deletedAt: null },
+      where: { customerId, distributorId, deletedAt: null },
       include: {
         customer: { select: { email: true, name: true } },
         distributor: { select: { name: true, email: true, phone: true } },
@@ -347,13 +347,13 @@ export class AdminCustomersService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.customerInvitation.updateMany({
-        where: { tradeRelationshipId: id, email: target, status: InvitationStatus.PENDING },
+        where: { tradeRelationshipId: rel.id, email: target, status: InvitationStatus.PENDING },
         data: { status: InvitationStatus.REVOKED },
       });
 
       const invitation = await tx.customerInvitation.create({
         data: {
-          tradeRelationshipId: id,
+          tradeRelationshipId: rel.id,
           distributorId,
           email: target,
           token,
@@ -382,35 +382,35 @@ export class AdminCustomersService {
     };
   }
 
-  async acceptRequest(id: string, distributorId: string) {
+  async acceptRequest(customerId: string, distributorId: string) {
     return this.transitionStatus(
-      id, distributorId,
+      customerId, distributorId,
       TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.ACTIVE,
       'TradeRelationshipRequestAccepted',
     );
   }
 
-  async declineRequest(id: string, distributorId: string) {
+  async declineRequest(customerId: string, distributorId: string) {
     // INACTIVE, not a hard delete — the customer can request again later
     // (see the portal's requestAccess, which re-allows a request from INACTIVE).
     return this.transitionStatus(
-      id, distributorId,
+      customerId, distributorId,
       TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.INACTIVE,
       'TradeRelationshipRequestDeclined',
     );
   }
 
-  async suspend(id: string, distributorId: string) {
+  async suspend(customerId: string, distributorId: string) {
     return this.transitionStatus(
-      id, distributorId,
+      customerId, distributorId,
       TradeRelationshipStatus.ACTIVE, TradeRelationshipStatus.SUSPENDED,
       'TradeRelationshipSuspended',
     );
   }
 
-  async unsuspend(id: string, distributorId: string) {
+  async unsuspend(customerId: string, distributorId: string) {
     return this.transitionStatus(
-      id, distributorId,
+      customerId, distributorId,
       TradeRelationshipStatus.SUSPENDED, TradeRelationshipStatus.ACTIVE,
       'TradeRelationshipUnsuspended',
     );
@@ -421,9 +421,9 @@ export class AdminCustomersService {
   // (e.g. a known contact onboarded by phone), not the customer verifying
   // their own email. A different trust model than acceptRequest above, so it
   // gets its own endpoint/event rather than reusing "accepted".
-  async activate(id: string, distributorId: string) {
+  async activate(customerId: string, distributorId: string) {
     return this.transitionStatus(
-      id, distributorId,
+      customerId, distributorId,
       TradeRelationshipStatus.PENDING_INVITE, TradeRelationshipStatus.ACTIVE,
       'TradeRelationshipActivated',
     );
@@ -438,14 +438,14 @@ export class AdminCustomersService {
    * unguarded race; not repeating it here).
    */
   private async transitionStatus(
-    id: string,
+    customerId: string,
     distributorId: string,
     from: TradeRelationshipStatus,
     to: TradeRelationshipStatus,
     eventType: string,
   ) {
     const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { id, distributorId, deletedAt: null },
+      where: { customerId, distributorId, deletedAt: null },
       include: {
         customer: { select: { id: true, name: true, email: true } },
         distributor: { select: { name: true, slug: true, email: true, phone: true } },
@@ -464,15 +464,15 @@ export class AdminCustomersService {
 
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.tradeRelationship.updateMany({
-        where: { id, distributorId, status: from },
+        where: { id: rel.id, distributorId, status: from },
         data: { status: to },
       });
       if (updated.count === 0) {
         throw new UnprocessableEntityException(`Customer must be ${from} for this action`);
       }
 
-      await this.outbox.writeEvent(tx, 'TradeRelationship', id, eventType, {
-        relationshipId: id,
+      await this.outbox.writeEvent(tx, 'TradeRelationship', rel.id, eventType, {
+        relationshipId: rel.id,
         distributorId,
         customerId: rel.customerId,
         customerName: rel.customer.name,
@@ -484,7 +484,7 @@ export class AdminCustomersService {
       });
     });
 
-    return this.findOne(id, distributorId);
+    return this.findOne(customerId, distributorId);
   }
 
   private formatCustomer(rel: any) {
@@ -511,6 +511,7 @@ export class AdminCustomersService {
       minimumOrderSpend: rel.minimumOrderSpend,
       paymentTerms: rel.paymentTerms,
       notes: rel.notes,
+      recentContactSelfDeclared: rel.recentContactSelfDeclared,
       deliveryLine1: rel.deliveryLine1,
       deliveryLine2: rel.deliveryLine2,
       deliveryCity: rel.deliveryCity,

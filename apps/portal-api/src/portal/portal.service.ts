@@ -1,25 +1,44 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import type { CustomerSelfView, MyDeliveryAddressResponse } from '@wholo/types';
+import type { Customer, CustomerSelfView, MyDeliveryAddressResponse } from '@wholo/types';
 import { ApiClientService } from '../api-client/api-client.service';
+
+// apps/api now returns the full Customer record to any authorized caller
+// (staff or the customer themselves) — this BFF is what keeps the
+// distributor's working data (notes, credit, pricing/catalogue wiring,
+// invitations) from ever reaching the portal frontend.
+function toSelfView(customer: Customer): CustomerSelfView {
+  const {
+    notes: _notes,
+    creditLimit: _creditLimit,
+    priceListId: _priceListId,
+    priceList: _priceList,
+    deliveryProfileId: _deliveryProfileId,
+    deliveryProfile: _deliveryProfile,
+    catalogues: _catalogues,
+    invitations: _invitations,
+    ...selfView
+  } = customer;
+  return selfView;
+}
 
 @Injectable()
 export class PortalService {
   constructor(private api: ApiClientService) {}
 
-  getMyDistributors(token: string) {
-    return this.api.get('/portal/me/distributors', token);
+  getMyDistributors(organisationId: string, token: string) {
+    return this.api.get(`/organisations/${organisationId}/distributors`, token);
   }
 
-  getRecommendedDistributors(token: string) {
-    return this.api.get('/portal/me/recommended-distributors', token);
+  getRecommendedDistributors(organisationId: string, token: string) {
+    return this.api.get(`/organisations/${organisationId}/recommended-distributors`, token);
   }
 
-  getMyProfile(token: string) {
-    return this.api.get('/portal/me/profile', token);
+  getMyProfile(organisationId: string, token: string) {
+    return this.api.get(`/organisations/${organisationId}`, token);
   }
 
-  updateMyProfile(token: string, body: unknown) {
-    return this.api.patch('/portal/me/profile', token, body);
+  updateMyProfile(organisationId: string, token: string, body: unknown) {
+    return this.api.patch(`/organisations/${organisationId}`, token, body);
   }
 
   async getMyDeliveryAddress(
@@ -28,7 +47,7 @@ export class PortalService {
     customerId: string,
   ): Promise<MyDeliveryAddressResponse> {
     const distributor = await this.api.get<{ id: string }>(`/distributors/${distributorSlug}`, token);
-    const customer = await this.api.get<CustomerSelfView>(
+    const customer = await this.api.get<Customer>(
       `/distributors/${distributor.id}/customers/${customerId}`,
       token,
     );
@@ -52,10 +71,11 @@ export class PortalService {
   ): Promise<CustomerSelfView | null> {
     const distributor = await this.api.get<{ id: string }>(`/distributors/${distributorSlug}`, token);
     try {
-      return await this.api.get<CustomerSelfView>(
+      const customer = await this.api.get<Customer>(
         `/distributors/${distributor.id}/customers/${customerId}`,
         token,
       );
+      return toSelfView(customer);
     } catch (e) {
       if (e instanceof HttpException && e.getStatus() === HttpStatus.NOT_FOUND) return null;
       throw e;
@@ -69,10 +89,11 @@ export class PortalService {
     recentContact: boolean,
   ): Promise<CustomerSelfView> {
     const distributor = await this.api.get<{ id: string }>(`/distributors/${distributorSlug}`, token);
-    return this.api.post<CustomerSelfView>(
+    const customer = await this.api.post<Customer>(
       `/distributors/${distributor.id}/customers/${customerId}`,
       token,
       { recentContact },
     );
+    return toSelfView(customer);
   }
 }

@@ -70,12 +70,12 @@ export function PortalAccessTab({ customer, mode, onSaved, onBack }: Props) {
     setIsActivating(true);
     setActivateError(null);
     try {
-      await adminCustomersApi.activate(customer.id);
+      await adminCustomersApi.activate(customer.organisationId);
       const email = inviteEmail.trim() || undefined;
       if (email || customer.organisation.email) {
-        try { await adminCustomersApi.invite(customer.id, email); } catch { /* no email — skip */ }
+        try { await adminCustomersApi.invite(customer.organisationId, email); } catch { /* no email — skip */ }
       }
-      router.push(`/customers/${customer.id}`);
+      router.push(`/customers/${customer.organisationId}`);
     } catch (err: unknown) {
       setActivateError(err instanceof Error ? err.message : 'Failed to activate customer.');
     } finally {
@@ -90,7 +90,7 @@ export function PortalAccessTab({ customer, mode, onSaved, onBack }: Props) {
     setSendError(null);
     setSendSuccess(false);
     try {
-      await adminCustomersApi.invite(customer.id, email);
+      await adminCustomersApi.invite(customer.organisationId, email);
       setNewInviteEmail('');
       setSendSuccess(true);
       onSaved?.();
@@ -133,7 +133,7 @@ export function PortalAccessTab({ customer, mode, onSaved, onBack }: Props) {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.push(`/customers/${customer.id}`)}
+              onClick={() => router.push(`/customers/${customer.organisationId}`)}
               disabled={isActivating}
               className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:opacity-50"
             >

@@ -31,7 +31,7 @@ interface RequestWithUser extends Request {
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId')
+@Controller('distributors/:distributorId')
 export class AdminOrdersController {
   constructor(private readonly service: AdminOrdersService) {}
 

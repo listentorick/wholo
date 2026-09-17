@@ -11,7 +11,7 @@ export class CustomersService {
   searchOrganisations(distributorId: string, q: string, token: string, limit?: number) {
     const params = new URLSearchParams({ q });
     if (limit != null) params.set('limit', String(limit));
-    return this.api.get(`/admin/distributors/${distributorId}/organisations/search?${params.toString()}`, token);
+    return this.api.get(`/distributors/${distributorId}/organisations/search?${params.toString()}`, token);
   }
 
   findAll(distributorId: string, query: CustomerQueryDto, token: string) {
@@ -20,72 +20,72 @@ export class CustomersService {
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.status) params.set('status', query.status);
     const qs = params.toString();
-    return this.api.get(`/admin/distributors/${distributorId}/customers${qs ? `?${qs}` : ''}`, token);
+    return this.api.get(`/distributors/${distributorId}/customers${qs ? `?${qs}` : ''}`, token);
   }
 
   findOne(id: string, distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/customers/${id}`, token);
+    return this.api.get(`/distributors/${distributorId}/customers/${id}`, token);
   }
 
   create(distributorId: string, dto: CreateCustomerDto, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers`, token, dto);
+    return this.api.post(`/distributors/${distributorId}/customers`, token, dto);
   }
 
   update(id: string, distributorId: string, dto: UpdateCustomerDto, token: string) {
-    return this.api.patch(`/admin/distributors/${distributorId}/customers/${id}`, token, dto);
+    return this.api.patch(`/distributors/${distributorId}/customers/${id}`, token, dto);
   }
 
   remove(id: string, distributorId: string, token: string) {
-    return this.api.delete(`/admin/distributors/${distributorId}/customers/${id}`, token);
+    return this.api.delete(`/distributors/${distributorId}/customers/${id}`, token);
   }
 
   invite(id: string, distributorId: string, token: string, email?: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/invite`, token, { email });
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/invite`, token, { email });
   }
 
   acceptRequest(id: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/accept-request`, token);
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/accept-request`, token);
   }
 
   declineRequest(id: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/decline-request`, token);
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/decline-request`, token);
   }
 
   suspend(id: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/suspend`, token);
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/suspend`, token);
   }
 
   unsuspend(id: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/unsuspend`, token);
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/unsuspend`, token);
   }
 
   activate(id: string, distributorId: string, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/customers/${id}/activate`, token);
+    return this.api.post(`/distributors/${distributorId}/customers/${id}/activate`, token);
   }
 
   getCatalogues(id: string, distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/trade-relationships/${id}/catalogues`, token);
+    return this.api.get(`/distributors/${distributorId}/trade-relationships/${id}/catalogues`, token);
   }
 
   assignCatalogue(id: string, catalogueId: string, distributorId: string, token: string) {
     return this.api.post(
-      `/admin/distributors/${distributorId}/trade-relationships/${id}/catalogues/${catalogueId}`,
+      `/distributors/${distributorId}/trade-relationships/${id}/catalogues/${catalogueId}`,
       token,
     );
   }
 
   unassignCatalogue(id: string, catalogueId: string, distributorId: string, token: string) {
     return this.api.delete(
-      `/admin/distributors/${distributorId}/trade-relationships/${id}/catalogues/${catalogueId}`,
+      `/distributors/${distributorId}/trade-relationships/${id}/catalogues/${catalogueId}`,
       token,
     );
   }
 
   assignPriceList(id: string, distributorId: string, body: { priceListId: string | null }, token: string) {
-    return this.api.patch(`/admin/distributors/${distributorId}/trade-relationships/${id}/price-list`, token, body);
+    return this.api.patch(`/distributors/${distributorId}/trade-relationships/${id}/price-list`, token, body);
   }
 
   assignDeliveryProfile(id: string, distributorId: string, body: { deliveryProfileId: string | null }, token: string) {
-    return this.api.patch(`/admin/distributors/${distributorId}/trade-relationships/${id}/delivery-profile`, token, body);
+    return this.api.patch(`/distributors/${distributorId}/trade-relationships/${id}/delivery-profile`, token, body);
   }
 }

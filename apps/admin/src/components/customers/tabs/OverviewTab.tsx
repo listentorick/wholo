@@ -48,7 +48,7 @@ export function OverviewTab({ customer, onSaved, onSaveStateChange }: Props) {
     setSuccess(false);
     setApiError(null);
     try {
-      await adminCustomersApi.update(customer.id, {
+      await adminCustomersApi.update(customer.organisationId, {
         name: data.name,
         email: data.email || undefined,
         phone: data.phone || undefined,

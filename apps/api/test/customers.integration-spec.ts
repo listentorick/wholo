@@ -26,12 +26,15 @@ const CUSTOMER_A  = 'integ-customers-customer-a';
 const CUSTOMER_B  = 'integ-customers-customer-b';
 const USER_A      = 'integ-customers-user-a';
 const USER_A_KEYCLOAK_ID = 'kc-integ-customers-user-a';
+const STAFF_X      = 'integ-customers-staff-x';
+const STAFF_X_KEYCLOAK_ID = 'kc-integ-customers-staff-x';
 
 describe('Customers (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let jwtServer: JwtTestServer;
   let token: string;
+  let staffToken: string;
 
   beforeAll(async () => {
     jwtServer = await startJwtTestServer();
@@ -84,14 +87,31 @@ describe('Customers (integration)', () => {
       create: { userId: userA.id, organisationId: CUSTOMER_A, role: Role.TRADE_CUSTOMER },
       update: {},
     });
+    const staffX = await prisma.user.upsert({
+      where: { id: STAFF_X },
+      create: {
+        id: STAFF_X,
+        email: 'customers-staff-x@integration.test',
+        keycloakId: STAFF_X_KEYCLOAK_ID,
+        firstName: 'Staff',
+        lastName: 'X',
+      },
+      update: { keycloakId: STAFF_X_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: staffX.id, organisationId: DIST_X } },
+      create: { userId: staffX.id, organisationId: DIST_X, role: Role.DISTRIBUTOR_ADMIN },
+      update: {},
+    });
 
     token = jwtServer.signToken({ sub: USER_A_KEYCLOAK_ID, email: 'customers-user-a@integration.test' });
+    staffToken = jwtServer.signToken({ sub: STAFF_X_KEYCLOAK_ID, email: 'customers-staff-x@integration.test' });
   });
 
   afterAll(async () => {
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_X, DIST_Y] } } });
-    await prisma.membership.deleteMany({ where: { userId: USER_A } });
-    await prisma.user.deleteMany({ where: { id: USER_A } });
+    await prisma.membership.deleteMany({ where: { userId: { in: [USER_A, STAFF_X] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [USER_A, STAFF_X] } } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_X, DIST_Y, CUSTOMER_A, CUSTOMER_B] } } });
     await app.close();
     await jwtServer.close();
@@ -145,17 +165,42 @@ describe('Customers (integration)', () => {
       expect(res.body.organisation.name).toBe('Integration Customer A');
     });
 
-    it('never exposes the distributor working data to the customer principal', async () => {
+    it('returns the full trade-relationship record, including distributor working data, to any authorized caller', async () => {
+      // apps/api does not branch its response on caller identity — it returns
+      // the same full Customer shape whether the caller is the customer or
+      // distributor staff. Hiding staff-only fields from the portal frontend
+      // is portal-api's job (see portal.service.spec.ts's toSelfView tests),
+      // not this endpoint's.
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_X}/customers/${CUSTOMER_A}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).not.toHaveProperty('notes');
-      expect(res.body).not.toHaveProperty('creditLimit');
-      expect(res.body).not.toHaveProperty('priceListId');
-      expect(res.body).not.toHaveProperty('catalogues');
-      expect(res.body).not.toHaveProperty('invitations');
+      expect(res.body.notes).toBe('internal note about A');
+      expect(res.body.creditLimit).not.toBeNull();
+      expect(res.body).toHaveProperty('catalogues');
+      expect(res.body).toHaveProperty('invitations');
+    });
+
+    it('allows distributor staff to fetch a customer other than themselves', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_X}/customers/${CUSTOMER_B}`)
+        .set('Authorization', `Bearer ${staffToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.organisationId).toBe(CUSTOMER_B);
+      expect(res.body.deliveryLine1).toBe('99 Secret St');
+    });
+
+    it('returns 403 when staff of a different distributor requests the record', async () => {
+      // staffToken is staff of DIST_X only — has no membership on DIST_Y and is
+      // not CUSTOMER_A itself, so neither authorization branch applies. This
+      // must reject before the DB lookup even runs.
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_Y}/customers/${CUSTOMER_A}`)
+        .set('Authorization', `Bearer ${staffToken}`);
+
+      expect(res.status).toBe(403);
     });
 
     it('returns 403 when requesting another customer\'s record', async () => {

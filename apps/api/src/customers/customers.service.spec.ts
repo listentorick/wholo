@@ -13,8 +13,11 @@ describe('CustomersService', () => {
     customerId: 'cust-1',
     status: 'ACTIVE',
     accountNumber: 'ACC-42',
+    creditLimit: '5000.00',
     minimumOrderSpend: '100.00',
     paymentTerms: 'NET 30',
+    notes: 'VIP — always calls ahead',
+    recentContactSelfDeclared: true,
     deliveryLine1: '1 Wine Lane',
     deliveryLine2: null,
     deliveryCity: 'Melbourne',
@@ -42,6 +45,14 @@ describe('CustomersService', () => {
       billingPostcode: '3000',
       billingCountry: 'Australia',
     },
+    traderCustomerSettings: {
+      priceListId: 'pl-1',
+      priceList: { id: 'pl-1', name: 'Trade' },
+      deliveryProfileId: 'dp-1',
+      deliveryProfile: { id: 'dp-1', name: 'Tuesdays' },
+    },
+    catalogues: [{ catalogue: { id: 'cat-1', name: 'Core range' } }],
+    invitations: [{ id: 'inv-1', email: 'a@b.com', status: 'PENDING', expiresAt: new Date('2026-02-01'), createdAt: new Date('2026-01-01') }],
   };
 
   beforeEach(async () => {
@@ -63,53 +74,43 @@ describe('CustomersService', () => {
     prisma = module.get(PrismaService) as jest.Mocked<PrismaService>;
   });
 
-  it('returns the customer record with trade information', async () => {
-    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
-    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(relRow);
+  describe('getCustomer', () => {
+    it('returns the full customer record — same shape for staff and self, trimming is a BFF concern', async () => {
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(relRow);
 
-    const result = await service.getSelfView('dist-1', 'cust-1');
+      const result = await service.getCustomer('dist-1', 'cust-1');
 
-    expect(result).toMatchObject({
-      id: 'rel-1',
-      organisationId: 'cust-1',
-      distributorId: 'dist-1',
-      status: 'ACTIVE',
-      accountNumber: 'ACC-42',
-      paymentTerms: 'NET 30',
-      deliveryLine1: '1 Wine Lane',
-      deliveryCity: 'Melbourne',
-      billingLine1: '3 Bill Rd',
-      organisation: { id: 'cust-1', name: 'The Bistro' },
+      expect(result).toMatchObject({
+        id: 'rel-1',
+        organisationId: 'cust-1',
+        distributorId: 'dist-1',
+        status: 'ACTIVE',
+        accountNumber: 'ACC-42',
+        creditLimit: '5000.00',
+        paymentTerms: 'NET 30',
+        notes: 'VIP — always calls ahead',
+        recentContactSelfDeclared: true,
+        deliveryLine1: '1 Wine Lane',
+        deliveryCity: 'Melbourne',
+        billingLine1: '3 Bill Rd',
+        organisation: { id: 'cust-1', name: 'The Bistro' },
+        priceListId: 'pl-1',
+        priceList: { id: 'pl-1', name: 'Trade' },
+        deliveryProfileId: 'dp-1',
+        deliveryProfile: { id: 'dp-1', name: 'Tuesdays' },
+        catalogues: [{ id: 'cat-1', name: 'Core range' }],
+      });
+      expect(result.invitations).toHaveLength(1);
+      expect(prisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { distributorId: 'dist-1', customerId: 'cust-1', deletedAt: null } }),
+      );
     });
-  });
 
-  it('never exposes the distributor working data on the self view', async () => {
-    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
-    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(relRow);
+    it('throws NotFoundException when no trade relationship exists', async () => {
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
 
-    const result = await service.getSelfView('dist-1', 'cust-1');
-
-    expect(result).not.toHaveProperty('notes');
-    expect(result).not.toHaveProperty('creditLimit');
-    expect(result).not.toHaveProperty('priceListId');
-    expect(result).not.toHaveProperty('priceList');
-    expect(result).not.toHaveProperty('deliveryProfileId');
-    expect(result).not.toHaveProperty('deliveryProfile');
-    expect(result).not.toHaveProperty('catalogues');
-    expect(result).not.toHaveProperty('invitations');
-  });
-
-  it('throws NotFoundException when the distributor does not exist', async () => {
-    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
-
-    await expect(service.getSelfView('nope', 'cust-1')).rejects.toThrow(NotFoundException);
-  });
-
-  it('throws NotFoundException when no trade relationship exists', async () => {
-    (prisma.organisation.findFirst as jest.Mock).mockResolvedValue({ id: 'dist-1' });
-    (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
-
-    await expect(service.getSelfView('dist-1', 'cust-1')).rejects.toThrow(NotFoundException);
+      await expect(service.getCustomer('dist-1', 'cust-1')).rejects.toThrow(NotFoundException);
+    });
   });
 
   describe('requestAccess', () => {
@@ -170,7 +171,7 @@ describe('CustomersService', () => {
       },
     );
 
-    it('returns the self view after a successful request', async () => {
+    it('returns the full customer record after a successful request', async () => {
       (prisma.tradeRelationship.findUnique as jest.Mock).mockResolvedValue(null);
 
       const result = await service.requestAccess('dist-1', 'cust-1', true);

@@ -112,15 +112,15 @@ describe('Admin Customers (integration)', () => {
     });
   };
 
-  // ── GET /admin/customers ───────────────────────────────────────────────────
+  // ── GET /distributors/:distributorId/customers ──────────────────────────────
 
-  describe('GET /api/v1/admin/distributors/:distributorId/customers', () => {
+  describe('GET /api/v1/distributors/:distributorId/customers', () => {
     it('returns only the requesting distributor\'s customers', async () => {
       const relA = await createCustomer(DIST_A, 'Customer A');
       await createCustomer(DIST_B, 'Customer B');
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .get(`/api/v1/distributors/${DIST_A}/customers`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -130,45 +130,24 @@ describe('Admin Customers (integration)', () => {
 
     it('returns 403 when requesting a distributor the caller has no membership for', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_B}/customers`)
+        .get(`/api/v1/distributors/${DIST_B}/customers`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
     });
   });
 
-  // ── GET /admin/distributors/:distributorId/customers/:id ───────────────────
+  // GET on a single customer (distributors/:distributorId/customers/:customerId,
+  // keyed by the customer organisation id) is served by
+  // apps/api/src/customers/customers.controller.ts and covered in
+  // customers.integration-spec.ts, including the staff-access case.
 
-  describe('GET /api/v1/admin/distributors/:distributorId/customers/:id', () => {
-    it('returns 404 when customer belongs to a different distributor than the one in the path', async () => {
-      const relB = await createCustomer(DIST_B);
+  // ── POST /distributors/:distributorId/customers ─────────────────────────────
 
-      const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(404);
-    });
-
-    it('returns the customer for the correct distributor', async () => {
-      const relA = await createCustomer(DIST_A);
-
-      const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${relA.id}`)
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.id).toBe(relA.id);
-      expect(res.body.distributorId).toBe(DIST_A);
-    });
-  });
-
-  // ── POST /admin/distributors/:distributorId/customers ──────────────────────
-
-  describe('POST /api/v1/admin/distributors/:distributorId/customers', () => {
+  describe('POST /api/v1/distributors/:distributorId/customers', () => {
     it('stamps the created customer with the requesting distributor id', async () => {
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .post(`/api/v1/distributors/${DIST_A}/customers`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'New Customer' });
 
@@ -180,14 +159,14 @@ describe('Admin Customers (integration)', () => {
     });
   });
 
-  // ── PATCH /admin/distributors/:distributorId/customers/:id ─────────────────
+  // ── PATCH /distributors/:distributorId/customers/:customerId ───────────────
 
-  describe('PATCH /api/v1/admin/distributors/:distributorId/customers/:id', () => {
+  describe('PATCH /api/v1/distributors/:distributorId/customers/:customerId', () => {
     it('returns 404 and leaves customer unchanged when it belongs to a different distributor', async () => {
       const relB = await createCustomer(DIST_B, 'Original Name');
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
+        .patch(`/api/v1/distributors/${DIST_A}/customers/${relB.customerId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ notes: 'Stolen update' });
 
@@ -195,14 +174,14 @@ describe('Admin Customers (integration)', () => {
     });
   });
 
-  // ── DELETE /admin/distributors/:distributorId/customers/:id ────────────────
+  // ── DELETE /distributors/:distributorId/customers/:customerId ──────────────
 
-  describe('DELETE /api/v1/admin/distributors/:distributorId/customers/:id', () => {
+  describe('DELETE /api/v1/distributors/:distributorId/customers/:customerId', () => {
     it('returns 404 and does not soft-delete when customer belongs to different distributor', async () => {
       const relB = await createCustomer(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}`)
+        .delete(`/api/v1/distributors/${DIST_A}/customers/${relB.customerId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -215,7 +194,7 @@ describe('Admin Customers (integration)', () => {
       const relA = await createCustomer(DIST_A);
 
       const res = await request(app.getHttpServer())
-        .delete(`/api/v1/admin/distributors/${DIST_A}/customers/${relA.id}`)
+        .delete(`/api/v1/distributors/${DIST_A}/customers/${relA.customerId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(204);
@@ -234,7 +213,7 @@ describe('Admin Customers (integration)', () => {
       );
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/customers`)
+        .post(`/api/v1/distributors/${DIST_A}/customers`)
         .set('Authorization', `Bearer ${token}`)
         .send({ name: 'Second Co', accountNumber: 'ACC-DUP' });
 
@@ -273,7 +252,7 @@ describe('Admin Customers (integration)', () => {
       await prisma.tradeRelationship.update({ where: { id: rel.id }, data: { accountNumber: 'ACC-SELF' } });
 
       const res = await request(app.getHttpServer())
-        .patch(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}`)
+        .patch(`/api/v1/distributors/${DIST_A}/customers/${rel.customerId}`)
         .set('Authorization', `Bearer ${token}`)
         .send({ accountNumber: 'ACC-SELF', notes: 'still me' });
 
@@ -298,7 +277,7 @@ describe('Admin Customers (integration)', () => {
         const relB = await createCustomer(DIST_B, 'Other Distributor Customer', from);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${relB.id}/${action}`)
+          .post(`/api/v1/distributors/${DIST_A}/customers/${relB.customerId}/${action}`)
           .set('Authorization', `Bearer ${token}`);
 
         expect(res.status).toBe(404);
@@ -311,7 +290,7 @@ describe('Admin Customers (integration)', () => {
         const rel = await createCustomer(DIST_A, 'Transition Customer', from);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}/${action}`)
+          .post(`/api/v1/distributors/${DIST_A}/customers/${rel.customerId}/${action}`)
           .set('Authorization', `Bearer ${token}`);
 
         expect(res.status).toBe(200);
@@ -333,7 +312,7 @@ describe('Admin Customers (integration)', () => {
         const rel = await createCustomer(DIST_A, 'Wrong Status Customer', wrongStatus);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/customers/${rel.id}/${action}`)
+          .post(`/api/v1/distributors/${DIST_A}/customers/${rel.customerId}/${action}`)
           .set('Authorization', `Bearer ${token}`);
 
         expect(res.status).toBe(422);

@@ -65,7 +65,7 @@ export function DeliveryTab({ customer, mode, onSaved, onNext, onBack, onSaveSta
     setSuccess(false);
     setApiError(null);
     try {
-      await adminCustomersApi.update(customer.id, {
+      await adminCustomersApi.update(customer.organisationId, {
         deliveryLine1: data.deliveryLine1 || undefined,
         deliveryLine2: data.deliveryLine2 || undefined,
         deliveryCity: data.deliveryCity || undefined,

@@ -21,7 +21,7 @@ describe('OrdersService (BFF)', () => {
       const result = await service.acceptOrder('order-1', 'dist-1', { confirmUnmappedTaxTypes: true }, 'token-1');
 
       expect(api.post).toHaveBeenCalledWith(
-        '/admin/distributors/dist-1/orders/order-1/accept',
+        '/distributors/dist-1/orders/order-1/accept',
         'token-1',
         { confirmUnmappedTaxTypes: true },
       );
@@ -35,7 +35,7 @@ describe('OrdersService (BFF)', () => {
 
       const result = await service.countNeedsAttention('dist-1', 'token-1');
 
-      expect(api.get).toHaveBeenCalledWith('/admin/distributors/dist-1/orders/needs-attention-count', 'token-1');
+      expect(api.get).toHaveBeenCalledWith('/distributors/dist-1/orders/needs-attention-count', 'token-1');
       expect(result).toEqual({ count: 3 });
     });
   });
@@ -47,7 +47,7 @@ describe('OrdersService (BFF)', () => {
       const result = await service.getDeliveryOutcome('order-1', 'dist-1', 'token-1');
 
       expect(api.get).toHaveBeenCalledWith(
-        '/admin/distributors/dist-1/orders/order-1/delivery-outcome',
+        '/distributors/dist-1/orders/order-1/delivery-outcome',
         'token-1',
       );
       expect(result).toEqual({ id: 'outcome-1', outcome: 'DELIVERED' });

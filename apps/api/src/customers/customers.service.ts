@@ -1,92 +1,55 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrganisationType, TradeRelationshipStatus } from '@prisma/client';
+import { OrganisationType, Prisma, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+const relationshipInclude = {
+  customer: {
+    select: {
+      id: true, name: true, legalName: true, email: true, phone: true,
+      addressLine1: true, addressLine2: true, addressCity: true,
+      addressState: true, addressPostcode: true, addressCountry: true,
+      billingLine1: true, billingLine2: true, billingCity: true,
+      billingState: true, billingPostcode: true, billingCountry: true,
+    },
+  },
+  invitations: {
+    orderBy: { createdAt: 'desc' as const },
+    select: { id: true, email: true, status: true, expiresAt: true, createdAt: true },
+  },
+  traderCustomerSettings: {
+    select: {
+      priceListId: true,
+      priceList: { select: { id: true, name: true } },
+      deliveryProfileId: true,
+      deliveryProfile: { select: { id: true, name: true } },
+    },
+  },
+  catalogues: {
+    where: { catalogue: { deletedAt: null } },
+    select: {
+      catalogue: { select: { id: true, name: true } },
+    },
+  },
+} satisfies Prisma.TradeRelationshipInclude;
 
 @Injectable()
 export class CustomersService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * The distributor's customer record (base customer + trade information) as
-   * visible to the customer principal — the distributor's working data
-   * (notes, credit, pricing/catalogue wiring, invitations) is never selected.
+   * The distributor's customer record (base customer + trade information),
+   * returned in full to any authorized caller — distributor staff or the
+   * customer themselves. Trimming what a given UI actually shows (e.g. hiding
+   * creditLimit/notes/pricing from the portal) is a BFF concern, not this
+   * service's — see CLAUDE.md's "BFFs shape payloads".
    */
-  async getSelfView(distributorId: string, customerId: string) {
-    const distributor = await this.prisma.organisation.findFirst({
-      where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true },
-    });
-    if (!distributor) throw new NotFoundException('Distributor not found');
-
+  async getCustomer(distributorId: string, customerId: string) {
     const rel = await this.prisma.tradeRelationship.findFirst({
       where: { distributorId, customerId, deletedAt: null },
-      select: {
-        id: true,
-        distributorId: true,
-        customerId: true,
-        status: true,
-        accountNumber: true,
-        minimumOrderSpend: true,
-        paymentTerms: true,
-        recentContactSelfDeclared: true,
-        deliveryLine1: true,
-        deliveryLine2: true,
-        deliveryCity: true,
-        deliveryState: true,
-        deliveryPostcode: true,
-        deliveryCountry: true,
-        createdAt: true,
-        updatedAt: true,
-        customer: {
-          select: {
-            id: true, name: true, legalName: true, email: true, phone: true,
-            addressLine1: true, addressLine2: true, addressCity: true,
-            addressState: true, addressPostcode: true, addressCountry: true,
-            billingLine1: true, billingLine2: true, billingCity: true,
-            billingState: true, billingPostcode: true, billingCountry: true,
-          },
-        },
-      },
+      include: relationshipInclude,
     });
     if (!rel) throw new NotFoundException('Customer not found');
-
-    return {
-      id: rel.id,
-      organisationId: rel.customerId,
-      distributorId: rel.distributorId,
-      status: rel.status,
-      organisation: {
-        id: rel.customer.id,
-        name: rel.customer.name,
-        legalName: rel.customer.legalName ?? null,
-        email: rel.customer.email ?? null,
-        phone: rel.customer.phone ?? null,
-        addressLine1: rel.customer.addressLine1 ?? null,
-        addressLine2: rel.customer.addressLine2 ?? null,
-        addressCity: rel.customer.addressCity ?? null,
-        addressState: rel.customer.addressState ?? null,
-        addressPostcode: rel.customer.addressPostcode ?? null,
-        addressCountry: rel.customer.addressCountry ?? null,
-      },
-      accountNumber: rel.accountNumber,
-      minimumOrderSpend: rel.minimumOrderSpend,
-      paymentTerms: rel.paymentTerms,
-      recentContactSelfDeclared: rel.recentContactSelfDeclared,
-      deliveryLine1: rel.deliveryLine1,
-      deliveryLine2: rel.deliveryLine2,
-      deliveryCity: rel.deliveryCity,
-      deliveryState: rel.deliveryState,
-      deliveryPostcode: rel.deliveryPostcode,
-      deliveryCountry: rel.deliveryCountry,
-      billingLine1: rel.customer.billingLine1 ?? null,
-      billingLine2: rel.customer.billingLine2 ?? null,
-      billingCity: rel.customer.billingCity ?? null,
-      billingState: rel.customer.billingState ?? null,
-      billingPostcode: rel.customer.billingPostcode ?? null,
-      billingCountry: rel.customer.billingCountry ?? null,
-      createdAt: rel.createdAt,
-      updatedAt: rel.updatedAt,
-    };
+    return this.formatCustomer(rel);
   }
 
   /**
@@ -132,6 +95,60 @@ export class CustomersService {
       throw new ConflictException('A relationship with this distributor already exists');
     }
 
-    return this.getSelfView(distributorId, customerId);
+    return this.getCustomer(distributorId, customerId);
+  }
+
+  private formatCustomer(rel: any) {
+    return {
+      id: rel.id,
+      organisationId: rel.customerId,
+      distributorId: rel.distributorId,
+      status: rel.status,
+      organisation: {
+        id: rel.customer.id,
+        name: rel.customer.name,
+        legalName: rel.customer.legalName ?? null,
+        email: rel.customer.email ?? null,
+        phone: rel.customer.phone ?? null,
+        addressLine1: rel.customer.addressLine1 ?? null,
+        addressLine2: rel.customer.addressLine2 ?? null,
+        addressCity: rel.customer.addressCity ?? null,
+        addressState: rel.customer.addressState ?? null,
+        addressPostcode: rel.customer.addressPostcode ?? null,
+        addressCountry: rel.customer.addressCountry ?? null,
+      },
+      accountNumber: rel.accountNumber,
+      creditLimit: rel.creditLimit,
+      minimumOrderSpend: rel.minimumOrderSpend,
+      paymentTerms: rel.paymentTerms,
+      notes: rel.notes,
+      recentContactSelfDeclared: rel.recentContactSelfDeclared,
+      deliveryLine1: rel.deliveryLine1,
+      deliveryLine2: rel.deliveryLine2,
+      deliveryCity: rel.deliveryCity,
+      deliveryState: rel.deliveryState,
+      deliveryPostcode: rel.deliveryPostcode,
+      deliveryCountry: rel.deliveryCountry,
+      billingLine1: rel.customer.billingLine1 ?? null,
+      billingLine2: rel.customer.billingLine2 ?? null,
+      billingCity: rel.customer.billingCity ?? null,
+      billingState: rel.customer.billingState ?? null,
+      billingPostcode: rel.customer.billingPostcode ?? null,
+      billingCountry: rel.customer.billingCountry ?? null,
+      priceListId: rel.traderCustomerSettings?.priceListId ?? null,
+      priceList: rel.traderCustomerSettings?.priceList ?? null,
+      deliveryProfileId: rel.traderCustomerSettings?.deliveryProfileId ?? null,
+      deliveryProfile: rel.traderCustomerSettings?.deliveryProfile ?? null,
+      catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
+      invitations: (rel.invitations ?? []).map((inv: any) => ({
+        id: inv.id,
+        email: inv.email,
+        status: inv.status,
+        expiresAt: inv.expiresAt,
+        createdAt: inv.createdAt,
+      })),
+      createdAt: rel.createdAt,
+      updatedAt: rel.updatedAt,
+    };
   }
 }

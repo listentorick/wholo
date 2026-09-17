@@ -27,7 +27,7 @@ import { CustomerQueryDto } from './dto/customer-query.dto';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId')
+@Controller('distributors/:distributorId')
 export class AdminCustomersController {
   constructor(private readonly service: AdminCustomersService) {}
 
@@ -52,16 +52,10 @@ export class AdminCustomersController {
     return this.service.findAll(distributorId, query);
   }
 
-  @Get('customers/:id')
-  @ApiOperation({ summary: 'Get a single trade customer' })
-  @ApiOkResponse({ description: 'Customer detail' })
-  @ApiNotFoundResponse({ description: 'Customer not found' })
-  findOne(
-    @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
-  ) {
-    return this.service.findOne(id, distributorId);
-  }
+  // GET on a single customer is served by apps/api/src/customers/customers.controller.ts
+  // (distributors/:distributorId/customers/:customerId) — merged there since it's the same
+  // TradeRelationship row a distributor-staff caller and the customer themselves both read,
+  // just projected differently. See CLAUDE.md's target API shape.
 
   @Post('customers')
   @ApiOperation({ summary: 'Create a new trade customer and optional portal invite' })
@@ -73,31 +67,31 @@ export class AdminCustomersController {
     return this.service.create(distributorId, dto);
   }
 
-  @Patch('customers/:id')
+  @Patch('customers/:customerId')
   @ApiOperation({ summary: 'Update a trade customer' })
   @ApiOkResponse({ description: 'Customer updated' })
   @ApiNotFoundResponse({ description: 'Customer not found' })
   update(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
     @Body() dto: UpdateCustomerDto,
   ) {
-    return this.service.update(id, distributorId, dto);
+    return this.service.update(customerId, distributorId, dto);
   }
 
-  @Delete('customers/:id')
+  @Delete('customers/:customerId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Soft-delete a trade customer' })
   @ApiNoContentResponse({ description: 'Customer deleted' })
   @ApiNotFoundResponse({ description: 'Customer not found' })
   remove(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.remove(id, distributorId);
+    return this.service.remove(customerId, distributorId);
   }
 
-  @Post('customers/:id/invite')
+  @Post('customers/:customerId/invite')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send or resend a portal invite to a customer' })
   @ApiOkResponse({ description: 'Invite sent — returns invite URL and expiry' })
@@ -105,13 +99,13 @@ export class AdminCustomersController {
   @ApiBadRequestResponse({ description: 'Customer has no email address' })
   invite(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
     @Body() body: { email?: string },
   ) {
-    return this.service.invite(id, distributorId, body.email);
+    return this.service.invite(customerId, distributorId, body.email);
   }
 
-  @Post('customers/:id/accept-request')
+  @Post('customers/:customerId/accept-request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Accept a pending connection request from a trade customer' })
   @ApiOkResponse({ description: 'Customer accepted' })
@@ -119,12 +113,12 @@ export class AdminCustomersController {
   @ApiUnprocessableEntityResponse({ description: 'Customer does not have a pending request' })
   acceptRequest(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.acceptRequest(id, distributorId);
+    return this.service.acceptRequest(customerId, distributorId);
   }
 
-  @Post('customers/:id/decline-request')
+  @Post('customers/:customerId/decline-request')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Decline a pending connection request from a trade customer' })
   @ApiOkResponse({ description: 'Request declined' })
@@ -132,12 +126,12 @@ export class AdminCustomersController {
   @ApiUnprocessableEntityResponse({ description: 'Customer does not have a pending request' })
   declineRequest(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.declineRequest(id, distributorId);
+    return this.service.declineRequest(customerId, distributorId);
   }
 
-  @Post('customers/:id/suspend')
+  @Post('customers/:customerId/suspend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Suspend an active trade customer' })
   @ApiOkResponse({ description: 'Customer suspended' })
@@ -145,12 +139,12 @@ export class AdminCustomersController {
   @ApiUnprocessableEntityResponse({ description: 'Customer is not active' })
   suspend(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.suspend(id, distributorId);
+    return this.service.suspend(customerId, distributorId);
   }
 
-  @Post('customers/:id/unsuspend')
+  @Post('customers/:customerId/unsuspend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Unsuspend a suspended trade customer' })
   @ApiOkResponse({ description: 'Customer unsuspended' })
@@ -158,12 +152,12 @@ export class AdminCustomersController {
   @ApiUnprocessableEntityResponse({ description: 'Customer is not suspended' })
   unsuspend(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.unsuspend(id, distributorId);
+    return this.service.unsuspend(customerId, distributorId);
   }
 
-  @Post('customers/:id/activate')
+  @Post('customers/:customerId/activate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Admin-activate a customer directly from pending invite (new-customer wizard)' })
   @ApiOkResponse({ description: 'Customer activated' })
@@ -171,8 +165,8 @@ export class AdminCustomersController {
   @ApiUnprocessableEntityResponse({ description: 'Customer is not pending invite' })
   activate(
     @Param('distributorId') distributorId: string,
-    @Param('id') id: string,
+    @Param('customerId') customerId: string,
   ) {
-    return this.service.activate(id, distributorId);
+    return this.service.activate(customerId, distributorId);
   }
 }

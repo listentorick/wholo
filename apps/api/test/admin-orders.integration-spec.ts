@@ -206,15 +206,15 @@ describe('Admin Orders (integration)', () => {
     return order;
   };
 
-  // ── GET /admin/distributors/:distributorId/orders ──────────────────────────
+  // ── GET /distributors/:distributorId/orders ──────────────────────────
 
-  describe('GET /api/v1/admin/distributors/:distributorId/orders', () => {
+  describe('GET /api/v1/distributors/:distributorId/orders', () => {
     it('returns only the requesting distributor\'s orders', async () => {
       const orderA = await createOrder(DIST_A);
       await createOrder(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders`)
+        .get(`/api/v1/distributors/${DIST_A}/orders`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -224,7 +224,7 @@ describe('Admin Orders (integration)', () => {
 
     it('returns 403 when requesting a distributor the caller has no membership for', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_B}/orders`)
+        .get(`/api/v1/distributors/${DIST_B}/orders`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
@@ -239,7 +239,7 @@ describe('Admin Orders (integration)', () => {
       const undatedB = await createOrder(DIST_B, OrderStatus.ACCEPTED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders?status=ACCEPTED&undated=true`)
+        .get(`/api/v1/distributors/${DIST_A}/orders?status=ACCEPTED&undated=true`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -250,14 +250,14 @@ describe('Admin Orders (integration)', () => {
     });
   });
 
-  // ── GET /admin/distributors/:distributorId/orders/:id ──────────────────────
+  // ── GET /distributors/:distributorId/orders/:id ──────────────────────
 
-  describe('GET /api/v1/admin/distributors/:distributorId/orders/:id', () => {
+  describe('GET /api/v1/distributors/:distributorId/orders/:id', () => {
     it('returns the order for the correct distributor', async () => {
       const orderA = await createOrder(DIST_A);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderA.id}`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${orderA.id}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -271,16 +271,16 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOrder(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${orderB.id}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
     });
   });
 
-  // ── GET /admin/distributors/:distributorId/orders/:id/delivery-outcome ─────
+  // ── GET /distributors/:distributorId/orders/:id/delivery-outcome ─────
 
-  describe('GET /api/v1/admin/distributors/:distributorId/orders/:id/delivery-outcome', () => {
+  describe('GET /api/v1/distributors/:distributorId/orders/:id/delivery-outcome', () => {
     const createOutcome = async (
       distributorId: string,
       opts: {
@@ -343,7 +343,7 @@ describe('Admin Orders (integration)', () => {
       const order = await createOutcome(DIST_A, { withRun: true, withPhoto: true });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -363,7 +363,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOutcome(DIST_B, {});
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${orderB.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -373,7 +373,7 @@ describe('Admin Orders (integration)', () => {
       const order = await createOrder(DIST_A, OrderStatus.DELIVERED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -383,7 +383,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOutcome(DIST_B, {});
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_B}/orders/${orderB.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
@@ -397,7 +397,7 @@ describe('Admin Orders (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -414,7 +414,7 @@ describe('Admin Orders (integration)', () => {
       const order = await createOutcome(DIST_A, { signature });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/delivery-outcome`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -422,14 +422,14 @@ describe('Admin Orders (integration)', () => {
     });
   });
 
-  // ── POST /admin/distributors/:distributorId/orders/:id/accept ──────────────
+  // ── POST /distributors/:distributorId/orders/:id/accept ──────────────
 
-  describe('POST /api/v1/admin/distributors/:distributorId/orders/:id/accept', () => {
+  describe('POST /api/v1/distributors/:distributorId/orders/:id/accept', () => {
     it('transitions order to ACCEPTED and records the acting user', async () => {
       const order = await createOrder(DIST_A, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -444,7 +444,7 @@ describe('Admin Orders (integration)', () => {
       const order = await createOrder(DIST_A, OrderStatus.ACCEPTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(422);
@@ -459,7 +459,7 @@ describe('Admin Orders (integration)', () => {
         const order = await createOrderWithTaxLine(DIST_A, taxType.id);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
           .set('Authorization', `Bearer ${token}`);
 
         expect(res.status).toBe(409);
@@ -477,7 +477,7 @@ describe('Admin Orders (integration)', () => {
         const order = await createOrderWithTaxLine(DIST_A, taxType.id);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
           .set('Authorization', `Bearer ${token}`)
           .send({ confirmUnmappedTaxTypes: true });
 
@@ -515,7 +515,7 @@ describe('Admin Orders (integration)', () => {
         const order = await createOrderWithTaxLine(DIST_A, taxType.id);
 
         const res = await request(app.getHttpServer())
-          .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+          .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
           .set('Authorization', `Bearer ${token}`);
 
         expect(res.status).toBe(200);
@@ -524,14 +524,14 @@ describe('Admin Orders (integration)', () => {
     });
   });
 
-  // ── POST /admin/distributors/:distributorId/orders/:id/reject ──────────────
+  // ── POST /distributors/:distributorId/orders/:id/reject ──────────────
 
-  describe('POST /api/v1/admin/distributors/:distributorId/orders/:id/reject', () => {
+  describe('POST /api/v1/distributors/:distributorId/orders/:id/reject', () => {
     it('transitions order to REJECTED', async () => {
       const order = await createOrder(DIST_A, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/reject`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/reject`)
         .set('Authorization', `Bearer ${token}`)
         .send({ reason: 'Out of stock' });
 
@@ -547,7 +547,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOrder(DIST_B);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}/reject`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${orderB.id}/reject`)
         .set('Authorization', `Bearer ${token}`)
         .send({ reason: 'Not mine' });
 
@@ -555,14 +555,14 @@ describe('Admin Orders (integration)', () => {
     });
   });
 
-  // ── POST /admin/distributors/:distributorId/orders/:id/cancel ──────────────
+  // ── POST /distributors/:distributorId/orders/:id/cancel ──────────────
 
-  describe('POST /api/v1/admin/distributors/:distributorId/orders/:id/cancel', () => {
+  describe('POST /api/v1/distributors/:distributorId/orders/:id/cancel', () => {
     it('cancels a SUBMITTED order', async () => {
       const order = await createOrder(DIST_A, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/cancel`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .send({ reason: 'Customer request' });
 
@@ -575,7 +575,7 @@ describe('Admin Orders (integration)', () => {
       const order = await createOrder(DIST_A, OrderStatus.ACCEPTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/cancel`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .send({ reason: 'Logistics issue' });
 
@@ -588,7 +588,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}/cancel`)
+        .post(`/api/v1/distributors/${DIST_B}/orders/${orderB.id}/cancel`)
         .set('Authorization', `Bearer ${token}`)
         .send({ reason: 'Attempted theft' });
 
@@ -598,19 +598,19 @@ describe('Admin Orders (integration)', () => {
     });
   });
 
-  // ── GET /admin/distributors/:distributorId/orders/:id/audit-log ────────────
+  // ── GET /distributors/:distributorId/orders/:id/audit-log ────────────
 
-  describe('GET /api/v1/admin/distributors/:distributorId/orders/:id/audit-log', () => {
+  describe('GET /api/v1/distributors/:distributorId/orders/:id/audit-log', () => {
     it('records and returns an audit entry for a real accept call, attributed to the acting user', async () => {
       const order = await createOrder(DIST_A, OrderStatus.SUBMITTED);
 
       const acceptRes = await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/accept`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${order.id}/accept`)
         .set('Authorization', `Bearer ${token}`);
       expect(acceptRes.status).toBe(200);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}/audit-log`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}/audit-log`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -635,7 +635,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderB.id}/audit-log`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${orderB.id}/audit-log`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -645,7 +645,7 @@ describe('Admin Orders (integration)', () => {
       const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}/audit-log`)
+        .get(`/api/v1/distributors/${DIST_B}/orders/${orderB.id}/audit-log`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);
@@ -659,7 +659,7 @@ describe('Admin Orders (integration)', () => {
       // ownership of the order id — is what's filtering results.
       const orderA = await createOrder(DIST_A, OrderStatus.SUBMITTED);
       await request(app.getHttpServer())
-        .post(`/api/v1/admin/distributors/${DIST_A}/orders/${orderA.id}/accept`)
+        .post(`/api/v1/distributors/${DIST_A}/orders/${orderA.id}/accept`)
         .set('Authorization', `Bearer ${token}`);
 
       const orderB = await createOrder(DIST_B, OrderStatus.SUBMITTED);
@@ -677,7 +677,7 @@ describe('Admin Orders (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${orderA.id}/audit-log`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${orderA.id}/audit-log`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);

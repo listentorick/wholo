@@ -199,7 +199,7 @@ function CustomerChipsCell({ customer, layout }: { customer: Customer; layout: '
 // ─── Customer row ──────────────────────────────────────────────────────────────
 
 function CustomerRow({ customer }: { customer: Customer }) {
-  const href = `/customers/${customer.id}`;
+  const href = `/customers/${customer.organisationId}`;
 
   return (
     <ListRow>
@@ -362,7 +362,7 @@ export default function CustomersPage() {
             renderExpanded={(customer) => (
               <>
                 <CustomerChipsCell customer={customer} layout="card" />
-                <Link href={`/customers/${customer.id}`} className="block text-sm font-medium text-primary hover:underline">
+                <Link href={`/customers/${customer.organisationId}`} className="block text-sm font-medium text-primary hover:underline">
                   View customer →
                 </Link>
               </>

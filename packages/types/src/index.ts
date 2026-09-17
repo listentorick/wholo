@@ -711,8 +711,10 @@ export interface Customer {
 
 /**
  * Distributor's customer record as visible to the customer principal.
- * The distributor's working data (notes, credit, pricing/catalogue wiring,
- * invitations) is filtered out by authorization at the API.
+ * apps/api returns the full `Customer` shape to any authorized caller;
+ * portal-api trims to this shape before responding to the browser, so the
+ * distributor's working data (notes, credit, pricing/catalogue wiring,
+ * invitations) never reaches the portal frontend.
  */
 export type CustomerSelfView = Omit<
   Customer,

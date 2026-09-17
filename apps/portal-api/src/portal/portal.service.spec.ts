@@ -22,33 +22,41 @@ describe('PortalService (portal-api)', () => {
     service = module.get(PortalService);
   });
 
-  it('calls GET /portal/me/distributors with the token', async () => {
+  it('calls GET /organisations/:organisationId/distributors with the token', async () => {
     mockApi.get.mockResolvedValue([]);
-    await service.getMyDistributors('tok-123');
-    expect(mockApi.get).toHaveBeenCalledWith('/portal/me/distributors', 'tok-123');
+    await service.getMyDistributors('org-1', 'tok-123');
+    expect(mockApi.get).toHaveBeenCalledWith('/organisations/org-1/distributors', 'tok-123');
   });
 
   it('returns the upstream response', async () => {
     const data = [{ id: 'dist-1', name: 'Winos', slug: 'winos', orderCount: 5, logoUrl: null, email: null, phone: null }];
     mockApi.get.mockResolvedValue(data);
-    const result = await service.getMyDistributors('tok-123');
+    const result = await service.getMyDistributors('org-1', 'tok-123');
     expect(result).toEqual(data);
   });
 
+  describe('getRecommendedDistributors', () => {
+    it('calls GET /organisations/:organisationId/recommended-distributors with the token', async () => {
+      mockApi.get.mockResolvedValue([]);
+      await service.getRecommendedDistributors('org-1', 'tok-123');
+      expect(mockApi.get).toHaveBeenCalledWith('/organisations/org-1/recommended-distributors', 'tok-123');
+    });
+  });
+
   describe('getMyProfile', () => {
-    it('calls GET /portal/me/profile with the token', async () => {
+    it('calls GET /organisations/:organisationId with the token', async () => {
       mockApi.get.mockResolvedValue({ name: 'Acme' });
-      await service.getMyProfile('tok-123');
-      expect(mockApi.get).toHaveBeenCalledWith('/portal/me/profile', 'tok-123');
+      await service.getMyProfile('org-1', 'tok-123');
+      expect(mockApi.get).toHaveBeenCalledWith('/organisations/org-1', 'tok-123');
     });
   });
 
   describe('updateMyProfile', () => {
-    it('calls PATCH /portal/me/profile with token and body', async () => {
+    it('calls PATCH /organisations/:organisationId with token and body', async () => {
       const body = { name: 'New Name' };
       mockApi.patch.mockResolvedValue({ name: 'New Name' });
-      await service.updateMyProfile('tok-123', body);
-      expect(mockApi.patch).toHaveBeenCalledWith('/portal/me/profile', 'tok-123', body);
+      await service.updateMyProfile('org-1', 'tok-123', body);
+      expect(mockApi.patch).toHaveBeenCalledWith('/organisations/org-1', 'tok-123', body);
     });
   });
 
@@ -133,6 +141,38 @@ describe('PortalService (portal-api)', () => {
 
       await expect(service.getDistributorRelationship('tok-123', 'winos', 'cust-1')).rejects.toThrow('Forbidden');
     });
+
+    // apps/api now returns the full Customer record (staff fields included) to
+    // any authorized caller — this BFF is what must strip them before the
+    // portal frontend ever sees the response.
+    it('strips the distributor-only fields from the upstream response', async () => {
+      mockApi.get
+        .mockResolvedValueOnce({ id: 'dist-1' })
+        .mockResolvedValueOnce({
+          id: 'rel-1',
+          status: 'ACTIVE',
+          notes: 'VIP — always calls ahead',
+          creditLimit: '5000.00',
+          priceListId: 'pl-1',
+          priceList: { id: 'pl-1', name: 'Trade' },
+          deliveryProfileId: 'dp-1',
+          deliveryProfile: { id: 'dp-1', name: 'Tuesdays' },
+          catalogues: [{ id: 'cat-1', name: 'Core range' }],
+          invitations: [{ id: 'inv-1', email: 'a@b.com', status: 'PENDING', expiresAt: '2026-01-01', createdAt: '2026-01-01' }],
+        });
+
+      const result = await service.getDistributorRelationship('tok-123', 'winos', 'cust-1');
+
+      expect(result).toEqual({ id: 'rel-1', status: 'ACTIVE' });
+      expect(result).not.toHaveProperty('notes');
+      expect(result).not.toHaveProperty('creditLimit');
+      expect(result).not.toHaveProperty('priceListId');
+      expect(result).not.toHaveProperty('priceList');
+      expect(result).not.toHaveProperty('deliveryProfileId');
+      expect(result).not.toHaveProperty('deliveryProfile');
+      expect(result).not.toHaveProperty('catalogues');
+      expect(result).not.toHaveProperty('invitations');
+    });
   });
 
   describe('requestDistributorAccess', () => {
@@ -149,6 +189,28 @@ describe('PortalService (portal-api)', () => {
         { recentContact: true },
       );
       expect(result).toEqual({ id: 'rel-1', status: 'PENDING_REQUEST' });
+    });
+
+    it('strips the distributor-only fields from the upstream response', async () => {
+      mockApi.get.mockResolvedValueOnce({ id: 'dist-1' });
+      mockApi.post.mockResolvedValueOnce({
+        id: 'rel-1',
+        status: 'PENDING_REQUEST',
+        notes: 'internal note',
+        creditLimit: '1000.00',
+        priceListId: null,
+        priceList: null,
+        deliveryProfileId: null,
+        deliveryProfile: null,
+        catalogues: [],
+        invitations: [],
+      });
+
+      const result = await service.requestDistributorAccess('tok-123', 'winos', 'cust-1', true);
+
+      expect(result).toEqual({ id: 'rel-1', status: 'PENDING_REQUEST' });
+      expect(result).not.toHaveProperty('notes');
+      expect(result).not.toHaveProperty('creditLimit');
     });
   });
 });

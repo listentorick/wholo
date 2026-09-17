@@ -91,7 +91,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsDeleting(true);
     try {
-      await adminCustomersApi.delete(customer.id);
+      await adminCustomersApi.delete(customer.organisationId);
       router.push('/customers');
     } catch {
       setIsDeleting(false);
@@ -102,7 +102,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsAccepting(true);
     try {
-      await adminCustomersApi.acceptRequest(customer.id);
+      await adminCustomersApi.acceptRequest(customer.organisationId);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -115,7 +115,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsDeclining(true);
     try {
-      await adminCustomersApi.declineRequest(customer.id);
+      await adminCustomersApi.declineRequest(customer.organisationId);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -128,7 +128,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsSuspending(true);
     try {
-      await adminCustomersApi.suspend(customer.id);
+      await adminCustomersApi.suspend(customer.organisationId);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable
@@ -141,7 +141,7 @@ function CustomerPageInner() {
     if (!accessToken || !customer) return;
     setIsUnsuspending(true);
     try {
-      await adminCustomersApi.unsuspend(customer.id);
+      await adminCustomersApi.unsuspend(customer.organisationId);
       fetchCustomer();
     } catch {
       // silently ignore — user sees the button un-disable

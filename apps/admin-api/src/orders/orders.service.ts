@@ -23,15 +23,15 @@ export class OrdersService {
     if (query.sortBy) params.set('sortBy', query.sortBy);
     if (query.sortOrder) params.set('sortOrder', query.sortOrder);
     const qs = params.toString();
-    return this.api.get(`/admin/distributors/${distributorId}/orders${qs ? `?${qs}` : ''}`, token);
+    return this.api.get(`/distributors/${distributorId}/orders${qs ? `?${qs}` : ''}`, token);
   }
 
   countNeedsAttention(distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/orders/needs-attention-count`, token);
+    return this.api.get(`/distributors/${distributorId}/orders/needs-attention-count`, token);
   }
 
   getOrder(orderId: string, distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}`, token);
+    return this.api.get(`/distributors/${distributorId}/orders/${orderId}`, token);
   }
 
   getOrderAuditLog(orderId: string, distributorId: string, query: AuditLogQueryDto, token: string) {
@@ -40,24 +40,24 @@ export class OrdersService {
     if (query.cursor) params.set('cursor', query.cursor);
     const qs = params.toString();
     return this.api.get(
-      `/admin/distributors/${distributorId}/orders/${orderId}/audit-log${qs ? `?${qs}` : ''}`,
+      `/distributors/${distributorId}/orders/${orderId}/audit-log${qs ? `?${qs}` : ''}`,
       token,
     );
   }
 
   getDeliveryOutcome(orderId: string, distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/orders/${orderId}/delivery-outcome`, token);
+    return this.api.get(`/distributors/${distributorId}/orders/${orderId}/delivery-outcome`, token);
   }
 
   acceptOrder(orderId: string, distributorId: string, dto: AcceptOrderDto, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/accept`, token, dto);
+    return this.api.post(`/distributors/${distributorId}/orders/${orderId}/accept`, token, dto);
   }
 
   rejectOrder(orderId: string, distributorId: string, dto: RejectOrderDto, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/reject`, token, dto);
+    return this.api.post(`/distributors/${distributorId}/orders/${orderId}/reject`, token, dto);
   }
 
   cancelOrder(orderId: string, distributorId: string, dto: CancelOrderDto, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/orders/${orderId}/cancel`, token, dto);
+    return this.api.post(`/distributors/${distributorId}/orders/${orderId}/cancel`, token, dto);
   }
 }

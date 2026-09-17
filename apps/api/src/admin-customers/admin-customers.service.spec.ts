@@ -256,6 +256,18 @@ describe('AdminCustomersService', () => {
       const result = await service.findOne('rel-1', 'dist-1');
       expect(result.minimumOrderSpend).not.toBeUndefined();
     });
+
+    it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(makeRel());
+
+      await service.findOne('org-1', 'dist-1');
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
+        }),
+      );
+    });
   });
 
   // ── create ──────────────────────────────────────────────────────────────────
@@ -446,6 +458,21 @@ describe('AdminCustomersService', () => {
       const result = await service.update('rel-1', 'dist-1', { accountNumber: 'ACC-001' });
       expect(result.accountNumber).toBe('ACC-001');
     });
+
+    it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
+      mockPrisma.tradeRelationship.findFirst
+        .mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' })
+        .mockResolvedValueOnce(makeRel({ notes: 'x' })); // findOne after update
+      mockPrisma.$transaction.mockResolvedValue([{}, {}]);
+
+      await service.update('org-1', 'dist-1', { notes: 'x' });
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
+        }),
+      );
+    });
   });
 
   // ── remove ──────────────────────────────────────────────────────────────────
@@ -465,6 +492,22 @@ describe('AdminCustomersService', () => {
     it('throws NotFoundException when not found', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
       await expect(service.remove('rel-1', 'dist-2')).rejects.toThrow(NotFoundException);
+    });
+
+    it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1' });
+      mockPrisma.tradeRelationship.update.mockResolvedValue({});
+
+      await service.remove('org-1', 'dist-1');
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
+        }),
+      );
+      expect(mockPrisma.tradeRelationship.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'rel-1' } }),
+      );
     });
   });
 
@@ -544,6 +587,33 @@ describe('AdminCustomersService', () => {
         makeRel({ customer: makeOrg({ email: null }) }),
       );
       await expect(service.invite('rel-1', 'dist-1')).rejects.toThrow(BadRequestException);
+    });
+
+    it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({ customer: makeOrg({ email: 'acme@example.com' }) }),
+      );
+      mockPrisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          customerInvitation: {
+            updateMany: mockPrisma.customerInvitation.updateMany,
+            create: mockPrisma.customerInvitation.create.mockResolvedValue({ id: 'inv-1' }),
+          },
+        }),
+      );
+
+      await service.invite('org-1', 'dist-1');
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
+        }),
+      );
+      // The CustomerInvitation FK is the relationship's own id (from the looked-up
+      // row), never the customer organisation id passed in.
+      expect(mockPrisma.customerInvitation.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tradeRelationshipId: 'rel-1' }) }),
+      );
     });
   });
 
@@ -648,6 +718,26 @@ describe('AdminCustomersService', () => {
       expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
         expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipRequestAccepted',
         expect.objectContaining({ portalUrl: 'http://portal.test/acme' }),
+      );
+    });
+
+    it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
+        makeRel({ status: TradeRelationshipStatus.ACTIVE, customer: makeOrg({ email: 'buyer@winebar.example' }) }),
+      );
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.suspend('org-1', 'dist-1');
+
+      expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
+        }),
+      );
+      // The updateMany guard and the outbox event's entity id are the
+      // relationship's own id (from the looked-up row), not the customer id.
+      expect(mockPrisma.tradeRelationship.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'rel-1' }) }),
       );
     });
   });
