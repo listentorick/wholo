@@ -38,7 +38,7 @@ describe('SettingsService (BFF)', () => {
 
       const result = await service.find('dist-1', 'token-1');
 
-      expect(mockApi.get).toHaveBeenCalledWith('/admin/distributors/dist-1/settings', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/settings', 'token-1');
       expect(result).toEqual(mockSettingsResponse);
     });
   });
@@ -50,7 +50,7 @@ describe('SettingsService (BFF)', () => {
 
       await service.update('dist-1', dto, 'token-1');
 
-      expect(mockApi.patch).toHaveBeenCalledWith('/admin/distributors/dist-1/settings', 'token-1', dto);
+      expect(mockApi.patch).toHaveBeenCalledWith('/distributors/dist-1/settings', 'token-1', dto);
     });
   });
 });

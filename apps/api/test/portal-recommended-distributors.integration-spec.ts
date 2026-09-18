@@ -1,8 +1,10 @@
 /**
- * Integration tests for GET /api/v1/portal/me/recommended-distributors
+ * Integration tests for GET /api/v1/organisations/:organisationId/recommended-distributors
  *
  * Hits a real database to verify the relationship-exclusion and marketplace-visibility
- * filtering that unit tests with mocked Prisma cannot guarantee.
+ * filtering that unit tests with mocked Prisma cannot guarantee. Also covers the
+ * path-matches-credential guard added when this moved off the `portal/me/*`
+ * identity-relative alias (Phase 3 of the apps/api route reshape).
  *
  * Prerequisites:
  *   kubectl port-forward svc/wholo-postgresql 5432:5432
@@ -156,7 +158,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('recommends a marketplace-visible distributor the customer has no relationship with', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
@@ -166,7 +168,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('excludes distributors the customer already has a relationship with, regardless of status', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(ids(res.body)).not.toContain(DIST_ACTIVE);
@@ -175,7 +177,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('still recommends a distributor whose only relationship is soft-deleted', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(ids(res.body)).toContain(DIST_SOFTDEL);
@@ -183,7 +185,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('excludes distributors that have not opted into the marketplace', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(ids(res.body)).not.toContain(DIST_HIDDEN);
@@ -192,7 +194,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('excludes soft-deleted distributor orgs even when marketplace-visible', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(ids(res.body)).not.toContain(DIST_DELETED);
@@ -200,7 +202,7 @@ describe('Portal recommended distributors (integration)', () => {
 
   it('orders results by name and resolves logo + location', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/portal/me/recommended-distributors')
+      .get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`)
       .set('Authorization', `Bearer ${token}`);
 
     const mine = (res.body as { id: string; name: string }[]).filter((d) =>
@@ -216,7 +218,15 @@ describe('Portal recommended distributors (integration)', () => {
   });
 
   it('returns 401 without an Authorization header', async () => {
-    const res = await request(app.getHttpServer()).get('/api/v1/portal/me/recommended-distributors');
+    const res = await request(app.getHttpServer()).get(`/api/v1/organisations/${CUSTOMER}/recommended-distributors`);
     expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when the path organisationId does not match the caller\'s own organisation', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/organisations/some-other-org-id/recommended-distributors')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
   });
 });

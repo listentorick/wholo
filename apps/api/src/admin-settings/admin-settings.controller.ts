@@ -9,7 +9,7 @@ import { UpdateSettingsDto } from './dto/update-settings.dto';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId/settings')
+@Controller('distributors/:distributorId/settings')
 export class AdminSettingsController {
   constructor(private readonly service: AdminSettingsService) {}
 

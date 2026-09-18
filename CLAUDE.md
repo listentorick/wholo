@@ -188,7 +188,7 @@ Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `loca
 | Portal app (frontend + BFF) | `http://localhost:3010` |
 | Marketing site (`apps/www`) | `http://localhost:3040` |
 | API (central domain API) | `http://localhost:3001` |
-| Keycloak | `http://localhost:8080` |
+| Keycloak | `http://localhost:3080` |
 | MailHog UI | `http://localhost:30825` |
 
 #### Local HTTPS (for real Xero OAuth testing only)

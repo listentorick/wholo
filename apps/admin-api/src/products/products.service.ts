@@ -14,22 +14,22 @@ export class ProductsService {
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.status) params.set('status', query.status);
     const qs = params.toString();
-    return this.api.get(`/admin/distributors/${distributorId}/products${qs ? `?${qs}` : ''}`, token);
+    return this.api.get(`/distributors/${distributorId}/products${qs ? `?${qs}` : ''}`, token);
   }
 
   findOne(id: string, distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/products/${id}`, token);
+    return this.api.get(`/distributors/${distributorId}/products/${id}`, token);
   }
 
   create(distributorId: string, dto: CreateProductDto, token: string) {
-    return this.api.post(`/admin/distributors/${distributorId}/products`, token, dto);
+    return this.api.post(`/distributors/${distributorId}/products`, token, dto);
   }
 
   update(id: string, distributorId: string, dto: UpdateProductDto, token: string) {
-    return this.api.patch(`/admin/distributors/${distributorId}/products/${id}`, token, dto);
+    return this.api.patch(`/distributors/${distributorId}/products/${id}`, token, dto);
   }
 
   remove(id: string, distributorId: string, token: string) {
-    return this.api.delete(`/admin/distributors/${distributorId}/products/${id}`, token);
+    return this.api.delete(`/distributors/${distributorId}/products/${id}`, token);
   }
 }

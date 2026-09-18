@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { CartOrderStatus, OrganisationType, Prisma } from '@prisma/client';
+import { CartOrderStatus, Prisma } from '@prisma/client';
 import { CartService } from './cart.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
@@ -10,10 +10,6 @@ const CUSTOMER_ID = 'cust-1';
 const USER_ID = 'user-1';
 const PRODUCT_ID = 'prod-1';
 const CART_ID = 'cart-1';
-
-function makeDistributor() {
-  return { id: DISTRIBUTOR_ID };
-}
 
 function makeProduct(overrides: Partial<{ id: string; price: unknown; distributorId: string; taxTypeId: string | null }> = {}) {
   return { id: PRODUCT_ID, price: { toFixed: () => '10.00' }, distributorId: DISTRIBUTOR_ID, taxTypeId: 'tax-1', ...overrides };
@@ -49,7 +45,6 @@ describe('CartService', () => {
 
   beforeEach(async () => {
     const mockPrisma = {
-      organisation: { findFirst: jest.fn() },
       tradeRelationship: { findFirst: jest.fn() },
       cartOrder: { upsert: jest.fn(), findUnique: jest.fn(), findUniqueOrThrow: jest.fn() },
       cartOrderLine: { upsert: jest.fn(), deleteMany: jest.fn() },
@@ -77,14 +72,10 @@ describe('CartService', () => {
   describe('getCart', () => {
     it('returns formatted cart for the given distributor/customer/user', async () => {
       const cart = makeCart([makeCartLine()]);
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(cart);
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
-      expect(prisma.organisation.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ slug: 'dist-slug', type: OrganisationType.DISTRIBUTOR }) }),
-      );
       expect(prisma.cartOrder.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { distributorId_customerId_userId_status: { distributorId: DISTRIBUTOR_ID, customerId: CUSTOMER_ID, userId: USER_ID, status: CartOrderStatus.DRAFT } },
@@ -96,10 +87,9 @@ describe('CartService', () => {
     });
 
     it('loads cart lines ordered by product name', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
 
-      await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(prisma.cartOrder.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -109,7 +99,6 @@ describe('CartService', () => {
     });
 
     it('returns items sorted alphabetically by product name even if the DB yields them out of order', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(
         makeCart([
           makeCartLine({ productId: 'p-shiraz', name: 'Shiraz' }),
@@ -118,49 +107,38 @@ describe('CartService', () => {
         ]),
       );
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items.map((i) => i.product.name)).toEqual(['Chardonnay', 'Merlot', 'Shiraz']);
     });
 
-    it('throws NotFoundException when distributor slug is unknown', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
-
-      await expect(service.getCart('bad-slug', CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
-    });
-
     it('throws ForbiddenException when the order-as session is bound to a different distributor', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
-
       await expect(
-        service.getCart('dist-slug', CUSTOMER_ID, USER_ID, 'some-other-distributor'),
+        service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID, 'some-other-distributor'),
       ).rejects.toThrow(ForbiddenException);
       expect(prisma.cartOrder.findUnique).not.toHaveBeenCalled();
     });
 
     it('succeeds when the order-as session distributor matches the requested distributor', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
 
       await expect(
-        service.getCart('dist-slug', CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
+        service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
       ).resolves.toBeDefined();
     });
 
     it('returns empty cart when no lines exist', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items).toHaveLength(0);
     });
 
     it('returns a synthesized empty cart without creating a row when no draft exists yet', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.orderId).toBeNull();
       expect(result.items).toHaveLength(0);
@@ -169,10 +147,9 @@ describe('CartService', () => {
   });
 
   describe('upsertItem', () => {
-    const dto = { distributorSlug: 'dist-slug', productId: PRODUCT_ID, quantity: 2 };
+    const dto = { productId: PRODUCT_ID, quantity: 2 };
 
     beforeEach(() => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({ id: 'rel-1' });
       (prisma.cartOrder.upsert as jest.Mock).mockResolvedValue(makeCart());
       (prisma.cartOrder.findUniqueOrThrow as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
@@ -186,7 +163,7 @@ describe('CartService', () => {
         priceListRuleId: 'plr-1',
       });
 
-      await service.upsertItem(dto, CUSTOMER_ID, USER_ID);
+      await service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID);
 
       expect(priceResolution.resolvePrice).toHaveBeenCalledWith(DISTRIBUTOR_ID, CUSTOMER_ID, PRODUCT_ID, 2);
       expect(prisma.cartOrderLine.upsert).toHaveBeenCalledWith(
@@ -201,7 +178,7 @@ describe('CartService', () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct());
       (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
 
-      await service.upsertItem(dto, CUSTOMER_ID, USER_ID);
+      await service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID);
 
       expect(prisma.cartOrderLine.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -214,13 +191,13 @@ describe('CartService', () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ price: null }));
       (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(UnprocessableEntityException);
+      await expect(service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(UnprocessableEntityException);
     });
 
     it('removes the line when quantity is 0', async () => {
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart());
 
-      await service.upsertItem({ ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
+      await service.upsertItem(DISTRIBUTOR_ID, { ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
 
       expect(prisma.cartOrderLine.deleteMany).toHaveBeenCalledWith({
         where: { orderId: CART_ID, productId: PRODUCT_ID },
@@ -231,7 +208,7 @@ describe('CartService', () => {
     it('no-ops without creating a cart when removing from a nonexistent cart', async () => {
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.upsertItem({ ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
+      const result = await service.upsertItem(DISTRIBUTOR_ID, { ...dto, quantity: 0 }, CUSTOMER_ID, USER_ID);
 
       expect(prisma.cartOrder.upsert).not.toHaveBeenCalled();
       expect(prisma.cartOrderLine.deleteMany).not.toHaveBeenCalled();
@@ -239,38 +216,31 @@ describe('CartService', () => {
       expect(result.items).toHaveLength(0);
     });
 
-    it('throws NotFoundException when distributor slug is unknown', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(null);
-
-      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
-    });
-
     it('throws ForbiddenException when no active trade relationship exists', async () => {
       (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(ForbiddenException);
+      await expect(service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(ForbiddenException);
     });
 
     it('throws NotFoundException when product does not belong to the distributor', async () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ForbiddenException when order-as distributorId does not match product distributorId', async () => {
-      (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ distributorId: DISTRIBUTOR_ID }));
-
+    it('throws ForbiddenException when the order-as session is bound to a different distributor, before touching the trade relationship', async () => {
       await expect(
-        service.upsertItem(dto, CUSTOMER_ID, USER_ID, 'other-dist-id'),
+        service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID, 'other-dist-id'),
       ).rejects.toThrow(ForbiddenException);
+      expect(prisma.tradeRelationship.findFirst).not.toHaveBeenCalled();
     });
 
-    it('succeeds when order-as distributorId matches product distributorId', async () => {
+    it('succeeds when the order-as session distributor matches the requested distributor', async () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ distributorId: DISTRIBUTOR_ID }));
       (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.upsertItem(dto, CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
+        service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID, DISTRIBUTOR_ID),
       ).resolves.toBeDefined();
     });
 
@@ -279,7 +249,7 @@ describe('CartService', () => {
       (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
       (prisma.taxType.findUnique as jest.Mock).mockResolvedValue({ ratePercentage: { toFixed: () => '20.00' } });
 
-      await service.upsertItem(dto, CUSTOMER_ID, USER_ID);
+      await service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID);
 
       expect(prisma.taxType.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'tax-1' } }),
@@ -296,27 +266,25 @@ describe('CartService', () => {
       (prisma.product.findFirst as jest.Mock).mockResolvedValue(makeProduct({ taxTypeId: null }));
       (priceResolution.resolvePrice as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.upsertItem(dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(UnprocessableEntityException);
+      await expect(service.upsertItem(DISTRIBUTOR_ID, dto, CUSTOMER_ID, USER_ID)).rejects.toThrow(UnprocessableEntityException);
       expect(prisma.cartOrderLine.upsert).not.toHaveBeenCalled();
     });
   });
 
   describe('formatCart / taxRatePercentage', () => {
     it('exposes the frozen tax rate per item', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items[0].taxRatePercentage).toBe('20.00');
     });
 
     it('defaults to "0.00" when a line has no frozen tax rate (pre-Phase-2 rollout edge case)', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       const line = makeCartLine({ taxRateSnapshot: null });
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([line]));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items[0].taxRatePercentage).toBe('0.00');
     });
@@ -324,33 +292,30 @@ describe('CartService', () => {
 
   describe('formatCart / taxAmount and aggregates', () => {
     it('computes taxAmount per item via the shared calculateLineTax helper (£10 x 2 @ 20% = £4.00)', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([makeCartLine()]));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items[0].taxAmount).toBe('4.00');
     });
 
     it('produces £0.00 tax for a line with no frozen tax rate, rather than throwing', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       const line = makeCartLine({ taxRateSnapshot: null });
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([line]));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.items[0].taxAmount).toBe('0.00');
     });
 
     it('sums per-line subtotal/tax/total across multiple lines without re-rounding after summing', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       const lines = [
         makeCartLine({ quantity: 2, unitPrice: new Prisma.Decimal('10.00'), taxRateSnapshot: new Prisma.Decimal('20.00') }),
         makeCartLine({ quantity: 1, unitPrice: new Prisma.Decimal('5.00'), taxRateSnapshot: new Prisma.Decimal('20.00') }),
       ];
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart(lines));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.subtotal).toBe('25.00');
       expect(result.taxAmount).toBe('5.00');
@@ -358,10 +323,9 @@ describe('CartService', () => {
     });
 
     it('returns zeroed aggregates for an empty cart', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.subtotal).toBe('0.00');
       expect(result.taxAmount).toBe('0.00');
@@ -372,22 +336,20 @@ describe('CartService', () => {
 
   describe('formatCart / taxLabel', () => {
     it('uses the real tax type name when every line shares one', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       const lines = [makeCartLine({ taxTypeName: 'VAT' }), makeCartLine({ taxTypeName: 'VAT' })];
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart(lines));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.taxLabel).toBe('VAT');
       expect(result.items[0].taxTypeName).toBe('VAT');
     });
 
     it('falls back to the generic "Tax" label when lines have different tax type names', async () => {
-      (prisma.organisation.findFirst as jest.Mock).mockResolvedValue(makeDistributor());
       const lines = [makeCartLine({ taxTypeName: 'VAT' }), makeCartLine({ taxTypeName: 'Zero-rated' })];
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart(lines));
 
-      const result = await service.getCart('dist-slug', CUSTOMER_ID, USER_ID);
+      const result = await service.getCart(DISTRIBUTOR_ID, CUSTOMER_ID, USER_ID);
 
       expect(result.taxLabel).toBe('Tax');
     });

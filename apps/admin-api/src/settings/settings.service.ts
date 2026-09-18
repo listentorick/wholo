@@ -7,10 +7,10 @@ export class SettingsService {
   constructor(private readonly api: ApiClientService) {}
 
   find(distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/settings`, token);
+    return this.api.get(`/distributors/${distributorId}/settings`, token);
   }
 
   update(distributorId: string, dto: UpdateSettingsDto, token: string) {
-    return this.api.patch(`/admin/distributors/${distributorId}/settings`, token, dto);
+    return this.api.patch(`/distributors/${distributorId}/settings`, token, dto);
   }
 }

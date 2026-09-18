@@ -17,7 +17,7 @@ import { ProductQueryDto } from './dto/product-query.dto';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId')
+@Controller('distributors/:distributorId')
 export class AdminProductsController {
   constructor(private service: AdminProductsService) {}
 

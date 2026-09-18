@@ -6,6 +6,6 @@ export class ProductTypesService {
   constructor(private api: ApiClientService) {}
 
   findAll(distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/product-types`, token);
+    return this.api.get(`/distributors/${distributorId}/product-types`, token);
   }
 }

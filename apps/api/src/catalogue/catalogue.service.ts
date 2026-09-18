@@ -100,9 +100,9 @@ export class CatalogueService {
     };
   }
 
-  async getProducts(distributorSlug: string, query: CatalogueQueryDto, customerOrgId?: string) {
+  async getProducts(distributorId: string, query: CatalogueQueryDto, customerOrgId?: string) {
     const distributor = await this.prisma.organisation.findFirst({
-      where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
       select: { id: true, name: true },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
@@ -303,9 +303,9 @@ export class CatalogueService {
     }));
   }
 
-  async getProduct(distributorSlug: string, productId: string, customerOrgId?: string) {
+  async getProduct(distributorId: string, productId: string, customerOrgId?: string) {
     const distributor = await this.prisma.organisation.findFirst({
-      where: { slug: distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
       select: { id: true, name: true },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');

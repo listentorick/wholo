@@ -32,7 +32,7 @@ import { ReorderAssetImagesDto } from './dto/reorder-asset-images.dto';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId/asset-images')
+@Controller('distributors/:distributorId/asset-images')
 export class AssetImagesController {
   constructor(private readonly service: AssetImagesService) {}
 

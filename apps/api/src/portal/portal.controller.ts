@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PortalService } from './portal.service';
@@ -9,38 +9,60 @@ interface RequestWithUser extends Request {
   user: { sub: string; organisationId: string };
 }
 
-@ApiTags('Portal')
+@ApiTags('Organisations')
 @ApiBearerAuth()
-@Controller('portal')
+@Controller('organisations/:organisationId')
 @UseGuards(JwtAuthGuard)
 export class PortalController {
   constructor(private readonly portalService: PortalService) {}
 
-  @Get('me/distributors')
-  @ApiOperation({ summary: 'List distributors the authenticated trade customer has access to' })
+  @Get('distributors')
+  @ApiOperation({ summary: 'List distributors the organisation has access to' })
   @ApiOkResponse({ description: 'List of accessible distributors with contact info and order count' })
-  getMyDistributors(@ActingCustomerId() organisationId: string) {
+  getMyDistributors(
+    @Param('organisationId') organisationId: string,
+    @ActingCustomerId() actingCustomerId: string,
+  ) {
+    if (organisationId !== actingCustomerId) {
+      throw new ForbiddenException('Not authorised for this organisation');
+    }
     return this.portalService.getMyDistributors(organisationId);
   }
 
-  @Get('me/recommended-distributors')
-  @ApiOperation({ summary: 'Marketplace-visible distributors the acting customer is not yet connected to' })
+  @Get('recommended-distributors')
+  @ApiOperation({ summary: 'Marketplace-visible distributors the organisation is not yet connected to' })
   @ApiOkResponse({
     description: 'Up to 24 distributor orgs, name-ordered, excluding any existing trade relationship',
   })
-  getRecommendedDistributors(@ActingCustomerId() organisationId: string) {
+  getRecommendedDistributors(
+    @Param('organisationId') organisationId: string,
+    @ActingCustomerId() actingCustomerId: string,
+  ) {
+    if (organisationId !== actingCustomerId) {
+      throw new ForbiddenException('Not authorised for this organisation');
+    }
     return this.portalService.getRecommendedDistributors(organisationId);
   }
 
-  @Get('me/profile')
-  @ApiOperation({ summary: 'Get the authenticated trade customer profile' })
-  getMyProfile(@Req() req: RequestWithUser) {
-    return this.portalService.getMyProfile(req.user.organisationId);
+  @Get()
+  @ApiOperation({ summary: 'Get the organisation profile' })
+  getMyProfile(@Param('organisationId') organisationId: string, @Req() req: RequestWithUser) {
+    if (organisationId !== req.user.organisationId) {
+      throw new ForbiddenException('Not authorised for this organisation');
+    }
+    return this.portalService.getMyProfile(organisationId);
   }
 
-  @Patch('me/profile')
-  @ApiOperation({ summary: 'Update the authenticated trade customer profile' })
-  updateMyProfile(@Req() req: RequestWithUser, @Body() dto: UpdateMyProfileDto) {
-    return this.portalService.updateMyProfile(req.user.organisationId, dto);
+  @Patch()
+  @ApiOperation({ summary: 'Update the organisation profile' })
+  updateMyProfile(
+    @Param('organisationId') organisationId: string,
+    @Req() req: RequestWithUser,
+    @Body() dto: UpdateMyProfileDto,
+  ) {
+    if (organisationId !== req.user.organisationId) {
+      throw new ForbiddenException('Not authorised for this organisation');
+    }
+    return this.portalService.updateMyProfile(organisationId, dto);
   }
 }

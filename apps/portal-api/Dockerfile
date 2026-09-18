@@ -23,7 +23,7 @@ RUN pnpm --filter @wholo/types build
 RUN pnpm --filter @wholo/api-client build
 
 # Build Next.js frontend — NEXT_PUBLIC_* vars must be baked into the bundle at build time
-ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
+ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:3080
 ARG NEXT_PUBLIC_KEYCLOAK_REALM=wholo
 ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
 ENV NEXT_TELEMETRY_DISABLED=1

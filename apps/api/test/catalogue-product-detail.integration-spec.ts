@@ -1,9 +1,12 @@
 /**
- * Integration tests for GET /api/v1/distributors/:slug/products/:productId
+ * Integration tests for GET /api/v1/distributors/:distributorId/customers/:customerId/catalogue/:productId
  *
  * These tests hit a real database to verify that the catalogue membership gate
  * and multi-tenancy isolation are enforced correctly — something unit tests
- * with mocked Prisma cannot guarantee.
+ * with mocked Prisma cannot guarantee. Also covers the path-matches-credential
+ * guard added when this moved off slug-based addressing (Phase 2 of the
+ * apps/api route reshape): :customerId in the path must equal the caller's
+ * own organisation (or an active order-as acting-customer).
  *
  * Prerequisites:
  *   kubectl port-forward svc/wholo-postgresql 5432:5432
@@ -150,11 +153,19 @@ describe('Catalogue Product Detail (integration)', () => {
     });
   });
 
-  describe('GET /api/v1/distributors/:slug/products/:productId', () => {
+  describe('GET /api/v1/distributors/:distributorId/customers/:customerId/catalogue/:productId', () => {
+    it('returns 403 when the path customerId does not match the caller\'s own organisation', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customers/some-other-org-id/catalogue/${productAId}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+    });
+
     it('returns 200 for a product in the customer\'s assigned catalogue', async () => {
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productAId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -164,7 +175,7 @@ describe('Catalogue Product Detail (integration)', () => {
 
     it('returns 401 without an Authorization header', async () => {
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`);
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productAId}`);
 
       expect(res.status).toBe(401);
     });
@@ -172,7 +183,7 @@ describe('Catalogue Product Detail (integration)', () => {
     it('returns 200 for a distributor the customer has no trade relationship with (browsing/discovery is allowed)', async () => {
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_B_SLUG}/products/${productBId}`)
+        .get(`/api/v1/distributors/${DIST_B}/customers/${CUSTOMER}/catalogue/${productBId}`)
         .set('Authorization', `Bearer ${token}`);
 
       // No relationship only restricts ordering and customer-specific pricing,
@@ -182,10 +193,10 @@ describe('Catalogue Product Detail (integration)', () => {
       expect(res.body.id).toBe(productBId);
     });
 
-    it('returns 404 when accessing a DIST_B product via DIST_A slug', async () => {
+    it('returns 404 when accessing a DIST_B product via DIST_A id', async () => {
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productBId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productBId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -197,7 +208,7 @@ describe('Catalogue Product Detail (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${unlistedProduct.id}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${unlistedProduct.id}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -206,7 +217,7 @@ describe('Catalogue Product Detail (integration)', () => {
     it('returns 404 for a non-existent product id', async () => {
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/non-existent-id`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/non-existent-id`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -232,7 +243,7 @@ describe('Catalogue Product Detail (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productAId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -262,7 +273,7 @@ describe('Catalogue Product Detail (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productAId}`)
         .set('Authorization', `Bearer ${token}`);
 
       // Still visible (public/default browsing, unaffected by SUSPENDED) but the
@@ -276,7 +287,7 @@ describe('Catalogue Product Detail (integration)', () => {
     it('returns imageUrl null when no primary image exists', async () => {
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/distributors/${DIST_A_SLUG}/products/${productAId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/catalogue/${productAId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);

@@ -13,29 +13,29 @@ export class CataloguesService {
     if (query.limit) qs.set('limit', String(query.limit));
     if (query.cursor) qs.set('cursor', query.cursor);
     const suffix = qs.toString() ? `?${qs}` : '';
-    return this.api.get(`/admin/distributors/${distributorId}/catalogues${suffix}`, token);
+    return this.api.get(`/distributors/${distributorId}/catalogues${suffix}`, token);
   }
 
   findOne(distributorId: string, id: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/catalogues/${id}`, token);
+    return this.api.get(`/distributors/${distributorId}/catalogues/${id}`, token);
   }
 
   async create(distributorId: string, dto: CreateCatalogueDto, token: string) {
     const { productIds, ...rest } = dto;
-    const catalogue = await this.api.post<any>(`/admin/distributors/${distributorId}/catalogues`, token, rest);
+    const catalogue = await this.api.post<any>(`/distributors/${distributorId}/catalogues`, token, rest);
     if (productIds && productIds.length > 0) {
-      return this.api.put(`/admin/distributors/${distributorId}/catalogues/${catalogue.id}/products`, token, { productIds });
+      return this.api.put(`/distributors/${distributorId}/catalogues/${catalogue.id}/products`, token, { productIds });
     }
     return catalogue;
   }
 
   async update(distributorId: string, id: string, dto: UpdateCatalogueDto, token: string) {
     const { productIds, ...rest } = dto;
-    await this.api.patch(`/admin/distributors/${distributorId}/catalogues/${id}`, token, rest);
-    return this.api.put(`/admin/distributors/${distributorId}/catalogues/${id}/products`, token, { productIds });
+    await this.api.patch(`/distributors/${distributorId}/catalogues/${id}`, token, rest);
+    return this.api.put(`/distributors/${distributorId}/catalogues/${id}/products`, token, { productIds });
   }
 
   remove(distributorId: string, id: string, token: string) {
-    return this.api.delete(`/admin/distributors/${distributorId}/catalogues/${id}`, token);
+    return this.api.delete(`/distributors/${distributorId}/catalogues/${id}`, token);
   }
 }

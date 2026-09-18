@@ -4,7 +4,7 @@ import { SubmitOrderDto } from './submit-order.dto';
 
 describe('SubmitOrderDto', () => {
   it('rejects a payload missing requestedDeliveryDate', async () => {
-    const dto = plainToInstance(SubmitOrderDto, { distributorSlug: 'dist' });
+    const dto = plainToInstance(SubmitOrderDto, {});
 
     const errors = await validate(dto);
 
@@ -14,7 +14,6 @@ describe('SubmitOrderDto', () => {
 
   it('rejects a non-date string for requestedDeliveryDate', async () => {
     const dto = plainToInstance(SubmitOrderDto, {
-      distributorSlug: 'dist',
       requestedDeliveryDate: 'not-a-date',
     });
 
@@ -26,7 +25,6 @@ describe('SubmitOrderDto', () => {
 
   it('accepts a valid ISO date string for requestedDeliveryDate', async () => {
     const dto = plainToInstance(SubmitOrderDto, {
-      distributorSlug: 'dist',
       requestedDeliveryDate: '2024-06-14',
     });
 

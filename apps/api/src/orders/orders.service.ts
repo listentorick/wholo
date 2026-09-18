@@ -114,15 +114,20 @@ export class OrdersService {
   ) {}
 
   async submitOrder(
+    distributorId: string,
     dto: SubmitOrderDto,
     placedByUserId: string,
     traderCustomerId: string,
     orderAsSessionToken?: string,
     orderAsDistributorId?: string,
   ) {
+    if (orderAsDistributorId && distributorId !== orderAsDistributorId) {
+      throw new ForbiddenException('Order-as session is not authorised for this distributor');
+    }
+
     // Resolve distributor
     const distributor = await this.prisma.organisation.findFirst({
-      where: { slug: dto.distributorSlug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
+      where: { id: distributorId, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
       select: { id: true, distributorSettings: { select: { minimumOrderSpend: true, currencyCode: true } } },
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
@@ -171,10 +176,6 @@ export class OrdersService {
 
     if (!cart) throw new UnprocessableEntityException('No active cart found for this distributor');
     if (cart.lines.length === 0) throw new UnprocessableEntityException('Cart is empty');
-
-    if (orderAsDistributorId && cart.distributorId !== orderAsDistributorId) {
-      throw new ForbiddenException('Order-as session is not authorised for this distributor');
-    }
 
     // Resolve acceptance mode
     const { mode, source } = await this.resolveAcceptanceMode(distributor.id, relationship.traderCustomerSettings);
@@ -407,19 +408,9 @@ export class OrdersService {
     const limit = query.limit ?? 20;
     const take = limit + 1;
 
-    let distributorId: string | undefined;
-    if (query.distributorSlug) {
-      const distributor = await this.prisma.organisation.findFirst({
-        where: { slug: query.distributorSlug, type: OrganisationType.DISTRIBUTOR },
-        select: { id: true },
-      });
-      if (!distributor) throw new NotFoundException('Distributor not found');
-      distributorId = distributor.id;
-    }
-
     const baseWhere: Prisma.OrderWhereInput = {
       traderCustomerId,
-      ...(distributorId && { distributorId }),
+      ...(query.distributorId && { distributorId: query.distributorId }),
       ...(query.status && { status: query.status }),
     };
 

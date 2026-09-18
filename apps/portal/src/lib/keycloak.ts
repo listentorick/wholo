@@ -43,7 +43,7 @@ export async function ensureKeycloak(): Promise<KeycloakInstance | null> {
     initPromise = (async () => {
       const { default: Keycloak } = await import('keycloak-js');
       const kc = new Keycloak({
-        url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:8080',
+        url: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? 'http://localhost:3080',
         realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? 'wholo',
         clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? 'wholo-portal',
       });

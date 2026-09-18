@@ -6,6 +6,6 @@ export class SuppliersService {
   constructor(private api: ApiClientService) {}
 
   findAll(distributorId: string, token: string) {
-    return this.api.get(`/admin/distributors/${distributorId}/suppliers`, token);
+    return this.api.get(`/distributors/${distributorId}/suppliers`, token);
   }
 }

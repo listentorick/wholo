@@ -16,7 +16,7 @@ COPY apps/portal ./apps/portal
 ENV NEXT_TELEMETRY_DISABLED=1
 # NEXT_PUBLIC_* vars must be present at build time to be embedded in the browser bundle
 ARG NEXT_PUBLIC_API_URL=http://localhost:3003
-ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
+ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:3080
 ARG NEXT_PUBLIC_KEYCLOAK_REALM=wholo
 ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-portal
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}

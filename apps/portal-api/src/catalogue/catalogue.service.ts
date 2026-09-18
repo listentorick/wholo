@@ -9,13 +9,21 @@ export class CatalogueService {
     return this.api.get(`/distributors/${slug}`);
   }
 
-  getProducts(slug: string, query: Record<string, string>, token: string) {
+  async getProducts(slug: string, query: Record<string, string>, organisationId: string, token: string) {
+    const distributor = await this.api.get<{ id: string }>(`/distributors/${slug}`, token);
     const params = new URLSearchParams(query);
     const qs = params.toString();
-    return this.api.get(`/distributors/${slug}/products${qs ? `?${qs}` : ''}`, token);
+    return this.api.get(
+      `/distributors/${distributor.id}/customers/${organisationId}/catalogue${qs ? `?${qs}` : ''}`,
+      token,
+    );
   }
 
-  getProduct(slug: string, productId: string, token: string) {
-    return this.api.get(`/distributors/${slug}/products/${productId}`, token);
+  async getProduct(slug: string, productId: string, organisationId: string, token: string) {
+    const distributor = await this.api.get<{ id: string }>(`/distributors/${slug}`, token);
+    return this.api.get(
+      `/distributors/${distributor.id}/customers/${organisationId}/catalogue/${productId}`,
+      token,
+    );
   }
 }

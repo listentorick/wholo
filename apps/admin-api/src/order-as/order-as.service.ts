@@ -15,7 +15,7 @@ export class OrderAsService {
 
   async createSession(distributorId: string, tradeRelationshipId: string, token: string) {
     const result = await this.api.post<{ deliveryToken: string; distributorSlug: string }>(
-      `/admin/distributors/${distributorId}/order-as/sessions`,
+      `/distributors/${distributorId}/order-as/sessions`,
       token,
       { tradeRelationshipId },
     );

@@ -3,33 +3,37 @@ import { Request } from 'express';
 import { PortalService } from './portal.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+interface RequestWithUser extends Request {
+  user: { token: string; organisationId: string };
+}
+
 @Controller('portal')
 @UseGuards(JwtAuthGuard)
 export class PortalController {
   constructor(private readonly portalService: PortalService) {}
 
   @Get('me/distributors')
-  getMyDistributors(@Req() req: Request) {
-    const { token } = req['user'] as { token: string };
-    return this.portalService.getMyDistributors(token);
+  getMyDistributors(@Req() req: RequestWithUser) {
+    const { token, organisationId } = req.user;
+    return this.portalService.getMyDistributors(organisationId, token);
   }
 
   @Get('me/recommended-distributors')
-  getRecommendedDistributors(@Req() req: Request) {
-    const { token } = req['user'] as { token: string };
-    return this.portalService.getRecommendedDistributors(token);
+  getRecommendedDistributors(@Req() req: RequestWithUser) {
+    const { token, organisationId } = req.user;
+    return this.portalService.getRecommendedDistributors(organisationId, token);
   }
 
   @Get('me/profile')
-  getMyProfile(@Req() req: Request) {
-    const { token } = req['user'] as { token: string };
-    return this.portalService.getMyProfile(token);
+  getMyProfile(@Req() req: RequestWithUser) {
+    const { token, organisationId } = req.user;
+    return this.portalService.getMyProfile(organisationId, token);
   }
 
   @Patch('me/profile')
-  updateMyProfile(@Req() req: Request, @Body() body: unknown) {
-    const { token } = req['user'] as { token: string };
-    return this.portalService.updateMyProfile(token, body);
+  updateMyProfile(@Req() req: RequestWithUser, @Body() body: unknown) {
+    const { token, organisationId } = req.user;
+    return this.portalService.updateMyProfile(organisationId, token, body);
   }
 
   @Get('me/delivery-address')

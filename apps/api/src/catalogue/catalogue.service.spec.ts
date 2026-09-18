@@ -209,7 +209,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.count.mockResolvedValue(1);
       mockPrisma.assetImage.findMany.mockResolvedValue([]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {});
+      const result = await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].thumbnailUrl).toBeNull();
@@ -225,7 +225,7 @@ describe('CatalogueService', () => {
         },
       ]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {});
+      const result = await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(result.data[0].thumbnailUrl).toBe('https://cdn.example.com/distributors/dist-1/products/prod-1/images/img-1/thumb.webp');
     });
@@ -240,7 +240,7 @@ describe('CatalogueService', () => {
         },
       ]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {});
+      const result = await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(result.data[0].thumbnailUrl).toBeNull();
     });
@@ -249,7 +249,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {});
+      await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(mockPrisma.assetImage.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -262,7 +262,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {});
+      await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(mockPrisma.assetImage.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,7 +275,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([]);
       mockPrisma.product.count.mockResolvedValue(0);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {});
+      await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(mockPrisma.assetImage.findMany).not.toHaveBeenCalled();
     });
@@ -291,7 +291,7 @@ describe('CatalogueService', () => {
         { entityId: PRODUCT_ID_2, variants: { thumb: 'dist/prod-2/thumb.webp' } },
       ]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {});
+      const result = await service.getProducts(DISTRIBUTOR_ID, {});
 
       const prod1 = result.data.find((p) => p.id === PRODUCT_ID_1);
       const prod2 = result.data.find((p) => p.id === PRODUCT_ID_2);
@@ -303,7 +303,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {});
+      const result = await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(result.pagination.total).toBe(1);
       expect(result.pagination.hasMore).toBe(false);
@@ -315,7 +315,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue(products);
       mockPrisma.product.count.mockResolvedValue(100);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, { limit: 50 });
+      const result = await service.getProducts(DISTRIBUTOR_ID, { limit: 50 });
 
       expect(result.pagination.hasMore).toBe(true);
       expect(result.pagination.nextCursor).not.toBeNull();
@@ -326,7 +326,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {});
+      await service.getProducts(DISTRIBUTOR_ID, {});
 
       expect(mockPriceResolution.resolvePricesForProducts).not.toHaveBeenCalled();
     });
@@ -335,7 +335,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1), makeProduct(PRODUCT_ID_2)]);
       mockPrisma.product.count.mockResolvedValue(2);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       expect(mockPriceResolution.resolvePricesForProducts).toHaveBeenCalledWith(
         DISTRIBUTOR_ID,
@@ -351,7 +351,7 @@ describe('CatalogueService', () => {
         new Map([[PRODUCT_ID_1, new Prisma.Decimal('18.50')]]),
       );
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       const p1 = result.data.find((p) => p.id === PRODUCT_ID_1);
       const p2 = result.data.find((p) => p.id === PRODUCT_ID_2);
@@ -363,7 +363,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       expect(result.data[0].resolvedPrice).toBeNull();
     });
@@ -372,7 +372,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -390,7 +390,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       const [{ where }] = mockPrisma.product.findMany.mock.calls[0];
       expect(where.AND[0]).not.toHaveProperty('id');
@@ -404,7 +404,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, {}, CUSTOMER_ORG_ID);
+      await service.getProducts(DISTRIBUTOR_ID, {}, CUSTOMER_ORG_ID);
 
       const [{ where }] = mockPrisma.product.findMany.mock.calls[0];
       expect(where.AND[0].id).toEqual({ in: [PRODUCT_ID_1] });
@@ -425,7 +425,7 @@ describe('CatalogueService', () => {
         makeProduct(PRODUCT_ID_2),
       ]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'sku' }, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, { search: 'sku' }, CUSTOMER_ORG_ID);
 
       expect(result.data.map((p) => p.id)).toEqual([PRODUCT_ID_2, PRODUCT_ID_1]);
       expect(mockProductSearch.search).toHaveBeenCalledWith(
@@ -442,7 +442,7 @@ describe('CatalogueService', () => {
       ]);
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'wine' }, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, { search: 'wine' }, CUSTOMER_ORG_ID);
 
       expect(result.data.map((p) => p.id)).toEqual([PRODUCT_ID_1]);
       expect(result.pagination.total).toBe(1);
@@ -451,7 +451,7 @@ describe('CatalogueService', () => {
     it('returns an empty page without querying products when nothing matches', async () => {
       mockProductSearch.search.mockResolvedValue([]);
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'zzz' }, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, { search: 'zzz' }, CUSTOMER_ORG_ID);
 
       expect(result.data).toEqual([]);
       expect(result.pagination).toEqual({ nextCursor: null, hasMore: false, total: 0 });
@@ -471,7 +471,7 @@ describe('CatalogueService', () => {
       ]);
 
       const page1 = await service.getProducts(
-        DISTRIBUTOR_SLUG,
+        DISTRIBUTOR_ID,
         { search: 'wine', limit: 2 },
         CUSTOMER_ORG_ID,
       );
@@ -481,7 +481,7 @@ describe('CatalogueService', () => {
       expect(page1.pagination.total).toBe(3);
 
       const page2 = await service.getProducts(
-        DISTRIBUTOR_SLUG,
+        DISTRIBUTOR_ID,
         { search: 'wine', limit: 2, cursor: page1.pagination.nextCursor! },
         CUSTOMER_ORG_ID,
       );
@@ -500,7 +500,7 @@ describe('CatalogueService', () => {
         new Map([[PRODUCT_ID_1, new Prisma.Decimal('12.00')]]),
       );
 
-      const result = await service.getProducts(DISTRIBUTOR_SLUG, { search: 'wine' }, CUSTOMER_ORG_ID);
+      const result = await service.getProducts(DISTRIBUTOR_ID, { search: 'wine' }, CUSTOMER_ORG_ID);
 
       expect(result.data[0].thumbnailUrl).toBe('https://cdn.example.com/dist/prod-1/thumb.webp');
       expect(result.data[0].resolvedPrice).toBe('12.00');
@@ -510,7 +510,7 @@ describe('CatalogueService', () => {
       mockPrisma.product.findMany.mockResolvedValue([makeProduct(PRODUCT_ID_1)]);
       mockPrisma.product.count.mockResolvedValue(1);
 
-      await service.getProducts(DISTRIBUTOR_SLUG, { search: '   ' }, CUSTOMER_ORG_ID);
+      await service.getProducts(DISTRIBUTOR_ID, { search: '   ' }, CUSTOMER_ORG_ID);
 
       expect(mockProductSearch.search).not.toHaveBeenCalled();
       expect(mockPrisma.product.count).toHaveBeenCalled();
@@ -520,12 +520,12 @@ describe('CatalogueService', () => {
   describe('getProduct', () => {
     it('throws NotFoundException when distributor does not exist', async () => {
       mockPrisma.organisation.findFirst.mockResolvedValue(null);
-      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+      await expect(service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when product does not exist', async () => {
       mockPrisma.product.findFirst.mockResolvedValue(null);
-      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+      await expect(service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when product is not in customer catalogues', async () => {
@@ -536,7 +536,7 @@ describe('CatalogueService', () => {
       // Product exists in DB but is not in the customer's catalogue
       mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
 
-      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID)).rejects.toThrow(NotFoundException);
+      await expect(service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID)).rejects.toThrow(NotFoundException);
     });
 
     it('queries tradeRelationship with a status ACTIVE filter, not just existence', async () => {
@@ -545,7 +545,7 @@ describe('CatalogueService', () => {
         { catalogue: { products: [{ productId: PRODUCT_ID_1 }] } },
       ]);
 
-      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.tradeRelationship.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -562,7 +562,7 @@ describe('CatalogueService', () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
       mockPrisma.product.findFirst.mockResolvedValue(makeProduct(PRODUCT_ID_1));
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.id).toBe(PRODUCT_ID_1);
     });
@@ -575,7 +575,7 @@ describe('CatalogueService', () => {
       ]);
       mockPrisma.product.findFirst.mockResolvedValue(target);
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.id).toBe(PRODUCT_ID_1);
       expect(result.description).toBe('The real description');
@@ -589,7 +589,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp', large: 'key/large.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBe('https://cdn.example.com/key/catalogue.webp');
     });
@@ -599,7 +599,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', large: 'key/large.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBe('https://cdn.example.com/key/large.webp');
     });
@@ -607,7 +607,7 @@ describe('CatalogueService', () => {
     it('returns imageUrl null when no primary image exists', async () => {
       mockPrisma.assetImage.findFirst.mockResolvedValue(null);
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBeNull();
     });
@@ -617,7 +617,7 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.imageUrl).toBeNull();
     });
@@ -627,13 +627,13 @@ describe('CatalogueService', () => {
         variants: { thumb: 'key/thumb.webp', catalogue: 'key/catalogue.webp' },
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.thumbnailUrl).toBe('https://cdn.example.com/key/thumb.webp');
     });
 
     it('scopes product query to distributor id', async () => {
-      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.product.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -643,7 +643,7 @@ describe('CatalogueService', () => {
     });
 
     it('scopes assetImage query to distributor id', async () => {
-      await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(mockPrisma.assetImage.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -659,7 +659,7 @@ describe('CatalogueService', () => {
         priceListRuleId: 'rule-1',
       });
 
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.resolvedPrice).toBe('15.00');
       expect(mockPriceResolution.resolvePrice).toHaveBeenCalledWith(
@@ -668,13 +668,13 @@ describe('CatalogueService', () => {
     });
 
     it('returns resolvedPrice null when resolvePrice returns null', async () => {
-      const result = await service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1, CUSTOMER_ORG_ID);
+      const result = await service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1, CUSTOMER_ORG_ID);
 
       expect(result.resolvedPrice).toBeNull();
     });
 
     it('does not call resolvePrice for unauthenticated requests (product is not visible)', async () => {
-      await expect(service.getProduct(DISTRIBUTOR_SLUG, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
+      await expect(service.getProduct(DISTRIBUTOR_ID, PRODUCT_ID_1)).rejects.toThrow(NotFoundException);
       expect(mockPriceResolution.resolvePrice).not.toHaveBeenCalled();
     });
   });

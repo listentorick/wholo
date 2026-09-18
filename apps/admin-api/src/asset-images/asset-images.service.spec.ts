@@ -41,7 +41,7 @@ describe('AssetImagesService (BFF)', () => {
       await service.upload('dist-a', 'product-image', 'product-1', mockFile, 'token-1');
 
       expect(mockApi.postMultipart).toHaveBeenCalledWith(
-        '/admin/distributors/dist-a/asset-images',
+        '/distributors/dist-a/asset-images',
         'token-1',
         expect.any(FormData),
       );
@@ -52,7 +52,7 @@ describe('AssetImagesService (BFF)', () => {
     it('calls api.get with encoded query params', async () => {
       await service.list('dist-a', 'product-image', 'product-1', 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/admin/distributors/dist-a/asset-images?assetType=product-image&entityId=product-1',
+        '/distributors/dist-a/asset-images?assetType=product-image&entityId=product-1',
         'token-1',
       );
     });
@@ -61,7 +61,7 @@ describe('AssetImagesService (BFF)', () => {
   describe('delete', () => {
     it('calls api.delete with imageId', async () => {
       await service.delete('dist-a', 'img-uuid', 'token-1');
-      expect(mockApi.delete).toHaveBeenCalledWith('/admin/distributors/dist-a/asset-images/img-uuid', 'token-1');
+      expect(mockApi.delete).toHaveBeenCalledWith('/distributors/dist-a/asset-images/img-uuid', 'token-1');
     });
   });
 
@@ -69,7 +69,7 @@ describe('AssetImagesService (BFF)', () => {
     it('calls api.put with correct body', async () => {
       await service.reorder('dist-a', 'product-image', 'product-1', ['id-2', 'id-1'], 'token-1');
       expect(mockApi.put).toHaveBeenCalledWith(
-        '/admin/distributors/dist-a/asset-images/reorder',
+        '/distributors/dist-a/asset-images/reorder',
         'token-1',
         { assetType: 'product-image', entityId: 'product-1', imageIds: ['id-2', 'id-1'] },
       );

@@ -17,7 +17,7 @@ import { DeliveryProfileQueryDto } from './dto/delivery-profile-query.dto';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId')
+@Controller('distributors/:distributorId')
 export class AdminDeliveryProfilesController {
   constructor(private service: AdminDeliveryProfilesService) {}
 

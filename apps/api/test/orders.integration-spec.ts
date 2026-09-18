@@ -166,9 +166,9 @@ describe('Orders submission (integration)', () => {
       await seedCart();
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(201);
       expect(res.body.distributorId).toBe(DIST);
@@ -187,9 +187,9 @@ describe('Orders submission (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(403);
 
@@ -201,12 +201,15 @@ describe('Orders submission (integration)', () => {
 
     it('returns 403 when there is no trade relationship at all', async () => {
       await seedCart();
+      // traderCustomerSettings FKs to the relationship — must go first, same
+      // cleanup order as beforeEach/afterAll.
+      await prisma.traderCustomerSettings.deleteMany({ where: { tradeRelationshipId: relationshipId } });
       await prisma.tradeRelationship.deleteMany({ where: { id: relationshipId } });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(403);
     });
@@ -219,9 +222,9 @@ describe('Orders submission (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(422);
       expect(res.body.detail).toMatch(/minimum order value/);
@@ -241,9 +244,9 @@ describe('Orders submission (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(422);
     });
@@ -256,9 +259,9 @@ describe('Orders submission (integration)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
 
       expect(res.status).toBe(201);
     });
@@ -267,9 +270,9 @@ describe('Orders submission (integration)', () => {
       await seedCart();
 
       const res = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG });
+        .send({});
 
       expect(res.status).toBe(400);
 
@@ -298,9 +301,9 @@ describe('Orders submission (integration)', () => {
       });
 
       const submitRes = await request(app.getHttpServer())
-        .post('/api/v1/orders')
+        .post(`/api/v1/distributors/${DIST}/orders`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ distributorSlug: DIST_SLUG, requestedDeliveryDate: tomorrowIso() });
+        .send({ requestedDeliveryDate: tomorrowIso() });
       expect(submitRes.status).toBe(201);
       const orderId = submitRes.body.id;
       expect(submitRes.body.taxAmount).toBe('4.00');

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { OrderAsContext } from '../order-as/order-as.interceptor';
 import { ActingCustomerId, OrderAsSession } from '../order-as/acting-customer.decorator';
 import {
@@ -18,32 +18,47 @@ interface RequestWithUser extends Request {
 
 @ApiTags('Orders')
 @ApiBearerAuth()
-@Controller('orders')
 @UseGuards(JwtAuthGuard)
+@Controller()
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
-  @Post()
+  @Post('distributors/:distributorId/orders')
   @ApiOperation({ summary: 'Submit a new order' })
   @ApiCreatedResponse({ description: 'Order submitted successfully' })
   @ApiBadRequestResponse({ description: 'Invalid order data' })
   submitOrder(
+    @Param('distributorId') distributorId: string,
     @Body() dto: SubmitOrderDto,
     @ActingCustomerId() customerId: string,
     @OrderAsSession() orderAs: OrderAsContext | undefined,
     @Req() req: RequestWithUser,
   ) {
-    return this.ordersService.submitOrder(dto, req.user.sub, customerId, orderAs?.sessionToken, orderAs?.distributorId);
+    return this.ordersService.submitOrder(
+      distributorId,
+      dto,
+      req.user.sub,
+      customerId,
+      orderAs?.sessionToken,
+      orderAs?.distributorId,
+    );
   }
 
-  @Get()
-  @ApiOperation({ summary: 'List orders for the authenticated trade customer' })
+  @Get('organisations/:organisationId/orders')
+  @ApiOperation({ summary: "List orders for the authenticated trade customer's organisation" })
   @ApiOkResponse({ description: 'Paginated list of orders' })
-  listOrders(@Query() query: OrderQueryDto, @ActingCustomerId() customerId: string) {
-    return this.ordersService.listCustomerOrders(customerId, query);
+  listOrders(
+    @Param('organisationId') organisationId: string,
+    @Query() query: OrderQueryDto,
+    @ActingCustomerId() customerId: string,
+  ) {
+    if (organisationId !== customerId) {
+      throw new ForbiddenException('Not authorised for this organisation');
+    }
+    return this.ordersService.listCustomerOrders(organisationId, query);
   }
 
-  @Get(':id')
+  @Get('orders/:id')
   @ApiOperation({ summary: 'Get a single order' })
   @ApiOkResponse({ description: 'Order detail' })
   @ApiNotFoundResponse({ description: 'Order not found' })
@@ -51,7 +66,7 @@ export class OrdersController {
     return this.ordersService.getCustomerOrder(id, customerId);
   }
 
-  @Post(':id/cancel')
+  @Post('orders/:id/cancel')
   @ApiOperation({ summary: 'Cancel an order' })
   @ApiOkResponse({ description: 'Order cancelled' })
   @ApiNotFoundResponse({ description: 'Order not found' })

@@ -20,32 +20,36 @@ export class SubmitOrderDto {
   requestedDeliveryDate: string;
 }
 
+interface RequestWithUser extends Request {
+  user: { token: string; organisationId: string };
+}
+
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  submitOrder(@Body() dto: SubmitOrderDto, @Req() req: Request) {
-    const { token } = req['user'] as { token: string };
+  submitOrder(@Body() dto: SubmitOrderDto, @Req() req: RequestWithUser) {
+    const { token } = req.user;
     return this.ordersService.submitOrder(dto, token);
   }
 
   @Get()
-  listOrders(@Query() query: Record<string, string>, @Req() req: Request) {
-    const { token } = req['user'] as { token: string };
-    return this.ordersService.listOrders(query, token);
+  listOrders(@Query() query: Record<string, string>, @Req() req: RequestWithUser) {
+    const { token, organisationId } = req.user;
+    return this.ordersService.listOrders(organisationId, query, token);
   }
 
   @Get(':id')
-  getOrder(@Param('id') id: string, @Req() req: Request) {
-    const { token } = req['user'] as { token: string };
+  getOrder(@Param('id') id: string, @Req() req: RequestWithUser) {
+    const { token } = req.user;
     return this.ordersService.getOrder(id, token);
   }
 
   @Post(':id/cancel')
-  cancelOrder(@Param('id') id: string, @Body() body: unknown, @Req() req: Request) {
-    const { token } = req['user'] as { token: string };
+  cancelOrder(@Param('id') id: string, @Body() body: unknown, @Req() req: RequestWithUser) {
+    const { token } = req.user;
     return this.ordersService.cancelOrder(id, body, token);
   }
 }

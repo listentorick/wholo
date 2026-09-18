@@ -15,8 +15,9 @@ export class CartController {
   }
 
   @Put('items')
-  upsertItem(@Body() body: unknown, @Req() req: Request) {
+  upsertItem(@Body() body: { distributorSlug: string } & Record<string, unknown>, @Req() req: Request) {
     const { token } = req['user'] as { token: string };
-    return this.cartService.upsertItem(body, token);
+    const { distributorSlug, ...rest } = body;
+    return this.cartService.upsertItem(distributorSlug, rest, token);
   }
 }

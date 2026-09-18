@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { Prisma, OrganisationType, CartOrderStatus, TradeRelationshipStatus } from '@prisma/client';
+import { Prisma, CartOrderStatus, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PriceResolutionService } from '../price-lists/price-resolution.service';
 import { UpsertCartItemDto } from './dto/upsert-cart-item.dto';
@@ -34,28 +34,34 @@ export class CartService {
     private priceResolution: PriceResolutionService,
   ) {}
 
-  async getCart(distributorSlug: string, customerId: string, userId: string, orderAsDistributorId?: string) {
-    const distributor = await this.resolveDistributor(distributorSlug);
-
-    if (orderAsDistributorId && distributor.id !== orderAsDistributorId) {
+  async getCart(distributorId: string, customerId: string, userId: string, orderAsDistributorId?: string) {
+    if (orderAsDistributorId && distributorId !== orderAsDistributorId) {
       throw new ForbiddenException('Order-as session is not authorised for this distributor');
     }
 
-    const order = await this.findDraft(distributor.id, customerId, userId);
+    const order = await this.findDraft(distributorId, customerId, userId);
     return this.formatCart(order ?? { id: null, lines: [] });
   }
 
-  async upsertItem(dto: UpsertCartItemDto, customerId: string, userId: string, orderAsDistributorId?: string) {
-    const distributor = await this.resolveDistributor(dto.distributorSlug);
+  async upsertItem(
+    distributorId: string,
+    dto: UpsertCartItemDto,
+    customerId: string,
+    userId: string,
+    orderAsDistributorId?: string,
+  ) {
+    if (orderAsDistributorId && distributorId !== orderAsDistributorId) {
+      throw new ForbiddenException('Order-as session is not authorised for this distributor');
+    }
 
     const relationship = await this.prisma.tradeRelationship.findFirst({
-      where: { distributorId: distributor.id, customerId, status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
+      where: { distributorId, customerId, status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
       select: { id: true },
     });
     if (!relationship) throw new ForbiddenException('No active trade relationship');
 
     if (dto.quantity === 0) {
-      const existing = await this.findDraft(distributor.id, customerId, userId);
+      const existing = await this.findDraft(distributorId, customerId, userId);
       if (!existing) return this.formatCart({ id: null, lines: [] });
 
       await this.prisma.cartOrderLine.deleteMany({
@@ -69,21 +75,17 @@ export class CartService {
       return this.formatCart(updated);
     }
 
-    const order = await this.findOrCreateDraft(distributor.id, customerId, userId);
+    const order = await this.findOrCreateDraft(distributorId, customerId, userId);
 
     const product = await this.prisma.product.findFirst({
-      where: { id: dto.productId, distributorId: distributor.id, deletedAt: null },
+      where: { id: dto.productId, distributorId, deletedAt: null },
       select: { id: true, price: true, distributorId: true, taxTypeId: true },
     });
 
     if (!product) throw new NotFoundException('Product not found');
 
-    if (orderAsDistributorId && product.distributorId !== orderAsDistributorId) {
-      throw new ForbiddenException('Order-as session is not authorised for this distributor');
-    }
-
     const resolved = await this.priceResolution.resolvePrice(
-      distributor.id,
+      distributorId,
       customerId,
       dto.productId,
       dto.quantity,
@@ -135,15 +137,6 @@ export class CartService {
     });
 
     return this.formatCart(updated);
-  }
-
-  private async resolveDistributor(slug: string) {
-    const distributor = await this.prisma.organisation.findFirst({
-      where: { slug, type: OrganisationType.DISTRIBUTOR, deletedAt: null },
-      select: { id: true },
-    });
-    if (!distributor) throw new NotFoundException('Distributor not found');
-    return distributor;
   }
 
   private async findDraft(distributorId: string, customerId: string, userId: string) {

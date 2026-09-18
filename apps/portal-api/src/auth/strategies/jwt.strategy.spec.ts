@@ -1,55 +1,97 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
 import { JwtStrategy } from './jwt.strategy';
+import { ApiClientService } from '../../api-client/api-client.service';
 
 jest.mock('jwks-rsa', () => ({
-  passportJwtSecret: jest.fn().mockReturnValue(jest.fn()),
+  passportJwtSecret: jest.fn(() => jest.fn()),
 }));
 
-const mockConfig = {
-  get: jest.fn((key: string, fallback?: string) => fallback ?? ''),
+const mockProfile = {
+  id: 'seed-customer-1',
+  email: 'peter@blackbird.com',
+  role: 'TRADE_CUSTOMER',
+  organisationId: 'seed-customer-org-1',
 };
 
-const mockRequest = (bearer?: string) =>
-  ({ headers: { authorization: bearer ? `Bearer ${bearer}` : undefined } }) as any;
+const mockReq = {
+  headers: { authorization: 'Bearer test-token-abc' },
+} as any;
+
+const mockPayload = { sub: 'kc-seed-customer-1', email: 'peter@blackbird.com' };
 
 describe('JwtStrategy (portal-api)', () => {
   let strategy: JwtStrategy;
+  let mockApiClient: { get: jest.Mock };
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    mockApiClient = { get: jest.fn() };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JwtStrategy,
-        { provide: ConfigService, useValue: mockConfig },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn((key: string, fallback?: string) => fallback ?? '') },
+        },
+        { provide: ApiClientService, useValue: mockApiClient },
       ],
     }).compile();
 
     strategy = module.get<JwtStrategy>(JwtStrategy);
   });
 
-  describe('validate', () => {
-    it('returns sub, email, and raw bearer token', async () => {
-      const req = mockRequest('my-bearer-token');
-      const result = await strategy.validate(req, { sub: 'kc-sub-abc', email: 'peter@blackbird.com' });
+  it('returns user context with organisationId on successful profile fetch', async () => {
+    mockApiClient.get.mockResolvedValueOnce(mockProfile);
 
-      expect(result).toEqual({
-        sub: 'kc-sub-abc',
-        email: 'peter@blackbird.com',
-        token: 'my-bearer-token',
-      });
+    const result = await strategy.validate(mockReq, mockPayload);
+
+    expect(result).toEqual({
+      sub: 'seed-customer-1',
+      email: 'peter@blackbird.com',
+      token: 'test-token-abc',
+      organisationId: 'seed-customer-org-1',
+      role: 'TRADE_CUSTOMER',
+    });
+    expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', 'test-token-abc');
+  });
+
+  it('accepts a DISTRIBUTOR_ADMIN profile too — no organisationType gate (ADR-053)', async () => {
+    mockApiClient.get.mockResolvedValueOnce({
+      id: 'seed-admin-1',
+      email: 'james@vineandco.com',
+      role: 'DISTRIBUTOR_ADMIN',
+      organisationId: 'seed-distributor-1',
     });
 
-    it('strips Bearer prefix from token', async () => {
-      const req = mockRequest('raw-token-value');
-      const result = await strategy.validate(req, { sub: 'kc-sub-xyz' });
-      expect(result.token).toBe('raw-token-value');
-    });
+    const result = await strategy.validate(mockReq, mockPayload);
 
-    it('sets token to undefined when no authorization header', async () => {
-      const req = mockRequest();
-      const result = await strategy.validate(req, { sub: 'kc-sub-abc' });
-      expect(result.token).toBeUndefined();
-    });
+    expect(result.role).toBe('DISTRIBUTOR_ADMIN');
+    expect(result.organisationId).toBe('seed-distributor-1');
+  });
+
+  it('throws UnauthorizedException when apps/api returns an error response', async () => {
+    const err = new Error('Unauthorized') as any;
+    err.status = 401;
+    mockApiClient.get.mockRejectedValueOnce(err);
+
+    await expect(strategy.validate(mockReq, mockPayload)).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('throws UnauthorizedException on network error (apps/api unreachable)', async () => {
+    mockApiClient.get.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    await expect(strategy.validate(mockReq, mockPayload)).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('sets token to undefined when no authorization header', async () => {
+    mockApiClient.get.mockResolvedValueOnce(mockProfile);
+    const req = { headers: {} } as any;
+
+    const result = await strategy.validate(req, mockPayload);
+
+    expect(result.token).toBeUndefined();
+    expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', undefined);
   });
 });

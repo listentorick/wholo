@@ -8,7 +8,7 @@ import { AdminProductTypesService } from './admin-product-types.service';
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
 @UseGuards(JwtAuthGuard, DistributorAccessGuard)
-@Controller('admin/distributors/:distributorId')
+@Controller('distributors/:distributorId')
 export class AdminProductTypesController {
   constructor(private service: AdminProductTypesService) {}
 

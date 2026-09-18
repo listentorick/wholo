@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiBearerAuth, ApiTags, ApiOperation,
@@ -20,31 +20,45 @@ export class CatalogueController {
   getDistributor(@Param('slug') slug: string) {
     return this.catalogueService.getDistributor(slug);
   }
+}
+
+@ApiTags('Distributors')
+@Controller('distributors/:distributorId/customers/:customerId')
+export class CustomerCatalogueController {
+  constructor(private readonly catalogueService: CatalogueService) {}
 
   @UseGuards(AuthGuard('jwt'))
-  @Get(':slug/products')
+  @Get('catalogue')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Browse products in a distributor catalogue with customer-specific pricing' })
   @ApiOkResponse({ description: 'Paginated product list' })
   getProducts(
-    @Param('slug') slug: string,
+    @Param('distributorId') distributorId: string,
+    @Param('customerId') customerId: string,
     @Query() query: CatalogueQueryDto,
-    @ActingCustomerId() organisationId: string,
+    @ActingCustomerId() actingCustomerId: string,
   ) {
-    return this.catalogueService.getProducts(slug, query, organisationId);
+    if (customerId !== actingCustomerId) {
+      throw new ForbiddenException('Not authorised for this customer');
+    }
+    return this.catalogueService.getProducts(distributorId, query, customerId);
   }
 
   @UseGuards(AuthGuard('jwt'))
-  @Get(':slug/products/:productId')
+  @Get('catalogue/:productId')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get a single product with customer-specific pricing' })
   @ApiOkResponse({ description: 'Product detail' })
   @ApiNotFoundResponse({ description: 'Product not found' })
   getProduct(
-    @Param('slug') slug: string,
+    @Param('distributorId') distributorId: string,
+    @Param('customerId') customerId: string,
     @Param('productId') productId: string,
-    @ActingCustomerId() organisationId: string,
+    @ActingCustomerId() actingCustomerId: string,
   ) {
-    return this.catalogueService.getProduct(slug, productId, organisationId);
+    if (customerId !== actingCustomerId) {
+      throw new ForbiddenException('Not authorised for this customer');
+    }
+    return this.catalogueService.getProduct(distributorId, productId, customerId);
   }
 }

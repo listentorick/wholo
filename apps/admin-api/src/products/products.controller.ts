@@ -52,6 +52,6 @@ export class ProductsController {
   @Get(':id/pricing')
   getProductPricing(@Req() req: Request, @Param('id') id: string) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
-    return this.api.get(`/admin/distributors/${organisationId}/products/${id}/pricing`, token);
+    return this.api.get(`/distributors/${organisationId}/products/${id}/pricing`, token);
   }
 }

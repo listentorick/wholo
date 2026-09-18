@@ -128,7 +128,7 @@ describe('Order-as session distributor boundary (integration)', () => {
   /** Mints a real order-as session for DIST_A via the actual HTTP flow (admin session create → exchange). */
   async function mintOrderAsSessionForDistA(): Promise<string> {
     const createRes = await request(app.getHttpServer())
-      .post(`/api/v1/admin/distributors/${DIST_A}/order-as/sessions`)
+      .post(`/api/v1/distributors/${DIST_A}/order-as/sessions`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ tradeRelationshipId: relationshipAId });
     expect(createRes.status).toBe(201);
@@ -147,25 +147,26 @@ describe('Order-as session distributor boundary (integration)', () => {
     const sessionToken = await mintOrderAsSessionForDistA();
 
     const res = await request(app.getHttpServer())
-      .put('/api/v1/cart/items')
+      .put(`/api/v1/distributors/${DIST_B}/cart/items`)
       .set('Authorization', `Bearer ${adminToken}`)
       .set('X-Order-As-Session', sessionToken)
-      .send({ distributorSlug: DIST_B_SLUG, productId: productBId, quantity: 1 });
+      .send({ productId: productBId, quantity: 1 });
 
     expect(res.status).toBe(403);
 
-    // upsertItem eagerly creates an empty draft cart before this check runs
-    // (pre-existing, unrelated behaviour) — what actually matters here is that
-    // no line for the product was written.
-    const linesAtB = await prisma.cartOrderLine.findMany({ where: { order: { distributorId: DIST_B, customerId: CUSTOMER } } });
-    expect(linesAtB).toHaveLength(0);
+    // The distributor check now runs before any cart row is touched (it's the
+    // first thing upsertItem does, ahead of the trade-relationship lookup and
+    // the draft-cart upsert) — no cart is created at all for the mismatched
+    // distributor, not just no line.
+    const cartAtB = await prisma.cartOrder.findFirst({ where: { distributorId: DIST_B, customerId: CUSTOMER } });
+    expect(cartAtB).toBeNull();
   });
 
   it('rejects reading the cart at a different distributor than the order-as session was issued for', async () => {
     const sessionToken = await mintOrderAsSessionForDistA();
 
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/cart?distributorSlug=${DIST_B_SLUG}`)
+      .get(`/api/v1/distributors/${DIST_B}/cart`)
       .set('Authorization', `Bearer ${adminToken}`)
       .set('X-Order-As-Session', sessionToken);
 
@@ -176,7 +177,7 @@ describe('Order-as session distributor boundary (integration)', () => {
     const sessionToken = await mintOrderAsSessionForDistA();
 
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/cart?distributorSlug=${DIST_A_SLUG}`)
+      .get(`/api/v1/distributors/${DIST_A}/cart`)
       .set('Authorization', `Bearer ${adminToken}`)
       .set('X-Order-As-Session', sessionToken);
 

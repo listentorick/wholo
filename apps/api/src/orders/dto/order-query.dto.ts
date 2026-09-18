@@ -22,5 +22,5 @@ export class OrderQueryDto {
 
   @IsOptional()
   @IsString()
-  distributorSlug?: string;
+  distributorId?: string;
 }
