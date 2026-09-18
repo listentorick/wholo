@@ -1,4 +1,7 @@
 export * from './format-money';
+export * from './permissions';
+
+import { Permission } from './permissions';
 
 export enum Role {
   PLATFORM_ADMIN = 'PLATFORM_ADMIN',
@@ -13,7 +16,8 @@ export interface AuthUser {
   email: string;
   firstName: string;
   lastName: string;
-  role: Role;
+  roles: Role[];
+  permissions: Permission[];
   organisationId: string;
   organisationName: string;
   organisationType?: 'DISTRIBUTOR' | 'TRADE_CUSTOMER';

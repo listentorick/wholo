@@ -77,7 +77,12 @@ describe('DistributorsService', () => {
       }),
     );
     expect(tx.membership.create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', organisationId: 'org-1', role: Role.DISTRIBUTOR_ADMIN },
+      data: {
+        userId: 'user-1',
+        organisationId: 'org-1',
+        role: Role.DISTRIBUTOR_ADMIN,
+        roles: { create: { role: Role.DISTRIBUTOR_ADMIN } },
+      },
     });
   });
 

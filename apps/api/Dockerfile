@@ -22,6 +22,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/types/dist ./packages/types/dist
+COPY --from=builder /app/packages/types/package.json ./packages/types/package.json
+# pnpm workspace link isn't copied with root node_modules; @wholo/types is imported at runtime
+RUN mkdir -p node_modules/@wholo && ln -sfn ../../packages/types node_modules/@wholo/types
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/apps/api/prisma ./prisma
 COPY --from=builder /app/apps/api/package.json ./package.json

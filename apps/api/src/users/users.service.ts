@@ -10,7 +10,10 @@ export class UsersService {
       where: { id, deletedAt: null },
       include: {
         memberships: {
-          include: { organisation: { include: { distributorSettings: { select: { currencyCode: true } } } } },
+          include: {
+            organisation: { include: { distributorSettings: { select: { currencyCode: true } } } },
+            roles: true,
+          },
         },
       },
     });
@@ -19,7 +22,7 @@ export class UsersService {
   async findByKeycloakId(keycloakId: string) {
     const user = await this.prisma.user.findFirst({
       where: { keycloakId, deletedAt: null },
-      include: { memberships: { include: { organisation: true } } },
+      include: { memberships: { include: { organisation: true, roles: true } } },
     });
     if (user) return user;
 
@@ -32,13 +35,13 @@ export class UsersService {
   async linkKeycloakId(email: string, keycloakId: string) {
     const user = await this.prisma.user.findFirst({
       where: { email, keycloakId: null, deletedAt: null },
-      include: { memberships: { include: { organisation: true } } },
+      include: { memberships: { include: { organisation: true, roles: true } } },
     });
     if (!user) return null;
     return this.prisma.user.update({
       where: { id: user.id },
       data: { keycloakId },
-      include: { memberships: { include: { organisation: true } } },
+      include: { memberships: { include: { organisation: true, roles: true } } },
     });
   }
 

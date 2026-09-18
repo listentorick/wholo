@@ -34,12 +34,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user) throw new UnauthorizedException('No Wholo user found for this identity');
     const membership = user.memberships[0];
+
+    // Union in the legacy scalar `role` alongside MembershipRole rows — a
+    // live-rollout safety net so permission resolution is correct even
+    // before the one-off db:membership-roles:backfill script has run for a
+    // given membership (see MembershipRole in schema.prisma).
+    const memberships = user.memberships.map((m) => ({
+      organisationId: m.organisationId,
+      roles: [...new Set([...m.roles.map((r) => r.role), m.role])],
+    }));
+
     return {
       sub: user.id,
       email: user.email,
       role: membership?.role,
       organisationId: membership?.organisationId,
       organisationIds: user.memberships.map((m) => m.organisationId),
+      memberships,
     };
   }
 }

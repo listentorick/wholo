@@ -1,7 +1,10 @@
 import { Body, Controller, HttpCode, Logger, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { OrderAsService } from './order-as.service';
 import { CreateSessionDto } from './dto/create-session.dto';
 import { ExchangeTokenDto } from './dto/exchange-token.dto';
@@ -14,7 +17,7 @@ interface RequestWithUser extends Request {
 @ApiTags('Order As')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/order-as')
 export class OrderAsAdminController {
   constructor(private readonly orderAsService: OrderAsService) {}
@@ -22,7 +25,10 @@ export class OrderAsAdminController {
   // Called by apps/admin-api only, relaying the admin's own validated JWT — see
   // DistributorAccessGuard. The delivery token minted here is inert without the
   // admin's Keycloak JWT (enforced on exchange via adminUserId === req.user.sub).
+  // Permission (not just tenant scope) enforced here — apps/api is the sole
+  // authority; admin-api no longer performs this check itself.
   @Post('sessions')
+  @RequirePermissions(Permission.ORDER_AS_INITIATE)
   @ApiOperation({ summary: 'Create or refresh an order-as session (admin BFF call)' })
   createSession(
     @Param('distributorId') distributorId: string,

@@ -29,12 +29,15 @@ const DIST_B_SLUG = 'test-oacd-dist-b-slug';
 const CUSTOMER = 'test-oacd-customer';
 const ADMIN_USER = 'test-oacd-admin';
 const ADMIN_KEYCLOAK_ID = 'kc-test-oacd-admin';
+const STAFF_USER = 'test-oacd-staff';
+const STAFF_KEYCLOAK_ID = 'kc-test-oacd-staff';
 
 describe('Order-as session distributor boundary (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let jwtServer: JwtTestServer;
   let adminToken: string;
+  let staffToken: string;
   let relationshipAId: string;
   let productBId: string;
 
@@ -84,6 +87,27 @@ describe('Order-as session distributor boundary (integration)', () => {
     });
 
     adminToken = jwtServer.signToken({ sub: ADMIN_KEYCLOAK_ID, email: 'oacd-admin@integration.test' });
+
+    // A non-admin distributor staff member at DIST_A — used to prove
+    // ORDER_AS_INITIATE is enforced by apps/api itself, not just trusted from
+    // admin-api's (now-removed) inline role check.
+    const staff = await prisma.user.upsert({
+      where: { id: STAFF_USER },
+      create: {
+        id: STAFF_USER,
+        email: 'oacd-staff@integration.test',
+        keycloakId: STAFF_KEYCLOAK_ID,
+        firstName: 'Order-As',
+        lastName: 'Staff',
+      },
+      update: { keycloakId: STAFF_KEYCLOAK_ID },
+    });
+    await prisma.membership.upsert({
+      where: { userId_organisationId: { userId: staff.id, organisationId: DIST_A } },
+      create: { userId: staff.id, organisationId: DIST_A, role: Role.WAREHOUSE_STAFF },
+      update: {},
+    });
+    staffToken = jwtServer.signToken({ sub: STAFF_KEYCLOAK_ID, email: 'oacd-staff@integration.test' });
   });
 
   afterAll(async () => {
@@ -93,8 +117,8 @@ describe('Order-as session distributor boundary (integration)', () => {
     await prisma.cartOrder.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
-    await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
-    await prisma.user.deleteMany({ where: { id: ADMIN_USER } });
+    await prisma.membership.deleteMany({ where: { userId: { in: [ADMIN_USER, STAFF_USER] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [ADMIN_USER, STAFF_USER] } } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B, CUSTOMER] } } });
     await app.close();
     await jwtServer.close();
@@ -169,6 +193,19 @@ describe('Order-as session distributor boundary (integration)', () => {
       .get(`/api/v1/distributors/${DIST_B}/cart`)
       .set('Authorization', `Bearer ${adminToken}`)
       .set('X-Order-As-Session', sessionToken);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects order-as session creation for a non-admin membership, enforced directly by apps/api', async () => {
+    // Authorization (only DISTRIBUTOR_ADMIN may initiate order-as) is now
+    // enforced by apps/api's PermissionsGuard, not trusted from admin-api's
+    // (now-removed) inline role check — hit apps/api directly, as admin-api
+    // itself would, and confirm it 403s independent of any BFF-side check.
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/distributors/${DIST_A}/order-as/sessions`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .send({ tradeRelationshipId: relationshipAId });
 
     expect(res.status).toBe(403);
   });

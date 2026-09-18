@@ -1,7 +1,10 @@
 import { Controller, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
 
 interface RequestWithUser extends Request {
@@ -11,7 +14,8 @@ interface RequestWithUser extends Request {
 @ApiTags('Accounting')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.ACCOUNTING_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/accounting/invoice-exports')
 export class AccountingInvoiceExportController {
   constructor(private readonly service: AccountingInvoiceExportService) {}

@@ -73,7 +73,7 @@ export class DistributorsService {
       const existing = await tx.membership.findFirst({
         where: {
           userId: user.id,
-          role: Role.DISTRIBUTOR_ADMIN,
+          roles: { some: { role: Role.DISTRIBUTOR_ADMIN } },
           organisation: { type: OrganisationType.DISTRIBUTOR, deletedAt: null },
         },
         include: { organisation: { select: organisationResponse } },
@@ -100,7 +100,12 @@ export class DistributorsService {
       });
 
       await tx.membership.create({
-        data: { userId: user.id, organisationId: organisation.id, role: Role.DISTRIBUTOR_ADMIN },
+        data: {
+          userId: user.id,
+          organisationId: organisation.id,
+          role: Role.DISTRIBUTOR_ADMIN,
+          roles: { create: { role: Role.DISTRIBUTOR_ADMIN } },
+        },
       });
 
       return organisation;

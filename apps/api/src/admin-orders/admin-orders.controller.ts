@@ -14,8 +14,11 @@ import {
   ApiParam, ApiTags, ApiOperation, ApiBearerAuth,
   ApiOkResponse, ApiNotFoundResponse, ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AdminOrdersService } from './admin-orders.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { AcceptOrderDto } from './dto/accept-order.dto';
@@ -30,12 +33,13 @@ interface RequestWithUser extends Request {
 @ApiTags('Admin / Orders')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId')
 export class AdminOrdersController {
   constructor(private readonly service: AdminOrdersService) {}
 
   @Get('orders')
+  @RequirePermissions(Permission.ORDERS_READ)
   @ApiOperation({ summary: 'List all orders for a distributor' })
   @ApiOkResponse({ description: 'Paginated list of orders' })
   listOrders(
@@ -46,12 +50,14 @@ export class AdminOrdersController {
   }
 
   @Get('orders/needs-attention-count')
+  @RequirePermissions(Permission.ORDERS_READ)
   @ApiOperation({ summary: 'Count of orders awaiting acceptance (SUBMITTED)' })
   async countNeedsAttention(@Param('distributorId') distributorId: string) {
     return { count: await this.service.countNeedsAttention(distributorId) };
   }
 
   @Get('orders/:id')
+  @RequirePermissions(Permission.ORDERS_READ)
   @ApiOperation({ summary: 'Get a single order' })
   @ApiOkResponse({ description: 'Order detail' })
   @ApiNotFoundResponse({ description: 'Order not found or belongs to a different distributor' })
@@ -63,6 +69,7 @@ export class AdminOrdersController {
   }
 
   @Get('orders/:id/audit-log')
+  @RequirePermissions(Permission.ORDERS_READ)
   @ApiOperation({ summary: "Get an order's audit log (who did what, when)" })
   @ApiOkResponse({ description: 'Paginated audit log entries' })
   @ApiNotFoundResponse({ description: 'Order not found or belongs to a different distributor' })
@@ -79,6 +86,7 @@ export class AdminOrdersController {
   // /orders/:id/... family is grandfathered and this is a consistent addition —
   // a standalone controller + guard + BFF module for one read isn't warranted.
   @Get('orders/:id/delivery-outcome')
+  @RequirePermissions(Permission.ORDERS_READ)
   @ApiOperation({ summary: "Get an order's recorded proof of delivery (driver outcome)" })
   @ApiOkResponse({ description: 'Delivery outcome detail with presigned proof-photo URLs' })
   @ApiNotFoundResponse({ description: 'Order not found, wrong distributor, or no outcome recorded' })
@@ -91,6 +99,7 @@ export class AdminOrdersController {
 
   @Post('orders/:id/accept')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.ORDERS_MANAGE)
   @ApiOperation({ summary: 'Accept a submitted order' })
   @ApiOkResponse({ description: 'Order accepted' })
   @ApiNotFoundResponse({ description: 'Order not found' })
@@ -106,6 +115,7 @@ export class AdminOrdersController {
 
   @Post('orders/:id/reject')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.ORDERS_MANAGE)
   @ApiOperation({ summary: 'Reject a submitted order' })
   @ApiOkResponse({ description: 'Order rejected' })
   @ApiNotFoundResponse({ description: 'Order not found' })
@@ -121,6 +131,7 @@ export class AdminOrdersController {
 
   @Post('orders/:id/cancel')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.ORDERS_MANAGE)
   @ApiOperation({ summary: 'Cancel an order (SUBMITTED or ACCEPTED)' })
   @ApiOkResponse({ description: 'Order cancelled' })
   @ApiNotFoundResponse({ description: 'Order not found' })

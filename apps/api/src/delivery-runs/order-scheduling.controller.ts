@@ -2,8 +2,11 @@ import {
   Body, Controller, Get, Param, Patch, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { ReschedulePreviewQueryDto } from './dto/reschedule-preview-query.dto';
 import { ChangeScheduledDeliveryDateDto } from './dto/change-scheduled-delivery-date.dto';
@@ -21,12 +24,13 @@ interface RequestWithUser extends Request {
 @ApiTags('Delivery Runs')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/orders')
 export class OrderSchedulingController {
   constructor(private service: DeliveryRunsService) {}
 
   @Get(':orderId/reschedule-preview')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'Preview route/run resolution and nearby same-address deliveries for a candidate date' })
   getReschedulePreview(
     @Param('distributorId') distributorId: string,
@@ -37,6 +41,7 @@ export class OrderSchedulingController {
   }
 
   @Patch(':orderId/scheduled-delivery-date')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Change an order\'s scheduled delivery date, re-resolving its route/run synchronously' })
   changeScheduledDeliveryDate(
     @Param('distributorId') distributorId: string,

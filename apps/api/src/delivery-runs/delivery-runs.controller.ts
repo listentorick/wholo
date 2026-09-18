@@ -3,8 +3,11 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { AssignOrderToRunDto } from './dto/assign-order-to-run.dto';
 import { CreateDeliveryRunDto } from './dto/create-delivery-run.dto';
@@ -20,7 +23,7 @@ interface RequestWithUser extends Request {
 @ApiTags('Delivery Runs')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/delivery-runs')
 export class DeliveryRunsController {
   constructor(private service: DeliveryRunsService, private manifestService: ManifestService) {}
@@ -33,6 +36,7 @@ export class DeliveryRunsController {
   // totals on the success path.
   @Post()
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Create an empty delivery run for a route on a given day' })
   createRun(
     @Param('distributorId') distributorId: string,
@@ -44,6 +48,7 @@ export class DeliveryRunsController {
 
   @Post(':runId/orders')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Assign (or move) an order into a delivery run' })
   assignOrderToRun(
     @Param('distributorId') distributorId: string,
@@ -61,6 +66,7 @@ export class DeliveryRunsController {
   // failure path (see M3 plan §"Mutations — CAS, ordering, versions").
   @Delete(':runId/orders/:orderId')
   @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Remove an order from a delivery run, back to Unassigned' })
   unassignOrderFromRun(
     @Param('distributorId') distributorId: string,
@@ -73,6 +79,7 @@ export class DeliveryRunsController {
   }
 
   @Patch(':runId/orders/reorder')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Bulk-update a run\'s delivery drop order' })
   reorderRunOrders(
     @Param('distributorId') distributorId: string,
@@ -84,6 +91,7 @@ export class DeliveryRunsController {
   }
 
   @Patch(':runId')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Mark a run ready, reopen it, or change its driver override' })
   updateRun(
     @Param('distributorId') distributorId: string,
@@ -95,6 +103,7 @@ export class DeliveryRunsController {
   }
 
   @Get(':runId/manifest')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'Generate a printable driver manifest PDF for a Ready run' })
   async getManifest(
     @Param('distributorId') distributorId: string,

@@ -1,7 +1,10 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { DeliveryRunsService } from './delivery-runs.service';
 import { DeliveryDayQueryDto } from './dto/delivery-day-query.dto';
 
@@ -11,7 +14,8 @@ import { DeliveryDayQueryDto } from './dto/delivery-day-query.dto';
 @ApiTags('Delivery Days')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.DELIVERY_READ)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/delivery-days')
 export class DeliveryDaysController {
   constructor(private service: DeliveryRunsService) {}

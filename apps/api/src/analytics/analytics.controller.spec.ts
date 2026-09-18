@@ -3,6 +3,7 @@ import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 
 describe('AnalyticsController', () => {
   let controller: AnalyticsController;
@@ -31,7 +32,7 @@ describe('AnalyticsController', () => {
 
   it('is guarded by JwtAuthGuard and DistributorAccessGuard', () => {
     const guards = Reflect.getMetadata('__guards__', AnalyticsController);
-    expect(guards).toEqual([JwtAuthGuard, DistributorAccessGuard]);
+    expect(guards).toEqual([JwtAuthGuard, DistributorAccessGuard, PermissionsGuard]);
   });
 
   it('forwards distributorId and query to orderSummary', async () => {

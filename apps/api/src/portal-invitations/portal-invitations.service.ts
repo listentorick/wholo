@@ -55,7 +55,12 @@ export class PortalInvitationsService {
     await this.prisma.$transaction([
       this.prisma.membership.upsert({
         where: { userId_organisationId: { userId: user.id, organisationId: rel.customerId } },
-        create: { userId: user.id, organisationId: rel.customerId, role: Role.TRADE_CUSTOMER },
+        create: {
+          userId: user.id,
+          organisationId: rel.customerId,
+          role: Role.TRADE_CUSTOMER,
+          roles: { create: { role: Role.TRADE_CUSTOMER } },
+        },
         update: {},
       }),
       this.prisma.customerInvitation.update({

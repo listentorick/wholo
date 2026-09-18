@@ -2,8 +2,11 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res, UseGuards 
 import { Request, Response } from 'express';
 import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AccountingProvider, IngestionRunTrigger } from '@prisma/client';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AccountingConnectionService } from './accounting-connection.service';
 import { AccountingSyncService } from './sync/accounting-sync.service';
 import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
@@ -15,7 +18,7 @@ interface RequestWithUser extends Request {
 @ApiTags('Accounting')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/accounting')
 export class AccountingConnectionController {
   constructor(
@@ -24,6 +27,7 @@ export class AccountingConnectionController {
   ) {}
 
   @Get('connection')
+  @RequirePermissions(Permission.ACCOUNTING_READ)
   @ApiOperation({ summary: 'Get the distributor\'s current accounting connection status' })
   @ApiNoContentResponse({ description: 'No accounting connection exists for this distributor' })
   async getConnection(
@@ -39,6 +43,7 @@ export class AccountingConnectionController {
   }
 
   @Post('connections/xero/authorization-url')
+  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
   @ApiOperation({ summary: 'Start a Xero OAuth connection — returns the consent URL to navigate to' })
   createXeroAuthorizationUrl(
     @Param('distributorId') distributorId: string,
@@ -48,6 +53,7 @@ export class AccountingConnectionController {
   }
 
   @Patch('connection')
+  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
   @ApiOperation({ summary: 'Update settings on the distributor\'s current accounting connection' })
   updateConnectionSettings(
     @Param('distributorId') distributorId: string,
@@ -57,18 +63,21 @@ export class AccountingConnectionController {
   }
 
   @Delete('connection')
+  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
   @ApiOperation({ summary: 'Disconnect the distributor\'s active accounting connection' })
   disconnect(@Param('distributorId') distributorId: string) {
     return this.service.disconnect(distributorId);
   }
 
   @Post('sync')
+  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
   @ApiOperation({ summary: 'Request a full sync (contacts, products, tax types) from the accounting provider' })
   requestSync(@Param('distributorId') distributorId: string) {
     return this.syncService.requestSync(distributorId, IngestionRunTrigger.MANUAL);
   }
 
   @Get('sync/status')
+  @RequirePermissions(Permission.ACCOUNTING_READ)
   @ApiOperation({ summary: 'Live status of the current/last accounting sync per resource type, plus lastSucceededAt' })
   getSyncStatus(@Param('distributorId') distributorId: string) {
     return this.syncService.getStatus(distributorId);

@@ -324,17 +324,29 @@ model User {
 }
 
 model Membership {
-  id             String       @id @default(cuid())
+  id             String           @id @default(cuid())
   userId         String
   organisationId String
-  role           Role
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  user           User         @relation(fields: [userId], references: [id])
-  organisation   Organisation @relation(fields: [organisationId], references: [id])
+  role           Role             // kept during multi-role transition; see MembershipRole
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  user           User             @relation(fields: [userId], references: [id])
+  organisation   Organisation     @relation(fields: [organisationId], references: [id])
+  roles          MembershipRole[]
 
   @@unique([userId, organisationId])
   @@map("memberships")
+}
+
+model MembershipRole {
+  id           String     @id @default(cuid())
+  membershipId String
+  role         Role
+  createdAt    DateTime   @default(now())
+  membership   Membership @relation(fields: [membershipId], references: [id])
+
+  @@unique([membershipId, role])
+  @@map("membership_roles")
 }
 
 model RefreshToken {

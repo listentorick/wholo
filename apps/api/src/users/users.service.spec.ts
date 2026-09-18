@@ -49,7 +49,10 @@ describe('UsersService', () => {
         where: { id: 'user-1', deletedAt: null },
         include: {
           memberships: {
-            include: { organisation: { include: { distributorSettings: { select: { currencyCode: true } } } } },
+            include: {
+              organisation: { include: { distributorSettings: { select: { currencyCode: true } } } },
+              roles: true,
+            },
           },
         },
       });
@@ -69,7 +72,7 @@ describe('UsersService', () => {
       expect(result).toEqual(mockUser);
       expect(mockPrisma.user.findFirst).toHaveBeenCalledWith({
         where: { keycloakId: 'kc-sub-123', deletedAt: null },
-        include: { memberships: { include: { organisation: true } } },
+        include: { memberships: { include: { organisation: true, roles: true } } },
       });
     });
 
@@ -92,7 +95,7 @@ describe('UsersService', () => {
       expect(mockPrisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { keycloakId: 'new-kc-sub' },
-        include: { memberships: { include: { organisation: true } } },
+        include: { memberships: { include: { organisation: true, roles: true } } },
       });
     });
 

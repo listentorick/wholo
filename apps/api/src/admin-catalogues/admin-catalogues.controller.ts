@@ -6,8 +6,11 @@ import {
   ApiParam, ApiTags, ApiOperation, ApiBearerAuth,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AdminCataloguesService } from './admin-catalogues.service';
 import { CreateAdminCatalogueDto } from './dto/create-admin-catalogue.dto';
 import { UpdateAdminCatalogueDto } from './dto/update-admin-catalogue.dto';
@@ -17,7 +20,8 @@ import { AdminCatalogueQueryDto } from './dto/catalogue-query.dto';
 @ApiTags('Admin / Catalogues')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.CATALOGUE_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId')
 export class AdminCataloguesController {
   constructor(private service: AdminCataloguesService) {}

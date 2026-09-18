@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { OrganisationType } from '@prisma/client';
+import { Permission } from '@wholo/types';
 import { UsersService } from '../users/users.service';
+import { ROLE_PERMISSIONS } from './role-permissions';
 
 @Injectable()
 export class AuthService {
@@ -15,12 +17,21 @@ export class AuthService {
     const membership =
       user.memberships.find((m) => m.organisation.type === OrganisationType.DISTRIBUTOR) ??
       user.memberships[0];
+
+    // Union in the legacy scalar `role` as a live-rollout safety net — see
+    // JwtStrategy.validate for the full rationale.
+    const roles = [...new Set([...(membership?.roles.map((r) => r.role) ?? []), membership?.role].filter(Boolean))];
+    const permissions = Array.from(
+      new Set(roles.flatMap((role) => ROLE_PERMISSIONS[role] ?? [])),
+    ) as Permission[];
+
     return {
       id: user.id,
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: membership?.role,
+      roles,
+      permissions,
       organisationId: membership?.organisationId,
       organisationName: membership?.organisation?.name,
       organisationType: membership?.organisation?.type,

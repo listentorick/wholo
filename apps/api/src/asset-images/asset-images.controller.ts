@@ -22,8 +22,11 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AssetImagesService } from './asset-images.service';
 import { UploadAssetImageDto } from './dto/upload-asset-image.dto';
 import { ReorderAssetImagesDto } from './dto/reorder-asset-images.dto';
@@ -31,7 +34,8 @@ import { ReorderAssetImagesDto } from './dto/reorder-asset-images.dto';
 @ApiTags('Admin / Asset Images')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.ASSET_IMAGES_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/asset-images')
 export class AssetImagesController {
   constructor(private readonly service: AssetImagesService) {}

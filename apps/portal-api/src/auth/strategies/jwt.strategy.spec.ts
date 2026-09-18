@@ -11,7 +11,8 @@ jest.mock('jwks-rsa', () => ({
 const mockProfile = {
   id: 'seed-customer-1',
   email: 'peter@blackbird.com',
-  role: 'TRADE_CUSTOMER',
+  roles: ['TRADE_CUSTOMER'],
+  permissions: ['catalogue:read'],
   organisationId: 'seed-customer-org-1',
 };
 
@@ -52,7 +53,8 @@ describe('JwtStrategy (portal-api)', () => {
       email: 'peter@blackbird.com',
       token: 'test-token-abc',
       organisationId: 'seed-customer-org-1',
-      role: 'TRADE_CUSTOMER',
+      roles: ['TRADE_CUSTOMER'],
+      permissions: ['catalogue:read'],
     });
     expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', 'test-token-abc');
   });
@@ -61,13 +63,14 @@ describe('JwtStrategy (portal-api)', () => {
     mockApiClient.get.mockResolvedValueOnce({
       id: 'seed-admin-1',
       email: 'james@vineandco.com',
-      role: 'DISTRIBUTOR_ADMIN',
+      roles: ['DISTRIBUTOR_ADMIN'],
+      permissions: ['order-as:initiate'],
       organisationId: 'seed-distributor-1',
     });
 
     const result = await strategy.validate(mockReq, mockPayload);
 
-    expect(result.role).toBe('DISTRIBUTOR_ADMIN');
+    expect(result.roles).toEqual(['DISTRIBUTOR_ADMIN']);
     expect(result.organisationId).toBe('seed-distributor-1');
   });
 

@@ -1,7 +1,7 @@
 # ADR-011: Role-based access control (RBAC)
 
 ## Status
-Accepted
+Accepted — extended by [ADR-066](ADR-066-multi-role-rbac-and-permission-catalogue.md) (multiple roles per membership, central permission resolution, permission catalogue)
 
 ## Context
 The platform has multiple distinct user personas with different capabilities. A clear permission model is needed to ensure users can only perform actions appropriate to their role, and that distributor data remains isolated from users of other distributors.

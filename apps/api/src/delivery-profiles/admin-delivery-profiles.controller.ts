@@ -3,8 +3,11 @@ import {
   Param, Body, Query, HttpCode, HttpStatus, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiParam, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AdminDeliveryProfilesService } from './admin-delivery-profiles.service';
 import { CreateDeliveryProfileDto } from './dto/create-delivery-profile.dto';
 import { UpdateDeliveryProfileDto } from './dto/update-delivery-profile.dto';
@@ -16,7 +19,7 @@ import { DeliveryProfileQueryDto } from './dto/delivery-profile-query.dto';
 @ApiTags('Admin / Delivery Profiles')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId')
 export class AdminDeliveryProfilesController {
   constructor(private service: AdminDeliveryProfilesService) {}
@@ -24,6 +27,7 @@ export class AdminDeliveryProfilesController {
   // ── Delivery Profiles ────────────────────────────────────────────────────────
 
   @Get('delivery-profiles')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'List delivery profiles for a distributor' })
   findAll(
     @Param('distributorId') distributorId: string,
@@ -33,6 +37,7 @@ export class AdminDeliveryProfilesController {
   }
 
   @Post('delivery-profiles')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Create a delivery profile' })
   create(
     @Param('distributorId') distributorId: string,
@@ -42,6 +47,7 @@ export class AdminDeliveryProfilesController {
   }
 
   @Get('delivery-profiles/:id')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'Get a delivery profile with its cutoff rules' })
   findOne(
     @Param('distributorId') distributorId: string,
@@ -51,6 +57,7 @@ export class AdminDeliveryProfilesController {
   }
 
   @Patch('delivery-profiles/:id')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Update a delivery profile' })
   update(
     @Param('distributorId') distributorId: string,
@@ -62,6 +69,7 @@ export class AdminDeliveryProfilesController {
 
   @Delete('delivery-profiles/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Delete (deactivate) a delivery profile' })
   remove(
     @Param('distributorId') distributorId: string,
@@ -73,6 +81,7 @@ export class AdminDeliveryProfilesController {
   // ── Cutoff Rules ─────────────────────────────────────────────────────────────
 
   @Get('delivery-profiles/:id/cutoff-rules')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'List cutoff rules for a delivery profile' })
   listCutoffRules(
     @Param('distributorId') distributorId: string,
@@ -82,6 +91,7 @@ export class AdminDeliveryProfilesController {
   }
 
   @Post('delivery-profiles/:id/cutoff-rules')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Create a cutoff rule for a delivery profile' })
   createCutoffRule(
     @Param('distributorId') distributorId: string,
@@ -92,6 +102,7 @@ export class AdminDeliveryProfilesController {
   }
 
   @Patch('delivery-profiles/:id/cutoff-rules/:ruleId')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Update a cutoff rule' })
   updateCutoffRule(
     @Param('distributorId') distributorId: string,
@@ -104,6 +115,7 @@ export class AdminDeliveryProfilesController {
 
   @Delete('delivery-profiles/:id/cutoff-rules/:ruleId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Delete a cutoff rule' })
   removeCutoffRule(
     @Param('distributorId') distributorId: string,
@@ -116,6 +128,7 @@ export class AdminDeliveryProfilesController {
   // ── Customer assignment ───────────────────────────────────────────────────────
 
   @Patch('trade-relationships/:trId/delivery-profile')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Assign or clear the delivery profile for a trade relationship' })
   assignDeliveryProfile(
     @Param('distributorId') distributorId: string,

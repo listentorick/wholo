@@ -9,7 +9,8 @@ import { ApiClientService } from '../../api-client/api-client.service';
 interface WholoProfile {
   id: string;
   email: string;
-  role: string;
+  roles: string[];
+  permissions: string[];
   organisationId: string;
 }
 
@@ -49,7 +50,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: profile.email,
       token,
       organisationId: profile.organisationId,
-      role: profile.role,
+      roles: profile.roles,
+      permissions: profile.permissions,
     };
   }
 }

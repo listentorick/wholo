@@ -35,7 +35,7 @@ export class AdminNotificationsService {
   // direct-write semantics as create(): no outbox, this IS the terminal write.
   async notifyOrganisationAdmins(organisationId: string, input: NotifyOrganisationAdminsInput): Promise<void> {
     const admins = await this.prisma.membership.findMany({
-      where: { organisationId, role: Role.DISTRIBUTOR_ADMIN },
+      where: { organisationId, roles: { some: { role: Role.DISTRIBUTOR_ADMIN } } },
       select: { userId: true },
     });
     if (admins.length === 0) return;

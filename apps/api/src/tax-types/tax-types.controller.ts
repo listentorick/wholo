@@ -3,8 +3,11 @@ import {
   ApiBearerAuth, ApiParam, ApiTags, ApiOperation,
   ApiOkResponse, ApiCreatedResponse, ApiNotFoundResponse,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { TaxTypesService } from './tax-types.service';
 import { CreateTaxTypeDto } from './dto/create-tax-type.dto';
 import { UpdateTaxTypeDto } from './dto/update-tax-type.dto';
@@ -15,7 +18,8 @@ import { TaxTypeQueryDto } from './dto/tax-type-query.dto';
 @ApiTags('Tax Types')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.TAX_TYPES_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/tax-types')
 export class TaxTypesController {
   constructor(private service: TaxTypesService) {}

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { ROLE_PERMISSIONS } from './role-permissions';
 
 const mockUser = {
   id: 'user-1',
@@ -11,6 +12,7 @@ const mockUser = {
     {
       role: 'DISTRIBUTOR_ADMIN',
       organisationId: 'org-1',
+      roles: [{ role: 'DISTRIBUTOR_ADMIN' }],
       organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR', distributorSettings: { currencyCode: 'GBP' } },
     },
   ],
@@ -44,7 +46,8 @@ describe('AuthService', () => {
         email: 'james@vineandco.com',
         firstName: 'James',
         lastName: 'Vine',
-        role: 'DISTRIBUTOR_ADMIN',
+        roles: ['DISTRIBUTOR_ADMIN'],
+        permissions: ROLE_PERMISSIONS['DISTRIBUTOR_ADMIN'],
         organisationId: 'org-1',
         organisationName: 'Vine & Co',
         organisationType: 'DISTRIBUTOR',
@@ -58,10 +61,11 @@ describe('AuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null role and organisationId when user has no memberships', async () => {
+    it('returns empty roles/permissions and undefined organisationId when user has no memberships', async () => {
       mockUsersService.findById.mockResolvedValue({ ...mockUser, memberships: [] });
       const result = await service.getProfile('user-1');
-      expect(result?.role).toBeUndefined();
+      expect(result?.roles).toEqual([]);
+      expect(result?.permissions).toEqual([]);
       expect(result?.organisationId).toBeUndefined();
       expect(result?.organisationName).toBeUndefined();
       expect(result?.organisationType).toBeUndefined();
@@ -74,6 +78,7 @@ describe('AuthService', () => {
           {
             role: 'TRADE_CUSTOMER',
             organisationId: 'org-2',
+            roles: [{ role: 'TRADE_CUSTOMER' }],
             organisation: { id: 'org-2', name: 'Blackbird Restaurant', type: 'TRADE_CUSTOMER' },
           },
         ],
@@ -81,7 +86,8 @@ describe('AuthService', () => {
       mockUsersService.findById.mockResolvedValue(tradeCustomerUser);
       const result = await service.getProfile('user-1');
       expect(result).toMatchObject({
-        role: 'TRADE_CUSTOMER',
+        roles: ['TRADE_CUSTOMER'],
+        permissions: ROLE_PERMISSIONS['TRADE_CUSTOMER'],
         organisationId: 'org-2',
         organisationType: 'TRADE_CUSTOMER',
       });
@@ -98,11 +104,13 @@ describe('AuthService', () => {
           {
             role: 'TRADE_CUSTOMER',
             organisationId: 'org-2',
+            roles: [{ role: 'TRADE_CUSTOMER' }],
             organisation: { id: 'org-2', name: 'Blackbird Restaurant', type: 'TRADE_CUSTOMER' },
           },
           {
             role: 'DISTRIBUTOR_ADMIN',
             organisationId: 'org-1',
+            roles: [{ role: 'DISTRIBUTOR_ADMIN' }],
             organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR' },
           },
         ],
@@ -110,10 +118,30 @@ describe('AuthService', () => {
       mockUsersService.findById.mockResolvedValue(multiMembershipUser);
       const result = await service.getProfile('user-1');
       expect(result).toMatchObject({
-        role: 'DISTRIBUTOR_ADMIN',
+        roles: ['DISTRIBUTOR_ADMIN'],
         organisationId: 'org-1',
         organisationType: 'DISTRIBUTOR',
       });
+    });
+
+    it('resolves roles/permissions from the legacy role column when no MembershipRole rows exist yet', async () => {
+      // Live-rollout safety net: correctness must not depend on the
+      // db:membership-roles:backfill script having run yet.
+      const preBackfillUser = {
+        ...mockUser,
+        memberships: [
+          {
+            role: 'DISTRIBUTOR_ADMIN',
+            organisationId: 'org-1',
+            roles: [],
+            organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR', distributorSettings: { currencyCode: 'GBP' } },
+          },
+        ],
+      };
+      mockUsersService.findById.mockResolvedValue(preBackfillUser);
+      const result = await service.getProfile('user-1');
+      expect(result?.roles).toEqual(['DISTRIBUTOR_ADMIN']);
+      expect(result?.permissions).toEqual(ROLE_PERMISSIONS['DISTRIBUTOR_ADMIN']);
     });
   });
 });

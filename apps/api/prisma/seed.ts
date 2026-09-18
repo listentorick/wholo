@@ -3,6 +3,20 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+async function upsertMembership(userId: string, organisationId: string, role: Role) {
+  const membership = await prisma.membership.upsert({
+    where: { userId_organisationId: { userId, organisationId } },
+    update: {},
+    create: { userId, organisationId, role },
+  });
+  await prisma.membershipRole.upsert({
+    where: { membershipId_role: { membershipId: membership.id, role } },
+    update: {},
+    create: { membershipId: membership.id, role },
+  });
+  return membership;
+}
+
 async function main() {
   const distributor = await prisma.organisation.upsert({
     where: { id: 'seed-distributor-1' },
@@ -40,15 +54,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: user.id, organisationId: tradeCustomerOrg.id } },
-    update: {},
-    create: {
-      userId: user.id,
-      organisationId: tradeCustomerOrg.id,
-      role: Role.TRADE_CUSTOMER,
-    },
-  });
+  await upsertMembership(user.id, tradeCustomerOrg.id, Role.TRADE_CUSTOMER);
 
   const adminPasswordHash = await bcrypt.hash('admin123', 10);
 
@@ -65,15 +71,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: adminUser.id, organisationId: distributor.id } },
-    update: {},
-    create: {
-      userId: adminUser.id,
-      organisationId: distributor.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(adminUser.id, distributor.id, Role.DISTRIBUTOR_ADMIN);
 
   // Yorkshire Hand Made Pies distributor
   const yhmp = await prisma.organisation.upsert({
@@ -113,15 +111,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: yhmpAdminUser.id, organisationId: yhmp.id } },
-    update: {},
-    create: {
-      userId: yhmpAdminUser.id,
-      organisationId: yhmp.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(yhmpAdminUser.id, yhmp.id, Role.DISTRIBUTOR_ADMIN);
 
   // Garratts — YHMP trade customer portal login. This organisation and its
   // trade relationship were created ad hoc through the app (real cuids, not
@@ -151,15 +141,7 @@ async function main() {
       },
     });
 
-    await prisma.membership.upsert({
-      where: { userId_organisationId: { userId: garrattsUser.id, organisationId: garrattsOrg.id } },
-      update: {},
-      create: {
-        userId: garrattsUser.id,
-        organisationId: garrattsOrg.id,
-        role: Role.TRADE_CUSTOMER,
-      },
-    });
+    await upsertMembership(garrattsUser.id, garrattsOrg.id, Role.TRADE_CUSTOMER);
 
     await prisma.tradeRelationship.updateMany({
       where: { id: 'cmqhajvda000mou01kgeqoz8v' },
@@ -194,15 +176,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: rogersBakeryAdmin.id, organisationId: rogersBakery.id } },
-    update: {},
-    create: {
-      userId: rogersBakeryAdmin.id,
-      organisationId: rogersBakery.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(rogersBakeryAdmin.id, rogersBakery.id, Role.DISTRIBUTOR_ADMIN);
 
   // Goo Cheese
   const gooCheese = await prisma.organisation.upsert({
@@ -231,15 +205,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: gooCheeseAdmin.id, organisationId: gooCheese.id } },
-    update: {},
-    create: {
-      userId: gooCheeseAdmin.id,
-      organisationId: gooCheese.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(gooCheeseAdmin.id, gooCheese.id, Role.DISTRIBUTOR_ADMIN);
 
   // Crofters Foods
   const croftersFoods = await prisma.organisation.upsert({
@@ -268,15 +234,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: croftersFoodsAdmin.id, organisationId: croftersFoods.id } },
-    update: {},
-    create: {
-      userId: croftersFoodsAdmin.id,
-      organisationId: croftersFoods.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(croftersFoodsAdmin.id, croftersFoods.id, Role.DISTRIBUTOR_ADMIN);
 
   // Cryer and Stott
   const cryerAndStott = await prisma.organisation.upsert({
@@ -305,15 +263,7 @@ async function main() {
     },
   });
 
-  await prisma.membership.upsert({
-    where: { userId_organisationId: { userId: cryerAndStottAdmin.id, organisationId: cryerAndStott.id } },
-    update: {},
-    create: {
-      userId: cryerAndStottAdmin.id,
-      organisationId: cryerAndStott.id,
-      role: Role.DISTRIBUTOR_ADMIN,
-    },
-  });
+  await upsertMembership(cryerAndStottAdmin.id, cryerAndStott.id, Role.DISTRIBUTOR_ADMIN);
 
   // Product types for Vine & Co
   const productTypeData = [
@@ -683,11 +633,7 @@ async function main() {
       },
     });
 
-    await prisma.membership.upsert({
-      where: { userId_organisationId: { userId: custUser.id, organisationId: custOrg.id } },
-      update: {},
-      create: { userId: custUser.id, organisationId: custOrg.id, role: Role.TRADE_CUSTOMER },
-    });
+    await upsertMembership(custUser.id, custOrg.id, Role.TRADE_CUSTOMER);
 
     const relationship = await prisma.tradeRelationship.upsert({
       where: { distributorId_customerId: { distributorId: distributor.id, customerId: custOrg.id } },

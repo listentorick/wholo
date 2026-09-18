@@ -3,6 +3,7 @@ import { AccountingInvoiceExportController } from './accounting-invoice-export.c
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 
 const mockService = { retryExport: jest.fn() };
 
@@ -20,7 +21,7 @@ describe('AccountingInvoiceExportController', () => {
 
   it('is protected by the JWT and distributor-access guards', () => {
     const guards = Reflect.getMetadata('__guards__', AccountingInvoiceExportController);
-    expect(guards).toEqual([JwtAuthGuard, DistributorAccessGuard]);
+    expect(guards).toEqual([JwtAuthGuard, DistributorAccessGuard, PermissionsGuard]);
   });
 
   it('retry forwards the path ids and requesting user to the service', async () => {

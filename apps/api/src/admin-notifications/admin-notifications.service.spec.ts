@@ -71,7 +71,7 @@ describe('AdminNotificationsService', () => {
       });
 
       expect(prisma.membership.findMany).toHaveBeenCalledWith({
-        where: { organisationId: 'org-1', role: Role.DISTRIBUTOR_ADMIN },
+        where: { organisationId: 'org-1', roles: { some: { role: Role.DISTRIBUTOR_ADMIN } } },
         select: { userId: true },
       });
       expect(prisma.adminNotification.createMany).toHaveBeenCalledWith({

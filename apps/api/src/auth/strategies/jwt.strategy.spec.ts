@@ -16,6 +16,7 @@ const mockUser = {
     {
       role: 'DISTRIBUTOR_ADMIN',
       organisationId: 'org-1',
+      roles: [{ role: 'DISTRIBUTOR_ADMIN' }],
       organisation: { id: 'org-1', name: 'Vine & Co' },
     },
   ],
@@ -58,6 +59,7 @@ describe('JwtStrategy', () => {
         role: 'DISTRIBUTOR_ADMIN',
         organisationId: 'org-1',
         organisationIds: ['org-1'],
+        memberships: [{ organisationId: 'org-1', roles: ['DISTRIBUTOR_ADMIN'] }],
       });
       expect(result.sub).toBe('wholo-user-1');
     });
@@ -104,6 +106,20 @@ describe('JwtStrategy', () => {
       expect(result.role).toBeUndefined();
       expect(result.organisationId).toBeUndefined();
       expect(result.organisationIds).toEqual([]);
+      expect(result.memberships).toEqual([]);
+    });
+
+    it('resolves membership roles from the legacy role column when no MembershipRole rows exist yet', async () => {
+      // Live-rollout safety net: correctness must not depend on the
+      // db:membership-roles:backfill script having run yet.
+      const preBackfillUser = {
+        ...mockUser,
+        memberships: [{ role: 'DISTRIBUTOR_ADMIN', organisationId: 'org-1', roles: [], organisation: { id: 'org-1' } }],
+      };
+      mockUsersService.findByKeycloakId.mockResolvedValue(preBackfillUser);
+
+      const result = await strategy.validate({ sub: 'kc-sub-abc' });
+      expect(result.memberships).toEqual([{ organisationId: 'org-1', roles: ['DISTRIBUTOR_ADMIN'] }]);
     });
   });
 });

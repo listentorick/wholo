@@ -6,8 +6,11 @@ import {
   ApiParam, ApiTags, ApiOperation, ApiBearerAuth,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AdminProductsService } from './admin-products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -16,7 +19,8 @@ import { ProductQueryDto } from './dto/product-query.dto';
 @ApiTags('Admin / Products')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.CATALOGUE_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId')
 export class AdminProductsController {
   constructor(private service: AdminProductsService) {}

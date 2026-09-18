@@ -3,8 +3,11 @@ import {
   Param, Body, Query, Req, HttpCode, HttpStatus, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiParam, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { DeliveryRoutesService } from './delivery-routes.service';
 import { CreateDeliveryRouteDto } from './dto/create-delivery-route.dto';
 import { UpdateDeliveryRouteDto } from './dto/update-delivery-route.dto';
@@ -17,19 +20,20 @@ interface RequestWithUser extends Request {
 }
 
 // Resource-oriented, no `admin/` prefix — see CLAUDE.md's target API shape.
-// Authorization is "member of this distributor org" (DistributorAccessGuard)
-// for every action here, including customer assignment/reorder; a
-// fine-grained read/manage permission split is an explicit fast-follow, not
-// built in this PBI (see the delivery-routes-and-runs plan's Open Decisions).
+// Tenant scope (DistributorAccessGuard) applies to every action here; the
+// read/manage permission split flagged as a fast-follow in the
+// delivery-routes-and-runs plan's Open Decisions is now implemented via
+// PermissionsGuard/RequirePermissions below.
 @ApiTags('Delivery Routes')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/delivery-routes')
 export class DeliveryRoutesController {
   constructor(private service: DeliveryRoutesService) {}
 
   @Get()
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'List delivery routes for a distributor' })
   findAll(
     @Param('distributorId') distributorId: string,
@@ -39,6 +43,7 @@ export class DeliveryRoutesController {
   }
 
   @Post()
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Create a delivery route' })
   create(
     @Param('distributorId') distributorId: string,
@@ -48,6 +53,7 @@ export class DeliveryRoutesController {
   }
 
   @Get(':id')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'Get a delivery route with its assigned customers' })
   findOne(
     @Param('distributorId') distributorId: string,
@@ -57,6 +63,7 @@ export class DeliveryRoutesController {
   }
 
   @Patch(':id')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Update a delivery route' })
   update(
     @Param('distributorId') distributorId: string,
@@ -68,6 +75,7 @@ export class DeliveryRoutesController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Delete (deactivate) a delivery route' })
   remove(
     @Param('distributorId') distributorId: string,
@@ -77,6 +85,7 @@ export class DeliveryRoutesController {
   }
 
   @Get(':id/customers')
+  @RequirePermissions(Permission.DELIVERY_READ)
   @ApiOperation({ summary: 'List a route\'s active customer assignments in drop order' })
   listCustomers(
     @Param('distributorId') distributorId: string,
@@ -86,6 +95,7 @@ export class DeliveryRoutesController {
   }
 
   @Post(':id/customers')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Assign a customer to a route as its active default' })
   assignCustomer(
     @Param('distributorId') distributorId: string,
@@ -98,6 +108,7 @@ export class DeliveryRoutesController {
 
   @Delete(':id/customers/:customerId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'End a customer\'s active assignment to this route' })
   removeCustomer(
     @Param('distributorId') distributorId: string,
@@ -109,6 +120,7 @@ export class DeliveryRoutesController {
   }
 
   @Patch(':id/customers/reorder')
+  @RequirePermissions(Permission.DELIVERY_MANAGE)
   @ApiOperation({ summary: 'Bulk-update a route\'s default drop order' })
   reorderCustomers(
     @Param('distributorId') distributorId: string,

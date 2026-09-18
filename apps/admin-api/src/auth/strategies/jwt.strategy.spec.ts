@@ -11,7 +11,8 @@ jest.mock('jwks-rsa', () => ({
 const mockProfile = {
   id: 'seed-admin-1',
   email: 'james@vineandco.com',
-  role: 'DISTRIBUTOR_ADMIN',
+  roles: ['DISTRIBUTOR_ADMIN'],
+  permissions: ['order-as:initiate'],
   organisationId: 'seed-distributor-1',
   organisationType: 'DISTRIBUTOR',
 };
@@ -61,7 +62,8 @@ describe('JwtStrategy (admin-api)', () => {
       email: 'james@vineandco.com',
       token: 'test-token-abc',
       organisationId: 'seed-distributor-1',
-      role: 'DISTRIBUTOR_ADMIN',
+      roles: ['DISTRIBUTOR_ADMIN'],
+      permissions: ['order-as:initiate'],
     });
     expect(mockApiClient.get).toHaveBeenCalledWith('/auth/me', 'test-token-abc');
   });
@@ -87,7 +89,8 @@ describe('JwtStrategy (admin-api)', () => {
   it('throws UnauthorizedException for a trade-customer profile (ADR-053)', async () => {
     mockApiClient.get.mockResolvedValueOnce({
       ...mockProfile,
-      role: 'TRADE_CUSTOMER',
+      roles: ['TRADE_CUSTOMER'],
+      permissions: ['catalogue:read'],
       organisationType: 'TRADE_CUSTOMER',
     });
 
@@ -99,7 +102,8 @@ describe('JwtStrategy (admin-api)', () => {
   it('throws UnauthorizedException when organisationType is missing (no membership at all)', async () => {
     mockApiClient.get.mockResolvedValueOnce({
       ...mockProfile,
-      role: undefined,
+      roles: [],
+      permissions: [],
       organisationId: undefined,
       organisationType: undefined,
     });

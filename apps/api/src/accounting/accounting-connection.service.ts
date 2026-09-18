@@ -450,7 +450,7 @@ export class AccountingConnectionService {
 
     const [admins, distributor] = await Promise.all([
       this.prisma.membership.findMany({
-        where: { organisationId: distributorId, role: Role.DISTRIBUTOR_ADMIN },
+        where: { organisationId: distributorId, roles: { some: { role: Role.DISTRIBUTOR_ADMIN } } },
         select: { user: { select: { email: true } } },
       }),
       this.prisma.organisation.findUnique({ where: { id: distributorId }, select: { name: true } }),

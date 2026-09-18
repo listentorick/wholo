@@ -6,8 +6,11 @@ import {
   ApiBearerAuth, ApiParam, ApiTags, ApiOperation,
   ApiOkResponse, ApiCreatedResponse, ApiNoContentResponse, ApiNotFoundResponse,
 } from '@nestjs/swagger';
+import { Permission } from '@wholo/types';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DistributorAccessGuard } from '../auth/guards/distributor-access.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/permissions.decorator';
 import { AdminPriceListsService } from './admin-price-lists.service';
 import { CreatePriceListDto } from './dto/create-price-list.dto';
 import { UpdatePriceListDto } from './dto/update-price-list.dto';
@@ -19,7 +22,8 @@ import { AssignPriceListDto } from './dto/assign-price-list.dto';
 @ApiTags('Admin / Price Lists')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@UseGuards(JwtAuthGuard, DistributorAccessGuard)
+@RequirePermissions(Permission.PRICE_LISTS_MANAGE)
+@UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId')
 export class AdminPriceListsController {
   constructor(private service: AdminPriceListsService) {}
