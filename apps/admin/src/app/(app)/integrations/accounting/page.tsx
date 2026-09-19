@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useCan } from '@/lib/permissions';
 import { useIngestionSync } from '@/lib/ingestion-sync-context';
 import { relativeTime } from '@/lib/date';
 import { ContactsTab } from '@/components/integrations/contacts/ContactsTab';
@@ -14,7 +15,7 @@ import { SyncWithProviderButton } from '@/components/integrations/SyncWithProvid
 import { IngestionProgressPanel } from '@/components/integrations/IngestionProgressPanel';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { adminAccountingApi } from '@wholo/admin-api-client';
-import type { AccountingConnectionStatusResponse } from '@wholo/types';
+import { Permission, type AccountingConnectionStatusResponse } from '@wholo/types';
 
 type TabKey = 'contacts' | 'products' | 'taxTypes' | 'invoices' | 'settings';
 
@@ -68,6 +69,9 @@ function BackLink() {
 
 function AccountingPageInner() {
   const { accessToken } = useAuth();
+  const can = useCan();
+  const canImport = can(Permission.ACCOUNTING_IMPORT);
+  const canManageConnection = can(Permission.ACCOUNTING_MANAGE);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -110,7 +114,11 @@ function AccountingPageInner() {
   const [productsNeedsAttentionCount, setProductsNeedsAttentionCount] = useState(0);
   const [taxTypesNeedsAttentionCount, setTaxTypesNeedsAttentionCount] = useState(0);
 
-  const activeTab = (searchParams.get('tab') as TabKey) ?? 'contacts';
+  // The Settings tab is connection-level (accounting:manage). Someone arriving
+  // at ?tab=settings without it lands on Contacts rather than an empty pane.
+  const requestedTab = (searchParams.get('tab') as TabKey) ?? 'contacts';
+  const activeTab: TabKey = requestedTab === 'settings' && !canManageConnection ? 'contacts' : requestedTab;
+  const visibleTabs = TABS.filter((t) => t.key !== 'settings' || canManageConnection);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -202,7 +210,7 @@ function AccountingPageInner() {
             <h1 className="text-xl font-semibold text-text">
               {providerLabel} — {connection.externalOrganisationName}
             </h1>
-            <SyncWithProviderButton onClick={triggerSync} disabled={isSyncing} label={`Sync with ${providerLabel}`} />
+            {canImport && <SyncWithProviderButton onClick={triggerSync} disabled={isSyncing} label={`Sync with ${providerLabel}`} />}
           </div>
         </div>
         <IngestionProgressPanel
@@ -237,11 +245,13 @@ function AccountingPageInner() {
           title={`No ${providerLabel} data has been synced yet`}
           description={`Pull your contacts, products and tax types from ${connection.externalOrganisationName} so you can review and import them.`}
           action={
-            <SyncWithProviderButton
-              variant="primary"
-              onClick={triggerSync}
-              label={`Sync with ${providerLabel}`}
-            />
+            canImport ? (
+              <SyncWithProviderButton
+                variant="primary"
+                onClick={triggerSync}
+                label={`Sync with ${providerLabel}`}
+              />
+            ) : undefined
           }
         />
       </>
@@ -257,11 +267,13 @@ function AccountingPageInner() {
             {providerLabel} — {connection.externalOrganisationName}
           </h1>
           <div className="flex flex-col items-end gap-1">
-            <SyncWithProviderButton
-              onClick={triggerSync}
-              disabled={isSyncing}
-              label={`Sync with ${providerLabel}`}
-            />
+            {canImport && (
+              <SyncWithProviderButton
+                onClick={triggerSync}
+                disabled={isSyncing}
+                label={`Sync with ${providerLabel}`}
+              />
+            )}
             {lastSyncedAt && (
               <span className="text-xs text-muted">Last synced {relativeTime(lastSyncedAt)}</span>
             )}
@@ -280,7 +292,7 @@ function AccountingPageInner() {
 
       <div className="mb-6 border-b border-border">
         <nav className="-mb-px flex gap-6 overflow-x-auto">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"

@@ -8,6 +8,7 @@ import {
   OrderStatusEmailParams,
   SendAccountingReconnectParams,
   SendInviteParams,
+  SendStaffInviteParams,
   SendOrderPlacedToDistributorParams,
   TradeRelationshipEmailParams,
 } from './mail.service';
@@ -711,5 +712,85 @@ describe('MailService — invite email', () => {
     await expect(service.sendInvite('buyer@winebar.example', inviteParams())).rejects.toThrow(
       'SMTP connection refused',
     );
+  });
+});
+
+
+function staffInviteParams(overrides: Partial<SendStaffInviteParams> = {}): SendStaffInviteParams {
+  return {
+    distributorName: 'Vine & Co',
+    inviterName: 'Priya Shah',
+    roleLabels: ['Operations manager'],
+    inviteUrl: 'http://localhost:3020/accept-invite?token=abc123',
+    recipientEmail: 'sam.patel@vine.test',
+    expiresAt: new Date('2026-09-23T00:00:00Z'),
+    ...overrides,
+  };
+}
+
+describe('MailService — staff invite email', () => {
+  let service: MailService;
+  let sendMail: jest.Mock;
+
+  beforeEach(() => {
+    sendMail = jest.fn().mockResolvedValue({});
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) => (key === 'SMTP_INVITE_FROM' ? 'invites@stocdup.com' : defaultValue)),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
+    } as unknown as ConfigService;
+    service = new MailService(config);
+  });
+
+  it('tells the invitee who invited them, to what, in which role, and how to accept', async () => {
+    await service.sendStaffInvite('sam.patel@vine.test', staffInviteParams());
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe('sam.patel@vine.test');
+    expect(mail.from).toBe('invites@stocdup.com');
+    expect(mail.subject).toBe('Priya Shah invited you to join Vine & Co on Stocdup');
+    for (const body of [mail.text, mail.html]) {
+      expect(body).toContain('Priya Shah');
+      expect(body).toContain('Operations manager');
+      expect(body).toContain('http://localhost:3020/accept-invite?token=abc123');
+    }
+  });
+
+  it('says the invitation only works for the address it was sent to, and when it expires', async () => {
+    await service.sendStaffInvite('sam.patel@vine.test', staffInviteParams());
+
+    const mail = sendMail.mock.calls[0][0];
+    for (const body of [mail.text, mail.html]) {
+      expect(body).toContain('sam.patel@vine.test');
+      expect(body).toContain('only works for that address');
+      expect(body).toContain('23 September 2026');
+    }
+  });
+
+  it('lists several roles in plain English', async () => {
+    await service.sendStaffInvite(
+      'sam.patel@vine.test',
+      staffInviteParams({ roleLabels: ['Operations manager', 'Warehouse staff'] }),
+    );
+
+    expect(sendMail.mock.calls[0][0].text).toContain('as Operations manager and Warehouse staff.');
+  });
+
+  it('escapes names in the HTML so a hostile name cannot inject markup, and keeps subject lines single-line', async () => {
+    await service.sendStaffInvite(
+      'sam.patel@vine.test',
+      staffInviteParams({ inviterName: '<img src=x onerror=alert(1)>\nBcc: evil@x.test', distributorName: 'A & B <b>Wines</b>' }),
+    );
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).not.toContain('<img src=x');
+    expect(mail.html).not.toContain('<b>Wines</b>');
+    expect(mail.html).toContain('A &amp; B &lt;b&gt;Wines&lt;/b&gt;');
+    expect(mail.subject).not.toMatch(/[\r\n]/);
+  });
+
+  it('propagates a delivery failure so the notification can retry', async () => {
+    sendMail.mockRejectedValue(new Error('SMTP down'));
+    await expect(service.sendStaffInvite('sam.patel@vine.test', staffInviteParams())).rejects.toThrow('SMTP down');
   });
 });

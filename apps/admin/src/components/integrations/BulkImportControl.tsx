@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { BulkImportJobResponse } from '@wholo/types';
+import { Permission, type BulkImportJobResponse } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 
 interface SelectionDto {
   ids?: string[];
@@ -28,6 +29,7 @@ export function BulkImportControl({ entityLabel, selectedCount, buildDto, bulkIm
   const [submitting, setSubmitting] = useState(false);
   const [queued, setQueued] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canImport = useCan()(Permission.ACCOUNTING_IMPORT);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,6 +65,8 @@ export function BulkImportControl({ entityLabel, selectedCount, buildDto, bulkIm
   }
 
   const disabled = selectedCount === 0;
+
+  if (!canImport) return null;
 
   return (
     <div ref={containerRef} className="relative flex items-center gap-2">

@@ -1,6 +1,8 @@
 export interface DetailTabItem<TKey extends string = string> {
   key: TKey;
   label: string;
+  /** Optional number shown after the label (e.g. a status filter's row count). */
+  count?: number;
 }
 
 interface DetailTabsProps<TKey extends string = string> {
@@ -26,6 +28,9 @@ export function DetailTabs<TKey extends string = string>({ tabs, activeKey, onCh
             ].join(' ')}
           >
             {tab.label}
+            {tab.count !== undefined && (
+              <span className={`ml-1.5 text-xs font-medium ${activeKey === tab.key ? 'text-primary/80' : 'text-muted'}`}>{tab.count}</span>
+            )}
           </button>
         ))}
       </nav>

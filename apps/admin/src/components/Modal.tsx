@@ -9,10 +9,12 @@ interface ModalProps {
   labelledBy: string;
   /** When false, Escape and backdrop-click are ignored — use while an action is in flight. Defaults to true. */
   closable?: boolean;
+  /** Card width: 'sm' (default, 384px) for confirmations; 'md' (512px) for dialogs with a form. */
+  size?: 'sm' | 'md';
   children: React.ReactNode;
 }
 
-export function Modal({ onClose, labelledBy, closable = true, children }: ModalProps) {
+export function Modal({ onClose, labelledBy, closable = true, size = 'sm', children }: ModalProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const closableRef = useRef(closable);
@@ -54,7 +56,7 @@ export function Modal({ onClose, labelledBy, closable = true, children }: ModalP
         aria-modal="true"
         aria-labelledby={labelledBy}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-lg"
+        className={`w-full ${size === 'md' ? 'max-w-lg' : 'max-w-sm'} rounded-lg border border-border bg-white p-6 shadow-lg`}
       >
         {children}
       </div>

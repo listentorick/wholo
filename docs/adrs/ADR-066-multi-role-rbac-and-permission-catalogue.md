@@ -83,12 +83,17 @@ Naming is `resource:action`. `read` and `manage` are only split where a read-onl
 | `DELIVERY_READ` | `delivery:read` | Delivery profiles, cut-off rules, routes, route customers, delivery days, run manifest, reschedule preview (reads) |
 | `DELIVERY_MANAGE` | `delivery:manage` | Create/update/delete profiles, cut-off rules, routes, route customers, runs, run orders; reschedule an order |
 | `ACCOUNTING_READ` | `accounting:read` | Connection status, sync status, contact/product/tax-type lists, needs-attention counts, bulk-import job status |
-| `ACCOUNTING_MANAGE` | `accounting:manage` | Connect/disconnect, sync, import/match/ignore/unlink/confirm/acknowledge mappings, bulk import, invoice-export retry |
+| `ACCOUNTING_IMPORT` | `accounting:import` | Bring data in and link it: sync now, import as new, match, confirm/ignore/unlink/acknowledge mappings, bulk import, invoice-export retry |
+| `ACCOUNTING_MANAGE` | `accounting:manage` | The connection itself: connect (Xero authorisation URL), update connection settings, disconnect |
 | `SETTINGS_MANAGE` | `settings:manage` | Distributor settings (read and update) |
 | `ASSET_IMAGES_MANAGE` | `asset-images:manage` | Upload, list, delete, reorder asset images |
 | `ANALYTICS_READ` | `analytics:read` | Order summary/trend, customer and product rankings, action items |
-| `TAX_TYPES_MANAGE` | `tax-types:manage` | Tax types (read and write) |
+| `TAX_TYPES_READ` | `tax-types:read` | List and view tax types (the product form reads them) |
+| `TAX_TYPES_MANAGE` | `tax-types:manage` | Create, update and deactivate tax types (the controller's fail-closed default; the two GETs override it with `tax-types:read`) |
+| `TEAM_MANAGE` | `team:manage` | Staff invitations and team members: invite, resend, revoke, change roles, remove (ADR-067) |
 | `ADMIN_NOTIFICATIONS_MANAGE` | `admin-notifications:manage` | **Reserved** — notifications are self-scoped (`UserAccessGuard`), so no route uses it |
+
+Integration permissions follow one shape per integration type: `<type>:read` (view), `<type>:import` (bring data in, link it, sync, retry exports) and `<type>:manage` (the connection itself). Accounting is the first; warehouse and ERP integrations will add `warehouse:*` and `erp:*` the same way. Each stronger permission is only ever granted together with its `read`, so read-only screens always load (asserted in `role-permissions.spec.ts`).
 
 `D` = `/distributors/:distributorId`, all under `/api/v1`. The per-route mapping lives in the controllers; `grep -rn RequirePermissions apps/api/src` is the source of truth, and this table is the summary.
 
@@ -96,26 +101,29 @@ Naming is `resource:action`. `read` and `manage` are only split where a read-onl
 
 Source: `apps/api/src/auth/role-permissions.ts`.
 
-| Permission | PLATFORM_ADMIN | DISTRIBUTOR_ADMIN | WAREHOUSE_STAFF | DRIVER | TRADE_CUSTOMER |
-|---|:-:|:-:|:-:|:-:|:-:|
-| `order-as:initiate` | ✓ | ✓ | | | |
-| `orders:read` | ✓ | ✓ | ✓ | | |
-| `orders:manage` | ✓ | ✓ | ✓ | | |
-| `catalogue:read` | ✓ | ✓ | ✓ | | ✓ |
-| `catalogue:manage` | ✓ | ✓ | | | |
-| `customers:read` | ✓ | ✓ | ✓ | | |
-| `customers:manage` | ✓ | ✓ | | | |
-| `price-lists:manage` | ✓ | ✓ | | | |
-| `suppliers:manage` | ✓ | ✓ | | | |
-| `delivery:read` | ✓ | ✓ | ✓ | ✓ | |
-| `delivery:manage` | ✓ | ✓ | ✓ | ✓ | |
-| `accounting:read` | ✓ | ✓ | | | |
-| `accounting:manage` | ✓ | ✓ | | | |
-| `settings:manage` | ✓ | ✓ | | | |
-| `asset-images:manage` | ✓ | ✓ | | | |
-| `analytics:read` | ✓ | ✓ | | | |
-| `tax-types:manage` | ✓ | ✓ | | | |
-| `admin-notifications:manage` | ✓ | ✓ | | | |
+| Permission | PLATFORM_ADMIN | DISTRIBUTOR_ADMIN | OPERATIONS_MANAGER | WAREHOUSE_STAFF | DRIVER | TRADE_CUSTOMER |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `order-as:initiate` | ✓ | ✓ | ✓ |  |  |  |
+| `orders:read` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `orders:manage` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `catalogue:read` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `catalogue:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `customers:read` | ✓ | ✓ | ✓ | ✓ |  |  |
+| `customers:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `price-lists:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `suppliers:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `delivery:read` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `delivery:manage` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `accounting:read` | ✓ | ✓ | ✓ |  |  |  |
+| `accounting:import` | ✓ | ✓ | ✓ |  |  |  |
+| `accounting:manage` | ✓ | ✓ |  |  |  |  |
+| `settings:manage` | ✓ | ✓ |  |  |  |  |
+| `asset-images:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `analytics:read` | ✓ | ✓ | ✓ |  |  |  |
+| `tax-types:read` | ✓ | ✓ | ✓ |  |  |  |
+| `tax-types:manage` | ✓ | ✓ | ✓ |  |  |  |
+| `team:manage` | ✓ | ✓ |  |  |  |  |
+| `admin-notifications:manage` | ✓ | ✓ | ✓ |  |  |  |
 
 ## Endpoints that do not use permissions
 

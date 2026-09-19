@@ -39,7 +39,7 @@ export class AccountingContactController {
   }
 
   @Post(':externalContactId/import')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Import an accounting contact as a new Wholo customer (no login user, no invitation)' })
   importAsNewCustomer(
     @Param('distributorId') distributorId: string,
@@ -51,7 +51,7 @@ export class AccountingContactController {
   }
 
   @Post('suggestions/:suggestionId/confirm')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Confirm a system-suggested contact-to-customer match' })
   confirmSuggestion(
     @Param('distributorId') distributorId: string,
@@ -62,7 +62,7 @@ export class AccountingContactController {
   }
 
   @Post(':externalContactId/match')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Link an accounting contact to an existing Wholo customer' })
   matchToExistingCustomer(
     @Param('distributorId') distributorId: string,
@@ -74,7 +74,7 @@ export class AccountingContactController {
   }
 
   @Post(':externalContactId/ignore')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Ignore an accounting contact — excludes it from future match suggestions' })
   ignore(
     @Param('distributorId') distributorId: string,
@@ -85,14 +85,14 @@ export class AccountingContactController {
   }
 
   @Post('mappings/:mappingId/unlink')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Unlink a confirmed customer-to-contact mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
   }
 
   @Post(':externalContactId/acknowledge-change')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Acknowledge a detected change on a linked contact, clearing its highlight' })
   acknowledgeChange(
     @Param('distributorId') distributorId: string,
@@ -102,7 +102,7 @@ export class AccountingContactController {
   }
 
   @Post('bulk-import')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Queue a bulk import of accounting contacts, by explicit ids or a server-side filter' })
   requestBulkImport(
     @Param('distributorId') distributorId: string,

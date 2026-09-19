@@ -13,6 +13,7 @@ import {
   ANALYTICS_FACTS_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,
   EVENT_ROUTES,
+  KEYCLOAK_USER_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from '../queues/queue.constants';
 
@@ -40,6 +41,7 @@ export class OutboxPublisherService {
     @InjectQueue(ANALYTICS_FACTS_QUEUE) analyticsFactsQueue: Queue,
     @InjectQueue(ACCOUNTING_BULK_IMPORT_QUEUE) accountingBulkImportQueue: Queue,
     @InjectQueue(DELIVERY_RUN_ALLOCATION_QUEUE) deliveryRunAllocationQueue: Queue,
+    @InjectQueue(KEYCLOAK_USER_QUEUE) keycloakUserQueue: Queue,
   ) {
     this.queues = new Map([
       [NOTIFICATIONS_QUEUE, notificationsQueue],
@@ -50,6 +52,7 @@ export class OutboxPublisherService {
       [ANALYTICS_FACTS_QUEUE, analyticsFactsQueue],
       [ACCOUNTING_BULK_IMPORT_QUEUE, accountingBulkImportQueue],
       [DELIVERY_RUN_ALLOCATION_QUEUE, deliveryRunAllocationQueue],
+      [KEYCLOAK_USER_QUEUE, keycloakUserQueue],
     ]);
   }
 

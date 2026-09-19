@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductRowActions } from './ProductRowActions';
@@ -49,6 +49,13 @@ function makeProduct(overrides: Partial<AccountingProductSummary> = {}): Account
     ...overrides,
   };
 }
+
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -197,5 +204,29 @@ describe('ProductRowActions', () => {
     await user.click(screen.getByText('Ignore'));
 
     await waitFor(() => expect(screen.getByText('That action failed. Please try again.')).toBeInTheDocument());
+  });
+});
+
+describe('ProductRowActions — without accounting:import', () => {
+  beforeEach(() => Object.assign(mockGranted, { all: false, list: ['accounting:read'] }));
+  afterEach(() => Object.assign(mockGranted, { all: true, list: [] }));
+
+  it('shows no import, match, ignore or confirm actions to someone who can only view', () => {
+    render(<ProductRowActions product={makeProduct()} providerLabel="Xero" onActionComplete={() => {}} />);
+
+    for (const name of [/Import as new/, /Match to existing/, /Ignore/, /Confirm/]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it('still lets a viewer follow a linked product, but not unlink it', () => {
+    const product = makeProduct({
+      status: 'LINKED',
+      mapping: { id: 'mapping-1', productId: 'prod-1', productName: 'Cab Sauv', matchMethod: 'MANUAL', linkedAt: '2026-01-01T00:00:00.000Z' },
+    });
+    render(<ProductRowActions product={product} providerLabel="Xero" onActionComplete={() => {}} />);
+
+    expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1/edit');
+    expect(screen.queryByText('Unlink')).not.toBeInTheDocument();
   });
 });

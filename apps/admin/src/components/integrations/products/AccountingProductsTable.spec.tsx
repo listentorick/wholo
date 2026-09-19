@@ -56,6 +56,13 @@ const baseProps = {
   onSelectAllMatching: () => {},
 };
 
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
 });

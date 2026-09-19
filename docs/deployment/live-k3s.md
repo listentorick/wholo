@@ -123,6 +123,32 @@ helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml
 propagate to an existing installation — change them in the Keycloak admin
 console instead, or delete and re-import the realm.
 
+## Keycloak service-account client (team removal)
+
+Removing a team member (Team page → **Remove from team**) revokes their access
+in Stocdup immediately, and the worker then **disables their Keycloak login** so
+they can't sign in at all (ADR-067). That call uses a dedicated service-account
+client, `wholo-api-admin`, which holds only `realm-management: manage-users`.
+
+- **Fresh realm:** created by the realm import from
+  `keycloak.apiAdminClientSecret` — nothing to do beyond setting that value in
+  `values.live.yaml` (`openssl rand -hex 32`).
+- **Existing realm** (import is first-boot-only, so this applies to every
+  environment that existed before this feature): run once, then redeploy so
+  the api/worker pick up the secret:
+
+  ```bash
+  kubectl port-forward svc/wholo-keycloak 3080:3080 -n wholo &
+  CLIENT_SECRET='<keycloak.apiAdminClientSecret from values.live.yaml>' \
+  REALM=<your realm, e.g. prod> KEYCLOAK_ADMIN=<admin user> KEYCLOAK_ADMIN_PASSWORD=<admin password> \
+  scripts/setup-keycloak-api-admin-client.sh
+  ```
+
+  Idempotent; it ends by proving the client can obtain a token. Until the
+  client exists, removal still works in Stocdup (the person is locked out at
+  the API), but the queued Keycloak disables retry and fail — check the worker
+  logs for `KEYCLOAK_ADMIN_CLIENT_SECRET` / `Keycloak could not …`.
+
 ## Email
 
 Live sends real mail via PurelyMail (`smtp.purelymail.com`, port 587

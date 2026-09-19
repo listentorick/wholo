@@ -40,7 +40,7 @@ export class AccountingProductController {
   }
 
   @Post(':externalProductId/import')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Import an accounting product as a new Wholo product (DRAFT — needs catalogue setup)' })
   importAsNewProduct(
     @Param('distributorId') distributorId: string,
@@ -52,7 +52,7 @@ export class AccountingProductController {
   }
 
   @Post('suggestions/:suggestionId/confirm')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Confirm a system-suggested product match' })
   confirmSuggestion(
     @Param('distributorId') distributorId: string,
@@ -64,7 +64,7 @@ export class AccountingProductController {
   }
 
   @Post(':externalProductId/match')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Link an accounting product to an existing Wholo product' })
   matchToExistingProduct(
     @Param('distributorId') distributorId: string,
@@ -82,7 +82,7 @@ export class AccountingProductController {
   }
 
   @Post(':externalProductId/ignore')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Ignore an accounting product — excludes it from future match suggestions' })
   ignore(
     @Param('distributorId') distributorId: string,
@@ -93,14 +93,14 @@ export class AccountingProductController {
   }
 
   @Post('mappings/:mappingId/unlink')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Unlink a confirmed product-to-accounting-product mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
   }
 
   @Post(':externalProductId/acknowledge-change')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Acknowledge a detected change on a linked product, clearing its highlight' })
   acknowledgeChange(
     @Param('distributorId') distributorId: string,
@@ -110,7 +110,7 @@ export class AccountingProductController {
   }
 
   @Post('bulk-import')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Queue a bulk import of accounting products, by explicit ids or a server-side filter' })
   requestBulkImport(
     @Param('distributorId') distributorId: string,

@@ -42,6 +42,13 @@ async function addFilter(user: ReturnType<typeof userEvent.setup>, fieldValue: s
   await user.click(screen.getByRole('button', { name: 'Apply →' }));
 }
 
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
 });

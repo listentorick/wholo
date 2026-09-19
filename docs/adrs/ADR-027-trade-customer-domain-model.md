@@ -55,7 +55,7 @@ A separate polymorphic address table was considered and rejected: the address fi
 
 Staff members who log in to the portal are modelled as `User` rows with a `Membership` linking them to the `Organisation (TRADE_CUSTOMER)` with role `TRADE_CUSTOMER`. This reuses the existing identity infrastructure without modification.
 
-All customer logins are equal — there is no admin-vs-staff distinction within a customer's portal account. The first user is created during invitation acceptance; subsequent staff are added by existing members via the portal (future slice).
+All customer logins are equal — there is no admin-vs-staff distinction within a customer's portal account. The first user is created during invitation acceptance; subsequent staff are added by existing members via the portal (future slice). Distributor-side staff invitations are a separate model on the same pipeline — see ADR-067.
 
 ### Invitation flow
 

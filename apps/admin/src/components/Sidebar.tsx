@@ -2,12 +2,16 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { Permission } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 import { useNavBadges } from '@/lib/nav-badges-context';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  /** Shown only to people holding this permission (the API enforces it regardless). */
+  requiredPermission?: Permission;
 }
 
 interface NavGroup {
@@ -39,6 +43,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Orders',
         href: '/orders',
+        requiredPermission: Permission.ORDERS_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <rect x="4" y="3" width="16" height="18" rx="2" />
@@ -51,6 +56,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Delivery Runs',
         href: '/delivery-runs',
+        requiredPermission: Permission.DELIVERY_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <rect x="1" y="6" width="15" height="12" rx="1.5" />
@@ -68,6 +74,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Customers',
         href: '/customers',
+        requiredPermission: Permission.CUSTOMERS_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
@@ -85,6 +92,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Products',
         href: '/products',
+        requiredPermission: Permission.CATALOGUE_MANAGE,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
@@ -96,6 +104,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Catalogues',
         href: '/catalogues',
+        requiredPermission: Permission.CATALOGUE_MANAGE,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
@@ -109,6 +118,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Price lists',
         href: '/pricelists',
+        requiredPermission: Permission.PRICE_LISTS_MANAGE,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
@@ -119,6 +129,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Tax types',
         href: '/tax-types',
+        requiredPermission: Permission.TAX_TYPES_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <line x1="19" y1="5" x2="5" y2="19" />
@@ -135,6 +146,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Delivery Routes',
         href: '/delivery-routes',
+        requiredPermission: Permission.DELIVERY_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <circle cx="6" cy="19" r="2.5" />
@@ -147,6 +159,7 @@ const navGroups: NavGroup[] = [
       {
         label: 'Delivery Profiles',
         href: '/delivery-profiles',
+        requiredPermission: Permission.DELIVERY_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <circle cx="12" cy="12" r="9" />
@@ -162,8 +175,21 @@ const navGroups: NavGroup[] = [
     label: 'System',
     items: [
       {
+        label: 'Team',
+        href: '/team',
+        requiredPermission: Permission.TEAM_MANAGE,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="8.5" cy="7" r="4" />
+            <polyline points="17 11 19 13 23 9" />
+          </svg>
+        ),
+      },
+      {
         label: 'Integrations',
         href: '/integrations',
+        requiredPermission: Permission.ACCOUNTING_READ,
         icon: (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
             <path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4" />
@@ -191,6 +217,10 @@ interface SidebarProps {
 export function Sidebar({ onClose, onLogout }: SidebarProps) {
   const pathname = usePathname();
   const { counts } = useNavBadges();
+  const can = useCan();
+  const canSee = (item: NavItem) => !item.requiredPermission || can(item.requiredPermission);
+  // A group whose items are all hidden shows no heading either.
+  const visibleGroups = navGroups.map((g) => ({ ...g, items: g.items.filter(canSee) })).filter((g) => g.items.length > 0);
 
   return (
     <div className="flex h-full flex-col text-sidebar-fg">
@@ -217,7 +247,7 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
 
       {/* Nav groups */}
       <nav className="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4">
-        {navGroups.map((group, groupIndex) => (
+        {visibleGroups.map((group, groupIndex) => (
           <div key={group.label} className={groupIndex === 0 ? '' : 'mt-5'}>
             <div className="flex items-center px-3 pb-1.5">
               <span className="text-[11px] font-medium text-sidebar-fg/40">{group.label}</span>
@@ -256,6 +286,7 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
 
       {/* Bottom section */}
       <div className="shrink-0 border-t border-sidebar-border px-3 py-3 space-y-0.5">
+        {can(Permission.SETTINGS_MANAGE) && (
         <Link
           href="/settings"
           onClick={onClose}
@@ -267,6 +298,7 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
           </svg>
           Company Settings
         </Link>
+        )}
         <button
           onClick={onLogout}
           className="flex w-full items-center gap-3 rounded px-3 py-2 text-sm font-medium text-sidebar-fg/70 hover:bg-sidebar-hover hover:text-sidebar-fg transition-colors"

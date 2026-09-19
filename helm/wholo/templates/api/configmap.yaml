@@ -10,6 +10,7 @@ data:
   REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
   KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
+  KEYCLOAK_ADMIN_CLIENT_ID: "wholo-api-admin"
   R2_ACCOUNT_ID: {{ .Values.api.r2.accountId | quote }}
   R2_BUCKET_NAME: {{ .Values.api.r2.bucketName | quote }}
   R2_DELIVERY_BUCKET_NAME: {{ .Values.api.r2.deliveryBucketName | quote }}

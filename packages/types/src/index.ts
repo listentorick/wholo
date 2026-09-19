@@ -6,9 +6,76 @@ import { Permission } from './permissions';
 export enum Role {
   PLATFORM_ADMIN = 'PLATFORM_ADMIN',
   DISTRIBUTOR_ADMIN = 'DISTRIBUTOR_ADMIN',
+  OPERATIONS_MANAGER = 'OPERATIONS_MANAGER',
   WAREHOUSE_STAFF = 'WAREHOUSE_STAFF',
   DRIVER = 'DRIVER',
   TRADE_CUSTOMER = 'TRADE_CUSTOMER',
+}
+
+/**
+ * Roles an Owner (DISTRIBUTOR_ADMIN) may grant to an employee by invitation.
+ * Deliberately excludes DISTRIBUTOR_ADMIN (the Owner — never granted this way)
+ * and DRIVER (drivers belong in the driver app; onboarding not designed yet).
+ */
+export const ASSIGNABLE_STAFF_ROLES = [Role.OPERATIONS_MANAGER, Role.WAREHOUSE_STAFF] as const;
+export type AssignableStaffRole = (typeof ASSIGNABLE_STAFF_ROLES)[number];
+
+/** Human-readable role names, shared by emails and the admin UI. */
+export const ROLE_LABELS: Record<Role, string> = {
+  [Role.PLATFORM_ADMIN]: 'Platform admin',
+  [Role.DISTRIBUTOR_ADMIN]: 'Owner',
+  [Role.OPERATIONS_MANAGER]: 'Operations manager',
+  [Role.WAREHOUSE_STAFF]: 'Warehouse staff',
+  [Role.DRIVER]: 'Driver',
+  [Role.TRADE_CUSTOMER]: 'Trade customer',
+};
+
+// ─── Team (distributor staff) ─────────────────────────────────────────────────
+
+/** An invitation for an employee, as the Owner sees it. Revoked/accepted ones are not listed. */
+export interface StaffInvitation {
+  id: string;
+  email: string;
+  roles: Role[];
+  /** PENDING until `expiresAt`, then EXPIRED. */
+  status: 'PENDING' | 'EXPIRED';
+  expiresAt: string;
+  createdAt: string;
+  invitedBy: { id: string; name: string };
+}
+
+/** Someone on the distributor's team. */
+export interface TeamMember {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  roles: Role[];
+  joinedAt: string;
+  /** Who invited them; null for people who were not invited (the Owner). */
+  invitedBy: string | null;
+}
+
+/** The whole Team page in one read: people and their pending/expired invitations. */
+export interface TeamOverview {
+  members: TeamMember[];
+  invitations: StaffInvitation[];
+}
+
+export interface InviteTeamMemberRequest {
+  email: string;
+  roles: Role[];
+}
+
+export interface UpdateTeamRolesRequest {
+  roles: Role[];
+}
+
+/** Result of accepting a staff invitation: where you now work, and as what. */
+export interface AcceptedStaffInvitation {
+  distributorId: string;
+  distributorName: string;
+  roles: Role[];
 }
 
 export interface AuthUser {

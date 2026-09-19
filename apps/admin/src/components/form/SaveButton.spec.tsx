@@ -10,6 +10,11 @@ describe('SaveButton', () => {
     expect(button).toHaveAttribute('type', 'submit');
   });
 
+  it('can be held disabled (e.g. until something has changed) without showing the saving label', () => {
+    render(<SaveButton isSubmitting={false} disabled />);
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
   it('shows a saving label and disables while submitting', () => {
     render(<SaveButton isSubmitting />);
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled();

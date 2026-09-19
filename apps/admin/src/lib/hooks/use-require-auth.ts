@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../auth-context';
+import { getPendingInviteToken } from '../pending-invite';
 
 export function useRequireAuth() {
   const { user, isLoading, onboardingRequired, accessDenied, login } = useAuth();
@@ -18,7 +19,10 @@ export function useRequireAuth() {
     if (accessDenied) {
       router.replace('/access-denied');
     } else if (onboardingRequired) {
-      router.replace('/onboarding');
+      // Someone mid-way through accepting a team invitation (e.g. back from
+      // Keycloak's verify-email link, on the app root) must finish that, not be
+      // offered the wizard that creates their own distributor.
+      router.replace(getPendingInviteToken() ? '/accept-invite' : '/onboarding');
     } else if (!user) {
       // Send the current path straight through as Keycloak's redirectUri so
       // the browser lands back on the deep link after auth, not on '/'.

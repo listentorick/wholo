@@ -17,4 +17,5 @@ export { adminAccountingApi } from './accounting';
 export { adminOnboardingApi } from './onboarding';
 export { adminAnalyticsApi } from './analytics';
 export { adminNotificationsApi } from './notifications';
+export { adminTeamApi } from './team';
 export { ApiError, setTokenProvider } from './base';

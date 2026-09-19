@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { adminAccountingApi, ApiError } from '@wholo/admin-api-client';
-import type { AccountingProductSummary } from '@wholo/types';
+import { Permission, type AccountingProductSummary } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 import { ImportProductDialog } from './ImportProductDialog';
 import { MatchExistingProductDialog } from './MatchExistingProductDialog';
 import { TaxTypeConflictModal } from './TaxTypeConflictModal';
@@ -19,6 +20,7 @@ export function ProductRowActions({ product, providerLabel, onActionComplete }: 
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
   const [taxConflictDetail, setTaxConflictDetail] = useState<string | null>(null);
+  const canImport = useCan()(Permission.ACCOUNTING_IMPORT);
 
   async function run(action: string, fn: () => Promise<unknown>) {
     setBusy(action);
@@ -62,6 +64,14 @@ export function ProductRowActions({ product, providerLabel, onActionComplete }: 
   }
 
   const anyBusy = busy !== null;
+
+  if (!canImport) {
+    return product.status === 'LINKED' && product.mapping ? (
+      <Link href={`/products/${product.mapping.productId}/edit`} className="text-xs text-primary hover:underline">
+        View product
+      </Link>
+    ) : null;
+  }
 
   return (
     <>

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
-import { CustomerInviteNotificationPayload, DeliveryOutcomeNotificationPayload, OrderPlacedNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
+import { CustomerInviteNotificationPayload, DeliveryOutcomeNotificationPayload, OrderPlacedNotificationPayload, StaffInviteNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
 import { ChannelSender } from './channel-sender.interface';
 
 @Injectable()
@@ -32,6 +32,19 @@ export class EmailChannelSender implements ChannelSender {
         distributorLogoUrl: invitePayload.distributorLogoUrl,
         distributorEmail: invitePayload.distributorEmail,
         distributorPhone: invitePayload.distributorPhone,
+      });
+      return;
+    }
+
+    if (notification.type === NotificationType.STAFF_INVITE_SENT) {
+      const staffPayload = notification.payload as unknown as StaffInviteNotificationPayload;
+      await this.mail.sendStaffInvite(delivery.recipient, {
+        distributorName: staffPayload.distributorName,
+        inviterName: staffPayload.inviterName,
+        roleLabels: staffPayload.roleLabels,
+        inviteUrl: staffPayload.inviteUrl,
+        recipientEmail: staffPayload.recipientEmail,
+        expiresAt: new Date(staffPayload.expiresAt),
       });
       return;
     }

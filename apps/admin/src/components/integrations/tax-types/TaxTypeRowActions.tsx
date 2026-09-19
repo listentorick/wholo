@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { adminAccountingApi } from '@wholo/admin-api-client';
-import type { AccountingTaxTypeSummary } from '@wholo/types';
+import { Permission, type AccountingTaxTypeSummary } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 import { CreateTaxTypeFromExternalDialog } from './CreateTaxTypeFromExternalDialog';
 import { MatchExistingTaxTypeDialog } from './MatchExistingTaxTypeDialog';
 
@@ -16,6 +17,7 @@ export function TaxTypeRowActions({ taxType, providerLabel, onActionComplete }: 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'create' | 'match' | null>(null);
+  const canImport = useCan()(Permission.ACCOUNTING_IMPORT);
 
   async function run(action: string, fn: () => Promise<unknown>) {
     setBusy(action);
@@ -46,6 +48,8 @@ export function TaxTypeRowActions({ taxType, providerLabel, onActionComplete }: 
   }
 
   const anyBusy = busy !== null;
+
+  if (!canImport) return null;
 
   return (
     <>

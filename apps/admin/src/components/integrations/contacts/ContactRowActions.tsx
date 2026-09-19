@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { adminAccountingApi } from '@wholo/admin-api-client';
-import type { AccountingContactSummary } from '@wholo/types';
+import { Permission, type AccountingContactSummary } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 import { ImportContactDialog } from './ImportContactDialog';
 import { MatchExistingCustomerDialog } from './MatchExistingCustomerDialog';
 
@@ -17,6 +18,8 @@ export function ContactRowActions({ contact, providerLabel, onActionComplete }: 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'import' | 'match' | null>(null);
+  // Confirming, matching, importing, ignoring and unlinking need accounting:import.
+  const canImport = useCan()(Permission.ACCOUNTING_IMPORT);
 
   async function run(action: string, fn: () => Promise<unknown>) {
     setBusy(action);
@@ -47,6 +50,14 @@ export function ContactRowActions({ contact, providerLabel, onActionComplete }: 
   }
 
   const anyBusy = busy !== null;
+
+  if (!canImport) {
+    return contact.status === 'LINKED' && contact.mapping ? (
+      <Link href={`/customers/${contact.mapping.tradeRelationshipId}`} className="text-xs text-primary hover:underline">
+        View customer
+      </Link>
+    ) : null;
+  }
 
   return (
     <>

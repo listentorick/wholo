@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactRowActions } from './ContactRowActions';
@@ -39,6 +39,13 @@ function makeContact(overrides: Partial<AccountingContactSummary> = {}): Account
     ...overrides,
   };
 }
+
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -141,5 +148,29 @@ describe('ContactRowActions', () => {
     await user.click(screen.getByText('Ignore'));
 
     await waitFor(() => expect(screen.getByText('That action failed. Please try again.')).toBeInTheDocument());
+  });
+});
+
+describe('ContactRowActions — without accounting:import', () => {
+  beforeEach(() => Object.assign(mockGranted, { all: false, list: ['accounting:read'] }));
+  afterEach(() => Object.assign(mockGranted, { all: true, list: [] }));
+
+  it('shows no import, match, ignore or confirm actions to someone who can only view', () => {
+    render(<ContactRowActions contact={makeContact()} providerLabel="Xero" onActionComplete={() => {}} />);
+
+    for (const name of [/Import as new/, /Match to existing/, /Ignore/, /Confirm match/]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it('still lets a viewer follow a linked contact to the customer, but not unlink it', () => {
+    const contact = makeContact({
+      status: 'LINKED',
+      mapping: { id: 'mapping-1', tradeRelationshipId: 'tr-1', customerName: 'Blackbird', matchMethod: 'MANUAL', linkedAt: '2026-01-01T00:00:00.000Z' },
+    });
+    render(<ContactRowActions contact={contact} providerLabel="Xero" onActionComplete={() => {}} />);
+
+    expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/tr-1');
+    expect(screen.queryByText('Unlink')).not.toBeInTheDocument();
   });
 });

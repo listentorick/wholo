@@ -3,6 +3,7 @@ import { CustomerInviteNotificationService } from './customer-invite-notificatio
 import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
 import { NotificationsProcessor, OutboxEventJobData } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
+import { StaffInviteNotificationService } from './staff-invite-notification.service';
 import { TradeRelationshipNotificationService } from './trade-relationship-notification.service';
 
 function makeJob(name: string, payload: unknown = { orderId: 'order-1' }): Job<OutboxEventJobData> {
@@ -24,6 +25,7 @@ describe('NotificationsProcessor', () => {
     handleTradeRelationshipActivated: jest.Mock;
   };
   let deliveryOutcome: { handleOrderDelivered: jest.Mock; handleOrderDeliveryFailed: jest.Mock };
+  let staffInvite: { handleStaffInviteSent: jest.Mock };
 
   beforeEach(() => {
     orderPlaced = { handleOrderSubmitted: jest.fn().mockResolvedValue(undefined) };
@@ -39,11 +41,13 @@ describe('NotificationsProcessor', () => {
       handleOrderDelivered: jest.fn().mockResolvedValue(undefined),
       handleOrderDeliveryFailed: jest.fn().mockResolvedValue(undefined),
     };
+    staffInvite = { handleStaffInviteSent: jest.fn().mockResolvedValue(undefined) };
     processor = new NotificationsProcessor(
       orderPlaced as unknown as OrderPlacedNotificationService,
       customerInvite as unknown as CustomerInviteNotificationService,
       tradeRelationship as unknown as TradeRelationshipNotificationService,
       deliveryOutcome as unknown as DeliveryOutcomeNotificationService,
+      staffInvite as unknown as StaffInviteNotificationService,
     );
   });
 
@@ -52,6 +56,13 @@ describe('NotificationsProcessor', () => {
     await processor.process(makeJob('OrderSubmitted', payload));
 
     expect(orderPlaced.handleOrderSubmitted).toHaveBeenCalledWith(payload);
+  });
+
+  it('routes StaffInviteSent jobs to the staff-invite handler', async () => {
+    const payload = { invitationId: 'inv-1', email: 'sam@vine.test' };
+    await processor.process(makeJob('StaffInviteSent', payload));
+
+    expect(staffInvite.handleStaffInviteSent).toHaveBeenCalledWith(payload);
   });
 
   it('routes CustomerInviteSent jobs to the customer-invite handler', async () => {

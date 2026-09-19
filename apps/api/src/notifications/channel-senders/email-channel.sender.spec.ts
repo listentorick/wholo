@@ -40,6 +40,7 @@ describe('EmailChannelSender', () => {
       sendOrderReceivedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendOrderConfirmedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendInvite: jest.fn().mockResolvedValue(undefined),
+      sendStaffInvite: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipRequestAccepted: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipRequestDeclined: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipSuspended: jest.fn().mockResolvedValue(undefined),
@@ -191,6 +192,32 @@ describe('EmailChannelSender', () => {
       orderUrl: 'http://localhost:3020/orders/order-1',
       unableReason: 'INCORRECT_ADDRESS',
     }));
+  });
+
+  it('sends the staff invite email for STAFF_INVITE_SENT notifications', async () => {
+    const notification = {
+      type: NotificationType.STAFF_INVITE_SENT,
+      payload: {
+        invitationId: 'inv-9',
+        distributorName: 'Vine & Co',
+        inviterName: 'Priya Shah',
+        roleLabels: ['Operations manager'],
+        recipientEmail: 'sam.patel@vine.test',
+        inviteUrl: 'http://localhost:3020/accept-invite?token=abc',
+        expiresAt: '2026-09-23T00:00:00.000Z',
+      },
+    } as unknown as Notification;
+
+    await sender.send(makeDelivery(NotificationAudience.DISTRIBUTOR, 'sam.patel@vine.test'), notification);
+
+    expect(mail.sendStaffInvite).toHaveBeenCalledWith('sam.patel@vine.test', {
+      distributorName: 'Vine & Co',
+      inviterName: 'Priya Shah',
+      roleLabels: ['Operations manager'],
+      inviteUrl: 'http://localhost:3020/accept-invite?token=abc',
+      recipientEmail: 'sam.patel@vine.test',
+      expiresAt: new Date('2026-09-23T00:00:00.000Z'),
+    });
   });
 
   it('sends the invite email for CUSTOMER_INVITE_SENT notifications', async () => {

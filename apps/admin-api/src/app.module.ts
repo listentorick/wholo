@@ -19,6 +19,7 @@ import { OrderAsModule } from './order-as/order-as.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { TeamModule } from './team/team.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthController } from './health.controller';
 
@@ -44,6 +45,7 @@ import { HealthController } from './health.controller';
     AccountingModule,
     NotificationsModule,
     OnboardingModule,
+    TeamModule,
     AnalyticsModule,
   ],
   controllers: [HealthController],

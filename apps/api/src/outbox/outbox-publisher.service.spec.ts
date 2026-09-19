@@ -27,6 +27,7 @@ describe('OutboxPublisherService', () => {
   let analyticsFactsQueue: { add: jest.Mock };
   let accountingBulkImportQueue: { add: jest.Mock };
   let deliveryRunAllocationQueue: { add: jest.Mock };
+  let keycloakUserQueue: { add: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -43,6 +44,7 @@ describe('OutboxPublisherService', () => {
     analyticsFactsQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingBulkImportQueue = { add: jest.fn().mockResolvedValue({}) };
     deliveryRunAllocationQueue = { add: jest.fn().mockResolvedValue({}) };
+    keycloakUserQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
@@ -53,7 +55,21 @@ describe('OutboxPublisherService', () => {
       analyticsFactsQueue as unknown as Queue,
       accountingBulkImportQueue as unknown as Queue,
       deliveryRunAllocationQueue as unknown as Queue,
+      keycloakUserQueue as unknown as Queue,
     );
+  });
+
+  it('routes StaffKeycloakDisableRequested to the keycloak-users queue and StaffInviteSent to notifications', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([
+      makeEvent({ id: 'evt-kc', eventType: 'StaffKeycloakDisableRequested' }),
+      makeEvent({ id: 'evt-inv', eventType: 'StaffInviteSent' }),
+    ]);
+
+    await service.publishPending();
+
+    expect(keycloakUserQueue.add).toHaveBeenCalledTimes(1);
+    expect(keycloakUserQueue.add).toHaveBeenCalledWith('StaffKeycloakDisableRequested', expect.anything(), { jobId: 'evt-kc' });
+    expect(notificationsQueue.add).toHaveBeenCalledWith('StaffInviteSent', expect.anything(), { jobId: 'evt-inv' });
   });
 
   it('enqueues OrderSubmitted to the notifications and analytics-facts queues with jobId = event id and marks it PUBLISHED', async () => {

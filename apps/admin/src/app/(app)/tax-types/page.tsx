@@ -3,6 +3,7 @@
 import { useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useCan } from '@/lib/permissions';
 import { useCursorList } from '@/lib/hooks/use-cursor-list';
 import { ListPageHeader } from '@/components/list/ListPageHeader';
 import { ListTableShell } from '@/components/list/ListTableShell';
@@ -15,12 +16,12 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { StatusBadge } from '@/components/list/StatusBadge';
 import { adminTaxTypesApi } from '@wholo/admin-api-client';
-import type { TaxType } from '@wholo/types';
+import { Permission, type TaxType } from '@wholo/types';
 import { CLASSIFICATION_LABELS } from '@/lib/tax-classification-labels';
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function TaxTypesEmptyState() {
+function TaxTypesEmptyState({ canCreate }: { canCreate: boolean }) {
   return (
     <ListEmptyState
       iconBgClassName="bg-[#eff6ff]"
@@ -32,14 +33,20 @@ function TaxTypesEmptyState() {
         </svg>
       }
       title="No tax types yet"
-      description="Tax types tell Stocdup how much tax to add on top of a product's price. Create one and assign it to your products."
+      description={
+        canCreate
+          ? "Tax types tell Stocdup how much tax to add on top of a product's price. Create one and assign it to your products."
+          : 'Tax types tell Stocdup how much tax to add on top of a product\u2019s price. None have been set up yet.'
+      }
       action={
-        <Link
-          href="/tax-types/new"
-          className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-        >
-          Create first tax type
-        </Link>
+        canCreate ? (
+          <Link
+            href="/tax-types/new"
+            className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+          >
+            Create first tax type
+          </Link>
+        ) : undefined
       }
     />
   );
@@ -84,6 +91,7 @@ function TaxTypeRow({ taxType }: { taxType: TaxType }) {
 
 export default function TaxTypesPage() {
   const { accessToken } = useAuth();
+  const canManage = useCan()(Permission.TAX_TYPES_MANAGE);
 
   const buildParams = useCallback((cursor: string | undefined) => ({ limit: 50, cursor }), []);
 
@@ -109,12 +117,14 @@ export default function TaxTypesPage() {
         title="Tax types"
         count={!isLoading ? total : undefined}
         actions={
-          <Link
-            href="/tax-types/new"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-          >
-            New tax type
-          </Link>
+          canManage ? (
+            <Link
+              href="/tax-types/new"
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              New tax type
+            </Link>
+          ) : undefined
         }
       />
 
@@ -123,7 +133,7 @@ export default function TaxTypesPage() {
       ) : error ? (
         <ListErrorBanner message={error} />
       ) : taxTypes.length === 0 ? (
-        <TaxTypesEmptyState />
+        <TaxTypesEmptyState canCreate={canManage} />
       ) : (
         <ListTableShell>
           <table className="w-full text-left">

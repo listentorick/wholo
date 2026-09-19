@@ -46,6 +46,13 @@ const baseProps = {
 // there's no real viewport to evaluate the media query against), so every
 // query below is scoped to whichever layout it's asserting on to avoid
 // "found multiple elements" false failures.
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
+
 describe('AccountingTaxTypesTable', () => {
   it('shows a spinner and no rows while loading with no tax types yet', () => {
     render(<AccountingTaxTypesTable taxTypes={[]} loading hasFilter={false} {...baseProps} />);

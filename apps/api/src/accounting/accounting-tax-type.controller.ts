@@ -38,7 +38,7 @@ export class AccountingTaxTypeController {
   }
 
   @Post(':externalTaxTypeId/import')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Import an accounting tax rate as a new Wholo tax type' })
   importAsNewTaxType(
     @Param('distributorId') distributorId: string,
@@ -50,7 +50,7 @@ export class AccountingTaxTypeController {
   }
 
   @Post('suggestions/:suggestionId/confirm')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Confirm a system-suggested tax type match' })
   confirmSuggestion(
     @Param('distributorId') distributorId: string,
@@ -61,7 +61,7 @@ export class AccountingTaxTypeController {
   }
 
   @Post(':externalTaxTypeId/match')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Link an accounting tax rate to an existing Wholo tax type' })
   matchToExistingTaxType(
     @Param('distributorId') distributorId: string,
@@ -73,7 +73,7 @@ export class AccountingTaxTypeController {
   }
 
   @Post(':externalTaxTypeId/ignore')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Ignore an accounting tax rate — excludes it from future match suggestions' })
   ignore(
     @Param('distributorId') distributorId: string,
@@ -84,14 +84,14 @@ export class AccountingTaxTypeController {
   }
 
   @Post('mappings/:mappingId/unlink')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Unlink a confirmed tax-type-to-accounting-tax-type mapping' })
   unlink(@Param('distributorId') distributorId: string, @Param('mappingId') mappingId: string) {
     return this.service.unlink(distributorId, mappingId);
   }
 
   @Post(':externalTaxTypeId/acknowledge-change')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Acknowledge a detected change on a linked tax rate, clearing its highlight' })
   acknowledgeChange(
     @Param('distributorId') distributorId: string,

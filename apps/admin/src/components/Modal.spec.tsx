@@ -26,6 +26,14 @@ describe('Modal', () => {
     expect(screen.getByText('Suspend this customer?')).toBeInTheDocument();
   });
 
+  it('is narrow by default and wider on request, for dialogs that hold a form', () => {
+    const { unmount } = render(<Modal onClose={vi.fn()} labelledBy="t"><h2 id="t">Title</h2></Modal>);
+    expect(screen.getByRole('dialog').className).toContain('max-w-sm');
+    unmount();
+    render(<Modal onClose={vi.fn()} labelledBy="t" size="md"><h2 id="t">Title</h2></Modal>);
+    expect(screen.getByRole('dialog').className).toContain('max-w-lg');
+  });
+
   it('closes on Escape by default', async () => {
     const onClose = renderModal();
     await userEvent.keyboard('{Escape}');

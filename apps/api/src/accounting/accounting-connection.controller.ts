@@ -70,7 +70,7 @@ export class AccountingConnectionController {
   }
 
   @Post('sync')
-  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @RequirePermissions(Permission.ACCOUNTING_IMPORT)
   @ApiOperation({ summary: 'Request a full sync (contacts, products, tax types) from the accounting provider' })
   requestSync(@Param('distributorId') distributorId: string) {
     return this.syncService.requestSync(distributorId, IngestionRunTrigger.MANUAL);

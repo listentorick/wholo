@@ -21,6 +21,10 @@ export enum Permission {
   DELIVERY_MANAGE = 'delivery:manage',
 
   ACCOUNTING_READ = 'accounting:read',
+  // Per integration type: <type>:read (view) / :import (bring data in, link it,
+  // sync, retry exports) / :manage (the connection itself: connect, settings,
+  // disconnect). Warehouse and ERP follow the same shape when they exist.
+  ACCOUNTING_IMPORT = 'accounting:import',
   ACCOUNTING_MANAGE = 'accounting:manage',
 
   SETTINGS_MANAGE = 'settings:manage',
@@ -29,7 +33,10 @@ export enum Permission {
 
   ANALYTICS_READ = 'analytics:read',
 
+  TAX_TYPES_READ = 'tax-types:read',
   TAX_TYPES_MANAGE = 'tax-types:manage',
 
   ADMIN_NOTIFICATIONS_MANAGE = 'admin-notifications:manage',
+
+  TEAM_MANAGE = 'team:manage',
 }

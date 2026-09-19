@@ -41,9 +41,11 @@ interface TaxTypeFormProps {
   initialValues?: TaxType;
   onSubmit: (data: CreateTaxTypeRequest) => Promise<TaxType>;
   onDeactivate?: () => Promise<void>;
+  /** Viewer without tax-types:manage: fields disabled, no Save / Deactivate — only a way back. */
+  readOnly?: boolean;
 }
 
-export function TaxTypeForm({ mode, initialValues, onSubmit, onDeactivate }: TaxTypeFormProps) {
+export function TaxTypeForm({ mode, initialValues, onSubmit, onDeactivate, readOnly = false }: TaxTypeFormProps) {
   const router = useRouter();
   const [apiError, setApiError] = useState<string | null>(null);
   const [isDeactivating, setIsDeactivating] = useState(false);
@@ -87,7 +89,7 @@ export function TaxTypeForm({ mode, initialValues, onSubmit, onDeactivate }: Tax
     }
   }
 
-  const disabled = isSubmitting;
+  const disabled = isSubmitting || readOnly;
 
   const actions: ActionItem[] = [
     {
@@ -119,6 +121,8 @@ export function TaxTypeForm({ mode, initialValues, onSubmit, onDeactivate }: Tax
       : []),
   ];
 
+  const shownActions: ActionItem[] = readOnly ? [{ key: 'back', label: 'Back to tax types', href: '/tax-types' }] : actions;
+
   return (
     <>
       <DetailPageHeader
@@ -137,7 +141,7 @@ export function TaxTypeForm({ mode, initialValues, onSubmit, onDeactivate }: Tax
 
       <form onSubmit={handleSubmit(onFormSubmit)} noValidate>
         <DetailPageLayout
-          sidebar={<DetailActionsPanel layout="sidebar" actions={actions} banner={{ error: apiError }} />}
+          sidebar={<DetailActionsPanel layout="sidebar" actions={shownActions} banner={{ error: apiError }} />}
         >
           <FormCard title="Details">
             <div className="space-y-4">

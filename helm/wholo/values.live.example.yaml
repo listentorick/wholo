@@ -131,6 +131,11 @@ keycloak:
   service:
     type: ClusterIP
   adminPassword: "CHANGE_ME_strong_password"
+  # Secret for the `wholo-api-admin` service-account client the worker uses to
+  # disable removed team members' Keycloak logins. Generate a long random value
+  # (e.g. `openssl rand -hex 32`). Must match what you pass to
+  # scripts/setup-keycloak-api-admin-client.sh on an existing realm.
+  apiAdminClientSecret: "CHANGE_ME_long_random_secret"
   # Keep the realm NAME brand-neutral (e.g. prod) — it is baked into browser
   # bundles (LIVE_KEYCLOAK_REALM must equal it) and into every token issuer,
   # so renaming after launch is painful. Branding lives in realmDisplayName,

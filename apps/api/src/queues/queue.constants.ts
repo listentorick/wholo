@@ -9,6 +9,7 @@ export const ACCOUNTING_TAX_TYPE_SYNC_QUEUE = 'accounting-tax-type-sync';
 export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
 export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
 export const DELIVERY_RUN_ALLOCATION_QUEUE = 'delivery-run-allocation';
+export const KEYCLOAK_USER_QUEUE = 'keycloak-users';
 
 // Domain event type → queues whose consumers care about it.
 // Activation rule (ADR-047): a route entry ships in the same PR as its
@@ -26,6 +27,8 @@ export const DELIVERY_RUN_ALLOCATION_QUEUE = 'delivery-run-allocation';
 export const EVENT_ROUTES: Record<string, string[]> = {
   OrderSubmitted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   CustomerInviteSent: [NOTIFICATIONS_QUEUE],
+  StaffInviteSent: [NOTIFICATIONS_QUEUE],
+  StaffKeycloakDisableRequested: [KEYCLOAK_USER_QUEUE],
   TradeRelationshipRequestAccepted: [NOTIFICATIONS_QUEUE],
   TradeRelationshipRequestDeclined: [NOTIFICATIONS_QUEUE],
   TradeRelationshipSuspended: [NOTIFICATIONS_QUEUE],

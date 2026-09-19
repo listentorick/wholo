@@ -15,6 +15,7 @@ import { AccountingTaxTypeSyncModule } from './accounting-tax-type-sync/accounti
 import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
 import { DeliveryRunAllocationWorkerModule } from './delivery-run-allocation/delivery-run-allocation-worker.module';
 import { HealthModule } from './health/health.module';
+import { KeycloakAdminWorkerModule } from './keycloak-admin/keycloak-admin-worker.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { OutboxModule } from './outbox/outbox.module';
@@ -29,6 +30,7 @@ import {
   ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,
+  KEYCLOAK_USER_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queues/queue.constants';
 import { redisConnectionFromUrl } from './queues/redis-connection';
@@ -117,6 +119,19 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         },
       },
       {
+        name: KEYCLOAK_USER_QUEUE,
+        // One external call to Keycloak's admin API. Keycloak being briefly
+        // unavailable (a restart, a deploy) is the usual cause, so retry for
+        // a good while: 6 attempts with a 30s exponential base spans ~30 min.
+        // The database-side removal is already effective meanwhile.
+        defaultJobOptions: {
+          attempts: 6,
+          backoff: { type: 'exponential', delay: 30_000 },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
+      {
         name: DELIVERY_RUN_ALLOCATION_QUEUE,
         // Local DB operations only (route lookup, run upsert) — same backoff
         // reasoning as ANALYTICS_FACTS_QUEUE, not the generous external-API
@@ -140,6 +155,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingTaxTypeSyncModule,
     AnalyticsFactsModule,
     DeliveryRunAllocationWorkerModule,
+    KeycloakAdminWorkerModule,
     OutboxModule,
     IngestionRunModule,
     HealthModule,

@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { adminAccountingApi } from '@wholo/admin-api-client';
-import type { OrderInvoiceExportSummary } from '@wholo/types';
+import { Permission, type OrderInvoiceExportSummary } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 
 interface OrderInvoiceExportBadgeProps {
   invoiceExport: OrderInvoiceExportSummary;
@@ -18,6 +19,7 @@ export function OrderInvoiceExportBadge({ invoiceExport }: OrderInvoiceExportBad
   const [retryRequested, setRetryRequested] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const canRetry = useCan()(Permission.ACCOUNTING_IMPORT);
 
   if (invoiceExport.status !== 'FAILED') return null;
 
@@ -41,6 +43,7 @@ export function OrderInvoiceExportBadge({ invoiceExport }: OrderInvoiceExportBad
         {invoiceExport.errorMessage ?? 'The invoice could not be created.'}
       </p>
       {retryError && <p className="mt-1 text-sm text-red-700">{retryError}</p>}
+      {canRetry && (
       <div className="mt-2.5">
         {retryRequested ? (
           <span className="text-sm font-medium text-amber-800">
@@ -57,6 +60,7 @@ export function OrderInvoiceExportBadge({ invoiceExport }: OrderInvoiceExportBad
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }

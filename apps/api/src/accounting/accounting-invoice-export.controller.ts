@@ -14,7 +14,7 @@ interface RequestWithUser extends Request {
 @ApiTags('Accounting')
 @ApiBearerAuth()
 @ApiParam({ name: 'distributorId', description: 'Distributor organisation ID' })
-@RequirePermissions(Permission.ACCOUNTING_MANAGE)
+@RequirePermissions(Permission.ACCOUNTING_IMPORT)
 @UseGuards(JwtAuthGuard, DistributorAccessGuard, PermissionsGuard)
 @Controller('distributors/:distributorId/accounting/invoice-exports')
 export class AccountingInvoiceExportController {

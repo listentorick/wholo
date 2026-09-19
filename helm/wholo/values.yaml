@@ -264,6 +264,12 @@ keycloak:
     pullPolicy: Never
   adminUser: admin
   adminPassword: admin
+  # Secret of the `wholo-api-admin` service-account client the worker uses to
+  # disable removed team members' Keycloak logins (ADR-067). Local default
+  # only — set a real random value in values.live.yaml. Like everything in the
+  # realm, import is first-boot-only: on an existing realm run
+  # scripts/setup-keycloak-api-admin-client.sh instead.
+  apiAdminClientSecret: local-wholo-api-admin-secret
   port: 8080
   # Realm name is an internal identifier baked into browser bundles as
   # NEXT_PUBLIC_KEYCLOAK_REALM (repo var LIVE_KEYCLOAK_REALM for live images)

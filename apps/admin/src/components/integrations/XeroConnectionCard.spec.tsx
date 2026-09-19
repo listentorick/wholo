@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { XeroConnectionCard } from './XeroConnectionCard';
@@ -29,6 +29,13 @@ const mockCountProductsNeedingAttention = adminAccountingApi.countProductsNeedin
 const mockCountTaxTypesNeedingAttention = adminAccountingApi.countTaxTypesNeedingAttention as ReturnType<
   typeof vi.fn
 >;
+
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -201,5 +208,49 @@ describe('XeroConnectionCard', () => {
 
     await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith());
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
+  });
+});
+
+describe('XeroConnectionCard — who can change the connection', () => {
+  const connected = { status: 'CONNECTED', externalOrganisationName: 'Acme Wines', connectedAt: '2026-01-01T00:00:00.000Z', lastSyncedAt: null };
+
+  // An Operations manager: can look at the connection and import, but not connect/disconnect.
+  const asImporter = () => Object.assign(mockGranted, { all: false, list: ['accounting:read', 'accounting:import'] });
+  const asOwner = () => Object.assign(mockGranted, { all: false, list: ['accounting:read', 'accounting:import', 'accounting:manage'] });
+  afterEach(() => Object.assign(mockGranted, { all: true, list: [] }));
+
+  it('shows an Owner Disconnect on a live connection', async () => {
+    asOwner();
+    mockGetConnection.mockResolvedValue(connected);
+    render(<XeroConnectionCard />);
+    expect(await screen.findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+
+  it('shows an importer the connection and a way to the synced data, but no Disconnect', async () => {
+    asImporter();
+    mockGetConnection.mockResolvedValue(connected);
+    render(<XeroConnectionCard />);
+
+    expect(await screen.findByText('Acme Wines')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /View synced data/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer an importer a Connect button when nothing is connected — it says who can', async () => {
+    asImporter();
+    mockGetConnection.mockResolvedValue(undefined);
+    render(<XeroConnectionCard />);
+
+    expect(await screen.findByText(/An Owner can connect it/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect Xero' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer an importer Reconnect on a broken connection — it says to ask an Owner', async () => {
+    asImporter();
+    mockGetConnection.mockResolvedValue({ ...connected, status: 'ERROR' });
+    render(<XeroConnectionCard />);
+
+    expect(await screen.findByText(/Ask an Owner to reconnect Xero/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reconnect Xero' })).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BulkImportControl } from './BulkImportControl';
+
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
 
 describe('BulkImportControl', () => {
   beforeEach(() => {
@@ -126,5 +133,23 @@ describe('BulkImportControl', () => {
 
     await waitFor(() => expect(screen.getByText('Failed to queue the import. Please try again.')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Import' })).toBeInTheDocument();
+  });
+});
+
+describe('BulkImportControl — without accounting:import', () => {
+  afterEach(() => Object.assign(mockGranted, { all: true, list: [] }));
+
+  it('is not shown at all to someone who cannot import', () => {
+    Object.assign(mockGranted, { all: false, list: ['accounting:read'] });
+    render(
+      <BulkImportControl
+        entityLabel="products"
+        selectedCount={3}
+        buildDto={(honourSuggestions) => ({ ids: [], honourSuggestions })}
+        bulkImport={vi.fn()}
+        onQueued={() => {}}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Bulk import/ })).not.toBeInTheDocument();
   });
 });

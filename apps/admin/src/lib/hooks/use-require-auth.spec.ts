@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useRequireAuth } from './use-require-auth';
+import { clearPendingInviteToken, setPendingInviteToken } from '../pending-invite';
 
 const replace = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -21,6 +22,7 @@ function setAuth(overrides: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearPendingInviteToken();
 });
 
 describe('useRequireAuth', () => {
@@ -35,6 +37,14 @@ describe('useRequireAuth', () => {
     setAuth({ onboardingRequired: true });
     renderHook(() => useRequireAuth());
     expect(replace).toHaveBeenCalledWith('/onboarding');
+  });
+
+  it('sends someone with a pending team invitation to finish accepting it, not into the onboarding wizard', () => {
+    setPendingInviteToken('emailed-token');
+    setAuth({ onboardingRequired: true });
+    renderHook(() => useRequireAuth());
+    expect(replace).toHaveBeenCalledWith('/accept-invite');
+    expect(replace).not.toHaveBeenCalledWith('/onboarding');
   });
 
   it('redirects non-distributor visitors to /access-denied even though they have a Wholo user', () => {

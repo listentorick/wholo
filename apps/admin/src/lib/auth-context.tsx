@@ -27,6 +27,8 @@ interface AuthContextValue {
   /** Re-fetch the session (e.g. right after onboarding completes). */
   refreshSession: () => Promise<void>;
   login: (returnUrl?: string) => void;
+  /** Send the visitor to Keycloak's sign-up form, returning to `returnUrl` (a same-origin path). */
+  register: (returnUrl?: string) => void;
   logout: () => void;
 }
 
@@ -131,6 +133,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
   }, []);
 
+  const register = useCallback((returnUrl = '/') => {
+    resetAuthTokenState();
+    const safe = isSafeReturnUrl(returnUrl) ? returnUrl : '/';
+    ensureKeycloak().then((kc) => kc?.register({ redirectUri: window.location.origin + safe }));
+  }, []);
+
   const logout = useCallback(() => {
     // Do NOT clear React auth state here first: nulling `user` re-renders the
     // shell, useRequireAuth sees `!user` and fires login() → kc.login(), whose
@@ -168,6 +176,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         identity,
         refreshSession,
         login,
+        register,
         logout,
       }}
     >

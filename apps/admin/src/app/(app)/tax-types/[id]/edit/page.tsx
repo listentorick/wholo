@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useCan } from '@/lib/permissions';
 import { TaxTypeForm } from '@/components/tax-types/TaxTypeForm';
 import { adminTaxTypesApi } from '@wholo/admin-api-client';
-import type { TaxType, CreateTaxTypeRequest } from '@wholo/types';
+import { Permission, type TaxType, type CreateTaxTypeRequest } from '@wholo/types';
 
 export default function EditTaxTypePage() {
   const { accessToken } = useAuth();
+  const canManage = useCan()(Permission.TAX_TYPES_MANAGE);
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
@@ -56,7 +58,13 @@ export default function EditTaxTypePage() {
 
   return (
     <>
-      <TaxTypeForm mode="edit" initialValues={taxType} onSubmit={handleSubmit} onDeactivate={handleDeactivate} />
+      <TaxTypeForm
+        mode="edit"
+        initialValues={taxType}
+        onSubmit={handleSubmit}
+        onDeactivate={canManage ? handleDeactivate : undefined}
+        readOnly={!canManage}
+      />
     </>
   );
 }

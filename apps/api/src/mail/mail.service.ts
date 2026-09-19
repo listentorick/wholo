@@ -14,6 +14,11 @@ function esc(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function joinWithAnd(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 function headerSafe(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim();
 }
@@ -27,6 +32,16 @@ export interface SendInviteParams {
   distributorLogoUrl: string | null;
   distributorEmail: string | null;
   distributorPhone: string | null;
+}
+
+export interface SendStaffInviteParams {
+  distributorName: string;
+  inviterName: string;
+  /** Human-readable role names, e.g. ['Operations manager']. */
+  roleLabels: string[];
+  inviteUrl: string;
+  recipientEmail: string;
+  expiresAt: Date;
 }
 
 // Shared by sendOrderReceivedToCustomer/sendOrderConfirmedToCustomer.
@@ -199,6 +214,50 @@ export class MailService {
       this.logger.log(`Invite email sent to ${to}`);
     } catch (err) {
       this.logger.error(`Failed to send invite email to ${to}: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  // An Owner inviting an employee to their distributor's team (ADR-067).
+  // The invitation only works for the address it was sent to, so the email
+  // says so — the invitee must sign up with, and verify, that exact address.
+  async sendStaffInvite(to: string, params: SendStaffInviteParams): Promise<void> {
+    const { distributorName, inviterName, roleLabels, inviteUrl, recipientEmail, expiresAt } = params;
+
+    const subject = `${headerSafe(inviterName)} invited you to join ${headerSafe(distributorName)} on Stocdup`;
+    const expiresAtFormatted = expiresAt.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+    const rolesText = joinWithAnd(roleLabels);
+
+    const text = [
+      `${inviterName} has invited you to work with ${distributorName} on Stocdup as ${rolesText}.`,
+      ``,
+      `Accept your invitation:`,
+      inviteUrl,
+      ``,
+      `Create your Stocdup account with ${recipientEmail} \u2014 this invitation only works for that address \u2014 and verify it when asked. The invitation expires on ${expiresAtFormatted}.`,
+      ``,
+      `Wasn't expecting this? You can ignore this email \u2014 nothing happens unless you accept.`,
+      ``,
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+    ].join('\n');
+
+    const html = await compileMjmlTemplate('staff-invite', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      distributorName: esc(distributorName),
+      inviterName: esc(inviterName),
+      rolesText: esc(rolesText),
+      inviteUrl: esc(inviteUrl),
+      recipientEmail: esc(recipientEmail),
+      expiresAtFormatted: esc(expiresAtFormatted),
+      distributorContactLine: '',
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
+
+    try {
+      await this.transporter.sendMail({ from: this.inviteFrom, to, subject, text, html });
+      this.logger.log(`Staff invite email sent to ${to}`);
+    } catch (err) {
+      this.logger.error(`Failed to send staff invite email to ${to}: ${(err as Error).message}`);
       throw err;
     }
   }

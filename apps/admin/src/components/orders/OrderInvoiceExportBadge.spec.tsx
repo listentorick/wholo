@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrderInvoiceExportBadge } from './OrderInvoiceExportBadge';
@@ -24,6 +24,13 @@ const makeExport = (overrides: Partial<OrderInvoiceExportSummary> = {}): OrderIn
   createdAt: '2026-07-09T18:44:00.000Z',
   ...overrides,
 });
+
+// Permissions: everything granted by default, so the existing behaviour tests are
+// unchanged; the permission tests below narrow `mockGranted` for their own case.
+const mockGranted: { all: boolean; list: string[] } = { all: true, list: [] };
+vi.mock('@/lib/permissions', () => ({
+  useCan: () => (p: string) => mockGranted.all || mockGranted.list.includes(p),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -66,5 +73,17 @@ describe('OrderInvoiceExportBadge', () => {
 
     await waitFor(() => expect(screen.getByText('boom')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Retry invoice export' })).toBeInTheDocument();
+  });
+});
+
+describe('OrderInvoiceExportBadge — without accounting:import', () => {
+  afterEach(() => Object.assign(mockGranted, { all: true, list: [] }));
+
+  it('still tells anyone the export failed and why, but only offers Retry to someone who can', () => {
+    Object.assign(mockGranted, { all: false, list: ['orders:read'] });
+    render(<OrderInvoiceExportBadge invoiceExport={makeExport()} />);
+
+    expect(screen.getByText('Invoice export failed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry invoice export/ })).not.toBeInTheDocument();
   });
 });

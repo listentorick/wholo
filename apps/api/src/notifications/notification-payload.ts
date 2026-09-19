@@ -49,6 +49,17 @@ export interface CustomerInviteNotificationPayload {
   expiresAt: string;
 }
 
+// Snapshot stored on Notification.payload for STAFF_INVITE_SENT.
+export interface StaffInviteNotificationPayload {
+  invitationId: string;
+  distributorName: string;
+  inviterName: string;
+  roleLabels: string[];
+  recipientEmail: string;
+  inviteUrl: string;
+  expiresAt: string;
+}
+
 // Snapshot stored on Notification.payload for ORDER_DELIVERED / ORDER_DELIVERY_FAILED.
 // Deliberately minimal, same shape discipline as OrderSubmittedEventPayload —
 // recipients are resolved live by DeliveryOutcomeNotificationService from the

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { adminAccountingApi } from '@wholo/admin-api-client';
-import type { AccountingConnectionStatusResponse } from '@wholo/types';
+import { Permission, type AccountingConnectionStatusResponse } from '@wholo/types';
+import { useCan } from '@/lib/permissions';
 
 function formatSyncCaption(lastSyncedAt: string | null): string {
   if (!lastSyncedAt) return 'Waiting for review since you connected';
@@ -20,6 +21,9 @@ function SyncStatChip({ label, count }: { label: string; count: number }) {
 }
 
 export function XeroConnectionCard() {
+  // Connecting, reconnecting and disconnecting change the integration itself
+  // (accounting:manage, Owner-only). Everyone who can see the card sees its status.
+  const canManageConnection = useCan()(Permission.ACCOUNTING_MANAGE);
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -126,14 +130,18 @@ export function XeroConnectionCard() {
           <p className="text-xs text-red-600">
             Stocdup lost access to your Xero organisation. Reconnect to restore syncing.
           </p>
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={connecting}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {connecting ? 'Redirecting…' : 'Reconnect Xero'}
-          </button>
+          {canManageConnection ? (
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={connecting}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {connecting ? 'Redirecting…' : 'Reconnect Xero'}
+            </button>
+          ) : (
+            <p className="text-xs text-muted">Ask an Owner to reconnect Xero.</p>
+          )}
         </div>
       ) : isConnected && connection ? (
         <div className="mt-4 space-y-3">
@@ -165,26 +173,32 @@ export function XeroConnectionCard() {
               View synced data
               <span aria-hidden>→</span>
             </Link>
-            <button
-              type="button"
-              onClick={handleDisconnect}
-              disabled={disconnecting}
-              className="rounded-md px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-            </button>
+            {canManageConnection && (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="rounded-md px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            )}
           </div>
         </div>
       ) : (
         <div className="mt-4">
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={connecting}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {connecting ? 'Redirecting…' : 'Connect Xero'}
-          </button>
+          {canManageConnection ? (
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={connecting}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {connecting ? 'Redirecting…' : 'Connect Xero'}
+            </button>
+          ) : (
+            <p className="text-xs text-muted">Xero isn&rsquo;t connected yet. An Owner can connect it.</p>
+          )}
         </div>
       )}
 

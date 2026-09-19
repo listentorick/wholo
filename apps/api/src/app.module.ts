@@ -14,6 +14,7 @@ import { TaxTypesModule } from './tax-types/tax-types.module';
 import { AdminProductsModule } from './admin-products/admin-products.module';
 import { AdminOrdersModule } from './admin-orders/admin-orders.module';
 import { AdminCustomersModule } from './admin-customers/admin-customers.module';
+import { TeamModule } from './team/team.module';
 import { AdminSettingsModule } from './admin-settings/admin-settings.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
@@ -53,6 +54,7 @@ import './asset-images/branding-asset-types';
     AdminProductsModule,
     AdminOrdersModule,
     AdminCustomersModule,
+    TeamModule,
     AdminSettingsModule,
     DeliveryProfilesModule,
     DeliveryAvailabilityModule,
