@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { PeriodSelector } from '@/components/dashboard/PeriodSelector';
-import { StatTile } from '@/components/dashboard/StatTile';
-import { OrderTrendChart } from '@/components/dashboard/OrderTrendChart';
+import { DashboardBar, type DashboardNav } from './DashboardBar';
+import { PeriodSelector } from './PeriodSelector';
+import { StatTile } from './StatTile';
+import { OrderTrendChart } from './OrderTrendChart';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
 import { adminAnalyticsApi } from '@wholo/admin-api-client';
 import { getCurrencySymbol } from '@wholo/types';
 import type {
-  ActionItemsResponse,
   AnalyticsPeriodKey,
   CustomerRankingsResponse,
   OrderSummaryResponse,
@@ -40,10 +40,11 @@ interface DashboardData {
   trend: OrderTrendResponse;
   customers: CustomerRankingsResponse;
   products: ProductRankingsResponse;
-  actionItems: ActionItemsResponse;
 }
 
-export default function DashboardPage() {
+// The commercial dashboard (order value, trend, top customers and products).
+// What needs doing lives on the Delivery dashboard. Needs analytics:read; the page shell decides who sees it.
+export function SalesDashboard({ nav }: { nav?: DashboardNav }) {
   const { user, accessToken } = useAuth();
 
   const [period, setPeriod] = useState<AnalyticsPeriodKey>('month');
@@ -55,14 +56,13 @@ export default function DashboardPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const [summary, trend, customers, products, actionItems] = await Promise.all([
+      const [summary, trend, customers, products] = await Promise.all([
         adminAnalyticsApi.orderSummary({ period: p }),
         adminAnalyticsApi.orderTrend({ period: p }),
         adminAnalyticsApi.customerRankings({ period: p, limit: 10 }),
         adminAnalyticsApi.productRankings({ period: p, limit: 10 }),
-        adminAnalyticsApi.actionItems(),
       ]);
-      setData({ summary, trend, customers, products, actionItems });
+      setData({ summary, trend, customers, products });
     } catch {
       setLoadError('Failed to load dashboard data.');
     } finally {
@@ -80,21 +80,10 @@ export default function DashboardPage() {
   const currencyCode = user.organisationCurrencyCode ?? 'GBP';
   const currency = makeCurrencyFormatter(currencyCode);
   const comparisonLabel = PERIOD_LABELS[period];
-  const actionItemCount = data
-    ? data.actionItems.awaitingAcceptance.length + data.actionItems.dueForFulfilment.length + data.actionItems.invoiceFailures.length
-    : 0;
-
   return (
     <>
+      <DashboardBar nav={nav} actions={<PeriodSelector period={period} onChange={setPeriod} />} />
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-text">Welcome back, {user.firstName}</h1>
-            <p className="mt-1 text-sm text-muted">{user.organisationName}</p>
-          </div>
-          <PeriodSelector period={period} onChange={setPeriod} />
-        </div>
-
         {loadError && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{loadError}</div>
         )}
@@ -213,46 +202,6 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
-            </div>
-
-            <div className="mt-6">
-              <h2 className="mb-3 text-sm font-semibold text-text">
-                Needs attention {actionItemCount > 0 && <span className="text-muted font-normal">({actionItemCount})</span>}
-              </h2>
-              <ListTableShell>
-                {actionItemCount === 0 && data.actionItems.neverOrdered.length === 0 && (
-                  <p className="px-5 py-6 text-center text-sm text-muted">Nothing needs attention right now.</p>
-                )}
-                <ul className="divide-y divide-border">
-                  {data.actionItems.awaitingAcceptance.map((o) => (
-                    <li key={o.id} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-canvas">
-                      <span className="text-text">Order <Link href={`/orders/${o.id}`} className="font-medium text-primary hover:underline">{o.orderNumber}</Link> awaiting acceptance</span>
-                      <span className="tabular-nums text-muted">{o.totalAmount}</span>
-                    </li>
-                  ))}
-                  {data.actionItems.dueForFulfilment.map((o) => (
-                    <li key={o.id} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-canvas">
-                      <span className="text-text">Order <Link href={`/orders/${o.id}`} className="font-medium text-primary hover:underline">{o.orderNumber}</Link> due for fulfilment</span>
-                      <span className="tabular-nums text-muted">{o.totalAmount}</span>
-                    </li>
-                  ))}
-                  {data.actionItems.invoiceFailures.map((f) => (
-                    <li key={f.id} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-canvas">
-                      <span className="text-text">
-                        Invoice failed for order <Link href={`/orders/${f.orderId}`} className="font-medium text-primary hover:underline">{f.orderId}</Link>
-                      </span>
-                      <span className="text-red-600">{f.errorCode}</span>
-                    </li>
-                  ))}
-                  {data.actionItems.neverOrdered.map((c) => (
-                    <li key={c.customerId} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-canvas">
-                      <span className="text-text">
-                        <Link href={`/customers/${c.customerId}`} className="font-medium text-primary hover:underline">{c.customerName}</Link> has never placed an order
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </ListTableShell>
             </div>
           </div>
         )}

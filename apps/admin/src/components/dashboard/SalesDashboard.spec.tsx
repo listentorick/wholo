@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import DashboardPage from './page';
+import { SalesDashboard as DashboardPage } from './SalesDashboard';
 import { adminAnalyticsApi } from '@wholo/admin-api-client';
 
 vi.mock('next/navigation', () => ({
@@ -15,7 +15,6 @@ vi.mock('@wholo/admin-api-client', () => ({
     orderTrend: vi.fn(),
     customerRankings: vi.fn(),
     productRankings: vi.fn(),
-    actionItems: vi.fn(),
   },
   // Sidebar (rendered by AdminLayout on every page) fetches these on mount.
   adminAccountingApi: {
@@ -103,14 +102,6 @@ const productRankings = {
   nonSellingProducts: [{ productId: 'prod-2', productName: 'Merlot' }],
 };
 
-const actionItems = {
-  distributorId: 'dist-1',
-  generatedAt: summary.generatedAt,
-  awaitingAcceptance: [{ id: 'order-1', orderNumber: 'ORD-1001', traderCustomerId: 'cust-1', submittedAt: null, totalAmount: '100.00' }],
-  dueForFulfilment: [],
-  invoiceFailures: [],
-  neverOrdered: [{ customerId: 'cust-2', customerName: 'The Anchor Pub' }],
-};
 
 function setAuth() {
   Object.assign(authState, {
@@ -121,7 +112,7 @@ function setAuth() {
   });
 }
 
-describe('DashboardPage', () => {
+describe('SalesDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setAuth();
@@ -129,15 +120,14 @@ describe('DashboardPage', () => {
     (adminAnalyticsApi.orderTrend as ReturnType<typeof vi.fn>).mockResolvedValue(trend);
     (adminAnalyticsApi.customerRankings as ReturnType<typeof vi.fn>).mockResolvedValue(customerRankings);
     (adminAnalyticsApi.productRankings as ReturnType<typeof vi.fn>).mockResolvedValue(productRankings);
-    (adminAnalyticsApi.actionItems as ReturnType<typeof vi.fn>).mockResolvedValue(actionItems);
   });
 
-  it('greets the user and loads all five analytics calls for the default (month) period', async () => {
+  it('loads the four analytics calls for the default (month) period', async () => {
     render(<DashboardPage />);
 
-    await waitFor(() => expect(screen.getByText('Welcome back, Ada')).toBeInTheDocument());
+    await waitFor(() => expect(adminAnalyticsApi.productRankings).toHaveBeenCalled());
     expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'month' });
-    expect(adminAnalyticsApi.actionItems).toHaveBeenCalledWith();
+    expect(adminAnalyticsApi.orderTrend).toHaveBeenCalledWith({ period: 'month' });
   });
 
   it('renders stat tiles with values and the growth percentage', async () => {
@@ -169,12 +159,11 @@ describe('DashboardPage', () => {
     expect(productLink).toHaveAttribute('href', '/products/prod-1/edit');
   });
 
-  it('lists action items, including a never-ordered customer and an order awaiting acceptance', async () => {
+  it("no longer carries a 'Needs attention' list: what needs doing lives on the Delivery dashboard", async () => {
     render(<DashboardPage />);
 
-    expect(await screen.findByText('ORD-1001')).toBeInTheDocument();
-    expect(screen.getByText(/has never placed an order/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'The Anchor Pub' })).toHaveAttribute('href', '/customers/cust-2');
+    await screen.findByText('Cabernet Sauvignon');
+    expect(screen.queryByText(/needs attention/i)).not.toBeInTheDocument();
   });
 
   it('shows an error banner when loading fails', async () => {
@@ -182,5 +171,23 @@ describe('DashboardPage', () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText('Failed to load dashboard data.')).toBeInTheDocument();
+  });
+
+  it('puts the period selector on the same bar as the dashboard tabs', async () => {
+    const nav = { tabs: [{ key: 'delivery' as const, label: 'Delivery' }, { key: 'sales' as const, label: 'Sales' }], activeKey: 'sales' as const, onChange: vi.fn() };
+    render(<DashboardPage nav={nav} />);
+
+    const selector = await screen.findByRole('radiogroup', { name: /reporting period/i });
+    const bar = selector.closest('div.border-b')!;
+    expect(bar.contains(screen.getByRole('button', { name: 'Sales' }))).toBe(true);
+    expect(bar.contains(screen.getByRole('button', { name: 'Delivery' }))).toBe(true);
+  });
+
+  it('shows the tabs while the numbers are still loading', () => {
+    (adminAnalyticsApi.orderSummary as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    const nav = { tabs: [{ key: 'delivery' as const, label: 'Delivery' }, { key: 'sales' as const, label: 'Sales' }], activeKey: 'sales' as const, onChange: vi.fn() };
+    render(<DashboardPage nav={nav} />);
+
+    expect(screen.getByRole('button', { name: 'Delivery' })).toBeInTheDocument();
   });
 });
