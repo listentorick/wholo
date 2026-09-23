@@ -1935,6 +1935,78 @@ export interface ActionItemsResponse {
   neverOrdered: ActionItemNeverOrderedCustomer[];
 }
 
+// ─── Delivery overview (the Delivery dashboard) ────────────────────────────────────
+// Live, current-state read for the warehouse: one snapshot, so the counts,
+// progress, runs and queue always agree with each other. Distinct from the
+// delivery-outcome series below, which is history built from delivery facts.
+
+export type DeliveryOverviewQueueKind = 'FAILED' | 'OVERDUE' | 'TO_ACCEPT' | 'NOT_ON_RUN';
+
+export interface DeliveryOverviewQueueItem {
+  kind: DeliveryOverviewQueueKind;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  /** When it started waiting, as a timestamp: the outcome (FAILED) or the submission (TO_ACCEPT). Null for date-driven kinds — `dueDate` carries that. */
+  since: string | null;
+  /** The committed delivery date (scheduled, else requested), or null. */
+  dueDate: string | null;
+  /** FAILED only. */
+  reason: UnableToDeliverReason | null;
+  /** The run the order is on, if any. */
+  runName: string | null;
+}
+
+export interface DeliveryOverviewRun {
+  runId: string;
+  name: string;
+  driverName: string | null;
+  status: 'OPEN' | 'READY';
+  stopCount: number;
+  /** Stops with a recorded outcome (delivered or failed). */
+  attemptedCount: number;
+  /** Time of the latest recorded outcome on the run. */
+  lastDropAt: string | null;
+}
+
+export interface DeliveryOverview {
+  distributorId: string;
+  /** Today in the distributor's timezone (YYYY-MM-DD). */
+  date: string;
+  timezone: string;
+  generatedAt: string;
+  counts: {
+    toAccept: { count: number; oldestSubmittedAt: string | null };
+    overdue: { count: number };
+    notOnRun: { count: number };
+    failedLast24h: { count: number };
+  };
+  progress: { planned: number; delivered: number; failed: number; remaining: number };
+  runs: DeliveryOverviewRun[];
+  /** Capped per kind (see queueCap); counts above are the true totals. */
+  queue: DeliveryOverviewQueueItem[];
+  queueCap: number;
+}
+
+/** One planned day of the outcome series: what became of the deliveries committed to that day. */
+export interface DeliveryOutcomeDay {
+  date: string;
+  /** Delivered on or before the committed day. */
+  onTime: number;
+  /** Delivered after the committed day. */
+  late: number;
+  /** A driver attempted and could not deliver. */
+  failed: number;
+}
+
+export interface DeliveryOutcomesResponse {
+  distributorId: string;
+  from: string;
+  to: string;
+  timezone: string;
+  days: DeliveryOutcomeDay[];
+}
+
 // ─── Admin notifications ───────────────────────────────────────────────────────
 // A general-purpose in-app notification inbox for admin users (the header
 // bell) — distinct from any customer/order transactional email pipeline.

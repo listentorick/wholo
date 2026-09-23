@@ -27,12 +27,17 @@ const orderSelect = {
   status: true,
   deliveryAddressSnapshot: true,
   notes: true,
+  scheduledDeliveryDate: true,
+  requestedDeliveryDate: true,
   customer: { select: { name: true, phone: true } },
   distributor: { select: { name: true } },
   lines: { select: { productNameSnapshot: true, quantityOrdered: true }, orderBy: { id: 'asc' as const } },
 } satisfies Prisma.OrderSelect;
 
 type OrderForDeliveryLink = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
+
+// @db.Date columns round-trip as UTC-midnight Dates; the event carries the plain date.
+const toIsoDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
 const NON_DELIVERABLE_STATUSES: OrderStatus[] = [OrderStatus.CANCELLED, OrderStatus.REJECTED];
 
@@ -111,7 +116,8 @@ export class DeliveryLinksService {
     const loc = dto.location;
     const locationUnavailable = loc?.unavailable ?? false;
 
-    const driverName = await this.getDriverName(order.id);
+    const allocation = await this.getAllocation(order.id);
+    const driverName = allocation?.driverName ?? null;
     const isDelivered = dto.outcome === DeliveryOutcomeType.DELIVERED;
     const newStatus = isDelivered ? OrderStatus.DELIVERED : OrderStatus.DELIVERY_FAILED;
 
@@ -186,6 +192,15 @@ export class DeliveryLinksService {
           driverName,
           recordedAt: created.recordedAt.toISOString(),
           unableReason: dto.unableReason ?? null,
+          // Carried for the delivery-facts consumer, which derives on-time / late
+          // from committedDate and needs the route/run to trend by them. The
+          // notification handler ignores these.
+          outcome: dto.outcome,
+          dropMethod: dto.dropMethod ?? null,
+          committedDate: toIsoDate(order.scheduledDeliveryDate ?? order.requestedDeliveryDate),
+          requestedDate: toIsoDate(order.requestedDeliveryDate),
+          runId: allocation?.runId ?? null,
+          routeId: allocation?.routeId ?? null,
         });
 
         return created;
@@ -205,12 +220,17 @@ export class DeliveryLinksService {
     }
   }
 
-  private async getDriverName(orderId: string): Promise<string | null> {
+  private async getAllocation(orderId: string): Promise<{ driverName: string | null; runId: string; routeId: string | null } | null> {
     const activeAllocation = await this.prisma.deliveryRunOrder.findFirst({
       where: { activeOrderId: orderId },
-      include: { run: { select: { driverName: true } } },
+      include: { run: { select: { driverName: true, routeId: true } } },
     });
-    return activeAllocation?.run.driverName ?? null;
+    if (!activeAllocation) return null;
+    return { driverName: activeAllocation.run.driverName, runId: activeAllocation.runId, routeId: activeAllocation.run.routeId };
+  }
+
+  private async getDriverName(orderId: string): Promise<string | null> {
+    return (await this.getAllocation(orderId))?.driverName ?? null;
   }
 
   private async resolveOrder(rawToken: string): Promise<OrderForDeliveryLink> {

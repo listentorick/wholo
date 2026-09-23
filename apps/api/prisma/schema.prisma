@@ -734,7 +734,7 @@ model OrderFact {
   distributorId        String
   orderId              String
   traderCustomerId     String
-  eventType            String // OrderSubmitted | OrderAccepted | OrderRejected | OrderCancelled
+  eventType            String // OrderSubmitted | OrderAccepted | OrderRejected | OrderCancelled | OrderDelivered | OrderDeliveryFailed
   resultingStatus      OrderStatus
   subtotalAmount       Decimal     @db.Decimal(10, 2)
   occurredAt           DateTime // UTC business timestamp; hypertable partitioning column
@@ -781,6 +781,39 @@ model OrderAnalyticsState {
   @@index([distributorId, distributorLocalDate, status])
   @@index([distributorId, traderCustomerId, status])
   @@map("order_analytics_state")
+}
+
+// Append-only log of delivery outcomes (OrderDelivered / OrderDeliveryFailed),
+// the substrate for delivery trends (on-time, failures and why, by route).
+// Records what was observed; "late" / "on time" are derived on read from
+// committedDate vs distributorLocalDate so the definition can change without a
+// rewrite. Like order_facts it has no foreign keys (a fact outlives whatever it
+// describes) and is a Timescale hypertable on occurredAt — see ADR-052 for why
+// the matching @@index([occurredAt]) is declared.
+model DeliveryFact {
+  eventId              String
+  distributorId        String
+  orderId              String
+  traderCustomerId     String
+  outcome              DeliveryOutcomeType
+  unableReason         UnableToDeliverReason?
+  dropMethod           DeliveryDropMethod?
+  // The date the distributor had committed to at the moment of the outcome
+  // (scheduledDeliveryDate ?? requestedDeliveryDate). Null for an undated order.
+  committedDate        DateTime?           @db.Date
+  requestedDate        DateTime?           @db.Date
+  routeId              String?
+  runId                String?
+  occurredAt           DateTime // UTC business timestamp (server-recorded outcome time); hypertable partitioning column
+  distributorLocalDate DateTime            @db.Date // the calendar day of the outcome in the distributor's timezone
+  recordedAt           DateTime            @default(now())
+
+  @@id([eventId, occurredAt])
+  @@index([distributorId, distributorLocalDate])
+  @@index([distributorId, committedDate])
+  @@index([orderId])
+  @@index([occurredAt])
+  @@map("delivery_facts")
 }
 
 // ─── Acceptance configuration ─────────────────────────────────────────────────

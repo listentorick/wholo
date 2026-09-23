@@ -11,7 +11,8 @@ export interface OrderEventPayload {
   occurredAt: string;
 }
 
-// Consumes OrderSubmitted/OrderAccepted/OrderRejected/OrderCancelled to build
+// Consumes OrderSubmitted/OrderAccepted/OrderRejected/OrderCancelled (and, for the
+// status projection only, OrderDelivered/OrderDeliveryFailed) to build
 // the dashboard analytics fact layer (see the wholesaler homepage dashboard
 // PRD's Foundation phase): an immutable order_facts/order_line_facts event
 // log, plus order_analytics_state — a one-row-per-order current-truth

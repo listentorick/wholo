@@ -31,6 +31,7 @@ import { DistributorsModule } from './distributors/distributors.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { AdminNotificationsModule } from './admin-notifications/admin-notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 import { HealthModule } from './health/health.module';
 import './admin-products/product-image.asset-config';
@@ -70,6 +71,7 @@ import './asset-images/branding-asset-types';
     AccountingModule,
     AdminNotificationsModule,
     AnalyticsModule,
+    DeliveryOverviewModule,
     HealthModule,
   ],
   controllers: [HealthController],

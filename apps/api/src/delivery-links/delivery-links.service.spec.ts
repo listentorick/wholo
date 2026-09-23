@@ -69,7 +69,7 @@ describe('DeliveryLinksService', () => {
         create: jest.fn().mockResolvedValue({ id: 'outcome-1', outcome: DeliveryOutcomeType.DELIVERED, recordedAt: new Date() }),
       },
       orderDeliveryPhoto: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      deliveryRunOrder: { findFirst: jest.fn().mockResolvedValue({ run: { driverName: 'Alex Turner' } }) },
+      deliveryRunOrder: { findFirst: jest.fn().mockResolvedValue({ runId: 'run-1', run: { driverName: 'Alex Turner', routeId: 'route-1' } }) },
       $transaction: jest.fn(async (fn) => fn(prisma)),
     };
     audit = { record: jest.fn() };
@@ -200,6 +200,41 @@ describe('DeliveryLinksService', () => {
           driverName: 'Alex Turner',
           unableReason: null,
         }),
+      );
+    });
+
+    it('carries what the delivery-facts consumer needs: the committed date, route and run, and how it was dropped', async () => {
+      (prisma as any).order.findUnique.mockResolvedValue({
+        ...order,
+        scheduledDeliveryDate: new Date('2026-08-27T00:00:00.000Z'),
+        requestedDeliveryDate: new Date('2026-08-26T00:00:00.000Z'),
+      });
+      (prisma as any).orderDeliveryOutcome.create.mockResolvedValue({ outcome: DeliveryOutcomeType.DELIVERED, recordedAt: new Date('2026-08-27T09:00:00Z') });
+
+      await service.submitOutcome('order-1.sig', deliveredDto as any);
+
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        prisma, 'Order', 'order-1', 'OrderDelivered',
+        expect.objectContaining({
+          outcome: DeliveryOutcomeType.DELIVERED,
+          dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
+          committedDate: '2026-08-27', // the scheduled date wins over the requested one
+          requestedDate: '2026-08-26',
+          runId: 'run-1',
+          routeId: 'route-1',
+        }),
+      );
+    });
+
+    it('falls back to the requested date as the committed date, and to nulls for an order on no run', async () => {
+      (prisma as any).order.findUnique.mockResolvedValue({ ...order, scheduledDeliveryDate: null, requestedDeliveryDate: new Date('2026-08-26T00:00:00.000Z') });
+      (prisma as any).deliveryRunOrder.findFirst.mockResolvedValue(null);
+
+      await service.submitOutcome('order-1.sig', deliveredDto as any);
+
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        prisma, 'Order', 'order-1', 'OrderDelivered',
+        expect.objectContaining({ committedDate: '2026-08-26', runId: null, routeId: null, driverName: null }),
       );
     });
 

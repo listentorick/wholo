@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { TeamModule } from './team/team.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -47,6 +48,7 @@ import { HealthController } from './health.controller';
     OnboardingModule,
     TeamModule,
     AnalyticsModule,
+    DeliveryOverviewModule,
   ],
   controllers: [HealthController],
 })
