@@ -1935,6 +1935,75 @@ export interface ActionItemsResponse {
   neverOrdered: ActionItemNeverOrderedCustomer[];
 }
 
+// ─── Customer health (the Customers dashboard) ─────────────────────────────────────
+// Rule-based flags, not a composite score: each customer gets zero or more explicit
+// reasons, and a tier derived from them. "our_fault" reasons (rejected/cancelled
+// orders) are shown but never move the tier — they're framed as our failure, not
+// evidence the customer is disengaging. Thresholds are fixed constants, not
+// configurable, so they live only in customer-health.logic.ts.
+
+export type CustomerHealthTier = 'healthy' | 'watch' | 'at_risk';
+
+export type CustomerHealthSignalCode = 'MISSED_ORDER' | 'SPEND_DOWN' | 'LATE_DELIVERY' | 'NEVER_ORDERED' | 'OUR_MISTAKES' | 'RANGE_NARROWING';
+
+export interface CustomerHealthReason {
+  code: CustomerHealthSignalCode;
+  category: 'customer_behaviour' | 'our_fault' | 'no_relationship_yet';
+  severity: 'watch' | 'at_risk';
+  text: string;
+}
+
+export interface FlaggedCustomer {
+  /** The customer's organisation id — what `/customers/:id` addresses (not the trade-relationship id). */
+  customerId: string;
+  customerName: string;
+  tier: CustomerHealthTier;
+  reasons: CustomerHealthReason[];
+  spend30d: number;
+  lastOrderDate: string | null;
+}
+
+export interface CustomerHealthBuyingTrendWeek {
+  weekStart: string;
+  /** Null when there is no baseline history yet to derive an expectation from — never a misleading 0. */
+  expectedOrders: number | null;
+  placedOrders: number;
+}
+
+export interface CustomerHealthTopCustomer {
+  /** The customer's organisation id — what `/customers/:id` addresses (not the trade-relationship id). */
+  customerId: string;
+  customerName: string;
+  tier: CustomerHealthTier;
+  value: number;
+  share: number | null;
+}
+
+/** Where sales come from over the last `periodDays`: the top customers, and everyone else as one remainder. */
+export interface CustomerHealthSalesConcentration {
+  periodDays: number;
+  totalValue: number;
+  top5Share: number | null;
+  topCustomers: CustomerHealthTopCustomer[];
+  otherValue: number;
+  otherShare: number | null;
+}
+
+export interface CustomerHealthResponse {
+  distributorId: string;
+  timezone: string;
+  generatedAt: string;
+  tiles: {
+    activeCustomers90d: number;
+    atRiskCount: number;
+    salesLast30d: number;
+  };
+  tierCounts: { healthy: number; watch: number; at_risk: number };
+  needingAttention: FlaggedCustomer[];
+  buyingTrends: CustomerHealthBuyingTrendWeek[];
+  salesConcentration: CustomerHealthSalesConcentration;
+}
+
 // ─── Delivery overview (the Delivery dashboard) ────────────────────────────────────
 // Live, current-state read for the warehouse: one snapshot, so the counts,
 // progress, runs and queue always agree with each other. Distinct from the

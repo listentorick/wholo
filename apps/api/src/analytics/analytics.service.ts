@@ -11,7 +11,7 @@ import { PeriodQueryDto } from './dto/period-query.dto';
 // delivery outcome, a fulfilment concern, not a sales one; an order that was
 // legitimately accepted doesn't stop counting just because it later moved
 // past ACCEPTED in its lifecycle.
-const QUALIFYING_STATUSES = Prisma.sql`('SUBMITTED', 'ACCEPTED', 'COMPLETED', 'DELIVERED', 'DELIVERY_FAILED')`;
+export const QUALIFYING_STATUSES = Prisma.sql`('SUBMITTED', 'ACCEPTED', 'COMPLETED', 'DELIVERED', 'DELIVERY_FAILED')`;
 
 export interface PeriodResponse {
   key: PeriodKey;

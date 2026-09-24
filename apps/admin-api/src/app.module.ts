@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { TeamModule } from './team/team.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { CustomerHealthModule } from './customer-health/customer-health.module';
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 
@@ -48,6 +49,7 @@ import { HealthController } from './health.controller';
     OnboardingModule,
     TeamModule,
     AnalyticsModule,
+    CustomerHealthModule,
     DeliveryOverviewModule,
   ],
   controllers: [HealthController],

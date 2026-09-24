@@ -743,6 +743,7 @@ model OrderFact {
 
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
+  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([orderId])
   @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_facts")
@@ -763,6 +764,7 @@ model OrderLineFact {
 
   @@id([eventId, orderLineId, occurredAt])
   @@index([distributorId, distributorLocalDate])
+  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([productId])
   @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_line_facts")
@@ -811,6 +813,7 @@ model DeliveryFact {
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
   @@index([distributorId, committedDate])
+  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([orderId])
   @@index([occurredAt])
   @@map("delivery_facts")
