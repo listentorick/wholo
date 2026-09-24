@@ -743,7 +743,6 @@ model OrderFact {
 
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
-  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([orderId])
   @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_facts")
@@ -764,7 +763,6 @@ model OrderLineFact {
 
   @@id([eventId, orderLineId, occurredAt])
   @@index([distributorId, distributorLocalDate])
-  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([productId])
   @@index([occurredAt]) // matches the index TimescaleDB's create_hypertable() auto-creates on the partitioning column
   @@map("order_line_facts")
@@ -782,6 +780,8 @@ model OrderAnalyticsState {
 
   @@index([distributorId, distributorLocalDate, status])
   @@index([distributorId, traderCustomerId, status])
+  // Serves the missed-order rule: each customer's most recent order dates, newest first, read straight off the index.
+  @@index([distributorId, traderCustomerId, distributorLocalDate(sort: Desc)])
   @@map("order_analytics_state")
 }
 
@@ -813,7 +813,6 @@ model DeliveryFact {
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
   @@index([distributorId, committedDate])
-  @@index([distributorId, traderCustomerId, occurredAt])
   @@index([orderId])
   @@index([occurredAt])
   @@map("delivery_facts")

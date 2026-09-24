@@ -33,6 +33,8 @@ const C_RANGE_COMPLETED = 'test-chlt-c-range-completed'; // the control: identic
 const C_INACTIVE = 'test-chlt-c-inactive';
 const C_RETRY = 'test-chlt-c-retry'; // one delivery failed then was delivered late, two on time
 const C_LATE = 'test-chlt-c-late'; // the control: two of three deliveries late
+const C_LAPSED = 'test-chlt-c-lapsed'; // ordered weekly, then stopped over a year ago
+const C_OLD_LATE = 'test-chlt-c-old-late'; // three late deliveries, all more than a year old
 const TZ = 'UTC';
 const NOW = new Date('2035-01-10T12:00:00.000Z');
 
@@ -43,7 +45,7 @@ const ADMIN_B: Fixture = { id: 'test-chlt-admin-b', kc: 'kc-test-chlt-admin-b', 
 const ADMIN_C: Fixture = { id: 'test-chlt-admin-c', kc: 'kc-test-chlt-admin-c', email: 'admin-c@chlt.integration.test', role: Role.DISTRIBUTOR_ADMIN, org: DIST_C };
 const USERS = [ADMIN_A, WAREHOUSE_A, ADMIN_B, ADMIN_C];
 const DISTS = [DIST_A, DIST_B, DIST_C];
-const C_CUSTOMERS = [C_INVITED, C_STALE, C_RANGE_REJECTED, C_RANGE_COMPLETED, C_INACTIVE, C_RETRY, C_LATE];
+const C_CUSTOMERS = [C_INVITED, C_STALE, C_RANGE_REJECTED, C_RANGE_COMPLETED, C_INACTIVE, C_RETRY, C_LATE, C_LAPSED, C_OLD_LATE];
 const CUSTOMERS = [CUST_NEVER_A, CUST_HEALTHY_A, CUST_NEVER_B, CUST_HEALTHY_B, ...C_CUSTOMERS];
 
 describe('Customer health (integration)', () => {
@@ -204,6 +206,20 @@ describe('Customer health (integration)', () => {
     await delivery('late-f1', 'late-o1', C_LATE, DeliveryOutcomeType.DELIVERED, '2035-01-04', '2035-01-02');
     await delivery('late-f2', 'late-o2', C_LATE, DeliveryOutcomeType.DELIVERED, '2035-01-06', '2035-01-04');
     await delivery('late-f3', 'late-o3', C_LATE, DeliveryOutcomeType.DELIVERED, '2035-01-06', '2035-01-06');
+
+    // Ten weekly orders ending 2033-12-05, 401 days before "now": a long-lapsed customer must still be recognised as overdue.
+    await relationship(C_LAPSED, TradeRelationshipStatus.ACTIVE, '2033-01-01');
+    for (let week = 0; week < 10; week++) {
+      const on = new Date(day('2033-10-03').getTime() + week * 7 * 86_400_000).toISOString().slice(0, 10);
+      await order(`lapsed-o${week}`, C_LAPSED, OrderStatus.COMPLETED, '80.00', on);
+    }
+
+    // Three late deliveries, all older than the one-year delivery window: they must not count.
+    await relationship(C_OLD_LATE, TradeRelationshipStatus.ACTIVE, '2033-01-01');
+    await order('oldlate-o1', C_OLD_LATE, OrderStatus.DELIVERED, '50.00', '2034-01-15');
+    await delivery('oldlate-f1', 'oldlate-o1', C_OLD_LATE, DeliveryOutcomeType.DELIVERED, '2034-01-04', '2034-01-01');
+    await delivery('oldlate-f2', 'oldlate-o2', C_OLD_LATE, DeliveryOutcomeType.DELIVERED, '2034-01-06', '2034-01-02');
+    await delivery('oldlate-f3', 'oldlate-o3', C_OLD_LATE, DeliveryOutcomeType.DELIVERED, '2034-01-08', '2034-01-03');
   });
 
   afterAll(async () => {
@@ -308,6 +324,19 @@ describe('Customer health (integration)', () => {
 
       expect(codes(body, C_RETRY)).not.toContain('LATE_DELIVERY'); // 3 deliveries, 1 problem (old logic: 4 attempts, 2 problems)
       expect(codes(body, C_LATE)).toContain('LATE_DELIVERY'); // 3 deliveries, 2 late
+    });
+
+    it('still recognises a long-lapsed customer as overdue — the usual gap comes from their last order dates, whenever those were', async () => {
+      const { body } = await get(`${DIST_C}/customer-health`, ADMIN_C);
+
+      expect(codes(body, C_LAPSED)).toContain('MISSED_ORDER'); // weekly, then 401 days of silence
+    });
+
+    it('ignores deliveries older than a year, so an old bad patch does not flag a customer today (the late twin proves the rule fires)', async () => {
+      const { body } = await get(`${DIST_C}/customer-health`, ADMIN_C);
+
+      expect(codes(body, C_OLD_LATE)).not.toContain('LATE_DELIVERY');
+      expect(codes(body, C_LATE)).toContain('LATE_DELIVERY');
     });
 
     it('keeps this distributor separate from A and B', async () => {

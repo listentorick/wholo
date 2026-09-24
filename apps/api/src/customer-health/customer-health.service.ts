@@ -5,7 +5,9 @@ import { distributorLocalDate } from '../common/distributor-local-date';
 import { QUALIFYING_STATUSES } from '../analytics/analytics.service';
 import { resolvePeriod } from '../analytics/period';
 import {
+  DELIVERY_HISTORY_DAYS,
   DELIVERY_WINDOW,
+  MISSED_ORDER_HISTORY_DATES,
   buildSalesConcentration,
   daysBetween,
   evaluateDeliveryReliability,
@@ -116,7 +118,7 @@ export class CustomerHealthService {
       this.missedOrderRows(distributorId),
       this.spendRows(distributorId, spendPeriod.current.start, spendPeriod.current.end),
       this.spendRows(distributorId, spendComparison.start, spendComparison.end),
-      this.deliveryRows(distributorId),
+      this.deliveryRows(distributorId, addDays(today, -DELIVERY_HISTORY_DAYS)),
       this.mistakesRows(distributorId, rolling90.current.start),
       this.rangeRows(distributorId, rangePeriod.current.start, rangePeriod.current.end, rangeBaseline.start, rangeBaseline.end),
       this.earliestDataDate(distributorId),
@@ -238,33 +240,37 @@ export class CustomerHealthService {
   }
 
   /**
-   * Per-customer median gap between historical order dates, and the most
-   * recent order date. gap_stats and last_order are aggregated separately
-   * (each one row per customer) before joining — aggregating gaps and dates
-   * together in a single GROUP BY would multiply rows per customer instead of
-   * counting each gap once.
+   * Per-customer median gap between their most recent order dates, and the latest one. Each roster customer's last
+   * MISSED_ORDER_HISTORY_DATES distinct dates are read straight off the (distributorId, traderCustomerId,
+   * distributorLocalDate DESC) index, so the cost follows the number of customers, not the length of their history —
+   * and a customer who lapsed long ago keeps their last dates, so they are still recognised as overdue.
    */
   private async missedOrderRows(distributorId: string): Promise<MissedOrderRow[]> {
     return this.prisma.$queryRaw<MissedOrderRow[]>`
-      WITH order_dates AS (
-        SELECT DISTINCT "traderCustomerId", "distributorLocalDate"
-        FROM order_analytics_state
-        WHERE "distributorId" = ${distributorId} AND status IN ${QUALIFYING_STATUSES}
+      WITH roster AS (
+        SELECT tr."customerId" AS id
+        FROM trade_relationships tr
+        WHERE tr."distributorId" = ${distributorId} AND tr.status = 'ACTIVE' AND tr."deletedAt" IS NULL
+      ), recent AS (
+        SELECT r.id AS "traderCustomerId", x."distributorLocalDate"
+        FROM roster r
+        CROSS JOIN LATERAL (
+          SELECT DISTINCT "distributorLocalDate"
+          FROM order_analytics_state
+          WHERE "distributorId" = ${distributorId} AND "traderCustomerId" = r.id AND status IN ${QUALIFYING_STATUSES}
+          ORDER BY "distributorLocalDate" DESC
+          LIMIT ${MISSED_ORDER_HISTORY_DATES}
+        ) x
       ), gaps AS (
-        SELECT "traderCustomerId", "distributorLocalDate" - LAG("distributorLocalDate") OVER (PARTITION BY "traderCustomerId" ORDER BY "distributorLocalDate") AS "gapDays"
-        FROM order_dates
-      ), gap_stats AS (
-        SELECT "traderCustomerId", COUNT("gapDays")::int AS "gapCount", (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "gapDays"))::float AS "medianGapDays"
-        FROM gaps
-        GROUP BY "traderCustomerId"
-      ), last_order AS (
-        SELECT "traderCustomerId", MAX("distributorLocalDate") AS "lastOrderDate"
-        FROM order_dates
-        GROUP BY "traderCustomerId"
+        SELECT "traderCustomerId", "distributorLocalDate",
+          "distributorLocalDate" - LAG("distributorLocalDate") OVER (PARTITION BY "traderCustomerId" ORDER BY "distributorLocalDate") AS "gapDays"
+        FROM recent
       )
-      SELECT lo."traderCustomerId" AS "traderCustomerId", COALESCE(gs."gapCount", 0) AS "gapCount", gs."medianGapDays" AS "medianGapDays", lo."lastOrderDate" AS "lastOrderDate"
-      FROM last_order lo
-      LEFT JOIN gap_stats gs ON gs."traderCustomerId" = lo."traderCustomerId"
+      SELECT "traderCustomerId" AS "traderCustomerId", COUNT("gapDays")::int AS "gapCount",
+        (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY "gapDays"))::float AS "medianGapDays",
+        MAX("distributorLocalDate") AS "lastOrderDate"
+      FROM gaps
+      GROUP BY "traderCustomerId"
     `;
   }
 
@@ -284,12 +290,12 @@ export class CustomerHealthService {
    * too much for a flat cutoff. One delivery is one order at its latest outcome, so a failed attempt that was retried and
    * delivered late is one delivery, not two.
    */
-  private async deliveryRows(distributorId: string): Promise<DeliveryRow[]> {
+  private async deliveryRows(distributorId: string, since: Date): Promise<DeliveryRow[]> {
     return this.prisma.$queryRaw<DeliveryRow[]>`
       WITH latest AS (
         SELECT DISTINCT ON ("orderId") "traderCustomerId", outcome, "committedDate", "distributorLocalDate", "occurredAt"
         FROM delivery_facts
-        WHERE "distributorId" = ${distributorId}
+        WHERE "distributorId" = ${distributorId} AND "occurredAt" >= ${since}
         ORDER BY "orderId", "occurredAt" DESC
       ), ranked AS (
         SELECT "traderCustomerId", outcome, "committedDate", "distributorLocalDate",
@@ -316,7 +322,11 @@ export class CustomerHealthService {
     `;
   }
 
+  // The facts are chunked by occurredAt but the windows are distributor-local dates, so on their own they cannot skip
+  // chunks (every chunk was scanned). A local date is at most a day from the UTC date of the same instant; the two-day
+  // margin keeps every row the date window wants while letting old chunks be skipped.
   private async rangeRows(distributorId: string, currentStart: Date, currentEnd: Date, baselineStart: Date, baselineEnd: Date): Promise<RangeRow[]> {
+    const occurredSince = addDays(baselineStart, -2);
     return this.prisma.$queryRaw<RangeRow[]>`
       WITH order_sku_counts AS (
         SELECT olf."traderCustomerId", olf."orderId", olf."distributorLocalDate", COUNT(DISTINCT olf."productId") AS "skuCount"
@@ -324,6 +334,8 @@ export class CustomerHealthService {
         JOIN order_analytics_state s ON s."orderId" = olf."orderId" AND s."distributorId" = olf."distributorId"
         WHERE olf."distributorId" = ${distributorId}
           AND s.status IN ${QUALIFYING_STATUSES}
+          AND olf."occurredAt" >= ${occurredSince}
+          AND olf."distributorLocalDate" BETWEEN ${baselineStart} AND ${currentEnd}
         GROUP BY olf."traderCustomerId", olf."orderId", olf."distributorLocalDate"
       )
       SELECT "traderCustomerId" AS "traderCustomerId",

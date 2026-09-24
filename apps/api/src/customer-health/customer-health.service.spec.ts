@@ -189,6 +189,33 @@ describe('CustomerHealthService', () => {
     expect(tiles.salesLast30d).toBe(1000);
   });
 
+  describe('bounding the scans (these keep the dashboard fast as history grows)', () => {
+    // $queryRaw is called as (strings, ...values). The order is getHealth's Promise.all order.
+    const CALL = { missed: 2, delivery: 5, range: 7 };
+    const valuesOf = (call: number) => (prisma.$queryRaw.mock.calls[call] as unknown[]).slice(1).map((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v));
+
+    it('reads only the last year of deliveries — the bound that lets Timescale skip old chunks', async () => {
+      mockQueries(prisma);
+      await service.getHealth('dist-1', now); // 24 Sep 2026
+
+      expect(valuesOf(CALL.delivery)).toContain('2025-09-24');
+    });
+
+    it('bounds the range query by occurredAt two days before the baseline window starts (27 Jul), so chunks can be skipped without losing a row to timezone', async () => {
+      mockQueries(prisma);
+      await service.getHealth('dist-1', now);
+
+      expect(valuesOf(CALL.range)).toContain('2026-07-25');
+    });
+
+    it("reads each customer's last 13 order dates for the usual gap, not their whole history", async () => {
+      mockQueries(prisma);
+      await service.getHealth('dist-1', now);
+
+      expect(valuesOf(CALL.missed)).toContain(13);
+    });
+  });
+
   it('defaults to UTC when the distributor has no timezone configured', async () => {
     prisma.distributorSettings.findUnique.mockResolvedValue(null);
     mockQueries(prisma);

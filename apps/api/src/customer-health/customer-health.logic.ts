@@ -10,6 +10,8 @@ import { classifyComparison } from '../analytics/comparison';
 // Defaults below are a starting point, not locked — expect to tune once seen
 // against real distributor data.
 
+/** The usual gap is read from each customer's most recent order dates, so it reflects how they buy now and the query stays cheap however long the history. */
+export const MISSED_ORDER_HISTORY_DATES = 13; // 12 gaps
 export const MISSED_ORDER_MIN_GAP_COUNT = 3; // needs >=3 historical gaps, i.e. >=4 distinct order dates
 export const MISSED_ORDER_WATCH_MULTIPLIER = 1.5;
 export const MISSED_ORDER_AT_RISK_MULTIPLIER = 2.5;
@@ -19,6 +21,8 @@ export const SPEND_AT_RISK_DECLINE_PCT = 30;
 
 export const DELIVERY_MIN_ATTEMPTS = 3;
 export const DELIVERY_WINDOW = 8;
+/** Only deliveries this recent are read, which lets Timescale skip older chunks; the last 8 deliveries all fall well inside it for any active customer. */
+export const DELIVERY_HISTORY_DAYS = 365;
 export const DELIVERY_WATCH_COUNT = 2;
 export const DELIVERY_AT_RISK_COUNT = 3;
 
