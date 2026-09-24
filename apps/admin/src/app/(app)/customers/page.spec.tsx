@@ -140,7 +140,7 @@ describe('CustomersPage', () => {
       expect(list.getByText(/Core Range/)).toBeInTheDocument();
       expect(list.getByText(/Trade Standard/)).toBeInTheDocument();
       expect(list.getByText(/Weekly Yorkshire/)).toBeInTheDocument();
-      expect(list.getByRole('link', { name: /View customer/ })).toHaveAttribute('href', '/customers/cust-1');
+      expect(list.getByRole('link', { name: /View customer/ })).toHaveAttribute('href', '/customers/org-1');
     });
 
     it('opens the price list drawer when its chip is clicked', async () => {
