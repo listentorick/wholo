@@ -75,7 +75,8 @@ describe('ProofOfDeliveryDrawer', () => {
     expect(screen.getByText('Handed to a person')).toBeInTheDocument();
     expect(screen.getByText(/Via QR link/)).toBeInTheDocument();
     expect(screen.getByTestId('signature')).toHaveTextContent('has-signature');
-    expect(screen.getByTestId('map')).toHaveTextContent('51.51,-0.12');
+    // The map is loaded lazily (next/dynamic), so it arrives after the outcome does — wait for it rather than assert at once.
+    expect(await screen.findByTestId('map')).toHaveTextContent('51.51,-0.12');
     expect(mockGetDeliveryOutcome).toHaveBeenCalledWith('order-1');
   });
 
