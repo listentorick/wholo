@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { DetailTabs, type DetailTabItem } from '@/components/detail/DetailTabs';
 
-export type DashboardTab = 'delivery' | 'sales';
+export type DashboardTab = 'delivery' | 'customers' | 'sales';
 
 /** The dashboards a person can switch between; passed down by the page shell when there is more than one. */
 export interface DashboardNav {

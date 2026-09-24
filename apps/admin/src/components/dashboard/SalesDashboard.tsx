@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { DashboardBar, type DashboardNav } from './DashboardBar';
+import { makeCurrencyFormatter } from './currency';
 import { PeriodSelector } from './PeriodSelector';
 import { StatTile } from './StatTile';
 import { OrderTrendChart } from './OrderTrendChart';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
 import { adminAnalyticsApi } from '@wholo/admin-api-client';
-import { getCurrencySymbol } from '@wholo/types';
 import type {
   AnalyticsPeriodKey,
   CustomerRankingsResponse,
@@ -29,11 +29,6 @@ const PERIOD_LABELS: Record<AnalyticsPeriodKey, string> = {
   rolling365: 'the previous 365 days',
   custom: 'the previous equivalent period',
 };
-
-function makeCurrencyFormatter(currencyCode: string) {
-  return (value: number): string =>
-    `${getCurrencySymbol(currencyCode)}${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
 
 interface DashboardData {
   summary: OrderSummaryResponse;

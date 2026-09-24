@@ -9,11 +9,13 @@ import type { DetailTabItem } from '@/components/detail/DetailTabs';
 import type { DashboardNav, DashboardTab } from '@/components/dashboard/DashboardBar';
 import { SalesDashboard } from '@/components/dashboard/SalesDashboard';
 import { DeliveryDashboard } from '@/components/dashboard/delivery/DeliveryDashboard';
+import { CustomerHealthDashboard } from '@/components/dashboard/customer-health/CustomerHealthDashboard';
 
 // The home page shows whichever dashboards this person can use. Delivery (where
 // are we at right now) needs orders + deliveries — Warehouse staff, Operations
-// manager, Owner. Sales (the commercial dashboard) needs analytics:read — Owner
-// and Operations manager. Someone with both gets two tabs, opening on Delivery; with
+// manager, Owner. Customers (who is at risk) and Sales (the commercial dashboard)
+// need analytics:read — Owner and Operations manager. Someone with more than one
+// gets a tab strip (Delivery | Customers | Sales), opening on the first; with
 // one, just that dashboard and no tab strip; with neither, a plain message. There is
 // deliberately no greeting: the top bar already says who and where you are.
 // The API enforces the same permissions on every request; this only keeps a
@@ -27,6 +29,7 @@ function DashboardHome() {
 
   const tabs: DetailTabItem<DashboardTab>[] = [];
   if (can(Permission.ORDERS_READ) && can(Permission.DELIVERY_READ)) tabs.push({ key: 'delivery', label: 'Delivery' });
+  if (can(Permission.ANALYTICS_READ)) tabs.push({ key: 'customers', label: 'Customers' });
   if (can(Permission.ANALYTICS_READ)) tabs.push({ key: 'sales', label: 'Sales' });
 
   // A stale or hand-edited ?tab= falls back to the first dashboard they can use.
@@ -38,6 +41,7 @@ function DashboardHome() {
   return (
     <div>
       {current === 'delivery' && <DeliveryDashboard nav={nav} />}
+      {current === 'customers' && <CustomerHealthDashboard nav={nav} />}
       {current === 'sales' && <SalesDashboard nav={nav} />}
       {!current && (
         <p className="rounded-lg border border-border bg-white px-5 py-10 text-center text-sm text-muted">

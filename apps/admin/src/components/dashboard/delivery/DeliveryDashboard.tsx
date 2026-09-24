@@ -6,6 +6,7 @@ import { useDeliveryOverview } from '@/lib/hooks/use-delivery-overview';
 import { useDeliveryOutcomes } from '@/lib/hooks/use-delivery-outcomes';
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { DashboardBar, type DashboardNav } from '../DashboardBar';
+import { RefreshButton } from '../RefreshButton';
 import { AttentionTiles, type QueueFilter } from './AttentionTiles';
 import { NeedsDoingTable } from './NeedsDoingTable';
 import { OutcomeChart } from './OutcomeChart';
@@ -56,17 +57,7 @@ export function DeliveryDashboard({ nav }: { nav?: DashboardNav }) {
       <p className="text-xs text-muted" role="status">
         {error ? `Could not refresh — showing the snapshot from ${timeOfDay(overview.generatedAt, overview.timezone)}.` : `Last updated ${timeOfDay(overview.generatedAt, overview.timezone)}`}
       </p>
-      <button
-        type="button"
-        onClick={() => void refetch()}
-        disabled={isRefreshing}
-        aria-label="Refresh"
-        className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-white text-muted hover:bg-canvas disabled:opacity-60"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true">
-          <polyline points="23 4 23 10 17 10" /><path d="M20.5 15a9 9 0 11-2.1-9.4L23 10" />
-        </svg>
-      </button>
+      <RefreshButton onClick={() => void refetch()} isRefreshing={isRefreshing} />
     </div>
   );
 

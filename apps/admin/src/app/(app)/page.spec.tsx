@@ -21,6 +21,10 @@ vi.mock('@/components/dashboard/SalesDashboard', async () => {
   const { DashboardBar } = await import('@/components/dashboard/DashboardBar');
   return { SalesDashboard: ({ nav }: { nav?: never }) => <div><DashboardBar nav={nav} />the sales dashboard</div> };
 });
+vi.mock('@/components/dashboard/customer-health/CustomerHealthDashboard', async () => {
+  const { DashboardBar } = await import('@/components/dashboard/DashboardBar');
+  return { CustomerHealthDashboard: ({ nav }: { nav?: never }) => <div><DashboardBar nav={nav} />the customers dashboard</div> };
+});
 vi.mock('@/components/dashboard/delivery/DeliveryDashboard', async () => {
   const { DashboardBar } = await import('@/components/dashboard/DashboardBar');
   return { DeliveryDashboard: ({ nav }: { nav?: never }) => <div><DashboardBar nav={nav} />the delivery dashboard</div> };
@@ -53,11 +57,10 @@ describe('DashboardPage', () => {
   });
 
   describe('Owner / Operations manager (orders, deliveries and analytics)', () => {
-    it('offers Delivery and Sales, opening on Delivery', () => {
+    it('offers Delivery, Customers and Sales in that order, opening on Delivery', () => {
       render(<DashboardPage />);
 
-      expect(screen.getByRole('button', { name: 'Delivery' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Sales' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Delivery', 'Customers', 'Sales']);
       expect(screen.getByText('the delivery dashboard')).toBeInTheDocument();
       expect(screen.queryByText('the sales dashboard')).not.toBeInTheDocument();
     });
@@ -68,6 +71,22 @@ describe('DashboardPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Sales' }));
 
       expect(push).toHaveBeenCalledWith('/?tab=sales');
+    });
+
+    it('opens the Customers dashboard from the tab', async () => {
+      render(<DashboardPage />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Customers' }));
+
+      expect(push).toHaveBeenCalledWith('/?tab=customers');
+    });
+
+    it('shows Customers when the address says so', () => {
+      search = 'tab=customers';
+      render(<DashboardPage />);
+
+      expect(screen.getByText('the customers dashboard')).toBeInTheDocument();
+      expect(screen.queryByText('the delivery dashboard')).not.toBeInTheDocument();
     });
 
     it('shows Sales when the address says so', () => {
@@ -90,20 +109,25 @@ describe('DashboardPage', () => {
       expect(screen.queryByRole('button', { name: 'Delivery' })).not.toBeInTheDocument();
     });
 
-    it('never reaches Sales, even by editing the address', () => {
-      search = 'tab=sales';
-      render(<DashboardPage />);
+    it('never reaches Sales or Customers, even by editing the address', () => {
+      for (const tab of ['sales', 'customers']) {
+        search = `tab=${tab}`;
+        const { unmount } = render(<DashboardPage />);
 
-      expect(screen.getByText('the delivery dashboard')).toBeInTheDocument();
-      expect(screen.queryByText('the sales dashboard')).not.toBeInTheDocument();
+        expect(screen.getByText('the delivery dashboard')).toBeInTheDocument();
+        expect(screen.queryByText('the sales dashboard')).not.toBeInTheDocument();
+        expect(screen.queryByText('the customers dashboard')).not.toBeInTheDocument();
+        unmount();
+      }
     });
   });
 
-  it('shows just Sales, with no tab strip, to someone who can see analytics but not deliveries', () => {
+  it('shows Customers and Sales, opening on Customers, to someone who can see analytics but not deliveries', () => {
     signIn(['analytics:read']);
     render(<DashboardPage />);
 
-    expect(screen.getByText('the sales dashboard')).toBeInTheDocument();
+    expect(screen.getByText('the customers dashboard')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sales' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delivery' })).not.toBeInTheDocument();
   });
 
