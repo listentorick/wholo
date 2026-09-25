@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { MetricsService } from '@wholo/nest-telemetry';
+import { PlatformMetricsService } from '@wholo/nest-telemetry';
 
 // BullMQ Queue / ioredis are constructed in the scheduler ctor — stub both so
 // the unit test never touches Redis.
@@ -33,17 +33,35 @@ import { Queue as MockedQueue } from 'bullmq';
 import { QueueMetricsScheduler } from './queue-metrics.scheduler';
 
 function build() {
-  const metrics = {
-    increment: jest.fn(),
-    timing: jest.fn(),
-    gauge: jest.fn(),
-  } as unknown as MetricsService;
   const config = { get: jest.fn((_k: string, d?: unknown) => d) } as unknown as ConfigService;
+  // A real registry — assertions read what a /metrics scrape would see.
+  const metrics = new PlatformMetricsService(config);
   const scheduler = new QueueMetricsScheduler(metrics, config);
   const queues = (MockedQueue as unknown as jest.Mock).mock.results.map(
     (r) => r.value as FakeQueue,
   );
   return { metrics, scheduler, queues };
+}
+
+type Series = { labels: Record<string, string | number>; value: number };
+
+async function series(metrics: PlatformMetricsService, name: string): Promise<Series[]> {
+  const metric = metrics.registry.getSingleMetric(name);
+  return metric ? ((await metric.get()).values as Series[]) : [];
+}
+
+const jobs = (m: PlatformMetricsService) => series(m, 'stocdup_queue_jobs');
+const ages = (m: PlatformMetricsService) => series(m, 'stocdup_queue_oldest_waiting_age_ms');
+
+async function ageOf(m: PlatformMetricsService, queue: string): Promise<number | undefined> {
+  return (await ages(m)).find((s) => s.labels.queue === queue)?.value;
+}
+
+/** Queues with a reported value — every state gauge plus the age gauge. */
+async function reportedQueues(m: PlatformMetricsService): Promise<Set<string>> {
+  const names = new Set<string>();
+  for (const s of [...(await jobs(m)), ...(await ages(m))]) names.add(String(s.labels.queue));
+  return names;
 }
 
 describe('QueueMetricsScheduler', () => {
@@ -76,29 +94,36 @@ describe('QueueMetricsScheduler', () => {
     expect(new Set(names).size).toBe(names.length); // no duplicates
   });
 
-  it('emits a job-count gauge per (queue, state) and an oldest-waiting-age gauge', async () => {
+  it('sets a job-count gauge per (queue, state) and an oldest-waiting-age gauge', async () => {
     const { metrics, scheduler, queues } = build();
     queues[0].getJobCounts.mockResolvedValue({ waiting: 4, active: 1, delayed: 2, failed: 3 });
 
     await scheduler.sweep();
 
-    for (const state of ['waiting', 'active', 'delayed', 'failed']) {
-      expect(metrics.gauge).toHaveBeenCalledWith('stocdup_queue_jobs', expect.any(Number), {
-        queue: queues[0].name,
-        state,
-      });
-    }
-    expect(metrics.gauge).toHaveBeenCalledWith('stocdup_queue_jobs', 3, {
-      queue: queues[0].name,
-      state: 'failed',
+    const first = (await jobs(metrics)).filter((s) => s.labels.queue === queues[0].name);
+    expect(Object.fromEntries(first.map((s) => [s.labels.state, s.value]))).toEqual({
+      waiting: 4,
+      active: 1,
+      delayed: 2,
+      failed: 3,
     });
-    expect(metrics.gauge).toHaveBeenCalledWith(
-      'stocdup_queue_oldest_waiting_age_ms',
-      expect.any(Number),
-      { queue: queues[0].name },
+    expect(await ageOf(metrics, queues[0].name)).toBe(0);
+    // 9 queues x 4 states, and one age series per queue
+    expect(await jobs(metrics)).toHaveLength(queues.length * 4);
+    expect(await ages(metrics)).toHaveLength(queues.length);
+  });
+
+  it('overwrites the previous sweep rather than accumulating', async () => {
+    const { metrics, scheduler, queues } = build();
+    queues[0].getJobCounts.mockResolvedValueOnce({ waiting: 9, active: 0, delayed: 0, failed: 0 });
+    await scheduler.sweep();
+    queues[0].getJobCounts.mockResolvedValueOnce({ waiting: 2, active: 0, delayed: 0, failed: 0 });
+    await scheduler.sweep();
+
+    const waiting = (await jobs(metrics)).find(
+      (s) => s.labels.queue === queues[0].name && s.labels.state === 'waiting',
     );
-    // 9 queues x (4 state gauges + 1 age gauge)
-    expect((metrics.gauge as jest.Mock).mock.calls.length).toBe(queues.length * 5);
+    expect(waiting?.value).toBe(2);
   });
 
   it('reports the age of the oldest waiting job from either end of the list', async () => {
@@ -110,20 +135,15 @@ describe('QueueMetricsScheduler', () => {
 
     await scheduler.sweep();
 
-    const ageCall = (metrics.gauge as jest.Mock).mock.calls.find(
-      (c) => c[0] === 'stocdup_queue_oldest_waiting_age_ms' && c[2].queue === queues[0].name,
-    );
-    expect(ageCall?.[1]).toBeGreaterThanOrEqual(90_000);
-    expect(ageCall?.[1]).toBeLessThan(95_000);
+    const age = await ageOf(metrics, queues[0].name);
+    expect(age).toBeGreaterThanOrEqual(90_000);
+    expect(age).toBeLessThan(95_000);
   });
 
   it('reports 0 age when nothing is waiting', async () => {
     const { metrics, scheduler, queues } = build();
     await scheduler.sweep();
-    const ageCall = (metrics.gauge as jest.Mock).mock.calls.find(
-      (c) => c[0] === 'stocdup_queue_oldest_waiting_age_ms' && c[2].queue === queues[0].name,
-    );
-    expect(ageCall?.[1]).toBe(0);
+    expect(await ageOf(metrics, queues[0].name)).toBe(0);
   });
 
   it('keeps sweeping when one queue throws', async () => {
@@ -132,8 +152,10 @@ describe('QueueMetricsScheduler', () => {
 
     await expect(scheduler.sweep()).resolves.toBeUndefined();
 
-    // the remaining 8 queues still reported (8 x 5 gauges)
-    expect((metrics.gauge as jest.Mock).mock.calls.length).toBe((queues.length - 1) * 5);
+    // the remaining 8 queues still reported
+    const reported = await reportedQueues(metrics);
+    expect(reported.has(queues[0].name)).toBe(false);
+    expect(reported.size).toBe(queues.length - 1);
   });
 
   it('times out a hung queue call and does not leave the sweep wedged', async () => {
@@ -147,7 +169,9 @@ describe('QueueMetricsScheduler', () => {
       await swept;
 
       // queue 0 timed out, the other 8 still reported
-      expect((metrics.gauge as jest.Mock).mock.calls.length).toBe((queues.length - 1) * 5);
+      const reported = await reportedQueues(metrics);
+      expect(reported.has(queues[0].name)).toBe(false);
+      expect(reported.size).toBe(queues.length - 1);
       // re-entrancy guard released
       expect((scheduler as unknown as { running: boolean }).running).toBe(false);
     } finally {
@@ -161,7 +185,7 @@ describe('QueueMetricsScheduler', () => {
 
     await scheduler.sweep();
 
-    expect(metrics.gauge).not.toHaveBeenCalled();
+    expect((await reportedQueues(metrics)).size).toBe(0);
   });
 
   it('closes its queues and connection on shutdown', async () => {

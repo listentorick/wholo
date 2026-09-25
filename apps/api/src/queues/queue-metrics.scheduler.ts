@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
-import { MetricsService } from '@wholo/nest-telemetry';
+import { PlatformMetricsService } from '@wholo/nest-telemetry';
 import { Queue } from 'bullmq';
 import IORedis, { Redis } from 'ioredis';
 import {
@@ -61,12 +61,16 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Platform-health background-job metrics (ADR-063). Worker-process only (the
- * worker is pinned to one replica, so one emitter). Emits, per queue, every
- * 15s:
+ * Platform-health background-job metrics (ADR-063, transport per ADR-065).
+ * Worker-process only (the worker is pinned to one replica, so one source).
+ * Sets, per queue, every 15s:
  *
- *   stocdup_queue_jobs{queue,state}            |g   job count per state
- *   stocdup_queue_oldest_waiting_age_ms{queue} |g   Date.now() - oldest wait ts
+ *   stocdup_queue_jobs{queue,state}            gauge   job count per state
+ *   stocdup_queue_oldest_waiting_age_ms{queue} gauge   Date.now() - oldest wait ts
+ *
+ * The gauges are served from the worker's `/metrics` and scraped by Telegraf. A
+ * prom-client gauge keeps its last value, so a scrape between sweeps returns
+ * the last known depth.
  *
  * Read-only `Queue` handles over a single shared ioredis connection — no
  * processors, no blocking clients. Fire-and-forget: a Redis blip logs a warning
@@ -80,7 +84,7 @@ export class QueueMetricsScheduler implements OnModuleDestroy {
   private running = false;
 
   constructor(
-    private readonly metrics: MetricsService,
+    private readonly metrics: PlatformMetricsService,
     config: ConfigService,
   ) {
     const redisUrl = config.get<string>('REDIS_URL', 'redis://localhost:6379');
@@ -111,11 +115,9 @@ export class QueueMetricsScheduler implements OnModuleDestroy {
   private async report(name: string, queue: Queue): Promise<void> {
     const counts = await queue.getJobCounts(...REPORTED_STATES);
     for (const state of REPORTED_STATES) {
-      this.metrics.gauge('stocdup_queue_jobs', counts[state] ?? 0, { queue: name, state });
+      this.metrics.setQueueJobs(counts[state] ?? 0, name, state);
     }
-    this.metrics.gauge('stocdup_queue_oldest_waiting_age_ms', await oldestWaitingAgeMs(queue), {
-      queue: name,
-    });
+    this.metrics.setQueueOldestWaitingAgeMs(await oldestWaitingAgeMs(queue), name);
   }
 
   async onModuleDestroy(): Promise<void> {

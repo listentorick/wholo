@@ -1,18 +1,17 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Observable, tap } from 'rxjs';
-import { MetricsService } from './metrics.service';
+import { PlatformMetricsService } from './platform-metrics.service';
 
 /**
- * Platform-health HTTP telemetry (ADR-063). One counter and one timing per
- * request:
+ * Platform-health HTTP telemetry (ADR-063, transport per ADR-065). One counter
+ * increment and one histogram observation per request:
  *
- *   stocdup_http_requests  {service, method, status_class}   |c
- *   stocdup_http_request_ms{service}                         |ms
+ *   stocdup_http_requests_total          {environment, service, method, status_class}
+ *   stocdup_http_request_duration_seconds{environment, service}
  *
- * Tagged by service / method / status class only — never a route path (PII and
- * unbounded tag cardinality). The timing carries only `service` so the p95
- * series count stays equal to the number of services.
+ * (`environment` / `service` are registry default labels.) Labelled by method /
+ * status class only — never a route path (PII and unbounded cardinality). The
+ * histogram carries no extra labels so its series count stays small.
  *
  * `/api/v1/health*` is excluded: k8s liveness/readiness probes and Telegraf's
  * own `http_response` self-checks would otherwise dominate the request count
@@ -23,14 +22,7 @@ import { MetricsService } from './metrics.service';
  */
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
-  private readonly service: string;
-
-  constructor(
-    private readonly metrics: MetricsService,
-    config: ConfigService,
-  ) {
-    this.service = config.get<string>('SERVICE_NAME', 'unknown');
-  }
+  constructor(private readonly metrics: PlatformMetricsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') return next.handle();
@@ -45,14 +37,8 @@ export class MetricsInterceptor implements NestInterceptor {
 
     const record = (statusCode: number): void => {
       const statusClass = `${Math.floor((statusCode || 0) / 100)}xx`;
-      this.metrics.increment('stocdup_http_requests', 1, {
-        service: this.service,
-        method,
-        status_class: statusClass,
-      });
-      this.metrics.timing('stocdup_http_request_ms', Date.now() - startedAt, {
-        service: this.service,
-      });
+      this.metrics.recordHttpRequest(method, statusClass);
+      this.metrics.observeHttpDuration((Date.now() - startedAt) / 1000);
     };
 
     return next.handle().pipe(

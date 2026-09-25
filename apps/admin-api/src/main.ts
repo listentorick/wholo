@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import { PinoAppLogger } from '@wholo/nest-telemetry';
+import { PinoAppLogger, startMetricsServerFromEnv } from '@wholo/nest-telemetry';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import express, { Request, Response, NextFunction } from 'express';
@@ -32,6 +32,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new ProblemDetailsFilter());
   app.enableCors({ origin: true, credentials: true });
+  startMetricsServerFromEnv(app);
   await app.listen(process.env['PORT'] ?? 3020);
 }
 

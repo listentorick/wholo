@@ -1,9 +1,12 @@
 // Shared NestJS platform observability for the Stocdup services:
-//   - metrics  (ADR-062 order activity, ADR-063 platform health) — StatsD/UDP
+//   - metrics  (ADR-062 order activity) — StatsD/UDP
+//   - metrics  (ADR-063/065 platform health) — prom-client, scraped at :9464/metrics
 //   - logging  (ADR-064) — structured JSON via nestjs-pino, shipped to Loki
 export { MetricsService } from './metrics.service';
 export { MetricsModule } from './metrics.module';
 export { MetricsInterceptor } from './metrics.interceptor';
+export { PlatformMetricsService } from './platform-metrics.service';
+export { startMetricsServer, startMetricsServerFromEnv } from './metrics-server';
 
 export { LoggingModule } from './logging.module';
 export { buildPinoOptions } from './logging.config';

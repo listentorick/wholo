@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { PinoAppLogger } from '@wholo/nest-telemetry';
+import { PinoAppLogger, startMetricsServerFromEnv } from '@wholo/nest-telemetry';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 
@@ -25,6 +25,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  startMetricsServerFromEnv(app);
   await app.listen(process.env['PORT'] ?? 3001);
 }
 
