@@ -17,9 +17,20 @@ imagePullSecrets:
 postgresql:
   password: "CHANGE_ME_strong_password"
   storageSize: 5Gi
+  # Encrypted off-cluster backups to R2 every 6h (ADR-069). One-time setup
+  # (bucket, 3-day lifecycle rule, scoped token) is in docs/deployment/live-k3s.md.
   backup:
     enabled: true
-    storageSize: 3Gi
+    r2:
+      accountId: "CHANGE_ME"
+      bucket: "stocdup-db-backups"
+      accessKeyId: "CHANGE_ME"           # token scoped to the backup bucket only
+      secretAccessKey: "CHANGE_ME"
+    # openssl rand -base64 32 — each. ALSO store both in the password manager:
+    # a restore after cluster loss is impossible without them.
+    encryption:
+      password: "CHANGE_ME"
+      salt: "CHANGE_ME"
 
 redis:
   storageSize: 1Gi

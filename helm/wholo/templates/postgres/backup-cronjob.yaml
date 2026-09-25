@@ -1,20 +1,9 @@
 {{- if .Values.postgresql.backup.enabled }}
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ include "wholo.fullname" . }}-pg-backups
-  labels:
-    app: {{ include "wholo.fullname" . }}-pg-backup
-spec:
-  accessModes:
-    - ReadWriteOnce
-  {{- with .Values.postgresql.storageClass }}
-  storageClassName: {{ . }}
-  {{- end }}
-  resources:
-    requests:
-      storage: {{ .Values.postgresql.backup.storageSize }}
----
+{{- $secret := printf "%s-pg-backup" (include "wholo.fullname" .) }}
+# Off-cluster encrypted Postgres backups (ADR-069): every 6h a full pg_dumpall
+# is streamed through gzip and an rclone crypt remote into Cloudflare R2. No
+# PVC — nothing touches node disk, and Postgres itself is not modified.
+# Restore: docs/deployment/postgres-backup-restore.md
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -24,41 +13,117 @@ metadata:
 spec:
   schedule: {{ .Values.postgresql.backup.schedule | quote }}
   concurrencyPolicy: Forbid
+  # A run missed by more than this (e.g. node down at :00) is skipped, not
+  # started late; the "backup stale" alert covers it.
+  startingDeadlineSeconds: 600
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
   jobTemplate:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-pg-backup
     spec:
+      # One retry. Every attempt reports its own outcome metric.
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
       template:
         metadata:
           labels:
             app: {{ include "wholo.fullname" . }}-pg-backup
+          annotations:
+            checksum/script: {{ include (print $.Template.BasePath "/postgres/backup-configmap.yaml") . | sha256sum }}
         spec:
-          restartPolicy: OnFailure
+          restartPolicy: Never
+          initContainers:
+            # Copies rclone's static binary into /tools so the backup can run
+            # in the Postgres image itself (matching pg_dumpall version) with
+            # no custom image and nothing installed at runtime.
+            - name: rclone-bin
+              image: {{ .Values.postgresql.backup.rcloneImage }}
+              command: ["cp", "/usr/local/bin/rclone", "/tools/rclone"]
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
           containers:
-            - name: pg-dump
+            - name: pg-backup
               image: {{ .Values.postgresql.image }}
-              command:
-                - /bin/sh
-                - -c
-                # pg_dumpall captures every database on the server, i.e. both
-                # wholo and keycloak. Keeps the newest 7 dumps.
-                - |
-                  set -e
-                  ts=$(date +%Y%m%d-%H%M%S)
-                  pg_dumpall -h {{ include "wholo.postgresql.host" . }} -U {{ .Values.postgresql.username }} \
-                    | gzip > /backups/wholo-$ts.sql.gz
-                  ls -1t /backups/wholo-*.sql.gz | tail -n +8 | xargs -r rm --
+              command: ["/bin/sh", "/scripts/backup.sh"]
               env:
+                - name: PGHOST
+                  value: {{ include "wholo.postgresql.host" . | quote }}
+                - name: PGUSER
+                  value: {{ .Values.postgresql.username | quote }}
                 - name: PGPASSWORD
                   valueFrom:
                     secretKeyRef:
                       name: {{ include "wholo.fullname" . }}-postgresql
                       key: password
+                - name: R2_ACCOUNT_ID
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: r2AccountId }
+                - name: R2_BUCKET
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: r2Bucket }
+                - name: R2_PREFIX
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: r2Prefix }
+                # `r2`: the raw bucket (S3 API). no_check_bucket — the scoped
+                # token may not create/inspect buckets.
+                - name: RCLONE_CONFIG_R2_TYPE
+                  value: s3
+                - name: RCLONE_CONFIG_R2_PROVIDER
+                  value: Cloudflare
+                - name: RCLONE_CONFIG_R2_ENDPOINT
+                  value: "https://$(R2_ACCOUNT_ID).r2.cloudflarestorage.com"
+                - name: RCLONE_CONFIG_R2_NO_CHECK_BUCKET
+                  value: "true"
+                - name: RCLONE_CONFIG_R2_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: r2AccessKeyId }
+                - name: RCLONE_CONFIG_R2_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: r2SecretAccessKey }
+                # `r2crypt`: client-side encryption over `r2`. File names stay
+                # readable (wholo-<UTC ts>.sql.gz.bin) so a backup can be picked
+                # by time; contents are encrypted. Password/salt are obscured
+                # by the script.
+                - name: RCLONE_CONFIG_R2CRYPT_TYPE
+                  value: crypt
+                - name: RCLONE_CONFIG_R2CRYPT_REMOTE
+                  value: "r2:$(R2_BUCKET)/$(R2_PREFIX)"
+                - name: RCLONE_CONFIG_R2CRYPT_FILENAME_ENCRYPTION
+                  value: "off"
+                - name: RCLONE_CONFIG_R2CRYPT_DIRECTORY_NAME_ENCRYPTION
+                  value: "false"
+                - name: BACKUP_ENCRYPTION_PASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: encryptionPassword }
+                - name: BACKUP_ENCRYPTION_SALT
+                  valueFrom:
+                    secretKeyRef: { name: {{ $secret }}, key: encryptionSalt }
+                # Backup health metrics (Grafana "Stocdup Backups" dashboard +
+                # alerts). Empty host = telemetry off; the script skips them.
+                - name: STATSD_HOST
+                  value: {{ ternary (include "wholo.telegraf.host" .) "" (.Values.telegraf.enabled | default false) | quote }}
+                - name: STATSD_PORT
+                  value: "8125"
+                - name: ENVIRONMENT
+                  value: {{ .Values.appEnv | default "local" | quote }}
+              resources:
+                requests:
+                  memory: "64Mi"
+                  cpu: "50m"
+                limits:
+                  memory: "256Mi"
               volumeMounts:
-                - name: backups
-                  mountPath: /backups
+                - name: tools
+                  mountPath: /tools
+                - name: scripts
+                  mountPath: /scripts
           volumes:
-            - name: backups
-              persistentVolumeClaim:
-                claimName: {{ include "wholo.fullname" . }}-pg-backups
+            - name: tools
+              emptyDir: {}
+            - name: scripts
+              configMap:
+                name: {{ include "wholo.fullname" . }}-pg-backup
 {{- end }}

@@ -1,0 +1,80 @@
+{{- if .Values.postgresql.backup.enabled }}
+# The off-cluster backup script (ADR-069), run by the pg-backup CronJob.
+# The rclone remotes (`r2`, `r2crypt`) are configured entirely through
+# RCLONE_CONFIG_* env vars set on the container — there is no config file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-pg-backup
+  labels:
+    app: {{ include "wholo.fullname" . }}-pg-backup
+data:
+  backup.sh: |
+    #!/bin/sh
+    set -eu
+    set -o pipefail
+
+    PATH="/tools:$PATH"
+    # No rclone config file — everything comes from RCLONE_CONFIG_* env vars.
+    export RCLONE_CONFIG=""
+    started=$(date +%s)
+    object="wholo-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+    size=0
+    verified=false
+
+    # One StatsD gauge per call, same InfluxDB-tag wire format as
+    # @wholo/nest-telemetry. Best-effort: a telemetry failure never fails the
+    # backup, and anything that stops these arriving at all (pod never starts,
+    # OOM) is caught by the "backup stale" alert instead.
+    metric() {
+      [ -n "${STATSD_HOST:-}" ] || return 0
+      printf '%s,environment=%s:%s|g' "$1" "${ENVIRONMENT:-unknown}" "$2" \
+        | nc -u -w1 "$STATSD_HOST" "${STATSD_PORT:-8125}" 2>/dev/null || true
+    }
+
+    on_exit() {
+      rc=$?
+      now=$(date +%s)
+      metric stocdup_backup_last_run_ts "$now"
+      metric stocdup_backup_duration_s "$((now - started))"
+      if [ "$rc" -eq 0 ]; then
+        metric stocdup_backup_last_outcome 1
+        # When the snapshot was taken, not when the upload finished — this is
+        # what "age of the latest backup" means for recovery.
+        metric stocdup_backup_last_success_ts "$started"
+        metric stocdup_backup_size_bytes "$size"
+        echo "backup OK: $object ($size bytes, $((now - started))s)"
+      else
+        metric stocdup_backup_last_outcome 0
+        # A dump that died mid-stream can still leave a well-formed but
+        # truncated object behind — never leave one that looks restorable.
+        if [ "$verified" != true ]; then
+          # Short retry budget: when R2 itself is the failure, this must not
+          # spend minutes retrying before the job can report.
+          rclone deletefile --retries 1 --low-level-retries 2 --contimeout 10s --timeout 30s \
+            "r2crypt:$object" 2>/dev/null || true
+        fi
+        echo "backup FAILED (exit $rc): $object" >&2
+      fi
+    }
+    trap on_exit EXIT
+
+    # rclone only accepts crypt keys in its "obscured" form; derive them here
+    # from the raw Secret values (via stdin, so they never appear in argv).
+    RCLONE_CONFIG_R2CRYPT_PASSWORD=$(printf '%s' "$BACKUP_ENCRYPTION_PASSWORD" | rclone obscure -)
+    RCLONE_CONFIG_R2CRYPT_PASSWORD2=$(printf '%s' "$BACKUP_ENCRYPTION_SALT" | rclone obscure -)
+    export RCLONE_CONFIG_R2CRYPT_PASSWORD RCLONE_CONFIG_R2CRYPT_PASSWORD2
+
+    echo "dumping + encrypting + uploading $object"
+    pg_dumpall -h "$PGHOST" -U "$PGUSER" | gzip -c | rclone rcat "r2crypt:$object"
+
+    # Read it back through the crypt remote: proves the object decrypts
+    # (crypt is authenticated), gunzips, and is a complete dump — pg_dumpall
+    # always ends with this trailer.
+    echo "verifying $object"
+    rclone cat "r2crypt:$object" | gunzip -c | tail -n 5 \
+      | grep -q 'PostgreSQL database cluster dump complete'
+    verified=true
+
+    size=$(rclone lsf --format s "r2crypt:$object") || size=0
+{{- end }}

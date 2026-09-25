@@ -22,6 +22,7 @@ spec:
       annotations:
         checksum/provisioning: {{ include (print $.Template.BasePath "/grafana/configmap-provisioning.yaml") . | sha256sum }}
         checksum/dashboards: {{ include (print $.Template.BasePath "/grafana/configmap-dashboards.yaml") . | sha256sum }}
+        checksum/alerting: {{ include (print $.Template.BasePath "/grafana/configmap-alerting.yaml") . | sha256sum }}
     spec:
       {{- include "wholo.imagePullSecrets" . }}
       containers:
@@ -54,6 +55,8 @@ spec:
             - name: provisioning
               mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
               subPath: dashboards.yaml
+            - name: alerting
+              mountPath: /etc/grafana/provisioning/alerting
           livenessProbe:
             httpGet:
               path: /api/health
@@ -77,4 +80,7 @@ spec:
         - name: dashboards
           configMap:
             name: {{ include "wholo.fullname" . }}-grafana-dashboards
+        - name: alerting
+          configMap:
+            name: {{ include "wholo.fullname" . }}-grafana-alerting
 {{- end }}

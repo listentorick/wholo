@@ -42,13 +42,33 @@ postgresql:
     limits:
       memory: "512Mi"
       cpu: "500m"
-  # Nightly pg_dumpall to a dedicated PVC. Protects against app-level
-  # corruption and accidental deletion — not node-disk loss (dumps live on
-  # the same cluster's node-local storage).
+  # Off-cluster encrypted backups (ADR-069). A CronJob streams a full
+  # pg_dumpall (every database: wholo, keycloak, plausible) through gzip and an
+  # rclone `crypt` remote into a Cloudflare R2 bucket — only ciphertext leaves
+  # the cluster, nothing is written to node disk. Retention is an R2 lifecycle
+  # rule on the bucket, not this chart. Restore: docs/deployment/postgres-backup-restore.md
   backup:
     enabled: false
-    schedule: "0 2 * * *"
-    storageSize: 2Gi
+    schedule: "0 */6 * * *"
+    # Only the static rclone binary is taken from this image (copied in by an
+    # initContainer); pg_dumpall runs in postgresql.image so its version always
+    # matches the server.
+    rcloneImage: rclone/rclone:1.71.1
+    r2:
+      accountId: ""
+      bucket: ""
+      # Key prefix inside the bucket — the R2 lifecycle rule targets it.
+      prefix: "postgres"
+      # R2 API token scoped to this bucket only (Object Read & Write).
+      accessKeyId: ""
+      secretAccessKey: ""
+    # rclone crypt password + salt (password2). Anyone restoring needs BOTH, so
+    # keep a copy outside the cluster (password manager) — losing the cluster
+    # loses this Secret. Changing them makes older backups unreadable with the
+    # new values.
+    encryption:
+      password: ""
+      salt: ""
 
 redis:
   image: redis:7-alpine

@@ -1,0 +1,115 @@
+# Grafana alert rules for off-cluster Postgres backups (ADR-069).
+#
+# Local: provisioned automatically into the in-cluster Grafana
+# (templates/grafana/configmap-alerting.yaml).
+# Live: create these two rules on the ops Grafana by hand — see
+# docs/deployment/live-k3s.md#backups. `datasourceUid: stocdup-influx` is the
+# local datasource uid; on the ops Grafana use that instance's InfluxDB (Flux)
+# datasource uid instead.
+#
+# Both rules are per `environment` (multi-dimensional), and both read the
+# gauges the pg-backup CronJob sends to Telegraf over StatsD.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: stocdup-backups
+    folder: Stocdup
+    interval: 5m
+    rules:
+      # The newest successful backup is older than 13h: two consecutive 6-hourly
+      # runs missed or failed. Also covers everything the script can never
+      # report itself (CronJob suspended/deleted, pod never scheduled, OOM,
+      # image pull failure). No data at all within 7d is treated as firing.
+      - uid: stocdup-backup-stale
+        title: Postgres backup stale
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 604800, to: 0 }
+            datasourceUid: stocdup-influx
+            model:
+              refId: A
+              query: |-
+                from(bucket: "stocdup_metrics")
+                  |> range(start: -7d)
+                  |> filter(fn: (r) => r._measurement == "stocdup_backup_last_success_ts" and r._field == "value")
+                  |> group(columns: ["environment"])
+                  |> max()
+                  |> map(fn: (r) => ({ _time: now(), environment: r.environment, _value: (float(v: int(v: now())) / 1000000000.0 - r._value) / 3600.0 }))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [13] }
+        noDataState: Alerting
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+          component: postgres-backup
+        annotations:
+          summary: "No successful Postgres backup for {{ printf \"%.1f\" $values.B.Value }}h ({{ $labels.environment }})"
+          description: >-
+            Backups run every 6h. The newest successful backup is older than 13h,
+            so at least two runs have been missed or failed. Check
+            `kubectl -n wholo get cronjob,jobs,pods -l app=wholo-pg-backup` and the
+            latest job's logs. Runbook: docs/deployment/postgres-backup-restore.md
+
+      # The most recent attempt failed (dump, upload, or read-back verification).
+      # Stays firing until the next successful run.
+      - uid: stocdup-backup-failed
+        title: Postgres backup failed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 604800, to: 0 }
+            datasourceUid: stocdup-influx
+            model:
+              refId: A
+              query: |-
+                from(bucket: "stocdup_metrics")
+                  |> range(start: -7d)
+                  |> filter(fn: (r) => r._measurement == "stocdup_backup_last_outcome" and r._field == "value")
+                  |> group(columns: ["environment"])
+                  |> last()
+                  |> keep(columns: ["_time", "_value", "environment"])
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        # Absence of data is the stale rule's job — don't double-alert.
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+          component: postgres-backup
+        annotations:
+          summary: "Postgres backup failed ({{ $labels.environment }})"
+          description: >-
+            The most recent backup attempt exited non-zero. Read its logs:
+            `kubectl -n wholo logs job/<latest wholo-pg-backup job>`. Runbook:
+            docs/deployment/postgres-backup-restore.md

@@ -1,0 +1,17 @@
+{{- if .Values.grafana.enabled }}
+# Every committed alert-rule provisioning file under helm/wholo/alerting/
+# (ADR-069 backups, …), mounted at /etc/grafana/provisioning/alerting. Same
+# single-source-of-truth idea as the dashboards: live's ops Grafana gets the
+# same rules created by hand from these files.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-grafana-alerting
+  labels:
+    app: {{ include "wholo.fullname" . }}-grafana
+data:
+{{- range $path, $_ := .Files.Glob "alerting/*.yaml" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}

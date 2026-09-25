@@ -346,26 +346,80 @@ a read-only `pods`/`namespaces` ClusterRole) and the DaemonSet, which mounts
 
 ## Backups
 
-A nightly CronJob (`postgresql.backup.enabled`) runs `pg_dumpall` (captures
-both the `wholo` and `keycloak` databases) to the `wholo-pg-backups` PVC,
-keeping the newest 7 dumps.
+Encrypted, off-cluster Postgres backups ([ADR-069](../adrs/ADR-069-offsite-encrypted-postgres-backups.md)).
+**Restore procedure: [postgres-backup-restore.md](postgres-backup-restore.md).**
+
+| | |
+|---|---|
+| What | A full `pg_dumpall` (every database: `wholo`, `keycloak`, `plausible`), gzip-compressed. Each backup is complete and independent — no incrementals, no WAL. |
+| Schedule | Every 6 hours, `0 */6 * * *` (`postgresql.backup.schedule`) — recovery point is up to 6h. CronJob `wholo-pg-backup`, `concurrencyPolicy: Forbid`, one retry, 1h deadline. |
+| Storage | Cloudflare R2 bucket `stocdup-db-backups`, key prefix `postgres/`, objects named `wholo-<UTC yyyymmddThhmmssZ>.sql.gz.bin`. Nothing is written to node disk; there is no backup PVC. |
+| Encryption | In the CronJob, before upload, via an rclone `crypt` remote (NaCl secretbox, authenticated). R2 only ever holds ciphertext. The password + salt are in the `wholo-pg-backup` Secret **and in the password manager** — without them a backup cannot be restored. |
+| Verification | Every run reads the object back through the crypt remote and checks it decrypts, gunzips and ends with pg_dumpall's completion trailer. A run that fails deletes its partial object. |
+| Retention | 3 days (~12 backups), enforced by an R2 lifecycle rule on the bucket — not by the chart. |
+| Monitoring | StatsD gauges → Telegraf → ops InfluxDB: `stocdup_backup_last_run_ts`, `_last_outcome`, `_last_success_ts`, `_size_bytes`, `_duration_s`. Grafana dashboard "Stocdup Backups" (`helm/wholo/dashboards/stocdup-backups.json`). |
+| Alerts | "Postgres backup failed" (last attempt failed) and "Postgres backup stale" (newest successful backup older than **13h**, i.e. two missed runs; no data counts as firing). Definitions: `helm/wholo/alerting/stocdup-backups.yaml`. |
+
+The job runs in the Postgres image itself (so `pg_dumpall` matches the server
+version); an initContainer copies the static `rclone` binary in from the pinned
+`rclone/rclone` image. Postgres' own Deployment, config and data PVC are
+untouched.
+
+**One-time setup:**
+
+1. Cloudflare → R2 → create bucket `stocdup-db-backups` (location hint near the
+   k3s node; default storage class).
+2. Bucket → Settings → Object lifecycle rules → add: prefix `postgres/`, delete
+   objects **3 days** after upload. (Also: abort incomplete multipart uploads
+   after 1 day.)
+3. R2 → Manage API tokens → create a token with **Object Read & Write**,
+   **applied to `stocdup-db-backups` only**. Note the access key id + secret and
+   the account id.
+4. Generate the encryption password and salt — `openssl rand -base64 32`, one
+   each. Store **both in the password manager** (with the bucket name and
+   account id) before putting them in `values.live.yaml`.
+5. `values.live.yaml` → `postgresql.backup.r2.*` and `postgresql.backup.encryption.*`
+   (see `values.live.example.yaml`).
+6. Ops Grafana → Dashboards → Import → `helm/wholo/dashboards/stocdup-backups.json`,
+   pick the Flux data source.
+7. Ops Grafana → Alerting → create the two rules from
+   `helm/wholo/alerting/stocdup-backups.yaml` (same Flux queries, reduce `last`,
+   thresholds `> 13` and `< 1`, no-data state as in the file), in folder
+   Stocdup, routed by the default notification policy. Alternatively POST each
+   rule to `/api/v1/provisioning/alert-rules` after swapping `datasourceUid`
+   `stocdup-influx` for the ops instance's InfluxDB data source uid.
+8. *(Recommended)* Bucket → Settings → Bucket lock rules → retain objects under
+   `postgres/` for 1 day, so a leaked token can't delete recent backups.
+
+**Upgrading from the old PVC backups:** the chart no longer creates the
+`wholo-pg-backups` PVC, so `helm upgrade` deletes it and its dumps (local-path
+reclaim policy is Delete). Before that upgrade, run one last old-style backup
+and copy the newest dump off-cluster:
 
 ```bash
-# manual backup now
-kubectl -n wholo create job pg-backup-manual --from=cronjob/wholo-pg-backup
-
-# list dumps
-kubectl -n wholo run -it --rm ls-backups --image=postgres:16-alpine \
-  --overrides='{"spec":{"containers":[{"name":"ls-backups","image":"postgres:16-alpine","command":["ls","-lh","/backups"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"wholo-pg-backups"}}]}}'
-
-# restore (DESTRUCTIVE — restores every database from the dump)
-gunzip -c wholo-<ts>.sql.gz | kubectl -n wholo exec -i deploy/wholo-postgresql -- psql -U wholo -d postgres
+kubectl -n wholo create job pg-backup-final --from=cronjob/wholo-pg-backup
+kubectl -n wholo wait --for=condition=complete job/pg-backup-final --timeout=600s
+kubectl -n wholo run keep-dump --image=postgres:16-alpine --restart=Never \
+  --overrides='{"spec":{"containers":[{"name":"keep-dump","image":"postgres:16-alpine","command":["sleep","600"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"wholo-pg-backups"}}]}}'
+kubectl -n wholo exec keep-dump -- ls -1t /backups | head -1        # newest
+kubectl -n wholo cp keep-dump:/backups/<newest> ./<newest>
+kubectl -n wholo delete pod keep-dump
 ```
 
-**Limitations**: dumps live on the same cluster's node-local storage. This
-protects against application-level corruption and accidental deletion, not
-node-disk loss. Copying dumps off-cluster (scp/rclone cron on a node, or a
-push to R2) is a recommended follow-up.
+**Day to day:**
+
+```bash
+# manual backup now (e.g. before a risky migration)
+kubectl -n wholo create job pg-backup-manual-$(date +%s) --from=cronjob/wholo-pg-backup
+kubectl -n wholo logs -f -l app=wholo-pg-backup --tail=5   # ends with "backup OK: <object> (<bytes> bytes, <n>s)"
+
+# recent runs
+kubectl -n wholo get jobs -l app=wholo-pg-backup
+```
+
+The `pg_dump: warning: there are circular foreign-key constraints` lines in
+the job log come from TimescaleDB's own catalog tables and are expected — they
+only matter for data-only dumps, which this is not.
 
 ## Verification checklist (after deploy)
 
@@ -396,4 +450,6 @@ push to R2) is a recommended follow-up.
    `connection refused`; `kubectl -n wholo logs deploy/wholo-api | head` is
    single-line JSON; `{namespace="wholo"}` in the ops Grafana Explore → Loki
    returns lines (ADR-064).
-9. Run a manual backup job and check a dump appears.
+9. Run a manual backup job (see [Backups](#backups)); its log ends with
+   `backup OK`, a new `postgres/wholo-<ts>.sql.gz.bin` object is in R2, and the
+   ops Grafana "Stocdup Backups" dashboard shows the run as Succeeded.
