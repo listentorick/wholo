@@ -1583,12 +1583,12 @@
       {
         "current": {
           "selected": false,
-          "text": "stocdup_metrics",
-          "value": "stocdup_metrics"
+          "text": "stocdup",
+          "value": "stocdup"
         },
         "hide": 2,
         "name": "bucket",
-        "query": "stocdup_metrics",
+        "query": "stocdup",
         "skipUrlSync": false,
         "type": "constant"
       },

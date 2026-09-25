@@ -114,12 +114,12 @@ outside the cluster.
 | api, portal-api, admin-api | `http://wholo-keycloak:8080` | `KEYCLOAK_URL` | JWKS fetch to validate browser JWTs |
 | api, worker | `wholo-postgresql:5432`, `wholo-redis:6379`, `wholo-mailhog:1025` | `DATABASE_URL`, `REDIS_URL`, `SMTP_HOST` | DB, queues/outbox, mail |
 | api, admin-api, portal-api, driver-api, worker | `wholo-telegraf:8125` (**UDP**) | `STATSD_HOST` / `STATSD_PORT` | Order-activity counters (ADR-062) + per-request HTTP metrics (all 4 APIs) + queue-depth gauges (worker), ADR-063. Fire-and-forget; unset = no-op. Only set when `telegraf.enabled` |
-| telegraf | `wholo-influxdb:8086` (local) / ops host `192.168.1.15:8086` (live) | `telegraf.influx.url` + `INFLUX_TOKEN` secret | Writes aggregated metrics to InfluxDB 2 (ADR-062/063). InfluxDB + Grafana are in-cluster locally, external in live |
+| telegraf | `wholo-influxdb:8086` (local) / ops host `influxdb.home.arpa:8086` (live) | `telegraf.influx.url` + `INFLUX_TOKEN` secret | Writes aggregated metrics to InfluxDB 2 (ADR-062/063). InfluxDB + Grafana are in-cluster locally, external in live |
 | telegraf | `wholo-{api,admin-api,portal-api,driver-api}:<port>/api/v1/health` | rendered from service ports | `inputs.http_response` availability self-checks (ADR-063). Only when `telegraf.platformHealth.enabled` |
 | telegraf | `https://kubernetes.default.svc` | ServiceAccount token, read-only ClusterRole | `inputs.kube_inventory` — pod status / restarts, node objects (ADR-063). Only when `telegraf.platformHealth.enabled` |
 | telegraf-node (DaemonSet) | host `/proc`, `/sys` (read-only hostPath) → `wholo-influxdb:8086` / ops host | `HOST_PROC` / `HOST_SYS` / `HOST_MOUNT_PREFIX` | Node CPU / memory / disk % (ADR-063). One pod per node; not privileged. Only when `telegraf.platformHealth.enabled` |
 | fluent-bit (DaemonSet) | host `/var/log/{pods,containers}` (read-only hostPath); `https://kubernetes.default.svc` (pod metadata, dedicated read-only SA) | — | Tails the `wholo` namespace's container logs (ADR-064). One pod per node; not privileged. Only when `fluentBit.enabled` |
-| fluent-bit (DaemonSet) | `wholo-loki:3100` (local) / ops host `192.168.1.15:3100` (live) | `LOKI_HOST` / `LOKI_PORT` / `LOKI_URI` (`fluentBit.loki.*`) | Pushes logs to Loki. Loki is in-cluster locally (`loki.enabled`), external in live |
+| fluent-bit (DaemonSet) | `wholo-loki:3100` (local) / ops host `loki.home.arpa:3100` (live) | `LOKI_HOST` / `LOKI_PORT` / `LOKI_URI` (`fluentBit.loki.*`) | Pushes logs to Loki. Loki is in-cluster locally (`loki.enabled`), external in live |
 | grafana (local only) | `wholo-influxdb:8086`, `wholo-loki:3100` | provisioned datasources | Renders "Stocdup Order Activity" + "Stocdup Platform Health" + "Stocdup Logs"; Explore → Loki. UI on NodePort `30300` |
 | keycloak | `wholo-postgresql:5432`, `wholo-mailhog:1025` | `KC_DB_URL`, realm `smtpServer` | Its own `keycloak` DB; verification emails |
 

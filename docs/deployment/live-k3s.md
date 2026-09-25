@@ -227,7 +227,7 @@ on first run.
 `apps/api` emits two StatsD counters over UDP on every successfully submitted
 order (`stocdup_orders_submitted`, `stocdup_order_value_minor`). In live only
 **Telegraf** runs in-cluster — it forwards to the **InfluxDB 2** and **Grafana**
-already running on the ops monitoring host (`192.168.1.15`). Stocdup holds no
+already running on the ops monitoring host (`influxdb.home.arpa`, `grafana.home.arpa`). Stocdup holds no
 InfluxDB credentials; the flow can never fail or slow an order.
 
 **values.live.yaml** needs an `appEnv` + `telegraf` block (see
@@ -236,22 +236,25 @@ InfluxDB credentials; the flow can never fail or slow an order.
 - `appEnv: "live"` — becomes the `environment` tag on every metric.
 - `telegraf.enabled: true`, `telegraf.image` — bump alongside the others is not
   needed (upstream image, not CI-built).
-- `telegraf.influx.url: http://192.168.1.15:8086` — the ops-host InfluxDB.
-- `telegraf.influx.org: stocdup`, `telegraf.influx.bucket: stocdup_metrics`.
+- `telegraf.influx.url: http://influxdb.home.arpa:8086` — the ops-host InfluxDB.
+- `telegraf.influx.org: Parsnips`, `telegraf.influx.bucket: stocdup`.
 - `telegraf.influx.token` — a write token (see step 3 below); real value goes in
   the gitignored `values.live.yaml`, not the example.
 
 **One-time infra-owner setup on the ops host:**
 
-1. InfluxDB: ensure org `stocdup`; create bucket `stocdup_metrics` with a `90d`
-   retention period.
-2. Confirm the k3s nodes can reach `192.168.1.15:8086` (it is already the
-   `healthAccess` monitoring peer, but egress ≠ ingress — check the firewall).
-3. InfluxDB: create an API token scoped to **write** `stocdup_metrics` (add read
+1. InfluxDB: org `Parsnips`, bucket `stocdup` (retention e.g. `90d`). The bucket
+   name must be `stocdup` — the committed dashboards and alert rules query it
+   by that name.
+2. Confirm pods can resolve **and** reach the ops host — `home.arpa` names are
+   resolved by the node's DNS via CoreDNS, and egress ≠ ingress:
+   `kubectl -n wholo run netcheck --rm -it --restart=Never --image=busybox -- sh -c 'nslookup influxdb.home.arpa && wget -qO- http://influxdb.home.arpa:8086/health'`
+3. InfluxDB: create an API token scoped to **write** `stocdup` (add read
    too if the same token backs Grafana). Put it in `values.live.yaml` as
    `telegraf.influx.token`.
-4. Grafana: add an InfluxDB data source — query language **Flux**, org
-   `stocdup`, default bucket `stocdup_metrics`, token from step 3.
+4. Grafana (`http://grafana.home.arpa:3000`): add an InfluxDB data source —
+   URL `http://influxdb.home.arpa:8086`, query language **Flux**, org
+   `Parsnips`, default bucket `stocdup`, token from step 3.
 5. Grafana: Dashboards → Import → paste
    `helm/wholo/dashboards/stocdup-order-activity.json`, pick the data source from
    step 4. This is the same file auto-provisioned into the local Grafana; there
@@ -312,7 +315,7 @@ Every pod's logs → Loki on the ops host. Only Fluent Bit runs in-cluster (a
 **values.live.yaml** (see `values.live.example.yaml`):
 
 - `fluentBit.enabled: true`
-- `fluentBit.loki.host: "192.168.1.15"` (port `3100`, uri `/loki/api/v1/push`)
+- `fluentBit.loki.host: "loki.home.arpa"` (port `3100`, uri `/loki/api/v1/push`)
 - `loki.enabled: false` — Loki is external (the in-cluster single-binary Loki is
   local-dev only).
 - Optionally `logging.level: "warn"` to cut boot-log noise across the 5 Node
@@ -328,9 +331,10 @@ a read-only `pods`/`namespaces` ClusterRole) and the DaemonSet, which mounts
 1. Run Loki (or point at an existing one). Set a retention period; storage
    backend (filesystem / object store) and sizing are the ops host's call.
 2. Confirm the k3s nodes — **including the schedulable control-plane node** — can
-   reach `192.168.1.15:3100` (egress ≠ ingress; the `healthAccess` allowlist is
+   resolve and reach `loki.home.arpa:3100` (same `netcheck` pod as above, with
+   `wget -qO- http://loki.home.arpa:3100/ready`; egress ≠ ingress; the `healthAccess` allowlist is
    inbound — check the ops firewall accepts inbound `:3100` from the cluster).
-3. Grafana: add a **Loki** data source, url `http://192.168.1.15:3100`.
+3. Grafana: add a **Loki** data source, url `http://loki.home.arpa:3100`.
 4. Grafana: Dashboards → Import → paste `helm/wholo/dashboards/stocdup-logs.json`,
    pick the Loki data source. Same file auto-provisioned locally; re-import on
    change. (Grafana → Explore → Loki is the primary tool.)

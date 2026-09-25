@@ -138,9 +138,9 @@ telegraf:
   platformHealth:
     enabled: true
   influx:
-    url: "http://192.168.1.15:8086"   # ops-host InfluxDB 2 (must be reachable from the k3s nodes)
-    org: "stocdup"
-    bucket: "stocdup_metrics"
+    url: "http://influxdb.home.arpa:8086"   # ops-host InfluxDB 2 (must resolve + be reachable from pods)
+    org: "Parsnips"
+    bucket: "stocdup"                        # dashboards + alert rules query this name
     token: "CHANGE_ME_influx_write_token"   # real value only in gitignored values.live.yaml
 influxdb:
   enabled: false                       # external in live
@@ -156,7 +156,7 @@ loki:
 fluentBit:
   enabled: true
   loki:
-    host: "192.168.1.15"               # ops-host Loki (must be reachable from the k3s nodes)
+    host: "loki.home.arpa"             # ops-host Loki (must resolve + be reachable from pods)
     port: 3100
     uri: "/loki/api/v1/push"
 

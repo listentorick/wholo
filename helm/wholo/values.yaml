@@ -310,10 +310,10 @@ telegraf:
         cpu: "100m"
   influx:
     # Blank -> the in-cluster InfluxDB service. Live: the ops host, e.g.
-    # http://192.168.1.15:8086
+    # http://influxdb.home.arpa:8086
     url: ""
     org: "stocdup"
-    bucket: "stocdup_metrics"
+    bucket: "stocdup"
     # Blank -> reuse influxdb.adminToken (local). Live: a write-scoped token,
     # real value only in the gitignored values.live.yaml.
     token: ""
@@ -330,7 +330,7 @@ influxdb:
   enabled: false
   image: influxdb:2.7-alpine
   org: "stocdup"
-  bucket: "stocdup_metrics"
+  bucket: "stocdup"
   retention: "90d"
   adminUser: "admin"
   # Set both in values.local.yaml. adminToken also feeds Telegraf and Grafana
@@ -370,7 +370,7 @@ grafana:
 # namespace and pushes them to Loki. The 5 Node processes emit structured JSON
 # (nestjs-pino); www/keycloak/postgres/redis/etc. ship raw, labelled.
 #   Local: loki.enabled + fluentBit.enabled — both in-cluster.
-#   Live : loki.enabled=false; fluentBit.loki.host = the ops host (192.168.1.15).
+#   Live : loki.enabled=false; fluentBit.loki.host = the ops host (loki.home.arpa).
 
 loki:
   # In-cluster single-binary Loki for local dev only. Live uses the external
