@@ -64,7 +64,7 @@ data:
     [[inputs.prometheus]]
       interval = "15s"
       metric_version = 2
-      response_timeout = "5s"
+      timeout = "5s"
       urls = [
       {{- range $name := splitList " " (include "wholo.metrics.targets" .) }}
         "http://{{ include "wholo.fullname" $ }}-{{ $name }}-metrics:{{ include "wholo.metrics.port" $ }}/metrics",

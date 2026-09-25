@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "Platform-operator view of core service health (PBI-1 / ADR-063). API availability + HTTP volume / 5xx / p95 from a per-request MetricsInterceptor; pod status + restarts from Telegraf inputs.kube_inventory; node CPU/memory/disk % from the telegraf-node DaemonSet; BullMQ queue depth from the worker. Best-effort trend data over UDP, not a system of record. No distributor / customer / user / order identifiers are used as labels.",
+  "description": "Platform-operator view of core service health (PBI-1 / ADR-063). API availability + HTTP volume / 5xx / p95 from a per-request MetricsInterceptor; pod status + restarts from Telegraf inputs.kube_inventory; node CPU/memory/disk % from the telegraf-node DaemonSet; BullMQ queue depth from the worker. HTTP and queue metrics are scraped from each process's /metrics (ADR-065): cumulative, reset-aware counters and a true latency histogram. Order and backup metrics still arrive over StatsD. No distributor / customer / user / order identifiers are used as labels.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -113,7 +113,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> increase()\n  |> difference(nonNegative: true)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
           "refId": "A"
         }
       ],
@@ -198,7 +198,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\" and r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> increase()\n  |> difference(nonNegative: true)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
           "refId": "A"
         }
       ],
@@ -253,7 +253,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group()\n  |> sum()",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()",
           "refId": "A"
         }
       ],
@@ -312,7 +312,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group()\n  |> sum()",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\" and r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> increase()\n  |> last()\n  |> group()\n  |> sum()",
           "refId": "A"
         }
       ],
@@ -375,7 +375,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "base = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\ntotal = base |> group() |> sum() |> map(fn: (r) => ({ _time: now(), kind: \"total\", _value: r._value }))\nerrs = base |> filter(fn: (r) => r.status_class == \"5xx\") |> group() |> sum() |> map(fn: (r) => ({ _time: now(), kind: \"errs\", _value: r._value }))\nunion(tables: [total, errs])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"kind\"], valueColumn: \"_value\")\n  |> map(fn: (r) => {\n      t = if exists r.total then float(v: r.total) else 0.0\n      e = if exists r.errs then float(v: r.errs) else 0.0\n      return { _time: r._time, _value: if t > 0.0 then e / t * 100.0 else 0.0 }\n  })",
+          "query": "base = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> increase()\n  |> last()\ntotal = base |> group() |> sum() |> map(fn: (r) => ({ _time: now(), kind: \"total\", _value: r._value }))\nerrs = base |> filter(fn: (r) => r.status_class == \"5xx\") |> group() |> sum() |> map(fn: (r) => ({ _time: now(), kind: \"errs\", _value: r._value }))\nunion(tables: [total, errs])\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"kind\"], valueColumn: \"_value\")\n  |> map(fn: (r) => {\n      t = if exists r.total then float(v: r.total) else 0.0\n      e = if exists r.errs then float(v: r.errs) else 0.0\n      return { _time: r._time, _value: if t > 0.0 then e / t * 100.0 else 0.0 }\n  })",
           "refId": "A"
         }
       ],
@@ -495,7 +495,7 @@
               }
             ]
           },
-          "unit": "ms"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -524,12 +524,13 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_request_ms\" and r._field == \"95_percentile\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_request_duration_seconds_bucket\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> increase()\n  |> difference(nonNegative: true)\n  |> group(columns: [\"service\", \"le\", \"_time\"])\n  |> sum()\n  |> group(columns: [\"service\", \"_time\"])\n  |> map(fn: (r) => ({ r with le: float(v: r.le) }))\n  |> sort(columns: [\"le\"])\n  |> histogramQuantile(quantile: 0.95, upperBoundColumn: \"le\", countColumn: \"_value\", valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r._value)\n  |> group(columns: [\"service\"])\n  |> keep(columns: [\"_time\", \"_value\", \"service\"])",
           "refId": "A"
         }
       ],
       "title": "p95 response time by service",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "True 95th percentile from the stocdup_http_request_duration_seconds histogram, per window (ADR-065)."
     },
     {
       "datasource": {
@@ -610,7 +611,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "total = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: true)\n  |> toFloat()\n  |> fill(value: 0.0)\nerrs = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_http_requests\" and r._field == \"value\")\n  |> filter(fn: (r) => r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: true)\n  |> toFloat()\n  |> fill(value: 0.0)\njoin(tables: {t: total, e: errs}, on: [\"_time\", \"service\"])\n  |> map(fn: (r) => ({ _time: r._time, service: r.service, _value: if r._value_t > 0.0 then r._value_e / r._value_t * 100.0 else 0.0 }))\n  |> group(columns: [\"service\"])",
+          "query": "total = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> increase()\n  |> difference(nonNegative: true)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: true)\n  |> toFloat()\n  |> fill(value: 0.0)\nerrs = from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_http_requests_total\" and r.status_class == \"5xx\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> filter(fn: (r) => r.service =~ /^(${service:regex})$/)\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> increase()\n  |> difference(nonNegative: true)\n  |> group(columns: [\"service\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: sum, createEmpty: true)\n  |> toFloat()\n  |> fill(value: 0.0)\njoin(tables: {t: total, e: errs}, on: [\"_time\", \"service\"])\n  |> map(fn: (r) => ({ _time: r._time, service: r.service, _value: if r._value_t > 0.0 then r._value_e / r._value_t * 100.0 else 0.0 }))\n  |> group(columns: [\"service\"])",
           "refId": "A"
         }
       ],
@@ -1293,7 +1294,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_queue_jobs\" and r._field == \"value\" and r.state == \"failed\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_queue_jobs\" and r.state == \"failed\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
           "refId": "A"
         }
       ],
@@ -1379,7 +1380,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_queue_oldest_waiting_age_ms\" and r._field == \"value\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1000.0 }))\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_queue_oldest_waiting_age_ms\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> map(fn: (r) => ({ r with _value: float(v: r._value) / 1000.0 }))\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
           "refId": "A"
         }
       ],
@@ -1464,7 +1465,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_queue_jobs\" and r._field == \"value\")\n  |> filter(fn: (r) => r.state == \"waiting\" or r.state == \"delayed\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\", \"state\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\", \"state\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_queue_jobs\")\n  |> filter(fn: (r) => r.state == \"waiting\" or r.state == \"delayed\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\", \"state\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\", \"state\"])",
           "refId": "A"
         }
       ],
@@ -1549,7 +1550,7 @@
       "pluginVersion": "11.2.0",
       "targets": [
         {
-          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"stocdup_queue_jobs\" and r._field == \"value\" and r.state == \"active\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"prometheus\" and r._field == \"stocdup_queue_jobs\" and r.state == \"active\")\n  |> filter(fn: (r) => r.environment =~ /^(${environment:regex})$/)\n  |> group(columns: [\"queue\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> keep(columns: [\"_time\", \"_value\", \"queue\"])",
           "refId": "A"
         }
       ],
@@ -1668,6 +1669,6 @@
   "timezone": "",
   "title": "Stocdup Platform Health",
   "uid": "stocdup-platform-health",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
