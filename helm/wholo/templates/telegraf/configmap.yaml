@@ -1,9 +1,10 @@
 {{- if .Values.telegraf.enabled }}
-# Order-activity telemetry (ADR-062) + core platform-health metrics
-# (PBI-1 / ADR-063). Receives InfluxDB-style StatsD from the apps over UDP and,
-# when platformHealth is on, also polls each API's /health and the Kubernetes
-# API. Forwards everything to InfluxDB 2. Environment variables (${INFLUX_*})
-# are injected by the Deployment.
+# Order-activity telemetry (ADR-062), backup health (ADR-069) and core
+# platform-health metrics (ADR-063, transport per ADR-065). Receives StatsD over
+# UDP (order counters, backup gauges) and, when platformHealth is on, scrapes
+# every process's /metrics (HTTP + queue metrics) and polls each API's /health
+# and the Kubernetes API. Forwards everything to InfluxDB 2. Environment
+# variables (${INFLUX_*}) are injected by the Deployment.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -22,32 +23,53 @@ data:
       omit_hostname = true
 
     # Stamped on every metric that does not already carry it. App-emitted StatsD
-    # lines set their own `environment` tag (from APP_ENV) — Telegraf never
-    # overrides a metric's own tag — so this only fills it in for Telegraf's own
-    # inputs (http_response, kube_inventory).
+    # lines and scraped /metrics series carry their own `environment` (from
+    # APP_ENV) — Telegraf never overrides a metric's own tag — so this only fills
+    # it in for Telegraf's own inputs (http_response, kube_inventory).
     [global_tags]
       environment = {{ .Values.appEnv | default "local" | quote }}
 
-    # apps/* send `name,tag=value,...:N|c|ms|g` (hand-built InfluxDB-line
-    # StatsD). Telegraf's statsd input parses those tags natively. Counters and
-    # timings are dropped after each flush so a quiet period reports nothing
-    # rather than a stale value; gauges are KEPT (delete_gauges = false) so the
-    # queue-depth series (ADR-063) stay continuous between the worker's 15s
-    # sweeps.
+    # StatsD senders: apps/api's order-activity counters (ADR-062,
+    # `name,tag=value,...:N|c`) and the pg-backup CronJob's gauges (ADR-069,
+    # `|g`). Counters are dropped after each flush so a quiet period reports
+    # nothing rather than a stale value. Gauges are KEPT (delete_gauges = false):
+    # the backup job runs every 6h and exits, and its last-run / last-success
+    # gauges must keep reporting in between — the backup dashboard and
+    # alerts depend on it.
     [[inputs.statsd]]
       protocol = "udp"
       service_address = ":8125"
       delete_counters = true
       delete_gauges = false
       delete_sets = true
-      delete_timings = true
       allowed_pending_messages = 10000
-      percentiles = [95]
 
     # Telegraf's own buffer / write-error counters — a debugging aid when the
     # InfluxDB output starts failing.
     [[inputs.internal]]
 {{- if .Values.telegraf.platformHealth.enabled }}
+
+    # ── ADR-065: HTTP + BullMQ queue metrics, scraped from each process ──────
+    # prom-client instruments on a cluster-internal :9464/metrics per process
+    # (the `<release>-<name>-metrics` ClusterIP Services). Counters/histograms
+    # are cumulative since process start: a missed scrape loses resolution,
+    # never events. metric_version = 2 writes measurement `prometheus`, one
+    # field per metric name, prom labels (environment, service, method, …) as
+    # tags, histogram buckets as `<name>_bucket` with an `le` tag.
+    #
+    # Static Service URLs are only deterministic while each app runs ONE
+    # replica (true today; the worker is pinned to 1). If an app ever scales
+    # out, a Service scrape hits a random pod and cumulative-counter math breaks
+    # — switch to pod discovery then (ADR-065).
+    [[inputs.prometheus]]
+      interval = "15s"
+      metric_version = 2
+      response_timeout = "5s"
+      urls = [
+      {{- range $name := splitList " " (include "wholo.metrics.targets" .) }}
+        "http://{{ include "wholo.fullname" $ }}-{{ $name }}-metrics:{{ include "wholo.metrics.port" $ }}/metrics",
+      {{- end }}
+      ]
 
     # ── ADR-063: per-API availability + latency self-checks (no app code) ──────
     # Polls the Service, so this measures "≥1 ready replica answered". Per-pod

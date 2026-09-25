@@ -8,16 +8,22 @@ data:
   PORT: "3001"
   NODE_ENV: "production"
   APP_ENV: {{ .Values.appEnv | default "local" | quote }}
-  # `service` tag on every metric this process emits (ADR-063).
+  # `service` label on every metric this process emits (ADR-063/065).
   SERVICE_NAME: "api"
   # Structured logging level (ADR-064).
   LOG_LEVEL: {{ .Values.logging.level | default "info" | quote }}
   {{- if .Values.telegraf.enabled }}
-  # Platform telemetry (ADR-062 / ADR-063). apps/api + the worker send StatsD
-  # over UDP to the in-cluster Telegraf; unset ⇒ MetricsService is a silent
-  # no-op.
+  # Order-activity counters (ADR-062) go to the in-cluster Telegraf over
+  # StatsD/UDP; unset ⇒ MetricsService is a silent no-op. (The worker shares
+  # this ConfigMap but emits nothing over StatsD.)
   STATSD_HOST: {{ include "wholo.telegraf.host" . | quote }}
   STATSD_PORT: "8125"
+  {{- if .Values.telegraf.platformHealth.enabled }}
+  # Platform-health metrics (ADR-065): prom-client served on this port at
+  # /metrics for Telegraf's scrape; unset ⇒ no metrics server. The worker
+  # inherits it too.
+  METRICS_PORT: {{ include "wholo.metrics.port" . | quote }}
+  {{- end }}
   {{- end }}
   REDIS_URL: {{ printf "redis://%s:%d" (include "wholo.redis.host" .) (int .Values.redis.port) | quote }}
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}

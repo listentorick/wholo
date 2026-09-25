@@ -283,6 +283,9 @@ telegraf:
   flushInterval: "10s"
   # ── Core platform-health metrics (PBI-1 / ADR-063) ────────────────────────
   # Layered on the same Telegraf → InfluxDB path. When enabled:
+  #   - every process (api, the 3 BFFs, worker) serves prom-client HTTP + queue
+  #     metrics on :9464/metrics via its own ClusterIP `<release>-<app>-metrics`
+  #     Service, and Telegraf scrapes them with inputs.prometheus (ADR-065);
   #   - the Telegraf Deployment additionally runs inputs.http_response (per-API
   #     availability self-checks) and inputs.kube_inventory (pod status /
   #     restarts), which needs the chart's first RBAC — a read-only

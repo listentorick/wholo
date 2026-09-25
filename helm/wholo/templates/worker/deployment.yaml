@@ -26,6 +26,9 @@ spec:
           command: ["node", "dist/worker.js"]
           ports:
             - containerPort: 3099
+            # Platform-health metrics (ADR-065), via <release>-worker-metrics.
+            - name: metrics
+              containerPort: {{ include "wholo.metrics.port" . }}
           envFrom:
             - configMapRef:
                 name: {{ include "wholo.fullname" . }}-api
@@ -33,7 +36,7 @@ spec:
                 name: {{ include "wholo.fullname" . }}-api
           env:
             # Overrides SERVICE_NAME=api inherited from the shared api ConfigMap
-            # so the worker's queue gauges (ADR-063) are tagged service=worker.
+            # so the worker's queue gauges (ADR-063) are labelled service=worker.
             - name: SERVICE_NAME
               value: "worker"
           livenessProbe:

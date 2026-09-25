@@ -8,16 +8,15 @@ data:
   PORT: "3020"
   NODE_ENV: "production"
   APP_ENV: {{ .Values.appEnv | default "local" | quote }}
-  # `service` tag on every metric this process emits (ADR-063).
+  # `service` label on every metric this process emits (ADR-063/065).
   SERVICE_NAME: "admin-api"
   # Structured logging level (ADR-064).
   LOG_LEVEL: {{ .Values.logging.level | default "info" | quote }}
-  {{- if .Values.telegraf.enabled }}
-  # Platform telemetry (ADR-062 / ADR-063). The BFF sends HTTP request / latency
-  # StatsD over UDP to the in-cluster Telegraf; unset ⇒ MetricsService is a
-  # silent no-op.
-  STATSD_HOST: {{ include "wholo.telegraf.host" . | quote }}
-  STATSD_PORT: "8125"
+  {{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+  # Platform-health metrics (ADR-065): prom-client served on this port at
+  # /metrics for Telegraf's scrape; unset ⇒ no metrics server. This BFF
+  # sends nothing over StatsD.
+  METRICS_PORT: {{ include "wholo.metrics.port" . | quote }}
   {{- end }}
   CENTRAL_API_URL: {{ .Values.adminApi.centralApiUrl | quote }}
   KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}

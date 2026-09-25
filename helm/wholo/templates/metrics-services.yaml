@@ -1,0 +1,24 @@
+{{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+{{- $root := . }}
+{{- range $name := splitList " " (include "wholo.metrics.targets" .) }}
+# Platform-health metrics endpoint for {{ $name }} (ADR-065), scraped by
+# Telegraf. A dedicated ClusterIP Service — never the app's own Service, which
+# is LoadBalancer/NodePort in some environments — so :9464 is only ever
+# reachable inside the cluster and never published on a node or ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" $root }}-{{ $name }}-metrics
+  labels:
+    app: {{ include "wholo.fullname" $root }}-{{ $name }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ include "wholo.fullname" $root }}-{{ $name }}
+  ports:
+    - name: metrics
+      port: {{ include "wholo.metrics.port" $root }}
+      targetPort: {{ include "wholo.metrics.port" $root }}
+---
+{{- end }}
+{{- end }}

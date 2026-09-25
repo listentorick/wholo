@@ -37,6 +37,19 @@ Expand the name of the chart.
 {{- printf "%s-telegraf" (include "wholo.fullname" .) }}
 {{- end }}
 
+{{/*
+Processes that serve platform-health metrics on :9464/metrics (ADR-065).
+Single source for the per-process metrics Services and Telegraf's scrape list.
+Each name matches the `app: <fullname>-<name>` pod label.
+*/}}
+{{- define "wholo.metrics.targets" -}}
+api admin-api portal-api driver-api worker
+{{- end }}
+
+{{- define "wholo.metrics.port" -}}
+9464
+{{- end }}
+
 {{- define "wholo.influxdb.host" -}}
 {{- printf "%s-influxdb" (include "wholo.fullname" .) }}
 {{- end }}
