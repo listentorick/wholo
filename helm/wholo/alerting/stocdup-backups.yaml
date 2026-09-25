@@ -30,7 +30,7 @@ groups:
             model:
               refId: A
               query: |-
-                from(bucket: "stocdup_metrics")
+                from(bucket: "stocdup")
                   |> range(start: -7d)
                   |> filter(fn: (r) => r._measurement == "stocdup_backup_last_success_ts" and r._field == "value")
                   |> group(columns: ["environment"])
@@ -78,7 +78,7 @@ groups:
             model:
               refId: A
               query: |-
-                from(bucket: "stocdup_metrics")
+                from(bucket: "stocdup")
                   |> range(start: -7d)
                   |> filter(fn: (r) => r._measurement == "stocdup_backup_last_outcome" and r._field == "value")
                   |> group(columns: ["environment"])
