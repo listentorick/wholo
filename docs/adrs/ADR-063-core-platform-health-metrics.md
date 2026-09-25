@@ -1,7 +1,7 @@
 # ADR-063: Core platform-health metrics via Telegraf (StatsD + kube_inventory + host DaemonSet) → InfluxDB / Grafana
 
 ## Status
-Accepted
+Accepted — **amended by [ADR-065](ADR-065-prometheus-scrape-platform-health-metrics.md)**: the HTTP and BullMQ queue metrics moved from StatsD/UDP to a Prometheus `/metrics` scrape (supersedes "HTTP volume / 5xx / p95", the transport part of "BullMQ depth", and "Horizontal-scaling behaviour" below). Everything else stands.
 
 ## Context
 The platform operator needs a quick read on whether Stocdup is *up, failing, or

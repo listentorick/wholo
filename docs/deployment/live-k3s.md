@@ -261,11 +261,19 @@ InfluxDB credentials; the flow can never fail or slow an order.
 statsd input + influxdb_v2 output loaded with no write errors; submit a real
 order; the point appears on the ops-host Grafana dashboard within ~15s.
 
-## Core platform-health metrics (ADR-063)
+## Core platform-health metrics (ADR-063 / ADR-065)
 
 Layered on the same Telegraf → ops-host InfluxDB path. Enabled by
 `telegraf.platformHealth.enabled: true` in `values.live.yaml` (already in
 `values.live.example.yaml`). When on, `helm upgrade` additionally creates:
+
+- **five `ClusterIP` Services** `wholo-{api,admin-api,portal-api,driver-api,worker}-metrics`
+  on port `9464`. Each process serves its HTTP request/latency and (worker)
+  BullMQ queue metrics there as Prometheus text at `/metrics` (ADR-065), and
+  the Telegraf Deployment scrapes them with `inputs.prometheus` every 15s. The
+  port is never on an app's own Service or an ingress route — cluster-internal
+  only, no new egress. (Order-activity counters and backup gauges still arrive
+  over StatsD/UDP.)
 
 - a read-only **ClusterRole + ClusterRoleBinding + ServiceAccount**
   (`wholo-telegraf`) — the chart's first RBAC — so the Telegraf Deployment's
@@ -286,8 +294,12 @@ already exists.
 source. Same file auto-provisioned locally; re-import on change.
 
 **Verify after deploy:**
-`kubectl -n wholo logs deploy/wholo-telegraf` shows `inputs.http_response` +
-`inputs.kube_inventory` loaded with **no `forbidden`** lines;
+`kubectl -n wholo logs deploy/wholo-telegraf` shows `inputs.prometheus`,
+`inputs.http_response` + `inputs.kube_inventory` loaded with **no `forbidden`**
+and no `connection refused` / `error making HTTP request` lines;
+`kubectl -n wholo exec deploy/wholo-api -- wget -qO- localhost:9464/metrics | head`
+returns `stocdup_http_requests_total` lines (repeat for `deploy/wholo-worker` →
+`stocdup_queue_jobs`);
 `kubectl -n wholo logs ds/wholo-telegraf-node` shows `inputs.cpu`/`mem`/`disk`
 loaded; `kubectl auth can-i list pods --as=system:serviceaccount:wholo:wholo-telegraf`
 returns `yes`; the "Stocdup Platform Health" dashboard populates within ~30s.
@@ -371,7 +383,8 @@ push to R2) is a recommended follow-up.
 6. `kubectl -n wholo logs deploy/wholo-telegraf` — statsd + influxdb_v2 loaded,
    no write errors; submit an order and confirm it lands on the ops Grafana
    "Stocdup Order Activity" dashboard (ADR-062).
-7. `kubectl -n wholo logs deploy/wholo-telegraf` — `inputs.http_response` +
+7. `kubectl -n wholo logs deploy/wholo-telegraf` — `inputs.prometheus` (5
+   targets, no `connection refused`), `inputs.http_response` +
    `inputs.kube_inventory` loaded, no `forbidden`; `kubectl -n wholo rollout
    status ds/wholo-telegraf-node`; the ops Grafana "Stocdup Platform Health"
    dashboard (ADR-063) shows availability, node CPU/mem/disk and queue depth.
