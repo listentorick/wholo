@@ -352,7 +352,7 @@ describe('OrdersService — delivery date revalidation', () => {
   describe('order-activity metrics', () => {
     it('emits both counters with distributor, source and currency tags', async () => {
       setupHappyPath();
-      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+      await service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
       expect(metrics.increment).toHaveBeenCalledWith('stocdup_orders_submitted', 1, {
         distributor_id: DISTRIBUTOR_ID,
@@ -371,7 +371,7 @@ describe('OrdersService — delivery date revalidation', () => {
 
     it('tags source=on_behalf for an order-as submission', async () => {
       setupHappyPath();
-      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
+      await service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID, 'session-token-1', DISTRIBUTOR_ID);
 
       expect(metrics.increment).toHaveBeenCalledWith(
         'stocdup_orders_submitted',
@@ -386,7 +386,7 @@ describe('OrdersService — delivery date revalidation', () => {
         makeDistributor({ distributorSettings: { minimumOrderSpend: null, currencyCode: 'JPY' } }),
       );
 
-      await service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID);
+      await service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
 
       expect(metrics.increment).toHaveBeenCalledWith(
         'stocdup_order_value_minor',
@@ -402,7 +402,7 @@ describe('OrdersService — delivery date revalidation', () => {
       });
 
       await expect(
-        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+        service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
       ).resolves.toBeDefined();
     });
 
@@ -411,7 +411,7 @@ describe('OrdersService — delivery date revalidation', () => {
       (prisma.cartOrder.findUnique as jest.Mock).mockResolvedValue(makeCart([]));
 
       await expect(
-        service.submitOrder({ distributorSlug: 'dist' }, USER_ID, CUSTOMER_ID),
+        service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID),
       ).rejects.toThrow();
       expect(metrics.increment).not.toHaveBeenCalled();
     });
