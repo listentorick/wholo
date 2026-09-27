@@ -12,6 +12,7 @@ import {
   ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,
+  KEYCLOAK_USER_QUEUE,
   NOTIFICATION_DELIVERY_QUEUE,
   NOTIFICATIONS_QUEUE,
 } from './queue.constants';
@@ -28,6 +29,9 @@ const MONITORED_QUEUES = [
   ANALYTICS_FACTS_QUEUE,
   ACCOUNTING_BULK_IMPORT_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,
+  // Removed staff members' Keycloak disables (ADR-067): a silent failure here
+  // leaves a removed person able to sign in to Keycloak.
+  KEYCLOAK_USER_QUEUE,
 ] as const;
 
 // Job states surfaced to the platform-health dashboard (ADR-063). "failed" and

@@ -89,6 +89,7 @@ describe('QueueMetricsScheduler', () => {
         'analytics-facts',
         'accounting-bulk-import',
         'delivery-run-allocation',
+        'keycloak-users',
       ]),
     );
     expect(new Set(names).size).toBe(names.length); // no duplicates
@@ -108,7 +109,7 @@ describe('QueueMetricsScheduler', () => {
       failed: 3,
     });
     expect(await ageOf(metrics, queues[0].name)).toBe(0);
-    // 9 queues x 4 states, and one age series per queue
+    // every queue x 4 states, and one age series per queue
     expect(await jobs(metrics)).toHaveLength(queues.length * 4);
     expect(await ages(metrics)).toHaveLength(queues.length);
   });
@@ -152,7 +153,7 @@ describe('QueueMetricsScheduler', () => {
 
     await expect(scheduler.sweep()).resolves.toBeUndefined();
 
-    // the remaining 8 queues still reported
+    // the remaining queues still reported
     const reported = await reportedQueues(metrics);
     expect(reported.has(queues[0].name)).toBe(false);
     expect(reported.size).toBe(queues.length - 1);
@@ -168,7 +169,7 @@ describe('QueueMetricsScheduler', () => {
       await jest.advanceTimersByTimeAsync(11_000); // past REPORT_TIMEOUT_MS
       await swept;
 
-      // queue 0 timed out, the other 8 still reported
+      // queue 0 timed out, the others still reported
       const reported = await reportedQueues(metrics);
       expect(reported.has(queues[0].name)).toBe(false);
       expect(reported.size).toBe(queues.length - 1);
