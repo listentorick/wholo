@@ -391,20 +391,26 @@ untouched.
 8. *(Recommended)* Bucket → Settings → Bucket lock rules → retain objects under
    `postgres/` for 1 day, so a leaked token can't delete recent backups.
 
-**Upgrading from the old PVC backups:** the chart no longer creates the
-`wholo-pg-backups` PVC, so `helm upgrade` deletes it and its dumps (local-path
-reclaim policy is Delete). Before that upgrade, run one last old-style backup
-and copy the newest dump off-cluster:
+**Upgrading from the old PVC backups:** the chart no longer writes to the
+`wholo-pg-backups` PVC, but it does **not** delete it. While that PVC exists the
+chart re-renders it unchanged with `helm.sh/resource-policy: keep`
+(`templates/postgres/backup-legacy-pvc.yaml`), so Helm never removes it and its
+last 7 nightly dumps stay available as a fallback. Nothing writes to it after the
+upgrade (the old CronJob is replaced).
+
+To read or copy an old dump while it exists:
 
 ```bash
-kubectl -n wholo create job pg-backup-final --from=cronjob/wholo-pg-backup
-kubectl -n wholo wait --for=condition=complete job/pg-backup-final --timeout=600s
 kubectl -n wholo run keep-dump --image=postgres:16-alpine --restart=Never \
   --overrides='{"spec":{"containers":[{"name":"keep-dump","image":"postgres:16-alpine","command":["sleep","600"],"volumeMounts":[{"name":"b","mountPath":"/backups"}]}],"volumes":[{"name":"b","persistentVolumeClaim":{"claimName":"wholo-pg-backups"}}]}}'
-kubectl -n wholo exec keep-dump -- ls -1t /backups | head -1        # newest
-kubectl -n wholo cp keep-dump:/backups/<newest> ./<newest>
+kubectl -n wholo exec keep-dump -- ls -lt /backups
+kubectl -n wholo cp keep-dump:/backups/<file> ./<file>
 kubectl -n wholo delete pod keep-dump
 ```
+
+**Delete it by hand** once an R2 backup has been restored successfully into an
+isolated database (runbook part A): `kubectl -n wholo delete pvc wholo-pg-backups`.
+Later upgrades then render nothing for it.
 
 **Day to day:**
 

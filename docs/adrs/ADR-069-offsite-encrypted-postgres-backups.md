@@ -22,7 +22,7 @@ pg_dumpall | gzip | rclone rcat r2crypt:wholo-<UTC ts>.sql.gz
 ```
 
 - **Full dumps.** Each backup is a complete dump of every database: `wholo`, `keycloak` and `plausible`, plus roles. There are no incrementals, so any single object restores on its own.
-- **Streamed.** Nothing touches node disk. The backup PVC is removed.
+- **Streamed.** Nothing touches node disk. The chart stops writing to the old backup PVC but keeps it (`helm.sh/resource-policy: keep`) until it is deleted by hand after R2 is proven.
 - **Recovery point: up to 6 hours.** We accept that for now. PITR, WAL archiving, CloudNativePG and HA are out of scope, and each would need a Postgres change.
 
 ### 2. Encryption: rclone `crypt`, symmetric, applied in the CronJob
@@ -85,5 +85,5 @@ Telemetry is best-effort. A lost UDP datagram can at worst delay the failure ale
 - **The recovery point gets shorter.** It was 24h and is now 6h.
 - **The key is now critical.** If the encryption key is lost, every backup is unrecoverable. It's kept in the password manager alongside `values.live.yaml`.
 - **Rotating the key** makes backups taken before the rotation need the old key. With 3-day retention, keep the old key for 3 days after rotating.
-- **The upgrade deletes the old PVC.** Upgrading the chart deletes `wholo-pg-backups` and the old dumps on it, so copy the newest one off first (see live-k3s.md).
+- **The old PVC is kept, not deleted.** The upgrade leaves `wholo-pg-backups` and its last dumps in place as a fallback; an operator deletes it once an R2 backup has been restored successfully (see live-k3s.md).
 - **Full dumps have a size ceiling.** At some size a full dump every 6 hours stops being cheap. Revisit this ADR, towards WAL-based PITR, when a backup takes minutes rather than seconds or the recovery point needs to be under 6h.

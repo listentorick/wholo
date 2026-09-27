@@ -1,0 +1,34 @@
+{{- /*
+The pre-ADR-069 backup PVC (nightly dumps on node-local disk). The chart no
+longer uses it, but it must not disappear on the upgrade that introduces R2
+backups: until an R2 backup has been proven restorable, those dumps are the only
+backups there are.
+
+While the PVC exists this re-renders it with its OWN current spec (lookup — so
+nothing about it changes) plus `helm.sh/resource-policy: keep`, which tells Helm
+never to delete it, including after it drops out of a later release. Remove it
+by hand once R2 backups are verified (docs/deployment/live-k3s.md → Backups).
+On a fresh install, or once deleted, lookup finds nothing and this renders
+nothing. `helm template` / client dry-runs can't lookup, so they render nothing.
+*/ -}}
+{{- $name := printf "%s-pg-backups" (include "wholo.fullname" .) }}
+{{- $existing := lookup "v1" "PersistentVolumeClaim" .Release.Namespace $name }}
+{{- if $existing }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    app: {{ include "wholo.fullname" . }}-pg-backup
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml $existing.spec.accessModes | nindent 4 }}
+  {{- with $existing.spec.storageClassName }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $existing.spec.resources.requests.storage }}
+{{- end }}
