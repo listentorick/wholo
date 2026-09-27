@@ -1,3 +1,15 @@
+<#import "password-policy.ftl" as pw>
+<#--
+  Field errors are shown under their own inputs. Keycloak's user profile reports
+  a missing name as the generic "Please specify this field.", so for the name
+  fields that is swapped for Keycloak's own field-specific message.
+-->
+<#macro fieldError field requiredMessage="">
+  <#if messagesPerField.existsError(field)>
+    <#assign error = messagesPerField.get(field)>
+    <p class="wh-field-error"><#if requiredMessage?has_content && error == msg("error-user-attribute-required")>${msg(requiredMessage)}<#else>${kcSanitize(error)?no_esc}</#if></p>
+  </#if>
+</#macro>
 <!DOCTYPE html>
 <html lang="${(locale.currentLanguageTag)!'en'}">
 <head>
@@ -23,7 +35,12 @@
       <div class="wh-divider"></div>
     </div>
 
-    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
+    <#-- The summary repeats every field error; when fields have errors show only messages not tied to a field. -->
+    <#if messagesPerField.existsError('firstName', 'lastName', 'email', 'username', 'password', 'password-confirm')>
+      <#if messagesPerField.existsError('global')>
+        <p class="wh-error">${kcSanitize(messagesPerField.get('global'))?no_esc}</p>
+      </#if>
+    <#elseif message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
       <p class="wh-<#if message.type = 'error'>error<#else>info</#if>">${kcSanitize(message.summary)?no_esc}</p>
     </#if>
 
@@ -40,9 +57,7 @@
             autocomplete="given-name"
             autofocus
           />
-          <#if messagesPerField.existsError('firstName')>
-            <p class="wh-field-error">${kcSanitize(messagesPerField.get('firstName'))?no_esc}</p>
-          </#if>
+          <@fieldError field="firstName" requiredMessage="missingFirstNameMessage"/>
         </div>
         <div class="wh-field">
           <label for="lastName">Last name</label>
@@ -53,9 +68,7 @@
             value="${(register.formData.lastName)!''}"
             autocomplete="family-name"
           />
-          <#if messagesPerField.existsError('lastName')>
-            <p class="wh-field-error">${kcSanitize(messagesPerField.get('lastName'))?no_esc}</p>
-          </#if>
+          <@fieldError field="lastName" requiredMessage="missingLastNameMessage"/>
         </div>
       </div>
 
@@ -69,32 +82,28 @@
           autocomplete="email"
           placeholder="you@yourbusiness.com"
         />
-        <#if messagesPerField.existsError('email')>
-          <p class="wh-field-error">${kcSanitize(messagesPerField.get('email'))?no_esc}</p>
+        <#-- The email is the username here, so a username error belongs to this field (email's own error wins). -->
+        <#if messagesPerField.existsError('email', 'username')>
+          <p class="wh-field-error">${kcSanitize(messagesPerField.getFirstError('email', 'username'))?no_esc}</p>
         </#if>
       </div>
 
       <#if passwordRequired??>
         <div class="wh-field">
           <label for="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            autocomplete="new-password"
-            placeholder="••••••••"
-          />
-          <#if passwordPolicies??>
-            <ul class="wh-field-hint" id="kc-password-policy-list">
-              <#if (passwordPolicies.length!-1) != -1><li>At least ${passwordPolicies.length} characters</li></#if>
-              <#if (passwordPolicies.upperCase!-1) != -1><li>At least ${passwordPolicies.upperCase} upper case letter<#if (passwordPolicies.upperCase!1) != 1>s</#if></li></#if>
-              <#if (passwordPolicies.lowerCase!-1) != -1><li>At least ${passwordPolicies.lowerCase} lower case letter<#if (passwordPolicies.lowerCase!1) != 1>s</#if></li></#if>
-              <#if (passwordPolicies.digits!-1) != -1><li>At least ${passwordPolicies.digits} number<#if (passwordPolicies.digits!1) != 1>s</#if></li></#if>
-              <#if (passwordPolicies.specialChars!-1) != -1><li>At least ${passwordPolicies.specialChars} special character<#if (passwordPolicies.specialChars!1) != 1>s</#if></li></#if>
-              <#if passwordPolicies.notUsername!false><li>Must not be your username</li></#if>
-              <#if passwordPolicies.notEmail!false><li>Must not be your email address</li></#if>
-            </ul>
-          </#if>
+          <div class="wh-pw-wrap">
+            <input
+              type="password"
+              id="password"
+              name="password"
+              autocomplete="new-password"
+              placeholder="••••••••"
+              <#if passwordPolicies??>aria-describedby="kc-password-policy-list"</#if>
+            />
+            <@pw.eyeToggle/>
+          </div>
+          <@pw.progress/>
+          <@pw.policyList passwordField="password" confirmField="password-confirm" emailField="#email" usernameField="#email"/>
           <#if messagesPerField.existsError('password')>
             <p class="wh-field-error">${kcSanitize(messagesPerField.get('password'))?no_esc}</p>
           </#if>
@@ -102,13 +111,18 @@
 
         <div class="wh-field wh-field--last">
           <label for="password-confirm">Confirm password</label>
-          <input
-            type="password"
-            id="password-confirm"
-            name="password-confirm"
-            autocomplete="new-password"
-            placeholder="••••••••"
-          />
+          <div class="wh-pw-wrap">
+            <input
+              type="password"
+              id="password-confirm"
+              name="password-confirm"
+              autocomplete="new-password"
+              placeholder="••••••••"
+              aria-describedby="pw-match"
+            />
+            <@pw.eyeToggle label="confirm password"/>
+          </div>
+          <@pw.matchLine/>
           <#if messagesPerField.existsError('password-confirm')>
             <p class="wh-field-error">${kcSanitize(messagesPerField.get('password-confirm'))?no_esc}</p>
           </#if>
@@ -124,6 +138,8 @@
     <a class="wh-link" href="${url.loginUrl}">Already have an account? Sign in</a>
 
   </div>
+
+  <script type="module" src="${url.resourcesPath}/js/password-rules.js"></script>
 
 </body>
 </html>

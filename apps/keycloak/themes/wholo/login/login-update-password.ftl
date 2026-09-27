@@ -1,3 +1,4 @@
+<#import "password-policy.ftl" as pw>
 <!DOCTYPE html>
 <html lang="${(locale.currentLanguageTag)!'en'}">
 <head>
@@ -33,36 +34,37 @@
 
       <div class="wh-field">
         <label for="password-new">New Password</label>
-        <input
-          type="password"
-          id="password-new"
-          name="password-new"
-          autocomplete="new-password"
-          placeholder="••••••••"
-          autofocus
-        />
-        <#if passwordPolicies??>
-          <ul class="wh-field-hint" id="kc-password-policy-list">
-            <#if (passwordPolicies.length!-1) != -1><li>At least ${passwordPolicies.length} characters</li></#if>
-            <#if (passwordPolicies.upperCase!-1) != -1><li>At least ${passwordPolicies.upperCase} upper case letter<#if (passwordPolicies.upperCase!1) != 1>s</#if></li></#if>
-            <#if (passwordPolicies.lowerCase!-1) != -1><li>At least ${passwordPolicies.lowerCase} lower case letter<#if (passwordPolicies.lowerCase!1) != 1>s</#if></li></#if>
-            <#if (passwordPolicies.digits!-1) != -1><li>At least ${passwordPolicies.digits} number<#if (passwordPolicies.digits!1) != 1>s</#if></li></#if>
-            <#if (passwordPolicies.specialChars!-1) != -1><li>At least ${passwordPolicies.specialChars} special character<#if (passwordPolicies.specialChars!1) != 1>s</#if></li></#if>
-            <#if passwordPolicies.notUsername!false><li>Must not be your username</li></#if>
-            <#if passwordPolicies.notEmail!false><li>Must not be your email address</li></#if>
-          </ul>
-        </#if>
+        <div class="wh-pw-wrap">
+          <input
+            type="password"
+            id="password-new"
+            name="password-new"
+            autocomplete="new-password"
+            placeholder="••••••••"
+            autofocus
+            <#if passwordPolicies??>aria-describedby="kc-password-policy-list"</#if>
+          />
+          <@pw.eyeToggle/>
+        </div>
+        <@pw.progress/>
+        <#-- The hidden #username holds the email when registrationEmailAsUsername is on. -->
+        <@pw.policyList passwordField="password-new" confirmField="password-confirm" emailField=((realm.registrationEmailAsUsername)!false)?then("#username", "") usernameField="#username"/>
       </div>
 
       <div class="wh-field wh-field--last">
         <label for="password-confirm">Confirm Password</label>
-        <input
-          type="password"
-          id="password-confirm"
-          name="password-confirm"
-          autocomplete="new-password"
-          placeholder="••••••••"
-        />
+        <div class="wh-pw-wrap">
+          <input
+            type="password"
+            id="password-confirm"
+            name="password-confirm"
+            autocomplete="new-password"
+            placeholder="••••••••"
+            aria-describedby="pw-match"
+          />
+          <@pw.eyeToggle label="confirm password"/>
+        </div>
+        <@pw.matchLine/>
       </div>
 
       <button class="wh-btn" type="submit">
@@ -72,6 +74,8 @@
     </form>
 
   </div>
+
+  <script type="module" src="${url.resourcesPath}/js/password-rules.js"></script>
 
 </body>
 </html>

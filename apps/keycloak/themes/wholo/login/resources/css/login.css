@@ -213,8 +213,159 @@ input[type="password"]:focus {
   margin: 6px 0 0;
   padding-left: 18px;
   font-size: 12px;
-  color: #9BA3AE;
+  color: #6B7280;
   line-height: 1.5;
+}
+
+/* ─── Live password rules (password-policy.ftl + js/password-rules.js) ─
+   Everything below only takes effect once the script adds .wh-live /
+   un-hides elements; without JS the hint list above is unchanged. */
+
+.wh-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.wh-pw-wrap {
+  position: relative;
+}
+
+.wh-pw-wrap input[type="password"],
+.wh-pw-wrap input[type="text"] {
+  padding-right: 44px;
+}
+
+.wh-pw-wrap.wh-live input[type="password"],
+.wh-pw-wrap.wh-live input[type="text"] {
+  border-bottom-color: transparent;
+}
+
+.wh-eye {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  cursor: pointer;
+}
+
+.wh-eye:hover,
+.wh-eye:focus-visible {
+  color: #1565FF;
+}
+
+.wh-eye[hidden],
+.wh-eye .wh-eye-hide,
+.wh-eye[aria-pressed="true"] .wh-eye-show {
+  display: none;
+}
+
+.wh-eye[aria-pressed="true"] .wh-eye-hide {
+  display: block;
+}
+
+.wh-pw-progress {
+  position: relative;
+  height: 1.5px;
+  background: #E5E7EB;
+  overflow: hidden;
+  transition: background-color 0.2s ease;
+}
+
+.wh-pw-progress[hidden] {
+  display: none;
+}
+
+.wh-field:focus-within .wh-pw-progress {
+  background: #C7D7FE;
+}
+
+.wh-pw-progress-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  background: #1565FF;
+  transition: width 0.25s ease, background-color 0.25s ease;
+}
+
+.wh-pw-progress-fill.is-complete {
+  background: #16A34A;
+}
+
+.wh-field-hint.wh-live {
+  list-style: none;
+  padding-left: 0;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wh-rule-icon {
+  display: none;
+}
+
+.wh-live .wh-rule,
+.wh-match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #6B7280;
+  transition: color 0.2s ease;
+}
+
+.wh-live .wh-rule-icon,
+.wh-match .wh-rule-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.wh-rule-icon svg {
+  display: none;
+}
+
+.wh-rule-icon .wh-i-todo,
+.is-met .wh-rule-icon .wh-i-met,
+.is-error .wh-rule-icon .wh-i-err {
+  display: block;
+}
+
+.is-met .wh-rule-icon .wh-i-todo,
+.is-error .wh-rule-icon .wh-i-todo {
+  display: none;
+}
+
+.wh-live .wh-rule.is-met,
+.wh-match.is-met {
+  color: #15803D;
+}
+
+.wh-live .wh-rule.is-error,
+.wh-match.is-error {
+  color: #DC2626;
+}
+
+.wh-match {
+  margin-top: 8px;
+}
+
+.wh-match[hidden] {
+  display: none;
 }
 
 /* ─── Body copy (verify-email, info pages) ──────────────── */
