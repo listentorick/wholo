@@ -1,5 +1,5 @@
 import type { ArgumentsHost } from '@nestjs/common';
-import { logHttpException } from './problem-details';
+import { loggableError, logHttpException } from './problem-details';
 
 function fakeHost(req: { method?: string; url?: string } = {}): ArgumentsHost {
   return {
@@ -19,8 +19,10 @@ describe('logHttpException', () => {
 
     expect(logger.error).toHaveBeenCalledTimes(1);
     const [payload, message] = logger.error.mock.calls[0];
-    expect(payload).toMatchObject({ err, method: 'POST', path: '/api/v1/orders', statusCode: 500 });
-    expect(payload.err.stack).toBe(err.stack);
+    expect(payload).toMatchObject({ method: 'POST', path: '/api/v1/orders', statusCode: 500 });
+    expect(payload.err).toBeInstanceOf(Error);
+    expect(payload.err.message).toBe('kaboom');
+    expect(payload.err.stack).toBe(err.stack); // plain Error: same header + frames
     expect(message).toBe('POST /api/v1/orders -> 500');
     expect(String(message)).not.toContain('\n'); // never the raw stack
     expect(logger.debug).not.toHaveBeenCalled();
@@ -49,5 +51,62 @@ describe('logHttpException', () => {
 
     expect(logger.error).not.toHaveBeenCalled();
     expect(logger.debug).not.toHaveBeenCalled();
+  });
+});
+
+describe('loggableError', () => {
+  class PrismaClientValidationError extends Error {
+    name = 'PrismaClientValidationError';
+    clientVersion = '5.0.0';
+  }
+
+  it('withholds a Prisma error message, which can carry query arguments', () => {
+    const err = new PrismaClientValidationError(
+      'Invalid `prisma.user.create()` invocation: { email: "jane@customer.com", address: "1 High St" }',
+    );
+    const safe = loggableError(err);
+    const serialised = JSON.stringify({ message: safe.message, stack: safe.stack, ...safe });
+
+    expect(safe.name).toBe('PrismaClientValidationError');
+    expect(safe.message).toContain('message withheld');
+    expect(serialised).not.toContain('jane@customer.com');
+    expect(serialised).not.toContain('High St');
+    expect(serialised).not.toContain('clientVersion');
+    expect(safe.stack).toMatch(/\n\s+at /); // frames kept for debugging
+  });
+
+  it('keeps a Prisma error code', () => {
+    const err = Object.assign(new Error('Unique constraint failed on (email) = jane@customer.com'), {
+      name: 'PrismaClientKnownRequestError',
+      code: 'P2002',
+      meta: { target: ['email'] },
+    });
+    const safe = loggableError(err);
+
+    expect(safe.message).toBe('PrismaClientKnownRequestError P2002 (message withheld: may contain query data)');
+    expect((safe as unknown as { code: string }).code).toBe('P2002');
+    expect(JSON.stringify({ ...safe, stack: safe.stack })).not.toContain('jane@customer.com');
+  });
+
+  it('drops enumerable properties such as an HTTP client request config', () => {
+    const err = Object.assign(new Error('Request failed with status code 502'), {
+      name: 'AxiosError',
+      code: 'ERR_BAD_RESPONSE',
+      config: { headers: { Authorization: 'Bearer secret-token' } },
+      response: { data: { email: 'jane@customer.com' } },
+    });
+    const safe = loggableError(err);
+
+    expect(safe.message).toBe('Request failed with status code 502');
+    expect((safe as unknown as { code: string }).code).toBe('ERR_BAD_RESPONSE');
+    expect(Object.keys(safe).sort()).toEqual(['code', 'name']);
+    expect(JSON.stringify({ ...safe, stack: safe.stack })).not.toMatch(/secret-token|jane@customer/);
+  });
+
+  it('wraps a non-Error value', () => {
+    const safe = loggableError('weird string failure');
+
+    expect(safe).toBeInstanceOf(Error);
+    expect(safe.message).toBe('weird string failure');
   });
 });
