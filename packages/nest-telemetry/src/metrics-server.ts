@@ -12,7 +12,9 @@ import { PlatformMetricsService } from './platform-metrics.service';
  * never public. It also works unchanged in the worker, which has no HTTP layer,
  * and is never counted by `MetricsInterceptor`.
  *
- * `unref()`ed so it never holds a process open on its own.
+ * `unref()`ed so it never holds a process open on its own, and a listen
+ * failure (port taken, EACCES) is logged, never thrown — an unhandled `error`
+ * event would otherwise take down the service it is only meant to observe.
  */
 export function startMetricsServer(registry: Registry, port: number): Server {
   const logger = new Logger('MetricsServer');
@@ -35,6 +37,9 @@ export function startMetricsServer(registry: Registry, port: number): Server {
     );
   });
 
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    logger.error(`Metrics server failed on :${port} (${err.code ?? err.message}) — metrics disabled`);
+  });
   server.unref();
   server.listen(port, () => logger.log(`Metrics server listening on :${port}`));
   return server;

@@ -35,6 +35,15 @@ describe('startMetricsServer', () => {
     expect((await fetch(`${base}/health`)).status).toBe(404);
   });
 
+  it('logs rather than throws when the port is already taken', async () => {
+    const port = (server.address() as AddressInfo).port;
+    const clash = startMetricsServer(new Registry(), port);
+
+    // An unhandled 'error' event would throw out of emit() and fail this test.
+    await new Promise<void>((resolve) => clash.once('error', () => resolve()));
+    expect(clash.listening).toBe(false);
+  });
+
   it('returns 405 for non-GET methods on /metrics', async () => {
     const res = await fetch(`${base}/metrics`, { method: 'POST' });
 
