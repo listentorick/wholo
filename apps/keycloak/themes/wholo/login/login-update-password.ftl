@@ -41,6 +41,9 @@
             name="password-new"
             autocomplete="new-password"
             placeholder="••••••••"
+            spellcheck="false"
+            autocorrect="off"
+            autocapitalize="off"
             autofocus
             <#if passwordPolicies??>aria-describedby="kc-password-policy-list"</#if>
           />
@@ -60,12 +63,21 @@
             name="password-confirm"
             autocomplete="new-password"
             placeholder="••••••••"
+            spellcheck="false"
+            autocorrect="off"
+            autocapitalize="off"
             aria-describedby="pw-match"
           />
           <@pw.eyeToggle label="confirm password"/>
         </div>
         <@pw.matchLine/>
       </div>
+
+      <#-- Keycloak's UpdatePassword signs out every other session only when this posts "on". -->
+      <label class="wh-check">
+        <input type="checkbox" id="logout-sessions" name="logout-sessions" value="on" checked />
+        <span>${msg("logoutOtherSessions")}</span>
+      </label>
 
       <button class="wh-btn" type="submit">
         Update Password

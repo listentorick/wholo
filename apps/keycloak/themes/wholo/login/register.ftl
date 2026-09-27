@@ -6,7 +6,7 @@
 -->
 <#macro fieldError field requiredMessage="">
   <#if messagesPerField.existsError(field)>
-    <#assign error = messagesPerField.get(field)>
+    <#local error = messagesPerField.get(field)>
     <p class="wh-field-error"><#if requiredMessage?has_content && error == msg("error-user-attribute-required")>${msg(requiredMessage)}<#else>${kcSanitize(error)?no_esc}</#if></p>
   </#if>
 </#macro>
@@ -35,13 +35,22 @@
       <div class="wh-divider"></div>
     </div>
 
-    <#-- The summary repeats every field error; when fields have errors show only messages not tied to a field. -->
-    <#if messagesPerField.existsError('firstName', 'lastName', 'email', 'username', 'password', 'password-confirm')>
-      <#if messagesPerField.existsError('global')>
-        <p class="wh-error">${kcSanitize(messagesPerField.get('global'))?no_esc}</p>
+    <#--
+      The summary is every message joined with <br>, field errors included. Drop
+      the lines already shown under a field on this form; anything else (global
+      errors, errors on attributes this form has no input for) stays visible.
+    -->
+    <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
+      <#assign shownUnderFields = []>
+      <#list ['firstName', 'lastName', 'email', 'username', 'password', 'password-confirm'] as field>
+        <#if messagesPerField.exists(field)>
+          <#assign shownUnderFields = shownUnderFields + messagesPerField.get(field)?split("<br>")>
+        </#if>
+      </#list>
+      <#assign bannerLines = message.summary?split("<br>")?filter(line -> !shownUnderFields?seq_contains(line))>
+      <#if bannerLines?has_content>
+        <p class="wh-<#if message.type = 'error'>error<#else>info</#if>">${kcSanitize(bannerLines?join("<br>"))?no_esc}</p>
       </#if>
-    <#elseif message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
-      <p class="wh-<#if message.type = 'error'>error<#else>info</#if>">${kcSanitize(message.summary)?no_esc}</p>
     </#if>
 
     <form id="kc-register-form" action="${url.registrationAction}" method="post">
@@ -98,6 +107,9 @@
               name="password"
               autocomplete="new-password"
               placeholder="••••••••"
+              spellcheck="false"
+              autocorrect="off"
+              autocapitalize="off"
               <#if passwordPolicies??>aria-describedby="kc-password-policy-list"</#if>
             />
             <@pw.eyeToggle/>
@@ -118,6 +130,9 @@
               name="password-confirm"
               autocomplete="new-password"
               placeholder="••••••••"
+              spellcheck="false"
+              autocorrect="off"
+              autocapitalize="off"
               aria-describedby="pw-match"
             />
             <@pw.eyeToggle label="confirm password"/>

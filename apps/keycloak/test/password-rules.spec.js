@@ -230,6 +230,44 @@ describe('attach', () => {
     expect(document.activeElement.id).toBe('password-confirm');
   });
 
+  it('lets a repeated submit of the same values through, so the server decides', () => {
+    type('password', 'abc1');
+    expect(submit().defaultPrevented).toBe(true);
+    expect(submit().defaultPrevented).toBe(false);
+  });
+
+  it('holds back again once the values change after a held-back submit', () => {
+    type('password', 'abc1');
+    submit();
+    type('password', 'abc12');
+    expect(submit().defaultPrevented).toBe(true);
+  });
+
+  it('hides revealed passwords when the form is submitted', () => {
+    type('password', 'Harbourwines1');
+    type('password-confirm', 'Harbourwines1');
+    document.querySelectorAll('.wh-eye').forEach((eye) => eye.click());
+    expect(submit().defaultPrevented).toBe(false);
+    expect(document.getElementById('password').type).toBe('password');
+    expect(document.getElementById('password-confirm').type).toBe('password');
+    document.querySelectorAll('.wh-eye').forEach((eye) => {
+      expect(eye.getAttribute('aria-pressed')).toBe('false');
+    });
+  });
+
+  it('keeps passwords revealed when a submit is held back', () => {
+    type('password', 'abc1');
+    document.querySelector('.wh-eye').click();
+    submit();
+    expect(document.getElementById('password').type).toBe('text');
+  });
+
+  it('hides revealed passwords when the page is left', () => {
+    document.querySelector('.wh-eye').click();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(document.getElementById('password').type).toBe('password');
+  });
+
   it('lets a valid, matching password submit', () => {
     type('password', 'Harbourwines1');
     type('password-confirm', 'Harbourwines1');
@@ -286,5 +324,55 @@ describe('attach without a matching password field', () => {
     document.body.innerHTML =
       '<ul id="kc-password-policy-list" data-password-field="missing"></ul>';
     expect(attach(document.getElementById('kc-password-policy-list'))).toBeNull();
+  });
+});
+
+// Mirrors login-update-password.ftl: the email/username lives in a hidden input.
+function renderUpdatePassword(username) {
+  document.body.innerHTML = `
+    <form id="kc-passwd-update-form">
+      <input type="hidden" id="username" name="username" value="${username}" />
+      <div class="wh-field">
+        <div class="wh-pw-wrap"><input type="password" id="password-new" name="password-new" /></div>
+        <div class="wh-pw-progress" hidden><span class="wh-pw-progress-fill"></span></div>
+        <ul id="kc-password-policy-list" data-password-field="password-new" data-confirm-field="password-confirm">
+          <li class="wh-rule" data-rule="length" data-min="4"><span class="wh-sr wh-rule-status"></span>At least 4 characters</li>
+          <li class="wh-rule" data-rule="notEmail" data-against="#username"><span class="wh-sr wh-rule-status"></span>Must not be your email address</li>
+        </ul>
+      </div>
+      <input type="password" id="password-confirm" name="password-confirm" />
+    </form>`;
+  attach(document.getElementById('kc-password-policy-list'));
+}
+
+describe('attach on update-password', () => {
+  it('checks the email rule against a populated hidden username', () => {
+    renderUpdatePassword('sam@example.com');
+    type('password-new', 'SAM@example.com');
+    expect(ruleEl('notEmail').classList.contains('is-met')).toBe(false);
+    type('password-new', 'something-else');
+    expect(ruleEl('notEmail').classList.contains('is-met')).toBe(true);
+  });
+
+  it('leaves the email rule neutral and uncounted when the page does not know the email', () => {
+    renderUpdatePassword('');
+    type('password-new', 'sam@example.com');
+    expect(ruleEl('notEmail').classList.contains('is-met')).toBe(false);
+    expect(ruleEl('notEmail').querySelector('.wh-rule-status').textContent).toBe(
+      'Checked when you submit: ',
+    );
+    const fill = document.querySelector('.wh-pw-progress-fill');
+    expect(fill.style.width).toBe('100%');
+    expect(fill.classList.contains('is-complete')).toBe(true);
+  });
+
+  it('does not hold back a submit, or mark an error, for a rule it cannot check', () => {
+    renderUpdatePassword('');
+    type('password-new', 'abcd');
+    type('password-confirm', 'abcd');
+    const event = new Event('submit', { bubbles: true, cancelable: true });
+    document.getElementById('kc-passwd-update-form').dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(ruleEl('notEmail').classList.contains('is-error')).toBe(false);
   });
 });

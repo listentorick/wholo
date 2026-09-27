@@ -3,8 +3,8 @@
 // Upgrades the static policy list rendered by password-policy.ftl: each rule is
 // ticked as the typed password satisfies it, unmet rules turn red only after a
 // submit attempt, and a match line sits under the confirm field. Keycloak's
-// server-side policy remains the authority — this is guidance only, and the page
-// works unchanged without JS.
+// server-side policy remains the authority — this is guidance only (a repeated
+// submit is never blocked), and the page works unchanged without JS.
 //
 // The checks mirror Keycloak 26.2's PasswordPolicyProvider implementations
 // (server-spi-private/.../policy/*PasswordPolicyProvider.java): they count per
@@ -67,6 +67,18 @@ const MATCH_TEXT = {
 
 const LIVE_DELAY_MS = 700;
 
+const IDENTITY_RULES = new Set(['notUsername', 'notEmail']);
+
+// An identity rule can only be checked here if the page holds the value to
+// compare with: an input the user fills in (register's email), or a hidden one
+// the server populated. With neither (e.g. update-password reached from a reset
+// email) it stays neutral, uncounted and never holds a submit back — the server
+// still enforces it.
+function isCheckable(rule, againstEl) {
+  if (!IDENTITY_RULES.has(rule)) return true;
+  return !!againstEl && (againstEl.type !== 'hidden' || againstEl.value.trim() !== '');
+}
+
 /** Wire the live checklist onto a rendered #kc-password-policy-list. */
 export function attach(list) {
   const doc = list.ownerDocument;
@@ -88,7 +100,8 @@ export function attach(list) {
     min: Number(el.dataset.min),
     max: Number(el.dataset.max),
     againstEl: el.dataset.against ? doc.querySelector(el.dataset.against) : null,
-  }));
+  })).map((item) => ({ ...item, checkable: isCheckable(item.rule, item.againstEl) }));
+  const total = items.filter((i) => i.checkable).length;
 
   let attempted = false;
   let liveTimer = null;
@@ -120,23 +133,27 @@ export function attach(list) {
         against: i.againstEl ? i.againstEl.value : '',
       })),
     );
+    let metCount = 0;
     items.forEach((item, idx) => {
+      if (!item.checkable) {
+        if (item.status) item.status.textContent = 'Checked when you submit: ';
+        return;
+      }
       const met = results[idx];
+      if (met) metCount++;
       item.el.classList.toggle('is-met', met);
       item.el.classList.toggle('is-error', !met && attempted);
       if (item.status) item.status.textContent = met ? 'Met: ' : 'Not yet met: ';
     });
 
-    const metCount = results.filter(Boolean).length;
-    const allMet = items.length > 0 && metCount === items.length;
+    const allMet = metCount === total;
     if (fill) {
-      fill.style.width = items.length ? `${Math.round((metCount / items.length) * 100)}%` : '0%';
+      fill.style.width = total ? `${Math.round((metCount / total) * 100)}%` : '0%';
       fill.classList.toggle('is-complete', allMet);
     }
 
-    let state = 'none';
+    const state = confirm ? matchState(pw, confirm.value, attempted) : 'none';
     if (match && confirm) {
-      state = matchState(pw, confirm.value, attempted);
       match.hidden = state === 'none';
       match.classList.toggle('is-met', state === 'met');
       match.classList.toggle('is-error', state === 'error');
@@ -148,7 +165,7 @@ export function attach(list) {
 
   function onInput() {
     const { metCount } = update();
-    announce(password.value ? `${metCount} of ${items.length} password requirements met` : '', false);
+    announce(password.value ? `${metCount} of ${total} password requirements met` : '', false);
   }
 
   [password, confirm, ...items.map((i) => i.againstEl)].forEach((el) => {
@@ -158,30 +175,47 @@ export function attach(list) {
     el.addEventListener('change', onInput);
   });
 
+  const toggles = [];
   [password, confirm].forEach((input) => {
     const eye = input && input.closest('.wh-pw-wrap')?.querySelector('.wh-eye');
     if (!eye) return;
     const label = eye.dataset.label || 'password';
-    eye.hidden = false;
-    eye.addEventListener('click', () => {
-      const show = input.type === 'password';
+    const setShown = (show) => {
       input.type = show ? 'text' : 'password';
       eye.setAttribute('aria-pressed', String(show));
       eye.setAttribute('aria-label', `${show ? 'Hide' : 'Show'} ${label}`);
-    });
+    };
+    eye.hidden = false;
+    eye.addEventListener('click', () => setShown(input.type === 'password'));
+    toggles.push(setShown);
   });
 
+  // Never let a revealed password leave the page as a text field: browsers may
+  // keep text-field values in autofill history, and bfcache would restore it shown.
+  const hideAll = () => toggles.forEach((setShown) => setShown(false));
+  doc.defaultView?.addEventListener('pagehide', hideAll);
+
   if (form) {
+    // The checks are advisory: the first failing submit is held back so the user
+    // sees what is missing without losing both password fields to a server round
+    // trip, but submitting the same values again goes through and the server
+    // decides. A client check can never lock anyone out.
+    let heldBack = null;
     form.addEventListener('submit', (event) => {
       attempted = true;
       const { metCount, allMet, matched } = update();
-      if (allMet && matched) return;
+      const values = `${password.value}\u0000${confirm ? confirm.value : ''}`;
+      if ((allMet && matched) || values === heldBack) {
+        hideAll();
+        return;
+      }
+      heldBack = values;
       event.preventDefault();
-      const unmet = items.length - metCount;
+      const unmet = total - metCount;
       announce(
         unmet > 0
           ? `${unmet} password requirement${unmet === 1 ? '' : 's'} not met`
-          : 'Passwords don’t match',
+          : 'Passwords don\u2019t match',
         true,
       );
       (unmet > 0 || !confirm ? password : confirm).focus();

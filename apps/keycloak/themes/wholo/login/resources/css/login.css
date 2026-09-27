@@ -398,3 +398,27 @@ input[type="password"]:focus {
   text-decoration: none;
   box-sizing: border-box;
 }
+
+/* ─── Checkbox row (update-password "sign out other devices") ── */
+
+.wh-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: -16px 0 24px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #1e2436;
+  cursor: pointer;
+}
+
+.wh-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #1565FF;
+}
