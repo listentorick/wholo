@@ -15,6 +15,7 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { RELATIONSHIP_EVENTS, RelationshipCreatedOrigin, relationshipEventFields } from '../common/relationship-events';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomerQueryDto } from './dto/customer-query.dto';
@@ -166,7 +167,7 @@ export class AdminCustomersService {
     }));
   }
 
-  async create(distributorId: string, dto: CreateCustomerDto) {
+  async create(distributorId: string, dto: CreateCustomerDto, origin: RelationshipCreatedOrigin = 'MANUAL') {
     const distributor = await this.prisma.organisation.findUniqueOrThrow({
       where: { id: distributorId },
       select: { name: true },
@@ -243,6 +244,11 @@ export class AdminCustomersService {
         },
       });
 
+      await this.outbox.writeEvent(tx, 'TradeRelationship', relationship.id, RELATIONSHIP_EVENTS.created, {
+        ...relationshipEventFields(relationship, null, relationship.status, relationship.createdAt),
+        origin,
+      });
+
       return tx.tradeRelationship.findUniqueOrThrow({
         where: { id: relationship.id },
         include: relationshipInclude,
@@ -316,14 +322,25 @@ export class AdminCustomersService {
   }
 
   async remove(customerId: string, distributorId: string) {
-    const rel = await this.prisma.tradeRelationship.findFirst({
-      where: { customerId, distributorId, deletedAt: null },
-      select: { id: true },
-    });
-    if (!rel) throw new NotFoundException('Customer not found');
-    await this.prisma.tradeRelationship.update({
-      where: { id: rel.id },
-      data: { deletedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      const rel = await tx.tradeRelationship.findFirst({
+        where: { customerId, distributorId, deletedAt: null },
+        select: { id: true, distributorId: true, customerId: true, status: true },
+      });
+      if (!rel) throw new NotFoundException('Customer not found');
+
+      // Guarded on deletedAt so a concurrent remove can't record the removal twice.
+      const removedAt = new Date();
+      const updated = await tx.tradeRelationship.updateMany({
+        where: { id: rel.id, deletedAt: null },
+        data: { deletedAt: removedAt },
+      });
+      if (updated.count === 0) throw new NotFoundException('Customer not found');
+
+      await this.outbox.writeEvent(
+        tx, 'TradeRelationship', rel.id, RELATIONSHIP_EVENTS.removed,
+        { ...relationshipEventFields(rel, rel.status, rel.status, removedAt) },
+      );
     });
   }
 
@@ -363,7 +380,8 @@ export class AdminCustomersService {
 
       // Sending is async from here — see CustomerInviteNotificationService
       // (NOTIFICATIONS_QUEUE, routed via EVENT_ROUTES['CustomerInviteSent']).
-      await this.outbox.writeEvent(tx, 'CustomerInvitation', invitation.id, 'CustomerInviteSent', {
+      await this.outbox.writeEvent(tx, 'CustomerInvitation', invitation.id, RELATIONSHIP_EVENTS.inviteSent, {
+        ...relationshipEventFields(rel, rel.status, rel.status, invitation.createdAt),
         invitationId: invitation.id,
         distributorId,
         email: target,
@@ -386,7 +404,7 @@ export class AdminCustomersService {
     return this.transitionStatus(
       customerId, distributorId,
       TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.ACTIVE,
-      'TradeRelationshipRequestAccepted',
+      RELATIONSHIP_EVENTS.requestAccepted,
     );
   }
 
@@ -396,7 +414,7 @@ export class AdminCustomersService {
     return this.transitionStatus(
       customerId, distributorId,
       TradeRelationshipStatus.PENDING_REQUEST, TradeRelationshipStatus.INACTIVE,
-      'TradeRelationshipRequestDeclined',
+      RELATIONSHIP_EVENTS.requestDeclined,
     );
   }
 
@@ -404,7 +422,7 @@ export class AdminCustomersService {
     return this.transitionStatus(
       customerId, distributorId,
       TradeRelationshipStatus.ACTIVE, TradeRelationshipStatus.SUSPENDED,
-      'TradeRelationshipSuspended',
+      RELATIONSHIP_EVENTS.suspended,
     );
   }
 
@@ -412,7 +430,7 @@ export class AdminCustomersService {
     return this.transitionStatus(
       customerId, distributorId,
       TradeRelationshipStatus.SUSPENDED, TradeRelationshipStatus.ACTIVE,
-      'TradeRelationshipUnsuspended',
+      RELATIONSHIP_EVENTS.unsuspended,
     );
   }
 
@@ -425,7 +443,7 @@ export class AdminCustomersService {
     return this.transitionStatus(
       customerId, distributorId,
       TradeRelationshipStatus.PENDING_INVITE, TradeRelationshipStatus.ACTIVE,
-      'TradeRelationshipActivated',
+      RELATIONSHIP_EVENTS.activated,
     );
   }
 
@@ -472,9 +490,7 @@ export class AdminCustomersService {
       }
 
       await this.outbox.writeEvent(tx, 'TradeRelationship', rel.id, eventType, {
-        relationshipId: rel.id,
-        distributorId,
-        customerId: rel.customerId,
+        ...relationshipEventFields(rel, from, to),
         customerName: rel.customer.name,
         customerEmail: rel.customer.email,
         distributorName: rel.distributor.name,

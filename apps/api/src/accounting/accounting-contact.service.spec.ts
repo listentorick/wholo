@@ -325,12 +325,13 @@ describe('AccountingContactService', () => {
       adminCustomers.create.mockResolvedValue({ id: 'tr-1', organisationId: 'org-1' });
     });
 
-    it('creates the customer via AdminCustomersService', async () => {
+    it('creates the customer via AdminCustomersService, marked as an accounting import', async () => {
       await service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', {});
 
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ name: 'Blackbird Vine & Co', accountNumber: 'XC-1' }),
+        'ACCOUNTING_IMPORT',
       );
     });
 
@@ -345,6 +346,7 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ email: 'billing@blackbird.example' }),
+        'ACCOUNTING_IMPORT',
       );
     });
 
@@ -359,6 +361,7 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ email: 'override@example.com' }),
+        'ACCOUNTING_IMPORT',
       );
     });
 
@@ -382,6 +385,7 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ name: 'Renamed Co', accountNumber: 'OVERRIDE' }),
+        'ACCOUNTING_IMPORT',
       );
     });
 
@@ -395,6 +399,7 @@ describe('AccountingContactService', () => {
           deliveryLine1: '1 Vine St',
           deliveryPostcode: 'E1 1AA',
         }),
+        'ACCOUNTING_IMPORT',
       );
     });
 
@@ -403,6 +408,7 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).toHaveBeenCalledWith(
         'dist-1',
         expect.objectContaining({ deliveryLine1: 'Overridden Line 1' }),
+        'ACCOUNTING_IMPORT',
       );
     });
 

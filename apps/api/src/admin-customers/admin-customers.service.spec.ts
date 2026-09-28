@@ -273,6 +273,44 @@ describe('AdminCustomersService', () => {
   // ── create ──────────────────────────────────────────────────────────────────
 
   describe('create', () => {
+    function mockCreateTransaction() {
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => {
+        mockPrisma.organisation.create.mockResolvedValue({ id: 'org-1' });
+        mockPrisma.tradeRelationship.create.mockResolvedValue({
+          id: 'rel-1', distributorId: 'dist-1', customerId: 'org-1', status: TradeRelationshipStatus.PENDING_INVITE, createdAt: new Date('2026-09-01T10:00:00Z'),
+        });
+        mockPrisma.tradeRelationship.findUniqueOrThrow.mockResolvedValue(makeRel());
+        return fn(mockPrisma);
+      });
+    }
+
+    it('records a created event opening the relationship, as a manual create by default', async () => {
+      mockCreateTransaction();
+
+      await service.create('dist-1', { name: 'Acme' });
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledTimes(1);
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipCreated',
+        {
+          relationshipId: 'rel-1', distributorId: 'dist-1', customerId: 'org-1',
+          fromStatus: null, toStatus: 'PENDING_INVITE', occurredAt: '2026-09-01T10:00:00.000Z',
+          origin: 'MANUAL',
+        },
+      );
+    });
+
+    it('marks a customer imported from the accounting system as ACCOUNTING_IMPORT, so it is not counted as new business', async () => {
+      mockCreateTransaction();
+
+      await service.create('dist-1', { name: 'Acme' }, 'ACCOUNTING_IMPORT');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipCreated',
+        expect.objectContaining({ origin: 'ACCOUNTING_IMPORT' }),
+      );
+    });
+
     it('persists email onto the organisation without creating an invitation', async () => {
       const rel = makeRel({ customer: makeOrg({ email: 'acme@example.com' }) });
       mockPrisma.$transaction.mockImplementation(async (fn: any) => {
@@ -478,25 +516,43 @@ describe('AdminCustomersService', () => {
   // ── remove ──────────────────────────────────────────────────────────────────
 
   describe('remove', () => {
-    it('soft-deletes the relationship', async () => {
-      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1' });
-      mockPrisma.tradeRelationship.update.mockResolvedValue({});
+    beforeEach(() => {
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+    });
 
-      await service.remove('rel-1', 'dist-1');
+    it('soft-deletes the relationship, guarded so it is only removed once, and records a removed event', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1', distributorId: 'dist-1', customerId: 'org-1', status: 'ACTIVE' });
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
 
-      expect(mockPrisma.tradeRelationship.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ deletedAt: expect.any(Date) }) }),
+      await service.remove('org-1', 'dist-1');
+
+      expect(mockPrisma.tradeRelationship.updateMany).toHaveBeenCalledWith({
+        where: { id: 'rel-1', deletedAt: null },
+        data: { deletedAt: expect.any(Date) },
+      });
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'TradeRelationshipRemoved',
+        expect.objectContaining({ relationshipId: 'rel-1', distributorId: 'dist-1', customerId: 'org-1', fromStatus: 'ACTIVE', toStatus: 'ACTIVE' }),
       );
     });
 
-    it('throws NotFoundException when not found', async () => {
+    it('throws NotFoundException and records nothing when not found', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(null);
-      await expect(service.remove('rel-1', 'dist-2')).rejects.toThrow(NotFoundException);
+      await expect(service.remove('org-1', 'dist-2')).rejects.toThrow(NotFoundException);
+      expect(mockOutbox.writeEvent).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException and records nothing when a concurrent remove got there first', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1', distributorId: 'dist-1', customerId: 'org-1', status: 'ACTIVE' });
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.remove('org-1', 'dist-1')).rejects.toThrow(NotFoundException);
+      expect(mockOutbox.writeEvent).not.toHaveBeenCalled();
     });
 
     it('looks up the relationship by the customer organisation id, not the relationship\'s own id', async () => {
-      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1' });
-      mockPrisma.tradeRelationship.update.mockResolvedValue({});
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue({ id: 'rel-1', distributorId: 'dist-1', customerId: 'org-1', status: 'ACTIVE' });
+      mockPrisma.tradeRelationship.updateMany.mockResolvedValue({ count: 1 });
 
       await service.remove('org-1', 'dist-1');
 
@@ -504,9 +560,6 @@ describe('AdminCustomersService', () => {
         expect.objectContaining({
           where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
         }),
-      );
-      expect(mockPrisma.tradeRelationship.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'rel-1' } }),
       );
     });
   });
@@ -546,6 +599,8 @@ describe('AdminCustomersService', () => {
         'CustomerInviteSent',
         expect.objectContaining({
           invitationId: 'inv-1',
+          relationshipId: 'rel-1',
+          customerId: 'org-1',
           distributorId: 'dist-1',
           email: 'acme@example.com',
           distributorName: 'Winos Pty Ltd',
@@ -669,6 +724,10 @@ describe('AdminCustomersService', () => {
           expect.objectContaining({
             relationshipId: 'rel-1',
             distributorId: 'dist-1',
+            customerId: 'org-1',
+            fromStatus: from,
+            toStatus: to,
+            occurredAt: expect.any(String),
             customerEmail: 'buyer@winebar.example',
           }),
         );

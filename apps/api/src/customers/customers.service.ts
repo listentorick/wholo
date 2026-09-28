@@ -1,6 +1,8 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { OrganisationType, Prisma, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { RELATIONSHIP_EVENTS, relationshipEventFields } from '../common/relationship-events';
 
 const relationshipInclude = {
   customer: {
@@ -34,7 +36,10 @@ const relationshipInclude = {
 
 @Injectable()
 export class CustomersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private outbox: OutboxService,
+  ) {}
 
   /**
    * The distributor's customer record (base customer + trade information),
@@ -65,35 +70,49 @@ export class CustomersService {
     });
     if (!distributor) throw new NotFoundException('Distributor not found');
 
-    const existing = await this.prisma.tradeRelationship.findUnique({
-      where: { distributorId_customerId: { distributorId, customerId } },
-      select: { id: true, status: true },
-    });
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.tradeRelationship.findUnique({
+        where: { distributorId_customerId: { distributorId, customerId } },
+        select: { id: true, status: true },
+      });
 
-    if (!existing) {
-      await this.prisma.tradeRelationship.create({
-        data: {
-          distributorId,
-          customerId,
-          status: TradeRelationshipStatus.PENDING_REQUEST,
-          recentContactSelfDeclared: recentContact,
-        },
+      let rel: { id: string; distributorId: string; customerId: string; status: TradeRelationshipStatus };
+      let fromStatus: TradeRelationshipStatus | null;
+      if (!existing) {
+        rel = await tx.tradeRelationship.create({
+          data: {
+            distributorId,
+            customerId,
+            status: TradeRelationshipStatus.PENDING_REQUEST,
+            recentContactSelfDeclared: recentContact,
+          },
+        });
+        fromStatus = null;
+      } else if (existing.status === TradeRelationshipStatus.INACTIVE) {
+        // The only status a customer can self-reactivate from — mirrors "suspended
+        // is not customer-reactivatable" by excluding SUSPENDED from this branch.
+        // Guarded on the status just read so a concurrent change can't be overwritten.
+        const updated = await tx.tradeRelationship.updateMany({
+          where: { id: existing.id, status: TradeRelationshipStatus.INACTIVE },
+          data: { status: TradeRelationshipStatus.PENDING_REQUEST, recentContactSelfDeclared: recentContact },
+        });
+        if (updated.count === 0) throw new ConflictException('A relationship with this distributor already exists');
+        rel = { id: existing.id, distributorId, customerId, status: TradeRelationshipStatus.PENDING_REQUEST };
+        fromStatus = TradeRelationshipStatus.INACTIVE;
+      } else if (existing.status === TradeRelationshipStatus.SUSPENDED) {
+        throw new ForbiddenException('This relationship is suspended — contact the distributor directly');
+      } else {
+        // ACTIVE, PENDING_INVITE, PENDING_REQUEST — the UI should never surface
+        // the request-access action in these states; this is a defensive
+        // server-side guard against a stale client or a replayed request.
+        throw new ConflictException('A relationship with this distributor already exists');
+      }
+
+      await this.outbox.writeEvent(tx, 'TradeRelationship', rel.id, RELATIONSHIP_EVENTS.accessRequested, {
+        ...relationshipEventFields(rel, fromStatus, rel.status),
+        recentContactSelfDeclared: recentContact,
       });
-    } else if (existing.status === TradeRelationshipStatus.INACTIVE) {
-      // The only status a customer can self-reactivate from — mirrors "suspended
-      // is not customer-reactivatable" by excluding SUSPENDED from this branch.
-      await this.prisma.tradeRelationship.update({
-        where: { id: existing.id },
-        data: { status: TradeRelationshipStatus.PENDING_REQUEST, recentContactSelfDeclared: recentContact },
-      });
-    } else if (existing.status === TradeRelationshipStatus.SUSPENDED) {
-      throw new ForbiddenException('This relationship is suspended — contact the distributor directly');
-    } else {
-      // ACTIVE, PENDING_INVITE, PENDING_REQUEST — the UI should never surface
-      // the request-access action in these states; this is a defensive
-      // server-side guard against a stale client or a replayed request.
-      throw new ConflictException('A relationship with this distributor already exists');
-    }
+    });
 
     return this.getCustomer(distributorId, customerId);
   }

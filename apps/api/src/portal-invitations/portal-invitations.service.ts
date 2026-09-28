@@ -8,6 +8,8 @@ import {
 import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { RELATIONSHIP_EVENTS, relationshipEventFields } from '../common/relationship-events';
 import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
 
 @Injectable()
@@ -15,6 +17,7 @@ export class PortalInvitationsService {
   constructor(
     private prisma: PrismaService,
     private users: UsersService,
+    private outbox: OutboxService,
   ) {}
 
   async acceptInvite(identity: KeycloakIdentity, token: string) {
@@ -52,8 +55,8 @@ export class PortalInvitationsService {
       identity.family_name ?? '',
     );
 
-    await this.prisma.$transaction([
-      this.prisma.membership.upsert({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.upsert({
         where: { userId_organisationId: { userId: user.id, organisationId: rel.customerId } },
         create: {
           userId: user.id,
@@ -62,16 +65,28 @@ export class PortalInvitationsService {
           roles: { create: { role: Role.TRADE_CUSTOMER } },
         },
         update: {},
-      }),
-      this.prisma.customerInvitation.update({
+      });
+      const acceptedAt = new Date();
+      await tx.customerInvitation.update({
         where: { id: invitation.id },
-        data: { status: InvitationStatus.ACCEPTED, acceptedAt: new Date() },
-      }),
-      this.prisma.tradeRelationship.update({
+        data: { status: InvitationStatus.ACCEPTED, acceptedAt },
+      });
+      // Read inside the transaction so the event records the status actually
+      // being left — an invite can be accepted on an already-active relationship
+      // (an extra user joining), which is not a new activation.
+      const before = await tx.tradeRelationship.findUniqueOrThrow({
+        where: { id: rel.id },
+        select: { id: true, distributorId: true, customerId: true, status: true },
+      });
+      await tx.tradeRelationship.update({
         where: { id: rel.id },
         data: { status: TradeRelationshipStatus.ACTIVE },
-      }),
-    ]);
+      });
+      await this.outbox.writeEvent(tx, 'TradeRelationship', rel.id, RELATIONSHIP_EVENTS.inviteAccepted, {
+        ...relationshipEventFields(before, before.status, TradeRelationshipStatus.ACTIVE, acceptedAt),
+        invitationId: invitation.id,
+      });
+    });
 
     return { distributorSlug: rel.distributor.slug };
   }

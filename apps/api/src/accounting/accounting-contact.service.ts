@@ -320,7 +320,7 @@ export class AccountingContactService {
       deliveryState: dto.deliveryState ?? contact.deliveryState ?? undefined,
       deliveryPostcode: dto.deliveryPostcode ?? contact.deliveryPostcode ?? undefined,
       deliveryCountry: dto.deliveryCountry ?? contact.deliveryCountry ?? undefined,
-    });
+    }, 'ACCOUNTING_IMPORT');
 
     await this.createMapping(
       distributorId,

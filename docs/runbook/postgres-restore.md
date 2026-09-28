@@ -3,7 +3,8 @@
 How to select, download, decrypt and apply one of the encrypted off-cluster
 backups made by the `wholo-pg-backup` CronJob
 ([ADR-069](../adrs/ADR-069-offsite-encrypted-postgres-backups.md); schedule,
-storage and monitoring are in [live-k3s.md → Backups](live-k3s.md#backups)).
+storage and monitoring are in [setup/backups.md](setup/backups.md); day-to-day
+backup commands are in [maintenance.md → Backups](maintenance.md#backups)).
 
 Each backup is a complete `pg_dumpall` of the whole Postgres server — every
 database (`wholo`, `keycloak`, `plausible`) plus roles — as a gzip-compressed
@@ -200,7 +201,7 @@ same file first.
    Or simply re-run `pnpm helm:install:live`, which restores every replica
    count from the chart.
 
-7. Run the [verification checklist](live-k3s.md#verification-checklist-after-deploy),
+7. Run the [verification checklist](deploy.md#3-verify),
    log in to admin and portal, then take a fresh manual backup:
    `kubectl -n wholo create job pg-backup-post-restore --from=cronjob/wholo-pg-backup`.
 

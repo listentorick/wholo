@@ -4,6 +4,7 @@ import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client'
 import { PortalInvitationsService } from './portal-invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { OutboxService } from '../outbox/outbox.service';
 import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
 
 const mockPrisma = {
@@ -16,9 +17,12 @@ const mockPrisma = {
   },
   tradeRelationship: {
     update: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
   },
   $transaction: jest.fn(),
 };
+
+const mockOutbox = { writeEvent: jest.fn() };
 
 const mockUsers = {
   findOrCreateFromKeycloak: jest.fn(),
@@ -53,14 +57,17 @@ describe('PortalInvitationsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockPrisma.$transaction.mockImplementation(async (ops: any[]) => {
-      for (const op of ops) await op;
+    mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma));
+    mockPrisma.tradeRelationship.findUniqueOrThrow.mockResolvedValue({
+      id: 'rel-1', distributorId: 'dist-1', customerId: 'customer-org-1', status: TradeRelationshipStatus.PENDING_INVITE,
     });
+    mockOutbox.writeEvent.mockResolvedValue({});
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PortalInvitationsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: UsersService, useValue: mockUsers },
+        { provide: OutboxService, useValue: mockOutbox },
       ],
     }).compile();
     service = module.get(PortalInvitationsService);
@@ -107,6 +114,38 @@ describe('PortalInvitationsService', () => {
 
       expect(mockPrisma.tradeRelationship.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: TradeRelationshipStatus.ACTIVE } }),
+      );
+    });
+
+    it('records an invite-accepted event carrying the status the relationship actually left', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation());
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+
+      await service.acceptInvite(identity, 'valid-token');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledTimes(1);
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'CustomerInviteAccepted',
+        expect.objectContaining({
+          relationshipId: 'rel-1', distributorId: 'dist-1', customerId: 'customer-org-1',
+          fromStatus: TradeRelationshipStatus.PENDING_INVITE, toStatus: TradeRelationshipStatus.ACTIVE,
+          invitationId: 'inv-1',
+        }),
+      );
+    });
+
+    it('records ACTIVE -> ACTIVE when an extra user accepts an invite on an already-active relationship (not a new activation)', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation());
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+      mockPrisma.tradeRelationship.findUniqueOrThrow.mockResolvedValue({
+        id: 'rel-1', distributorId: 'dist-1', customerId: 'customer-org-1', status: TradeRelationshipStatus.ACTIVE,
+      });
+
+      await service.acceptInvite(identity, 'valid-token');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'CustomerInviteAccepted',
+        expect.objectContaining({ fromStatus: TradeRelationshipStatus.ACTIVE, toStatus: TradeRelationshipStatus.ACTIVE }),
       );
     });
 
