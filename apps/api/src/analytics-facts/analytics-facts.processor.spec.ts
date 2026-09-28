@@ -3,6 +3,7 @@ import { OrderStatus } from '@prisma/client';
 import { AnalyticsFactsProcessor } from './analytics-facts.processor';
 import { OrderFactsService } from './order-facts.service';
 import { DeliveryFactsService } from './delivery-facts.service';
+import { RelationshipFactsService } from './relationship-facts.service';
 
 const makeJob = (name: string, payload: Record<string, unknown> = {}) =>
   ({
@@ -14,11 +15,30 @@ describe('AnalyticsFactsProcessor', () => {
   let processor: AnalyticsFactsProcessor;
   let orderFacts: { handleOrderEvent: jest.Mock };
   let deliveryFacts: { handleDeliveryEvent: jest.Mock };
+  let relationshipFacts: { handleRelationshipEvent: jest.Mock };
 
   beforeEach(() => {
     orderFacts = { handleOrderEvent: jest.fn().mockResolvedValue(undefined) };
     deliveryFacts = { handleDeliveryEvent: jest.fn().mockResolvedValue(undefined) };
-    processor = new AnalyticsFactsProcessor(orderFacts as unknown as OrderFactsService, deliveryFacts as unknown as DeliveryFactsService);
+    relationshipFacts = { handleRelationshipEvent: jest.fn().mockResolvedValue(undefined) };
+    processor = new AnalyticsFactsProcessor(
+      orderFacts as unknown as OrderFactsService,
+      deliveryFacts as unknown as DeliveryFactsService,
+      relationshipFacts as unknown as RelationshipFactsService,
+    );
+  });
+
+  it.each([
+    'TradeRelationshipCreated', 'TradeRelationshipAccessRequested', 'CustomerInviteSent', 'CustomerInviteAccepted',
+    'TradeRelationshipRequestAccepted', 'TradeRelationshipRequestDeclined', 'TradeRelationshipActivated',
+    'TradeRelationshipSuspended', 'TradeRelationshipUnsuspended', 'TradeRelationshipRemoved',
+  ])('dispatches %s to RelationshipFactsService and nothing else', async (eventType) => {
+    const payload = { relationshipId: 'rel-1', toStatus: 'ACTIVE' };
+    await processor.process(makeJob(eventType, payload));
+
+    expect(relationshipFacts.handleRelationshipEvent).toHaveBeenCalledWith('evt-1', eventType, payload);
+    expect(orderFacts.handleOrderEvent).not.toHaveBeenCalled();
+    expect(deliveryFacts.handleDeliveryEvent).not.toHaveBeenCalled();
   });
 
   it.each(['OrderSubmitted', 'OrderAccepted', 'OrderRejected', 'OrderCancelled'])(

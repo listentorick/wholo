@@ -32,6 +32,7 @@ export class AnalyticsReconciliationService {
     this.running = true;
     try {
       await this.reconcile();
+      await this.reconcileRelationships();
     } finally {
       this.running = false;
     }
@@ -64,6 +65,45 @@ export class AnalyticsReconciliationService {
       );
     } else {
       this.logger.log('Analytics reconciliation: order_analytics_state matches live Order data');
+    }
+
+    return { missing, mismatched };
+  }
+
+  /**
+   * The same proof for relationship_analytics_state (ADR-070) against
+   * trade_relationships. Relationships created before relationship facts
+   * started are not expected to have a state row (no backfill), so "missing"
+   * only counts those created since the first relationship fact; a state row
+   * that exists must always agree on status and removal.
+   */
+  async reconcileRelationships(): Promise<ReconciliationResult> {
+    const cutoff = new Date(Date.now() - GRACE_PERIOD_MS);
+
+    const missingRows = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::int AS count
+      FROM trade_relationships tr
+      LEFT JOIN relationship_analytics_state s ON s."relationshipId" = tr.id
+      WHERE s."relationshipId" IS NULL
+        AND tr."createdAt" < ${cutoff}
+        AND tr."createdAt" >= (SELECT MIN("occurredAt") FROM relationship_facts)
+    `;
+
+    const mismatchedRows = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::int AS count
+      FROM trade_relationships tr
+      JOIN relationship_analytics_state s ON s."relationshipId" = tr.id
+      WHERE tr."updatedAt" < ${cutoff}
+        AND (tr.status::text != s.status::text OR (tr."deletedAt" IS NULL) != (s."removedAt" IS NULL))
+    `;
+
+    const missing = Number(missingRows[0]?.count ?? 0);
+    const mismatched = Number(mismatchedRows[0]?.count ?? 0);
+
+    if (missing > 0 || mismatched > 0) {
+      this.logger.error(
+        `Relationship reconciliation found discrepancies: ${missing} relationship(s) missing from relationship_analytics_state, ${mismatched} mismatched`,
+      );
     }
 
     return { missing, mismatched };

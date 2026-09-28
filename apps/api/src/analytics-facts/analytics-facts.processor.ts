@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ANALYTICS_FACTS_QUEUE } from '../queues/queue.constants';
 import { OrderEventPayload, OrderFactsService } from './order-facts.service';
+import { RELATIONSHIP_EVENT_TYPES, RelationshipEventPayload, RelationshipFactsService } from './relationship-facts.service';
 import { DELIVERY_EVENT_TYPES, DeliveryEventPayload, DeliveryFactsService, toOrderEventPayload } from './delivery-facts.service';
 
 export interface OutboxEventJobData {
@@ -24,6 +25,7 @@ export class AnalyticsFactsProcessor extends WorkerHost {
   constructor(
     private readonly orderFacts: OrderFactsService,
     private readonly deliveryFacts: DeliveryFactsService,
+    private readonly relationshipFacts: RelationshipFactsService,
   ) {
     super();
   }
@@ -40,6 +42,10 @@ export class AnalyticsFactsProcessor extends WorkerHost {
       const payload = job.data.payload as DeliveryEventPayload;
       await this.orderFacts.handleOrderEvent(job.data.eventId, job.name, toOrderEventPayload(job.name, payload));
       await this.deliveryFacts.handleDeliveryEvent(job.data.eventId, job.name, payload);
+      return;
+    }
+    if (RELATIONSHIP_EVENT_TYPES.has(job.name)) {
+      await this.relationshipFacts.handleRelationshipEvent(job.data.eventId, job.name, job.data.payload as RelationshipEventPayload);
       return;
     }
     this.logger.warn(`No analytics-facts handler for event type '${job.name}' (event ${job.data.eventId}); ignoring`);

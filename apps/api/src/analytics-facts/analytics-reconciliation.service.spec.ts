@@ -54,8 +54,25 @@ describe('AnalyticsReconciliationService', () => {
     release([{ count: 0 }]);
     await Promise.all([first, second]);
 
-    // Two queries per reconcile() run (missing + mismatched); only one run
-    // should have executed despite two overlapping ticks.
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    // Four queries per tick (orders then relationships, each missing +
+    // mismatched); only one run should have executed despite two overlapping ticks.
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
+  });
+
+  describe('reconcileRelationships', () => {
+    it('reports zero discrepancies when relationship state matches live relationships', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ count: 0 }]).mockResolvedValueOnce([{ count: 0 }]);
+      expect(await service.reconcileRelationships()).toEqual({ missing: 0, mismatched: 0 });
+    });
+
+    it('reports relationships missing from relationship_analytics_state', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ count: 2 }]).mockResolvedValueOnce([{ count: 0 }]);
+      expect(await service.reconcileRelationships()).toEqual({ missing: 2, mismatched: 0 });
+    });
+
+    it('reports relationships whose recorded status or removal has drifted', async () => {
+      prisma.$queryRaw.mockResolvedValueOnce([{ count: 0 }]).mockResolvedValueOnce([{ count: 1 }]);
+      expect(await service.reconcileRelationships()).toEqual({ missing: 0, mismatched: 1 });
+    });
   });
 });

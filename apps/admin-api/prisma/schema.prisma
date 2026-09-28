@@ -802,13 +802,13 @@ model DeliveryFact {
   dropMethod           DeliveryDropMethod?
   // The date the distributor had committed to at the moment of the outcome
   // (scheduledDeliveryDate ?? requestedDeliveryDate). Null for an undated order.
-  committedDate        DateTime?           @db.Date
-  requestedDate        DateTime?           @db.Date
+  committedDate        DateTime?              @db.Date
+  requestedDate        DateTime?              @db.Date
   routeId              String?
   runId                String?
   occurredAt           DateTime // UTC business timestamp (server-recorded outcome time); hypertable partitioning column
-  distributorLocalDate DateTime            @db.Date // the calendar day of the outcome in the distributor's timezone
-  recordedAt           DateTime            @default(now())
+  distributorLocalDate DateTime               @db.Date // the calendar day of the outcome in the distributor's timezone
+  recordedAt           DateTime               @default(now())
 
   @@id([eventId, occurredAt])
   @@index([distributorId, distributorLocalDate])
@@ -816,6 +816,62 @@ model DeliveryFact {
   @@index([orderId])
   @@index([occurredAt])
   @@map("delivery_facts")
+}
+
+// How a trade relationship was opened (ADR-070): typed in by distributor staff,
+// imported from their accounting system (existing book of business), or
+// requested by the customer through discovery. UNKNOWN only when a later event
+// is consumed before the opening one.
+enum RelationshipOrigin {
+  MANUAL
+  ACCOUNTING_IMPORT
+  ACCESS_REQUEST
+  UNKNOWN
+}
+
+// Append-only log of trade-relationship lifecycle events (ADR-070): created,
+// access requested, invite sent/accepted, request accepted/declined, activated,
+// suspended/unsuspended, removed. The substrate for new-business win rate,
+// activation and acquisition cohorts. Like the other fact tables it has no
+// foreign keys and is a Timescale hypertable on occurredAt (see ADR-052).
+model RelationshipFact {
+  eventId              String
+  distributorId        String
+  relationshipId       String
+  customerId           String
+  eventType            String
+  fromStatus           TradeRelationshipStatus? // null when the event opens the relationship
+  toStatus             TradeRelationshipStatus
+  occurredAt           DateTime // UTC business timestamp; hypertable partitioning column
+  distributorLocalDate DateTime                 @db.Date
+  recordedAt           DateTime                 @default(now())
+
+  @@id([eventId, occurredAt])
+  @@index([distributorId, distributorLocalDate])
+  @@index([relationshipId])
+  @@index([occurredAt])
+  @@map("relationship_facts")
+}
+
+// One row per relationship, projected from relationship_facts: how it was
+// opened, when it FIRST became active (never moved by a later suspend/unsuspend),
+// and its current status. The read model for activation and win rate.
+model RelationshipAnalyticsState {
+  relationshipId String                  @id
+  distributorId  String
+  customerId     String
+  origin         RelationshipOrigin
+  openedAt       DateTime?
+  activatedAt    DateTime?
+  activatedVia   String? // the event type of the first activation
+  status         TradeRelationshipStatus
+  removedAt      DateTime?
+  lastEventAt    DateTime
+  updatedAt      DateTime                @updatedAt
+
+  @@index([distributorId, activatedAt])
+  @@index([distributorId, status])
+  @@map("relationship_analytics_state")
 }
 
 // ─── Acceptance configuration ─────────────────────────────────────────────────

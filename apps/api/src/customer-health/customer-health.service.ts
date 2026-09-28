@@ -208,19 +208,20 @@ export class CustomerHealthService {
     };
   }
 
-  // "Became a customer" is the accepted invitation's date, else the row's creation. The row is created when the
-  // invite or request is made, so creation alone would age a customer who accepted long after being invited.
-  // Known gap: access a customer requested and the distributor accepted later, and an unsuspended customer,
-  // still age from creation — a real activatedAt column would settle that if it matters.
+  // "Became a customer" is the first activation recorded in relationship_analytics_state (ADR-070). Relationships
+  // activated before those facts existed fall back to the accepted invitation's date, else the row's creation —
+  // approximate for a request accepted later or a customer activated directly by staff, but only for old rows.
   private async rosterRows(distributorId: string): Promise<RosterRow[]> {
     return this.prisma.$queryRaw<RosterRow[]>`
       SELECT tr."customerId" AS "organisationId", o.name AS "customerName",
         COALESCE(
+          ras."activatedAt",
           (SELECT MAX(ci."acceptedAt") FROM customer_invitations ci WHERE ci."tradeRelationshipId" = tr.id AND ci.status = 'ACCEPTED'),
           tr."createdAt"
         ) AS "activeSince"
       FROM trade_relationships tr
       JOIN organisations o ON o.id = tr."customerId"
+      LEFT JOIN relationship_analytics_state ras ON ras."relationshipId" = tr.id
       WHERE tr."distributorId" = ${distributorId} AND tr.status = 'ACTIVE' AND tr."deletedAt" IS NULL
     `;
   }
