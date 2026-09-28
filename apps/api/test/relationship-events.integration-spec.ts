@@ -311,6 +311,38 @@ describe('Relationship lifecycle events (integration)', () => {
       expect(state.removedAt).not.toBeNull();
     });
 
+    it("keeps a customer shared by two distributors separate: A's changes never touch B's relationship with the same customer", async () => {
+      // The same customer organisation already trades with B.
+      const relB = await prisma.tradeRelationship.create({
+        data: { distributorId: DIST_B, customerId: BUYER_ORG, status: TradeRelationshipStatus.ACTIVE },
+      });
+
+      // ...and now requests access to A, which A accepts, suspends and removes.
+      await api().post(`/api/v1/distributors/${DIST_A}/customers/${BUYER_ORG}`).set('Authorization', `Bearer ${buyerToken}`).send({ recentContact: false }).expect(ok);
+      await api().post(`/api/v1/distributors/${DIST_A}/customers/${BUYER_ORG}/accept-request`).set('Authorization', `Bearer ${adminToken}`).expect(ok);
+      await api().post(`/api/v1/distributors/${DIST_A}/customers/${BUYER_ORG}/suspend`).set('Authorization', `Bearer ${adminToken}`).expect(ok);
+      await api().delete(`/api/v1/distributors/${DIST_A}/customers/${BUYER_ORG}`).set('Authorization', `Bearer ${adminToken}`).expect(ok);
+
+      const relA = await prisma.tradeRelationship.findUniqueOrThrow({ where: { distributorId_customerId: { distributorId: DIST_A, customerId: BUYER_ORG } } });
+      const aEvents = await allEventsFor(relA.id);
+      await consume(aEvents);
+
+      // Every event about A's relationship is A's, and names A's relationship only.
+      expect(aEvents).toHaveLength(4);
+      expect(aEvents.every((e) => (e.payload as { distributorId: string; relationshipId: string }).distributorId === DIST_A
+        && (e.payload as { relationshipId: string }).relationshipId === relA.id)).toBe(true);
+
+      // B's relationship with the same customer has no events, no facts, no state, and is unchanged.
+      expect(await allEventsFor(relB.id)).toEqual([]);
+      expect(await prisma.relationshipFact.count({ where: { OR: [{ relationshipId: relB.id }, { distributorId: DIST_B }] } })).toBe(0);
+      expect(await prisma.relationshipAnalyticsState.findUnique({ where: { relationshipId: relB.id } })).toBeNull();
+      expect(await prisma.tradeRelationship.findUniqueOrThrow({ where: { id: relB.id } })).toMatchObject({ status: 'ACTIVE', deletedAt: null });
+
+      // A's state reflects only A's history.
+      expect(await prisma.relationshipAnalyticsState.findUniqueOrThrow({ where: { relationshipId: relA.id } }))
+        .toMatchObject({ distributorId: DIST_A, customerId: BUYER_ORG, origin: 'ACCESS_REQUEST', status: 'SUSPENDED' });
+    });
+
     it("keeps each distributor's relationships under that distributor only", async () => {
       const { relationshipId: relA } = await createInviteAndAccept();
       const org = await prisma.organisation.create({ data: { name: 'B facts customer', type: OrganisationType.TRADE_CUSTOMER } });
