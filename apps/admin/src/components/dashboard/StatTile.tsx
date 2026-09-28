@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import type { AnalyticsComparison } from '@wholo/types';
+import type { AnalyticsComparison, AnalyticsShareComparison } from '@wholo/types';
 
 interface Props {
   label: string;
@@ -77,6 +77,33 @@ export function StatTile({ label, comparison, format = defaultFormat }: Props) {
             </p>
           )}
           {comparison.status === 'value' && comparison.percentageChange === null && (
+            <p className="text-xs font-medium text-muted">No change vs. previous period</p>
+          )}
+        </>
+      }
+    />
+  );
+}
+
+// A "part of the whole" metric (e.g. orders customers placed themselves): shown
+// as a percentage, with the change in percentage points — a move from 60% to 66%
+// is "+6 pts", never "+10%". Same footer states as StatTile; up is good.
+export function ShareStatTile({ label, comparison }: { label: string; comparison: AnalyticsShareComparison }) {
+  const { current, status, pointChange } = comparison;
+  return (
+    <StatTileFrame
+      label={label}
+      value={current === null ? '—' : `${Math.round(current * 100)}%`}
+      footer={
+        <>
+          {status === 'insufficient_history' && <p className="text-xs font-medium text-muted">Building history</p>}
+          {status === 'new' && <p className="text-xs font-medium text-primary">New</p>}
+          {status === 'value' && pointChange !== null && Math.round(pointChange) !== 0 && (
+            <p className={`text-xs font-medium ${pointChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {pointChange > 0 ? '▲' : '▼'} {Math.abs(Math.round(pointChange))} pts vs. previous period
+            </p>
+          )}
+          {status === 'value' && (pointChange === null || Math.round(pointChange) === 0) && current !== null && (
             <p className="text-xs font-medium text-muted">No change vs. previous period</p>
           )}
         </>

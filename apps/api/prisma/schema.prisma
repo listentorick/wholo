@@ -737,6 +737,7 @@ model OrderFact {
   eventType            String // OrderSubmitted | OrderAccepted | OrderRejected | OrderCancelled | OrderDelivered | OrderDeliveryFailed
   resultingStatus      OrderStatus
   subtotalAmount       Decimal     @db.Decimal(10, 2)
+  isOrderedByDelegate  Boolean     @default(false) // placed by distributor staff on the customer's behalf, not by the customer
   occurredAt           DateTime // UTC business timestamp; hypertable partitioning column
   distributorLocalDate DateTime    @db.Date // computed at write time from the distributor's timezone as of this event
   recordedAt           DateTime    @default(now())
@@ -774,6 +775,7 @@ model OrderAnalyticsState {
   traderCustomerId     String
   status               OrderStatus
   subtotalAmount       Decimal     @db.Decimal(10, 2)
+  isOrderedByDelegate  Boolean     @default(false)
   distributorLocalDate DateTime    @db.Date
   lastEventAt          DateTime
   updatedAt            DateTime    @updatedAt

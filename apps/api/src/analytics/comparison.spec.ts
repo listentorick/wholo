@@ -1,4 +1,4 @@
-import { classifyComparison } from './comparison';
+import { classifyComparison, classifyShareComparison } from './comparison';
 
 const RANGE_END = new Date('2026-02-28T00:00:00.000Z');
 
@@ -46,5 +46,39 @@ describe('classifyComparison', () => {
     const result = classifyComparison(750, 1000, earliestOrder, RANGE_END);
     expect(result.absoluteChange).toBe(-250);
     expect(result.percentageChange).toBe(-25);
+  });
+});
+
+describe('classifyShareComparison', () => {
+  const HISTORY = new Date('2026-01-01T00:00:00.000Z');
+
+  it('reports the change in percentage points, not a percentage of a percentage', () => {
+    const result = classifyShareComparison({ part: 7, total: 10 }, { part: 5, total: 10 }, HISTORY, RANGE_END);
+    expect(result).toEqual({ current: 0.7, comparison: 0.5, status: 'value', pointChange: expect.closeTo(20, 10) });
+  });
+
+  it('reports a fall as negative points', () => {
+    const result = classifyShareComparison({ part: 1, total: 4 }, { part: 3, total: 4 }, HISTORY, RANGE_END);
+    expect(result.pointChange).toBeCloseTo(-50);
+  });
+
+  it('has no current share, and no change, when the current period has no orders', () => {
+    const result = classifyShareComparison({ part: 0, total: 0 }, { part: 3, total: 4 }, HISTORY, RANGE_END);
+    expect(result).toEqual({ current: null, comparison: 0.75, status: 'value', pointChange: null });
+  });
+
+  it('is "new" when history exists but the comparison period had no orders', () => {
+    const result = classifyShareComparison({ part: 2, total: 4 }, { part: 0, total: 0 }, HISTORY, RANGE_END);
+    expect(result).toEqual({ current: 0.5, comparison: null, status: 'new', pointChange: null });
+  });
+
+  it('a share rising from zero is a normal points change, not "new"', () => {
+    const result = classifyShareComparison({ part: 3, total: 6 }, { part: 0, total: 5 }, HISTORY, RANGE_END);
+    expect(result).toEqual({ current: 0.5, comparison: 0, status: 'value', pointChange: 50 });
+  });
+
+  it('is insufficient_history when no data could have existed in the comparison window', () => {
+    const result = classifyShareComparison({ part: 2, total: 4 }, { part: 0, total: 0 }, null, RANGE_END);
+    expect(result).toEqual({ current: 0.5, comparison: null, status: 'insufficient_history', pointChange: null });
   });
 });

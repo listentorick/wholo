@@ -51,3 +51,43 @@ export function classifyComparison(
     percentageChange: (absoluteChange / comparisonValue) * 100,
   };
 }
+
+export interface ShareComparison {
+  /** Share of the period's total, 0–1. Null when the period has nothing to take a share of. */
+  current: number | null;
+  comparison: number | null;
+  status: ComparisonStatus;
+  /** Change in percentage points (0.62 → 0.70 is +8), never a percentage of a percentage. */
+  pointChange: number | null;
+}
+
+/**
+ * The share counterpart of classifyComparison, for "part of the whole" metrics
+ * (e.g. orders placed by customers themselves). Same three states: no history
+ * for the comparison window → `insufficient_history`; history exists but the
+ * comparison period had no total to take a share of → `new`; otherwise a
+ * change in percentage points.
+ */
+export function classifyShareComparison(
+  current: { part: number; total: number },
+  comparison: { part: number; total: number },
+  earliestDataDate: Date | null,
+  comparisonRangeEnd: Date,
+): ShareComparison {
+  const currentShare = current.total > 0 ? current.part / current.total : null;
+
+  if (!earliestDataDate || earliestDataDate.getTime() > comparisonRangeEnd.getTime()) {
+    return { current: currentShare, comparison: null, status: 'insufficient_history', pointChange: null };
+  }
+  if (comparison.total === 0) {
+    return { current: currentShare, comparison: null, status: currentShare != null ? 'new' : 'value', pointChange: null };
+  }
+
+  const comparisonShare = comparison.part / comparison.total;
+  return {
+    current: currentShare,
+    comparison: comparisonShare,
+    status: 'value',
+    pointChange: currentShare == null ? null : (currentShare - comparisonShare) * 100,
+  };
+}

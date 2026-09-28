@@ -152,6 +152,7 @@ describe('OrderFactsService', () => {
         traderCustomerId: 'cust-1',
         status: OrderStatus.CANCELLED,
         subtotalAmount: new Prisma.Decimal('50.00'),
+        isOrderedByDelegate: false,
         distributorLocalDate: new Date('2026-03-01T00:00:00.000Z'),
         occurredAt: new Date('2026-03-02T09:00:00.000Z'),
       });

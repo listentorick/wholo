@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { classifyComparison } from './comparison';
+import { classifyComparison, classifyShareComparison } from './comparison';
 import { PeriodKey, PeriodRange, resolvePeriod } from './period';
 import { PeriodQueryDto } from './dto/period-query.dto';
 
@@ -55,24 +55,25 @@ export class AnalyticsService {
   }
 
   private async summaryRow(distributorId: string, range: PeriodRange) {
-    const rows = await this.prisma.$queryRaw<Array<{ orderValue: number; orderCount: number; purchasingCustomers: number }>>`
+    const rows = await this.prisma.$queryRaw<Array<{ orderValue: number; orderCount: number; purchasingCustomers: number; selfServeCount: number }>>`
       SELECT
         COALESCE(SUM("subtotalAmount"), 0)::float AS "orderValue",
         COUNT(*)::int AS "orderCount",
-        COUNT(DISTINCT "traderCustomerId")::int AS "purchasingCustomers"
+        COUNT(DISTINCT "traderCustomerId")::int AS "purchasingCustomers",
+        COUNT(*) FILTER (WHERE NOT "isOrderedByDelegate")::int AS "selfServeCount"
       FROM order_analytics_state
       WHERE "distributorId" = ${distributorId}
         AND "distributorLocalDate" BETWEEN ${range.start} AND ${range.end}
         AND status IN ${QUALIFYING_STATUSES}
     `;
-    return rows[0] ?? { orderValue: 0, orderCount: 0, purchasingCustomers: 0 };
+    return rows[0] ?? { orderValue: 0, orderCount: 0, purchasingCustomers: 0, selfServeCount: 0 };
   }
 
   async orderSummary(distributorId: string, query: PeriodQueryDto) {
     const { timezone, period } = await this.resolve(distributorId, query);
     const [current, comparison, earliest] = await Promise.all([
       this.summaryRow(distributorId, period.current),
-      period.comparison ? this.summaryRow(distributorId, period.comparison) : Promise.resolve({ orderValue: 0, orderCount: 0, purchasingCustomers: 0 }),
+      period.comparison ? this.summaryRow(distributorId, period.comparison) : Promise.resolve({ orderValue: 0, orderCount: 0, purchasingCustomers: 0, selfServeCount: 0 }),
       this.earliestDataDate(distributorId),
     ]);
     const comparisonEnd = period.comparison?.end ?? period.current.start;
@@ -86,6 +87,13 @@ export class AnalyticsService {
       earliest,
       comparisonEnd,
     );
+    // Orders the customer placed themselves rather than staff placing them on their behalf (order-as).
+    const selfServeShare = classifyShareComparison(
+      { part: current.selfServeCount, total: current.orderCount },
+      { part: comparison.selfServeCount, total: comparison.orderCount },
+      earliest,
+      comparisonEnd,
+    );
 
     return {
       distributorId,
@@ -93,7 +101,7 @@ export class AnalyticsService {
       period: this.periodMeta(query.period ?? 'month', period.current),
       comparisonPeriod: period.comparison ? this.periodMeta(query.period ?? 'month', period.comparison) : null,
       generatedAt: new Date().toISOString(),
-      metrics: { orderValue, orderCount, purchasingCustomers, averageOrderValue },
+      metrics: { orderValue, orderCount, purchasingCustomers, averageOrderValue, selfServeShare },
     };
   }
 
@@ -144,9 +152,10 @@ export class AnalyticsService {
     const limit = query.limit ?? 10;
 
     const [rankings, totalRow, earliest] = await Promise.all([
-      this.prisma.$queryRaw<Array<{ customerId: string; organisationId: string; customerName: string; value: number; orderCount: number }>>`
+      this.prisma.$queryRaw<Array<{ customerId: string; organisationId: string; customerName: string; value: number; orderCount: number; selfServeCount: number }>>`
         SELECT tr.id AS "customerId", s."traderCustomerId" AS "organisationId", o.name AS "customerName",
-          COALESCE(SUM(s."subtotalAmount"), 0)::float AS value, COUNT(*)::int AS "orderCount"
+          COALESCE(SUM(s."subtotalAmount"), 0)::float AS value, COUNT(*)::int AS "orderCount",
+          COUNT(*) FILTER (WHERE NOT s."isOrderedByDelegate")::int AS "selfServeCount"
         FROM order_analytics_state s
         JOIN organisations o ON o.id = s."traderCustomerId"
         JOIN trade_relationships tr ON tr."customerId" = s."traderCustomerId"
@@ -194,6 +203,7 @@ export class AnalyticsService {
         value: r.value,
         orderCount: r.orderCount,
         share: totalValue > 0 ? r.value / totalValue : null,
+        selfServeShare: r.orderCount > 0 ? r.selfServeCount / r.orderCount : null,
         change: classifyComparison(r.value, comparisonMap.get(r.organisationId) ?? 0, earliest, comparisonEnd),
       })),
     };

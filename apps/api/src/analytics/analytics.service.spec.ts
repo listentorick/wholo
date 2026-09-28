@@ -48,7 +48,7 @@ describe('AnalyticsService', () => {
         { match: (sql) => sql.includes('MIN('), rows: [{ earliest: new Date('2026-01-01T00:00:00.000Z') }] },
         {
           match: (sql) => sql.includes('COUNT(DISTINCT "traderCustomerId")') && sql.includes('BETWEEN'),
-          rows: [{ orderValue: 1300, orderCount: 10, purchasingCustomers: 4 }],
+          rows: [{ orderValue: 1300, orderCount: 10, purchasingCustomers: 4, selfServeCount: 7 }],
         },
       ]);
 
@@ -61,6 +61,23 @@ describe('AnalyticsService', () => {
       expect(result.metrics.orderCount.current).toBe(10);
       expect(result.metrics.purchasingCustomers.current).toBe(4);
       expect(result.metrics.averageOrderValue.current).toBe(130);
+      // Both periods return the same canned row here, so the share is unchanged.
+      expect(result.metrics.selfServeShare).toEqual({ current: 0.7, comparison: 0.7, status: 'value', pointChange: 0 });
+    });
+
+    it('has no self-serve share when there are no orders in the period', async () => {
+      prisma.$queryRaw = makeQueryRawMock([
+        { match: (sql) => sql.includes('MIN('), rows: [{ earliest: new Date('2026-01-01T00:00:00.000Z') }] },
+        {
+          match: (sql) => sql.includes('COUNT(DISTINCT "traderCustomerId")'),
+          rows: [{ orderValue: 0, orderCount: 0, purchasingCustomers: 0, selfServeCount: 0 }],
+        },
+      ]);
+
+      const result = await service.orderSummary('dist-1', { period: 'month' });
+
+      expect(result.metrics.selfServeShare.current).toBeNull();
+      expect(result.metrics.selfServeShare.pointChange).toBeNull();
     });
 
     it('marks insufficient_history when the distributor has no data yet', async () => {
@@ -104,8 +121,8 @@ describe('AnalyticsService', () => {
         {
           match: (sql) => sql.includes('organisations'),
           rows: [
-            { customerId: 'rel-1', organisationId: 'org-1', customerName: 'Alpha', value: 700, orderCount: 5 },
-            { customerId: 'rel-2', organisationId: 'org-2', customerName: 'Beta', value: 300, orderCount: 2 },
+            { customerId: 'rel-1', organisationId: 'org-1', customerName: 'Alpha', value: 700, orderCount: 5, selfServeCount: 4 },
+            { customerId: 'rel-2', organisationId: 'org-2', customerName: 'Beta', value: 300, orderCount: 2, selfServeCount: 0 },
           ],
         },
         {
@@ -119,8 +136,9 @@ describe('AnalyticsService', () => {
       expect(result.totalQualifyingValue).toBe(1000);
       expect(result.top5Share).toBe(1);
       expect(result.customers[0]).toEqual(
-        expect.objectContaining({ customerId: 'rel-1', value: 700, share: 0.7 }),
+        expect.objectContaining({ customerId: 'rel-1', value: 700, share: 0.7, selfServeShare: 0.8 }),
       );
+      expect(result.customers[1].selfServeShare).toBe(0);
       // customerId must be the trade-relationship id, never the underlying organisation id.
       expect(result.customers[0].customerId).not.toBe('org-1');
     });

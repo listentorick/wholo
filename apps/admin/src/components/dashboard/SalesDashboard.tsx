@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { DashboardBar, type DashboardNav } from './DashboardBar';
 import { makeCurrencyFormatter } from './currency';
 import { PeriodSelector } from './PeriodSelector';
-import { StatTile } from './StatTile';
+import { ShareStatTile, StatTile } from './StatTile';
 import { OrderTrendChart } from './OrderTrendChart';
 import { ListTableShell } from '@/components/list/ListTableShell';
 import { ListTh } from '@/components/list/ListTh';
@@ -84,8 +84,8 @@ export function SalesDashboard({ nav }: { nav?: DashboardNav }) {
         )}
 
         {!data && isLoading && (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((i) => (
               <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-canvas" />
             ))}
           </div>
@@ -93,11 +93,12 @@ export function SalesDashboard({ nav }: { nav?: DashboardNav }) {
 
         {data && (
           <div style={{ opacity: isLoading ? 0.6 : 1, transition: 'opacity 150ms' }}>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               <StatTile label="Order value" comparison={data.summary.metrics.orderValue} format={currency} />
               <StatTile label="Orders placed" comparison={data.summary.metrics.orderCount} />
               <StatTile label="Average order value" comparison={data.summary.metrics.averageOrderValue} format={currency} />
               <StatTile label="Purchasing customers" comparison={data.summary.metrics.purchasingCustomers} />
+              <ShareStatTile label="Placed by customers" comparison={data.summary.metrics.selfServeShare} />
             </div>
 
             <div className="mt-6 rounded-lg border border-border bg-white p-5">
@@ -123,12 +124,13 @@ export function SalesDashboard({ nav }: { nav?: DashboardNav }) {
                         <ListTh>Customer</ListTh>
                         <ListTh className="text-right">Value</ListTh>
                         <ListTh className="text-right">Share</ListTh>
+                        <ListTh className="text-right" title="Share of this customer's orders they placed themselves, rather than staff placing them on their behalf">Self-serve</ListTh>
                       </tr>
                     </thead>
                     <tbody>
                       {data.customers.customers.length === 0 && (
                         <tr>
-                          <td colSpan={3} className="px-5 py-6 text-center text-sm text-muted">No qualifying orders in this period.</td>
+                          <td colSpan={4} className="px-5 py-6 text-center text-sm text-muted">No qualifying orders in this period.</td>
                         </tr>
                       )}
                       {data.customers.customers.map((c) => (
@@ -141,6 +143,9 @@ export function SalesDashboard({ nav }: { nav?: DashboardNav }) {
                           <td className="px-4 py-2.5 text-right tabular-nums text-text">{currency(c.value)}</td>
                           <td className="px-4 py-2.5 text-right tabular-nums text-muted">
                             {c.share !== null ? `${(c.share * 100).toFixed(0)}%` : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted">
+                            {c.selfServeShare !== null ? `${(c.selfServeShare * 100).toFixed(0)}%` : '—'}
                           </td>
                         </tr>
                       ))}

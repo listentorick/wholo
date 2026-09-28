@@ -1831,6 +1831,15 @@ export interface AnalyticsComparison {
   percentageChange: number | null;
 }
 
+/** A "part of the whole" metric (0–1) compared in percentage points, not as a percentage change. */
+export interface AnalyticsShareComparison {
+  /** Null when the period has nothing to take a share of (no orders). */
+  current: number | null;
+  comparison: number | null;
+  status: ComparisonStatus;
+  pointChange: number | null;
+}
+
 export interface OrderSummaryResponse {
   distributorId: string;
   timezone: string;
@@ -1842,6 +1851,8 @@ export interface OrderSummaryResponse {
     orderCount: AnalyticsComparison;
     purchasingCustomers: AnalyticsComparison;
     averageOrderValue: AnalyticsComparison;
+    /** Share of qualifying orders the customer placed themselves, not staff on their behalf. */
+    selfServeShare: AnalyticsShareComparison;
   };
 }
 
@@ -1867,6 +1878,8 @@ export interface CustomerRanking {
   value: number;
   orderCount: number;
   share: number | null;
+  /** Share of this customer's orders they placed themselves. Null with no orders. */
+  selfServeShare: number | null;
   change: AnalyticsComparison;
 }
 

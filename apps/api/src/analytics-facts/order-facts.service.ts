@@ -32,7 +32,7 @@ export class OrderFactsService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { subtotalAmount: true },
+      select: { subtotalAmount: true, isOrderedByDelegate: true },
     });
     if (!order) {
       this.logger.warn(`Order ${orderId} not found — skipping fact recording for event ${eventId}`);
@@ -56,6 +56,7 @@ export class OrderFactsService {
             eventType,
             resultingStatus: status,
             subtotalAmount: order.subtotalAmount,
+            isOrderedByDelegate: order.isOrderedByDelegate,
             occurredAt,
             distributorLocalDate: localDate,
           },
@@ -102,6 +103,7 @@ export class OrderFactsService {
         traderCustomerId,
         status,
         subtotalAmount: order.subtotalAmount,
+        isOrderedByDelegate: order.isOrderedByDelegate,
         distributorLocalDate: localDate,
         occurredAt,
       });
@@ -116,7 +118,8 @@ export class OrderFactsService {
    * `distributorLocalDate` is set only on first insert and never overwritten,
    * so an order's period attribution stays fixed to whichever event created
    * the row (expected to be `OrderSubmitted`) regardless of later status
-   * changes. Shared by the live consumer and the rebuild command — the two
+   * changes. `isOrderedByDelegate` is likewise set on insert only: who placed
+   * an order never changes. Shared by the live consumer and the rebuild command — the two
    * must never diverge in how they derive state from facts.
    */
   async upsertAnalyticsState(
@@ -127,16 +130,17 @@ export class OrderFactsService {
       traderCustomerId: string;
       status: OrderStatus;
       subtotalAmount: Prisma.Decimal;
+      isOrderedByDelegate: boolean;
       distributorLocalDate: Date;
       occurredAt: Date;
     },
   ): Promise<void> {
-    const { orderId, distributorId, traderCustomerId, status, subtotalAmount, distributorLocalDate: localDate, occurredAt } = params;
+    const { orderId, distributorId, traderCustomerId, status, subtotalAmount, isOrderedByDelegate, distributorLocalDate: localDate, occurredAt } = params;
     await tx.$executeRaw`
       INSERT INTO order_analytics_state
-        ("orderId", "distributorId", "traderCustomerId", "status", "subtotalAmount", "distributorLocalDate", "lastEventAt", "updatedAt")
+        ("orderId", "distributorId", "traderCustomerId", "status", "subtotalAmount", "isOrderedByDelegate", "distributorLocalDate", "lastEventAt", "updatedAt")
       VALUES
-        (${orderId}, ${distributorId}, ${traderCustomerId}, ${status}::"OrderStatus", ${subtotalAmount}, ${localDate}, ${occurredAt}, now())
+        (${orderId}, ${distributorId}, ${traderCustomerId}, ${status}::"OrderStatus", ${subtotalAmount}, ${isOrderedByDelegate}, ${localDate}, ${occurredAt}, now())
       ON CONFLICT ("orderId") DO UPDATE SET
         "status" = EXCLUDED."status",
         "subtotalAmount" = EXCLUDED."subtotalAmount",

@@ -232,6 +232,7 @@ describe('Analytics fact layer (integration)', () => {
           traderCustomerId: fact.traderCustomerId,
           status: fact.resultingStatus,
           subtotalAmount: fact.subtotalAmount,
+          isOrderedByDelegate: fact.isOrderedByDelegate,
           distributorLocalDate: fact.distributorLocalDate,
           occurredAt: fact.occurredAt,
         }),
@@ -243,5 +244,28 @@ describe('Analytics fact layer (integration)', () => {
     expect(rebuilt?.subtotalAmount.toString()).toBe(original?.subtotalAmount.toString());
     expect(rebuilt?.distributorLocalDate.toISOString()).toBe(original?.distributorLocalDate.toISOString());
     expect(rebuilt?.lastEventAt.toISOString()).toBe(original?.lastEventAt.toISOString());
+    expect(rebuilt?.isOrderedByDelegate).toBe(original?.isOrderedByDelegate);
+  });
+
+  it('records whether staff placed the order on the customer\'s behalf, on the fact and the state, and keeps it through later events', async () => {
+    await prisma.order.update({ where: { id: ORDER_1 }, data: { isOrderedByDelegate: true } });
+    const base = { orderId: ORDER_1, distributorId: DIST_A, traderCustomerId: CUSTOMER_A };
+
+    await orderFacts.handleOrderEvent('evt-facts-delegate-1', 'OrderSubmitted', { ...base, status: OrderStatus.SUBMITTED, occurredAt: '2026-03-15T10:00:00.000Z' });
+    await orderFacts.handleOrderEvent('evt-facts-delegate-2', 'OrderAccepted', { ...base, status: OrderStatus.ACCEPTED, occurredAt: '2026-03-15T11:00:00.000Z' });
+
+    const facts = await prisma.orderFact.findMany({ where: { orderId: ORDER_1 } });
+    expect(facts.map((f) => f.isOrderedByDelegate)).toEqual([true, true]);
+    const state = await prisma.orderAnalyticsState.findUniqueOrThrow({ where: { orderId: ORDER_1 } });
+    expect(state).toMatchObject({ status: OrderStatus.ACCEPTED, isOrderedByDelegate: true });
+  });
+
+  it('records a customer-placed order as not delegated', async () => {
+    await orderFacts.handleOrderEvent('evt-facts-self-1', 'OrderSubmitted', {
+      orderId: ORDER_1, distributorId: DIST_A, traderCustomerId: CUSTOMER_A, status: OrderStatus.SUBMITTED, occurredAt: '2026-03-15T10:00:00.000Z',
+    });
+
+    const state = await prisma.orderAnalyticsState.findUniqueOrThrow({ where: { orderId: ORDER_1 } });
+    expect(state.isOrderedByDelegate).toBe(false);
   });
 });

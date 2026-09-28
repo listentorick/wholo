@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { StatTile, StatTileFrame } from './StatTile';
-import type { AnalyticsComparison } from '@wholo/types';
+import { ShareStatTile, StatTile, StatTileFrame } from './StatTile';
+import type { AnalyticsComparison, AnalyticsShareComparison } from '@wholo/types';
 
 const base: AnalyticsComparison = { current: 0, comparison: 0, status: 'value', absoluteChange: 0, percentageChange: null };
 
@@ -60,5 +60,39 @@ describe('StatTileFrame', () => {
 
     rerender(<StatTileFrame label="Overdue" value={2} onClick={onClick} selected />);
     expect(screen.getByRole('button', { name: /overdue/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('ShareStatTile', () => {
+  const share: AnalyticsShareComparison = { current: 0.66, comparison: 0.6, status: 'value', pointChange: 6 };
+
+  it('shows the share as a whole percentage', () => {
+    render(<ShareStatTile label="Placed by customers" comparison={share} />);
+    expect(screen.getByText('66%')).toBeInTheDocument();
+  });
+
+  it('shows a rise in percentage points, in green', () => {
+    render(<ShareStatTile label="Placed by customers" comparison={share} />);
+    const delta = screen.getByText(/6 pts vs\. previous period/);
+    expect(delta.className).toContain('text-green-600');
+  });
+
+  it('shows a fall in percentage points, in red', () => {
+    render(<ShareStatTile label="Placed by customers" comparison={{ ...share, current: 0.5, pointChange: -10 }} />);
+    const delta = screen.getByText(/10 pts vs\. previous period/);
+    expect(delta.className).toContain('text-red-600');
+  });
+
+  it('shows a dash, not 0%, when there were no orders to take a share of', () => {
+    render(<ShareStatTile label="Placed by customers" comparison={{ current: null, comparison: 0.6, status: 'value', pointChange: null }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText(/pts/)).not.toBeInTheDocument();
+  });
+
+  it('shows "Building history" and "New" like the other tiles', () => {
+    const { rerender } = render(<ShareStatTile label="Placed by customers" comparison={{ ...share, status: 'insufficient_history', comparison: null, pointChange: null }} />);
+    expect(screen.getByText('Building history')).toBeInTheDocument();
+    rerender(<ShareStatTile label="Placed by customers" comparison={{ ...share, status: 'new', comparison: null, pointChange: null }} />);
+    expect(screen.getByText('New')).toBeInTheDocument();
   });
 });

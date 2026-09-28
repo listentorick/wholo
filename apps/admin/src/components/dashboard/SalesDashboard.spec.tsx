@@ -66,6 +66,7 @@ const summary = {
     orderCount: comparison(10),
     purchasingCustomers: comparison(4),
     averageOrderValue: comparison(130),
+    selfServeShare: { current: 0.7, comparison: 0.62, status: 'value', pointChange: 8 },
   },
 };
 
@@ -88,7 +89,7 @@ const customerRankings = {
   totalQualifyingValue: 1300,
   top5Share: 1,
   customers: [
-    { customerId: 'cust-1', customerName: 'Blackbird Restaurant', value: 1300, orderCount: 10, share: 1, change: comparison(1300) },
+    { customerId: 'cust-1', customerName: 'Blackbird Restaurant', value: 1300, orderCount: 10, share: 1, selfServeShare: 0.8, change: comparison(1300) },
   ],
 };
 
@@ -128,6 +129,22 @@ describe('SalesDashboard', () => {
     await waitFor(() => expect(adminAnalyticsApi.productRankings).toHaveBeenCalled());
     expect(adminAnalyticsApi.orderSummary).toHaveBeenCalledWith({ period: 'month' });
     expect(adminAnalyticsApi.orderTrend).toHaveBeenCalledWith({ period: 'month' });
+  });
+
+  it('shows the share of orders customers placed themselves, with the change in points', async () => {
+    render(<DashboardPage />);
+
+    const tile = (await screen.findByText('Placed by customers')).closest('div');
+    expect(tile).toHaveTextContent('70%');
+    expect(tile).toHaveTextContent('8 pts vs. previous period');
+  });
+
+  it("shows each top customer's self-serve share", async () => {
+    render(<DashboardPage />);
+
+    const row = (await screen.findByRole('link', { name: 'Blackbird Restaurant' })).closest('tr');
+    expect(row).toHaveTextContent('80%');
+    expect(screen.getByRole('columnheader', { name: 'Self-serve' })).toBeInTheDocument();
   });
 
   it('renders stat tiles with values and the growth percentage', async () => {

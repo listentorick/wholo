@@ -36,6 +36,7 @@ async function main() {
           traderCustomerId: fact.traderCustomerId,
           status: fact.resultingStatus,
           subtotalAmount: fact.subtotalAmount,
+          isOrderedByDelegate: fact.isOrderedByDelegate,
           distributorLocalDate: fact.distributorLocalDate,
           occurredAt: fact.occurredAt,
         }),

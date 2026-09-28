@@ -207,6 +207,40 @@ describe('Analytics (integration)', () => {
       expect(res.body.metrics.orderCount.current).toBe(2);
       expect(res.body.metrics.purchasingCustomers.current).toBe(2);
     });
+
+    it("reports the share of qualifying orders customers placed themselves, counting only the distributor's own orders", async () => {
+      await seedOrderState({ orderId: 'test-analytics-order-self1' });
+      await seedOrderState({ orderId: 'test-analytics-order-deleg1', isOrderedByDelegate: true });
+      // A rejected delegate order does not qualify, so it is not in the share either.
+      await seedOrderState({ orderId: 'test-analytics-order-deleg2', isOrderedByDelegate: true, status: 'REJECTED' });
+      // Distributor B's delegate orders must not move A's share.
+      for (const n of [1, 2, 3]) {
+        await prisma.orderAnalyticsState.create({
+          data: {
+            orderId: `test-analytics-order-b-deleg${n}`,
+            distributorId: DIST_B,
+            traderCustomerId: CUSTOMER_A1,
+            status: 'ACCEPTED',
+            subtotalAmount: new Prisma.Decimal('10.00'),
+            isOrderedByDelegate: true,
+            distributorLocalDate: new Date('2026-03-15T00:00:00.000Z'),
+            lastEventAt: new Date('2026-03-15T10:00:00.000Z'),
+          },
+        });
+      }
+
+      const summary = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/order-summary`)
+        .query({ period: 'custom', start: '2026-03-15', end: '2026-03-15' })
+        .set('Authorization', `Bearer ${token}`);
+      expect(summary.body.metrics.selfServeShare.current).toBe(0.5);
+
+      const rankings = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customer-rankings`)
+        .query({ period: 'custom', start: '2026-03-15', end: '2026-03-15' })
+        .set('Authorization', `Bearer ${token}`);
+      expect(rankings.body.customers[0].selfServeShare).toBe(0.5);
+    });
   });
 
   describe('GET /api/v1/distributors/:distributorId/customer-rankings', () => {
