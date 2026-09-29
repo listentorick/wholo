@@ -13,6 +13,7 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
   AccountingConnectionAdapter,
+  AccountingFetchResult,
   AccountingExternalTaxRate,
   AccountingTokenSet,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
@@ -28,9 +29,10 @@ import {
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
+import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
 // Consumes AccountingTaxTypeSyncRequested — written to the outbox by both
-// AccountingTaxTypeSyncScheduler (periodic) and the "Sync now" HTTP endpoint
+// AccountingSyncScheduler (periodic) and the "Sync now" HTTP endpoint
 // (manual). Third implementation of the shared sync pipeline
 // (AccountingSyncProcessorBase): pull tax rates from the provider, cache
 // them, and run the matcher against unmapped Wholo tax types. Never writes a
@@ -40,7 +42,7 @@ import { IngestionRunService } from '../ingestion/ingestion-run.service';
 // mutated here — same deliberate rule as products/contacts. A rate change on
 // a mapped row is surfaced via AccountingChangeDetectionService instead.
 // concurrency 2 — see AccountingContactSyncProcessor / ADR-061.
-@Processor(ACCOUNTING_TAX_TYPE_SYNC_QUEUE, { concurrency: 2 })
+@Processor(ACCOUNTING_TAX_TYPE_SYNC_QUEUE, { concurrency: 2, ...ACCOUNTING_WORKER_SETTINGS })
 export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalTaxRate,
   ExternalAccountingTaxType,
@@ -62,12 +64,14 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
     super(prisma, accountingConnectionService, adapters, changeDetection, ingestionRuns);
   }
 
-  protected fetchExternalRecords(
+  // Tax rates have no per-record modified timestamp, so every pull is full
+  // (nextCursor null keeps shouldRunFull true).
+  protected async fetchExternalRecords(
     adapter: AccountingConnectionAdapter,
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-  ): Promise<AccountingExternalTaxRate[]> {
-    return adapter.listTaxRates(tokenSet, externalOrganisationId);
+  ): Promise<AccountingFetchResult<AccountingExternalTaxRate>> {
+    return { records: await adapter.listTaxRates(tokenSet, externalOrganisationId), nextCursor: null };
   }
 
   // Business fields shown in the review table. isActive is excluded — a flip to

@@ -1403,6 +1403,17 @@ model IngestionRun {
   queuedAt         DateTime            @default(now())
   startedAt        DateTime?
   finishedAt       DateTime?
+  // Scheduling (ADR-061 "Scheduling"). The scheduler enqueues every row whose
+  // nextRunAt has passed, then advances it by whole intervals from its own
+  // slot (no drift). null = not yet scheduled; the scheduler seeds it.
+  nextRunAt        DateTime?
+  // Opaque incremental position produced by the source adapter and handed
+  // back on the next pull (e.g. a modified-since timestamp). null = the next
+  // pull must be full.
+  cursor           String?
+  // Last successful FULL pull — drives the periodic full reconcile that
+  // incremental pulls can't replace (deletions, re-matching).
+  lastFullRunAt    DateTime?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -1410,6 +1421,7 @@ model IngestionRun {
 
   @@unique([sourceType, sourceRef, resourceType])
   @@index([distributorId])
+  @@index([sourceType, nextRunAt])
   @@map("ingestion_runs")
 }
 

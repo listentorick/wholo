@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AccountingInvoiceExportStatus, ActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -11,6 +11,8 @@ import { AuditService } from '../audit/audit.service';
 // idempotency guard.
 @Injectable()
 export class AccountingInvoiceExportService {
+  private readonly logger = new Logger(AccountingInvoiceExportService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
@@ -52,6 +54,10 @@ export class AccountingInvoiceExportService {
         changes: { exportId: exportRow.id },
       });
     });
+    this.logger.log(
+      { event: 'accounting.invoice_export.retry_requested', distributorId, exportId, userId },
+      `Invoice export ${exportId} retry requested by user ${userId}`,
+    );
     return { status: 'requested' };
   }
 }

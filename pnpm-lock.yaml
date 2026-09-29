@@ -107,7 +107,7 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@7.3.5(@types/node@22.19.20)(jiti@1.21.7)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.7.0(vite@7.3.5(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.15)
@@ -125,7 +125,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.3
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.20)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.20)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)
 
   apps/admin-api:
     dependencies:
@@ -326,8 +326,8 @@ importers:
         specifier: ^4.19.2
         version: 4.22.4
       xero-node:
-        specifier: ^18.0.0
-        version: 18.0.0
+        specifier: ^18.1.0
+        version: 18.1.0
     devDependencies:
       '@nestjs/cli':
         specifier: ^10.4.9
@@ -774,7 +774,7 @@ importers:
         version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
         specifier: ^4.3.4
-        version: 4.7.0(vite@7.3.5(@types/node@22.19.20)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.7.0(vite@7.3.5(@types/node@22.19.20)(jiti@1.21.7)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
       autoprefixer:
         specifier: ^10.4.20
         version: 10.5.0(postcss@8.5.15)
@@ -792,7 +792,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.3
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.20)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@22.19.20)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)
 
   packages/admin-api-client:
     dependencies:
@@ -7385,8 +7385,8 @@ packages:
       utf-8-validate:
         optional: true
 
-  xero-node@18.0.0:
-    resolution: {integrity: sha512-n2j6llh0mi8AAp7SEMUh3LBqH9H3wk8izmrD4fT3FcMckAuDqULjBI46HkQZasu40n/CtaA+8Y4MlNcYiN+03g==}
+  xero-node@18.1.0:
+    resolution: {integrity: sha512-+nWnVbawSylPE8sszxjCPXt+zmQTeKq4nAP24gXSGa/scNcr3EfF2aYGx7XnnSKREDP+uK4qlaZNVJ5IukNexg==}
 
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
@@ -15453,7 +15453,7 @@ snapshots:
 
   ws@8.21.0: {}
 
-  xero-node@18.0.0:
+  xero-node@18.1.0:
     dependencies:
       axios: 1.18.1
       openid-client: 5.7.1

@@ -55,7 +55,7 @@ export function logHttpException(
  * errors) and the stack frames are kept; enumerable properties are dropped.
  */
 export function loggableError(exception: unknown): Error {
-  const src = exception instanceof Error ? exception : new Error(String(exception));
+  const src = exception instanceof Error ? exception : new Error(describeNonError(exception));
   const rawCode = (src as { code?: unknown }).code;
   const code = typeof rawCode === 'string' || typeof rawCode === 'number' ? rawCode : undefined;
   const message = src.name.startsWith('PrismaClient')
@@ -67,6 +67,26 @@ export function loggableError(exception: unknown): Error {
   safe.stack = [`${src.name}: ${message}`, ...stackFrames(src.stack)].join('\n');
   if (code !== undefined) Object.assign(safe, { code });
   return safe;
+}
+
+// Some SDKs reject with a non-Error — xero-node, for one, rejects with a
+// JSON string embedding the whole HTTP response (body, headers, request
+// path). A short plain string is kept verbatim; anything structured or long
+// is withheld, same reasoning as the Prisma message rule above.
+const NON_ERROR_STRING_MAX = 200;
+
+function describeNonError(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trimStart();
+    if (value.length <= NON_ERROR_STRING_MAX && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+      return value;
+    }
+    return `Non-Error string thrown (${value.length} chars, withheld: may contain response data)`;
+  }
+  if (value !== null && typeof value === 'object') {
+    return 'Non-Error object thrown (withheld: may contain response data)';
+  }
+  return String(value);
 }
 
 /** The `    at …` lines of a stack — never its header, which embeds the message. */

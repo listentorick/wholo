@@ -5,9 +5,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { LoggingModule, MetricsModule } from '@wholo/nest-telemetry';
 import { AccountingModule } from './accounting/accounting.module';
 import { AccountingTokenRefreshScheduler } from './accounting/accounting-token-refresh.scheduler';
-import { AccountingContactSyncScheduler } from './accounting/accounting-contact-sync.scheduler';
-import { AccountingProductSyncScheduler } from './accounting/accounting-product-sync.scheduler';
-import { AccountingTaxTypeSyncScheduler } from './accounting/accounting-tax-type-sync.scheduler';
+import { AccountingSyncScheduler } from './accounting/accounting-sync.scheduler';
+import { ACCOUNTING_BACKOFF_TYPE } from './accounting/accounting-backoff';
 import { AccountingBulkImportModule } from './accounting-bulk-import/accounting-bulk-import.module';
 import { AccountingContactSyncModule } from './accounting-contact-sync/accounting-contact-sync.module';
 import { AccountingInvoiceExportModule } from './accounting-invoice-export/accounting-invoice-export.module';
@@ -62,7 +61,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         // rate limit, not a blip.
         defaultJobOptions: {
           attempts: 5,
-          backoff: { type: 'exponential', delay: 30_000 },
+          backoff: { type: ACCOUNTING_BACKOFF_TYPE },
           removeOnComplete: { count: 1000 },
           removeOnFail: false,
         },
@@ -74,7 +73,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         name: ACCOUNTING_CONTACT_SYNC_QUEUE,
         defaultJobOptions: {
           attempts: 3,
-          backoff: { type: 'exponential', delay: 30_000 },
+          backoff: { type: ACCOUNTING_BACKOFF_TYPE },
           removeOnComplete: { count: 1000 },
           removeOnFail: false,
         },
@@ -83,7 +82,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         name: ACCOUNTING_PRODUCT_SYNC_QUEUE,
         defaultJobOptions: {
           attempts: 3,
-          backoff: { type: 'exponential', delay: 30_000 },
+          backoff: { type: ACCOUNTING_BACKOFF_TYPE },
           removeOnComplete: { count: 1000 },
           removeOnFail: false,
         },
@@ -92,7 +91,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         name: ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
         defaultJobOptions: {
           attempts: 3,
-          backoff: { type: 'exponential', delay: 30_000 },
+          backoff: { type: ACCOUNTING_BACKOFF_TYPE },
           removeOnComplete: { count: 1000 },
           removeOnFail: false,
         },
@@ -169,9 +168,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
   providers: [
     OutboxPublisherService,
     AccountingTokenRefreshScheduler,
-    AccountingContactSyncScheduler,
-    AccountingProductSyncScheduler,
-    AccountingTaxTypeSyncScheduler,
+    AccountingSyncScheduler,
     QueueMetricsScheduler,
   ],
 })

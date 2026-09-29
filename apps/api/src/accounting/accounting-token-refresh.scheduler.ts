@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { loggableError } from '@wholo/nest-telemetry';
 import { Interval } from '@nestjs/schedule';
 import { AccountingConnectionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -57,9 +58,17 @@ export class AccountingTokenRefreshScheduler implements OnModuleInit {
       try {
         await this.accountingConnectionService.getValidTokenSet(connection.distributorId, connection.provider);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.error(
-          `Dormancy-prevention refresh failed for distributor ${connection.distributorId}: ${message}`,
+        // Provider failures are already logged (with the reconnect decision)
+        // by AccountingConnectionService; this line ties them to the sweep.
+        this.logger.warn(
+          {
+            event: 'accounting.connection.dormancy_refresh_failed',
+            provider: connection.provider,
+            distributorId: connection.distributorId,
+            connectionId: connection.id,
+            err: loggableError(err),
+          },
+          `Dormancy-prevention refresh failed for distributor ${connection.distributorId}`,
         );
       }
     }

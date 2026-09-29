@@ -22,6 +22,9 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { AccountingSyncScheduler } from '../src/accounting/accounting-sync.scheduler';
+import { AccountingSyncService } from '../src/accounting/sync/accounting-sync.service';
+import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
 
 const DIST_A = 'test-ingest-dist-a';
 const DIST_B = 'test-ingest-dist-b';
@@ -117,12 +120,87 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
     }
   });
 
-  it('calling it again while runs are non-terminal keeps 3 rows but writes new events', async () => {
+  it('calling it again while runs are still queued writes no duplicate events', async () => {
     await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
     await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
 
     expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(3);
-    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(6);
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+  });
+
+  it('two concurrent sync requests still produce exactly one event per resource type (atomic create/reset)', async () => {
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`),
+      ),
+    );
+
+    expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(3);
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+  });
+
+  it('re-queues a run left QUEUED for over an hour (its job gave up before claiming it)', async () => {
+    await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
+    await prisma.ingestionRun.updateMany({
+      where: { sourceRef: connectionA.id, resourceType: 'contact' },
+      data: { queuedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+    });
+
+    await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
+
+    const events = await prisma.outboxEvent.findMany({ where: { aggregateId: connectionA.id } });
+    expect(events.filter((e) => e.eventType === 'AccountingContactSyncRequested')).toHaveLength(2);
+    expect(events.filter((e) => e.eventType === 'AccountingProductSyncRequested')).toHaveLength(1);
+  });
+
+  describe('scheduler', () => {
+    let scheduler: AccountingSyncScheduler;
+    let connectionB: { id: string };
+
+    beforeEach(async () => {
+      scheduler = new AccountingSyncScheduler(prisma, app.get(IngestionRunService), app.get(AccountingSyncService));
+      connectionB = await prisma.accountingConnection.create({
+        data: { ...baseConn, distributorId: DIST_B, status: AccountingConnectionStatus.DISCONNECTED },
+      });
+      await prisma.outboxEvent.deleteMany({ where: { aggregateId: connectionB.id } });
+    });
+
+    afterEach(async () => {
+      await prisma.outboxEvent.deleteMany({ where: { aggregateId: connectionB.id } });
+    });
+
+    it('queues a never-synced connection once, then nothing until its next slot', async () => {
+      const now = new Date();
+      const first = await scheduler.runOnce(now);
+      const second = await scheduler.runOnce(new Date(now.getTime() + 60_000));
+
+      expect(first.enqueued).toBeGreaterThanOrEqual(3);
+      expect(second.enqueued).toBe(0);
+      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+      const runs = await prisma.ingestionRun.findMany({ where: { sourceRef: connectionA.id } });
+      expect(runs.every((r) => r.nextRunAt !== null && r.nextRunAt.getTime() > now.getTime())).toBe(true);
+    });
+
+    it('never schedules a connection that is not CONNECTED (another distributor\'s, here)', async () => {
+      await scheduler.runOnce(new Date());
+
+      expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionB.id } })).toBe(0);
+      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionB.id } })).toBe(0);
+    });
+
+    it('advances the slot without a duplicate event while the run is still in flight', async () => {
+      const now = new Date();
+      await scheduler.runOnce(now);
+      await prisma.ingestionRun.updateMany({
+        where: { sourceRef: connectionA.id },
+        data: { nextRunAt: new Date(now.getTime() - 1000) }, // due again, but still QUEUED
+      });
+
+      const summary = await scheduler.runOnce(new Date(now.getTime() + 1000));
+
+      expect(summary.skippedInFlight).toBe(3);
+      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+    });
   });
 
   it('resets a terminal run back to QUEUED with zeroed counts on the next trigger', async () => {

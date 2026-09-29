@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Inject, Logger } from '@nestjs/common';
 import { NotificationChannel, NotificationDeliveryStatus } from '@prisma/client';
 import { Job } from 'bullmq';
@@ -11,7 +12,7 @@ export interface DeliveryJobData {
 }
 
 @Processor(NOTIFICATION_DELIVERY_QUEUE)
-export class NotificationDeliveryProcessor extends WorkerHost {
+export class NotificationDeliveryProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(NotificationDeliveryProcessor.name);
   private readonly senders: Map<NotificationChannel, ChannelSender>;
 

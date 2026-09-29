@@ -10,14 +10,34 @@
 // `transient`, for callers that need to distinguish *why* a permanent
 // failure happened (e.g. "distributor must reconnect" vs "our application
 // credentials are wrong") rather than just whether to retry.
+//
+// `details` carries provider-neutral facts about the failed HTTP exchange:
+// the status code (for log fields / alerting) and, on a rate limit, how long
+// the provider asked us to wait — the queue's backoff strategy honours it
+// (see accounting-backoff.ts). `message` must already be safe to show to a
+// distributor and to log: adapters never put raw provider responses in it.
+export interface AccountingProviderErrorDetails {
+  statusCode?: number;
+  retryAfterMs?: number;
+}
+
 export class AccountingProviderError extends Error {
   constructor(
     message: string,
     readonly transient: boolean,
     readonly cause?: unknown,
     readonly code?: string,
+    readonly details: AccountingProviderErrorDetails = {},
   ) {
     super(message);
     this.name = 'AccountingProviderError';
+  }
+
+  get statusCode(): number | undefined {
+    return this.details.statusCode;
+  }
+
+  get retryAfterMs(): number | undefined {
+    return this.details.retryAfterMs;
   }
 }

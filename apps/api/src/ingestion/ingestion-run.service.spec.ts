@@ -1,5 +1,5 @@
 import { PrismaService } from '../prisma/prisma.service';
-import { IngestionRunService, PROCESSING_STALE_MS } from './ingestion-run.service';
+import { IngestionRunService, PROCESSING_STALE_MS, QUEUED_STALE_MS } from './ingestion-run.service';
 
 function makePrisma() {
   return {
@@ -31,51 +31,78 @@ describe('IngestionRunService', () => {
     prisma = makePrisma();
     service = new IngestionRunService(prisma as unknown as PrismaService);
     tx.ingestionRun = {
-      findUnique: jest.fn(),
-      create: jest.fn().mockResolvedValue({ id: 'run-1' }),
+      createMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findUniqueOrThrow: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       update: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'run-1', ...data })),
     };
   });
 
   describe('requestRun', () => {
-    it('creates a QUEUED row when none exists', async () => {
-      tx.ingestionRun.findUnique.mockResolvedValue(null);
-      await service.requestRun(tx as never, baseInput);
-      expect(tx.ingestionRun.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ sourceRef: 'conn-1', trigger: 'MANUAL' }) }),
-      );
-    });
+    it('creates a QUEUED row when none exists — and says to enqueue it', async () => {
+      tx.ingestionRun.createMany.mockResolvedValue({ count: 1 });
+      tx.ingestionRun.findUniqueOrThrow.mockResolvedValue({ id: 'run-1', status: 'QUEUED' });
 
-    it('resets a terminal row back to QUEUED with zeroed counts', async () => {
-      tx.ingestionRun.findUnique.mockResolvedValue({ id: 'run-1', status: 'COMPLETED', trigger: 'SCHEDULED' });
-      await service.requestRun(tx as never, baseInput);
-      expect(tx.ingestionRun.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'run-1' },
-          data: expect.objectContaining({
-            status: 'QUEUED',
-            recordsProcessed: 0,
-            recordsTotal: null,
-            startedAt: null,
-            finishedAt: null,
-            errorMessage: null,
-          }),
-        }),
-      );
-    });
-
-    it('escalates a running SCHEDULED run to MANUAL on a manual click, without touching progress', async () => {
-      tx.ingestionRun.findUnique.mockResolvedValue({ id: 'run-1', status: 'PROCESSING', trigger: 'SCHEDULED' });
-      await service.requestRun(tx as never, baseInput);
-      expect(tx.ingestionRun.update).toHaveBeenCalledWith({ where: { id: 'run-1' }, data: { trigger: 'MANUAL' } });
-    });
-
-    it('leaves a running MANUAL run untouched', async () => {
-      const existing = { id: 'run-1', status: 'PROCESSING', trigger: 'MANUAL' };
-      tx.ingestionRun.findUnique.mockResolvedValue(existing);
       const result = await service.requestRun(tx as never, baseInput);
+
+      expect(result.shouldEnqueue).toBe(true);
+      expect(tx.ingestionRun.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ sourceRef: 'conn-1', trigger: 'MANUAL' })],
+        skipDuplicates: true, // ON CONFLICT DO NOTHING — a unique violation would abort the caller's tx
+      });
+    });
+
+    it('resets a finished/stale row back to QUEUED with zeroed counts in ONE conditional update', async () => {
+      tx.ingestionRun.findUniqueOrThrow.mockResolvedValue({ id: 'run-1', status: 'COMPLETED', trigger: 'SCHEDULED' });
+      tx.ingestionRun.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await service.requestRun(tx as never, baseInput);
+
+      expect(result.shouldEnqueue).toBe(true);
+      const { where, data } = tx.ingestionRun.updateMany.mock.calls[0][0];
+      expect(where.id).toBe('run-1');
+      // The status re-check lives in the WHERE, so a concurrent caller that
+      // already moved the row to QUEUED makes this update match nothing.
+      expect(where.OR).toEqual(
+        expect.arrayContaining([
+          { status: { in: ['COMPLETED', 'FAILED'] } },
+          { status: 'PROCESSING', updatedAt: { lt: expect.any(Date) } },
+          { status: 'QUEUED', queuedAt: { lt: expect.any(Date) } },
+        ]),
+      );
+      expect(data).toMatchObject({ status: 'QUEUED', recordsProcessed: 0, recordsTotal: null, errorMessage: null });
+    });
+
+    it('treats a PROCESSING row as stale only after PROCESSING_STALE_MS, and a QUEUED one after QUEUED_STALE_MS', async () => {
+      tx.ingestionRun.findUniqueOrThrow.mockResolvedValue({ id: 'run-1', status: 'PROCESSING', trigger: 'SCHEDULED' });
+      const before = Date.now();
+
+      await service.requestRun(tx as never, baseInput);
+
+      const or = tx.ingestionRun.updateMany.mock.calls[0][0].where.OR;
+      const processingCutoff = or[1].updatedAt.lt.getTime();
+      const queuedCutoff = or[2].queuedAt.lt.getTime();
+      expect(before - processingCutoff).toBeGreaterThanOrEqual(PROCESSING_STALE_MS - 1000);
+      expect(before - queuedCutoff).toBeGreaterThanOrEqual(QUEUED_STALE_MS - 1000);
+    });
+
+    it('does not enqueue again while a run is already queued or processing', async () => {
+      const existing = { id: 'run-1', status: 'PROCESSING', trigger: 'MANUAL' };
+      tx.ingestionRun.findUniqueOrThrow.mockResolvedValue(existing);
+
+      const result = await service.requestRun(tx as never, baseInput);
+
+      expect(result).toEqual({ run: existing, shouldEnqueue: false });
       expect(tx.ingestionRun.update).not.toHaveBeenCalled();
-      expect(result).toBe(existing);
+    });
+
+    it('escalates a running SCHEDULED run to MANUAL on a manual click, without enqueueing a duplicate', async () => {
+      tx.ingestionRun.findUniqueOrThrow.mockResolvedValue({ id: 'run-1', status: 'PROCESSING', trigger: 'SCHEDULED' });
+
+      const result = await service.requestRun(tx as never, baseInput);
+
+      expect(result.shouldEnqueue).toBe(false);
+      expect(tx.ingestionRun.update).toHaveBeenCalledWith({ where: { id: 'run-1' }, data: { trigger: 'MANUAL' } });
     });
   });
 
@@ -145,6 +172,39 @@ describe('IngestionRunService', () => {
     it('finalizeFailure truncates the message and never throws', async () => {
       prisma.ingestionRun.update.mockRejectedValue(new Error('db gone'));
       await expect(service.finalizeFailure('run-1', 'x'.repeat(5000))).resolves.toBeUndefined();
+    });
+  });
+
+  describe('incremental position + schedule', () => {
+    it('stores the next cursor and stamps lastFullRunAt after a full pull', async () => {
+      await service.finalizeSuccess('run-1', { recordsProcessed: 3 }, { cursor: 'c-2', full: true });
+
+      const { data } = prisma.ingestionRun.update.mock.calls[0][0];
+      expect(data.cursor).toBe('c-2');
+      expect(data.lastFullRunAt).toBeInstanceOf(Date);
+    });
+
+    it('leaves lastFullRunAt alone after an incremental pull, and the cursor alone when none is given', async () => {
+      await service.finalizeSuccess('run-1', { recordsProcessed: 3 }, { full: false });
+
+      const { data } = prisma.ingestionRun.update.mock.calls[0][0];
+      expect(data).not.toHaveProperty('lastFullRunAt');
+      expect(data).not.toHaveProperty('cursor');
+    });
+
+    it('gives unscheduled rows their first slot without touching already-scheduled ones', async () => {
+      prisma.ingestionRun.updateMany.mockResolvedValue({ count: 1 });
+      const slot = new Date('2026-09-29T10:17:00Z');
+
+      const filled = await service.fillMissingSchedules([
+        { sourceType: 'accounting', sourceRef: 'conn-1', resourceType: 'contact', nextRunAt: slot },
+      ]);
+
+      expect(filled).toBe(1);
+      expect(prisma.ingestionRun.updateMany).toHaveBeenCalledWith({
+        where: { sourceType: 'accounting', sourceRef: 'conn-1', resourceType: 'contact', nextRunAt: null },
+        data: { nextRunAt: slot },
+      });
     });
   });
 });

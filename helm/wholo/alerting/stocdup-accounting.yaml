@@ -1,0 +1,164 @@
+# Grafana alert rules for the accounting integrations (ADR-064 addendum /
+# ADR-071): errors that need a person. Read from Loki — every rule keys on the
+# stable `event` field the apps log, never on message text.
+#
+# Local: provisioned automatically into the in-cluster Grafana
+# (templates/grafana/configmap-alerting.yaml).
+# Live: create these rules on the ops Grafana by hand — see
+# docs/runbook/setup/logging.md ("Accounting alerts"). `datasourceUid:
+# stocdup-loki` is the local datasource uid; on the ops Grafana use that
+# instance's Loki datasource uid.
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: stocdup-accounting
+    folder: Stocdup
+    interval: 5m
+    rules:
+      - uid: stocdup-accounting-job-gave-up
+        title: Accounting job gave up
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: stocdup-loki
+            model:
+              refId: A
+              queryType: instant
+              expr: "sum by (environment, queue) (count_over_time({job=\"fluent-bit\", app=~\".*worker\"} | json | event=\"queue.job.failed\" | final=\"true\" | queue=~\"accounting-.*\" [15m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: warning
+          component: accounting
+        annotations:
+          summary: "{{ $labels.queue }}: a job failed its final attempt ({{ $labels.environment }})"
+          description: "BullMQ has stopped retrying at least one job on this accounting queue in the last 15 minutes. The work (a sync or an invoice export) will not happen until someone acts. In Grafana Explore -> Loki: {app=~\".*worker\"} | json | event=\"queue.job.failed\" | final=\"true\" \u2014 the line carries queue, jobId, eventId, aggregateId and err. For an invoice export the order shows \"Invoice export failed\" with a Retry button."
+
+      - uid: stocdup-accounting-invalid-client
+        title: Xero rejected Stocdup application credentials
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: stocdup-loki
+            model:
+              refId: A
+              queryType: instant
+              expr: "sum by (environment) (count_over_time({job=\"fluent-bit\", app=~\".*(api|worker)\"} | json | event=\"accounting.connection.invalid_client\" [1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: critical
+          component: accounting
+        annotations:
+          summary: "Xero rejected our client id/secret (invalid_client) ({{ $labels.environment }})"
+          description: "Token refresh failed with invalid_client: the XERO_CLIENT_ID / XERO_CLIENT_SECRET the api uses are wrong or revoked. This breaks every distributor's Xero connection, not one \u2014 reconnecting will not help. Check the Xero developer app and the api secret."
+
+      - uid: stocdup-accounting-error-spike
+        title: Accounting errors spike
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: stocdup-loki
+            model:
+              refId: A
+              queryType: instant
+              expr: "sum by (environment) (count_over_time({job=\"fluent-bit\", app=~\".*(api|worker)\"} | json | level=\"error\" | event=~\"accounting\\\\..*\" [15m]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: warning
+          component: accounting
+        annotations:
+          summary: "{{ printf \"%.0f\" $values.B.Value }} accounting errors in 15 min ({{ $labels.environment }})"
+          description: "error-level accounting lines are unexpected failures (bugs) or final give-ups, never routine provider rejections (those are warn). Explore -> Loki: filter level=\"error\" and event starting \"accounting.\", grouped by event."
+
+      - uid: stocdup-accounting-xero-day-limit-low
+        title: Xero daily call limit low
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: stocdup-loki
+            model:
+              refId: A
+              queryType: instant
+              expr: "sum by (environment, externalOrgId) (count_over_time({job=\"fluent-bit\", app=~\".*(api|worker)\"} | json | event=\"accounting.provider.day_limit_low\" [1h]))"
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+              settings: { mode: dropNN }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels:
+          severity: warning
+          component: accounting
+        annotations:
+          summary: "Xero org {{ $labels.externalOrgId }} is below 10% of its 5,000 daily calls ({{ $labels.environment }})"
+          description: "Past the daily limit Xero answers 429 until the day resets, so syncs and invoice exports for this organisation stall. Find the distributor from the accounting_connections row with this externalOrganisationId and check what is calling so often (accounting.provider.call lines at debug, or the scheduler tick)."

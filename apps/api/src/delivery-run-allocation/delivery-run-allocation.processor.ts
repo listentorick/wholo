@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { Job } from 'bullmq';
@@ -21,7 +22,7 @@ interface DeliveryRunAllocationJobData {
 // Business idempotency is the DeliveryRunOrder row (unique activeOrderId), so
 // a redelivered job can never double-allocate an order.
 @Processor(DELIVERY_RUN_ALLOCATION_QUEUE)
-export class DeliveryRunAllocationProcessor extends WorkerHost {
+export class DeliveryRunAllocationProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(DeliveryRunAllocationProcessor.name);
 
   constructor(

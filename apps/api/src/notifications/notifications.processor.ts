@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
@@ -20,7 +21,7 @@ export interface OutboxEventJobData {
 // event types reach this queue, so an unexpected name is a routing bug — warn
 // and complete rather than retrying forever.
 @Processor(NOTIFICATIONS_QUEUE)
-export class NotificationsProcessor extends WorkerHost {
+export class NotificationsProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(NotificationsProcessor.name);
 
   constructor(

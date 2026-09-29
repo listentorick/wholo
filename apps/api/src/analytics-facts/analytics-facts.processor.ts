@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { ANALYTICS_FACTS_QUEUE } from '../queues/queue.constants';
@@ -19,7 +20,7 @@ const ORDER_EVENT_TYPES = new Set(['OrderSubmitted', 'OrderAccepted', 'OrderReje
 // event types reach this queue, so an unexpected name is a routing bug — warn
 // and complete rather than retrying forever.
 @Processor(ANALYTICS_FACTS_QUEUE)
-export class AnalyticsFactsProcessor extends WorkerHost {
+export class AnalyticsFactsProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(AnalyticsFactsProcessor.name);
 
   constructor(

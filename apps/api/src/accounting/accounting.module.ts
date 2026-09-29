@@ -15,6 +15,7 @@ import { XeroCallbackController } from './xero-callback.controller';
 import { AccountingConnectionService } from './accounting-connection.service';
 import { AccountingSyncService } from './sync/accounting-sync.service';
 import { AccountingRefreshLockService } from './accounting-refresh-lock.service';
+import { AccountingCallBudgetService } from './accounting-call-budget.service';
 import { AccountingContactService } from './accounting-contact.service';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
 import { AccountingProductService } from './accounting-product.service';
@@ -49,6 +50,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     AccountingConnectionService,
     AccountingSyncService,
     AccountingRefreshLockService,
+    AccountingCallBudgetService,
     AccountingContactService,
     AccountingInvoiceExportService,
     AccountingProductService,

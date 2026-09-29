@@ -114,9 +114,56 @@ distributor mid-review.
   documents intent (vs the implicit default of 1) and stays within the pool.
 - **`attempts: 3, backoff exponential 30s`** on the three sync queues (fewer than
   invoice-export's 5 — every retry is a full provider re-fetch).
-- Xero rate limits are *not* a concern: limits are per-tenant (~60/min,
-  ~5000/day), so one connection's full sync is a handful of calls every 30 min,
-  and the serial per-queue drain keeps the app-wide rate low.
+- Xero rate limits: see ADR-071 (per-organisation call budget + Retry-After).
+
+### Scheduling (2026-09-29, supersedes the per-type sweeps above)
+The three serial per-resource schedulers were replaced by one
+`AccountingSyncScheduler` (`apps/api/src/accounting/accounting-sync.scheduler.ts`).
+The serial loop with a 0–4 s random sleep per connection took ~N × 2 s per sweep —
+at 1000 connections ~33 min, longer than its 30-min interval — and each job was a
+full provider re-fetch.
+
+- **The run row is the schedule.** `IngestionRun` gains `nextRunAt`, `cursor` and
+  `lastFullRunAt` (plain columns, `@@index([sourceType, nextRunAt])`). A tick every
+  minute enqueues **every** row whose `nextRunAt` has passed. There is **no
+  per-tick cap**: the queues absorb bursts and drain at their fixed concurrency, so
+  queue depth (ADR-063 `stocdup_queue_jobs`, `oldest_waiting_age_ms`) stays the one
+  measure of waiting work — a cap would hide part of it in the database.
+- **Anchored advance.** After enqueueing, `nextRunAt` moves to the first slot
+  strictly after now on its own grid (`slot + k·interval`): no drift, and an outage
+  skips missed slots instead of replaying them.
+- **First slot.** A never-run triple is due immediately (requestRun creates a real
+  run — no placeholder rows, which would read as "has synced" in the UI). Rows that
+  predate scheduling get a random slot within one interval, so the first deploy
+  doesn't enqueue the fleet at once; a connection made within the last interval
+  syncs straight away.
+- **Intervals.** contact 30 min, product 30 min, tax_type 6 h
+  (`ACCOUNTING_SYNC_INTERVAL_MS`). A manual Sync always pulls everything now.
+- **No duplicate jobs.** `requestRun` returns `{ run, shouldEnqueue }` and callers
+  write the outbox event only when it is true. Both paths are single conditional
+  statements — create is `createMany({ skipDuplicates: true })` (ON CONFLICT DO
+  NOTHING; a caught P2002 would abort the caller's transaction), reset is an
+  `updateMany` whose WHERE re-checks the status — so a scheduler tick and a manual
+  click can never both enqueue. `claim()` stays the backstop.
+- **Staleness.** `PROCESSING_STALE_MS` rose 5 → 15 min (the provider fetch is one
+  await with no heartbeat inside it). New `QUEUED_STALE_MS` (60 min): a QUEUED row
+  whose job exhausted its attempts before claiming could otherwise never be
+  re-queued.
+- **Incremental pulls.** The port's list methods take an opaque `cursor` and return
+  `{ records, nextCursor }` (`AccountingFetchResult`); the adapter decides what the
+  cursor encodes (Xero: an ISO timestamp for If-Modified-Since, newest change seen
+  minus 5 min, never moving backwards). A pull is **full** when manual, when there
+  is no cursor, or when `lastFullRunAt` is over 24 h old — incremental pulls can't
+  see hard deletions (`handleStaleRecords` now runs on full pulls only) or re-offer
+  matches for unchanged records. A provider without incremental support returns
+  `nextCursor: null`, so every pull is full; still correct, just costlier.
+- **Permanent failures stop retrying.** A non-transient `AccountingProviderError`
+  finalizes the run FAILED and throws BullMQ's `UnrecoverableError`.
+- **Retries actually retry.** Previously every failure finalized the run FAILED and
+  then rethrew for BullMQ to retry — but a FAILED run can't be claimed, so each
+  retry was a silent no-op (found by a local end-to-end probe). A transient failure
+  with attempts left now puts the run back to QUEUED (`requeueForRetry`, keeping the
+  error message); only the last attempt finalizes FAILED.
 
 ### Scaling later (ADR-047)
 Scaling sync throughput = split the three sync processors into their own

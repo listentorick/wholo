@@ -1,5 +1,7 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
+import { loggableError } from '@wholo/nest-telemetry';
 import { AccountingBulkImportJob, AccountingBulkImportJobStatus, AccountingBulkImportRecordType, Prisma } from '@prisma/client';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
@@ -49,7 +51,7 @@ function tally(results: ItemResult[]) {
 // reimplementation of that logic here. One bad item never aborts the batch;
 // only a systemic failure (e.g. resolving ids itself throws) fails the job.
 @Processor(ACCOUNTING_BULK_IMPORT_QUEUE)
-export class AccountingBulkImportProcessor extends WorkerHost {
+export class AccountingBulkImportProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(AccountingBulkImportProcessor.name);
 
   constructor(
@@ -87,7 +89,10 @@ export class AccountingBulkImportProcessor extends WorkerHost {
       await this.finalize(bulkJob, externalIds.length, results);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Bulk import job ${bulkJob.id} failed: ${message}`);
+      this.logger.error(
+        { event: 'accounting.bulk_import.failed', bulkJobId: bulkJob.id, distributorId: bulkJob.distributorId, err: loggableError(err) },
+        `Bulk import job ${bulkJob.id} failed: ${message}`,
+      );
       await this.prisma.accountingBulkImportJob.update({
         where: { id: bulkJob.id },
         data: { status: AccountingBulkImportJobStatus.FAILED, completedAt: new Date() },
@@ -111,7 +116,7 @@ export class AccountingBulkImportProcessor extends WorkerHost {
   private async claim(jobId: string): Promise<AccountingBulkImportJob | null> {
     const bulkJob = await this.prisma.accountingBulkImportJob.findUnique({ where: { id: jobId } });
     if (!bulkJob) {
-      this.logger.warn(`Bulk import job ${jobId} no longer exists — skipping`);
+      this.logger.warn({ event: 'accounting.bulk_import.skipped', reason: 'missing', bulkJobId: jobId }, `Bulk import job ${jobId} no longer exists — skipping`);
       return null;
     }
     if (bulkJob.status === AccountingBulkImportJobStatus.COMPLETED) {
@@ -120,10 +125,13 @@ export class AccountingBulkImportProcessor extends WorkerHost {
     if (bulkJob.status === AccountingBulkImportJobStatus.PROCESSING) {
       const ageMs = Date.now() - bulkJob.updatedAt.getTime();
       if (ageMs < PROCESSING_STALE_MS) {
-        this.logger.log(`Bulk import job ${bulkJob.id} already in flight — skipping`);
+        this.logger.log({ event: 'accounting.bulk_import.skipped', reason: 'in_flight', bulkJobId: bulkJob.id }, `Bulk import job ${bulkJob.id} already in flight — skipping`);
         return null;
       }
-      this.logger.warn(`Bulk import job ${bulkJob.id} is stale PROCESSING (${Math.round(ageMs / 1000)}s) — resuming`);
+      this.logger.warn(
+        { event: 'accounting.bulk_import.resumed_stale', bulkJobId: bulkJob.id, ageMs },
+        `Bulk import job ${bulkJob.id} is stale PROCESSING (${Math.round(ageMs / 1000)}s) — resuming`,
+      );
     }
     return this.prisma.accountingBulkImportJob.update({
       where: { id: bulkJob.id },

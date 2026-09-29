@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AccountingBulkImportRecordType,
   AccountingConnectionStatus,
@@ -40,6 +40,8 @@ export type ProductRow = Prisma.ExternalAccountingProductGetPayload<{ include: t
 
 @Injectable()
 export class AccountingProductService {
+  private readonly logger = new Logger(AccountingProductService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
@@ -353,6 +355,7 @@ export class AccountingProductService {
       userId,
     );
 
+    this.logMappingAction('imported_as_new', { distributorId, userId, externalRecordId: externalProductId });
     return product;
   }
 
@@ -403,6 +406,7 @@ export class AccountingProductService {
     if (taxTypeIdToApply) {
       await this.adminProducts.update(suggestion.suggestedProductId, distributorId, { taxTypeId: taxTypeIdToApply });
     }
+    this.logMappingAction('suggestion_confirmed', { distributorId, userId, suggestionId });
   }
 
   async matchToExistingProduct(
@@ -455,6 +459,7 @@ export class AccountingProductService {
     if (taxTypeIdToApply) {
       await this.adminProducts.update(productId, distributorId, { taxTypeId: taxTypeIdToApply });
     }
+    this.logMappingAction('matched_manually', { distributorId, userId, externalRecordId: externalProductId, targetId: productId });
   }
 
   // Shared by matchToExistingProduct and confirmSuggestion — both are "link
@@ -498,6 +503,7 @@ export class AccountingProductService {
         data: { status: AccountingProductMatchStatus.REJECTED, reviewedByUserId: userId, reviewedAt: new Date() },
       }),
     ]);
+    this.logMappingAction('ignored', { distributorId, userId, externalRecordId: externalProductId });
   }
 
   async unlink(distributorId: string, mappingId: string): Promise<void> {
@@ -512,6 +518,7 @@ export class AccountingProductService {
       where: { id: mapping.id },
       data: { unlinkedAt: new Date() },
     });
+    this.logMappingAction('unlinked', { distributorId, mappingId });
   }
 
   // Clears the "changed since sync" highlight on a cache row — an explicit
@@ -651,5 +658,14 @@ export class AccountingProductService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  // User-initiated mapping changes aren't in the audit log, so this line is
+  // the record of who linked/unlinked/ignored what (ADR-064 addendum).
+  private logMappingAction(action: string, fields: Record<string, unknown>): void {
+    this.logger.log(
+      { event: `accounting.mapping.${action}`, recordType: 'product', ...fields },
+      `Accounting product mapping ${action}`,
+    );
   }
 }

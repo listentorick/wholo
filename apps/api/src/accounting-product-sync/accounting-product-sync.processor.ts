@@ -13,6 +13,7 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
   AccountingConnectionAdapter,
+  AccountingFetchResult,
   AccountingExternalProduct,
   AccountingTokenSet,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
@@ -28,9 +29,10 @@ import {
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
+import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
 // Consumes AccountingProductSyncRequested — written to the outbox by both
-// AccountingProductSyncScheduler (periodic) and the "Sync now" HTTP endpoint
+// AccountingSyncScheduler (periodic) and the "Sync now" HTTP endpoint
 // (manual). Second implementation of the shared sync pipeline
 // (AccountingSyncProcessorBase): pull products/items from the provider, cache
 // them, and run the matcher against unmapped Wholo products. Never writes a
@@ -41,7 +43,7 @@ import { IngestionRunService } from '../ingestion/ingestion-run.service';
 // allowed after linking, that rule would run after upsertCacheRecord for rows
 // with an active mapping — a deliberate product decision, not a default.
 // concurrency 2 — see AccountingContactSyncProcessor / ADR-061.
-@Processor(ACCOUNTING_PRODUCT_SYNC_QUEUE, { concurrency: 2 })
+@Processor(ACCOUNTING_PRODUCT_SYNC_QUEUE, { concurrency: 2, ...ACCOUNTING_WORKER_SETTINGS })
 export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalProduct,
   ExternalAccountingProduct,
@@ -67,8 +69,9 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     adapter: AccountingConnectionAdapter,
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-  ): Promise<AccountingExternalProduct[]> {
-    return adapter.listProducts(tokenSet, externalOrganisationId);
+    cursor: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalProduct>> {
+    return adapter.listProducts(tokenSet, externalOrganisationId, cursor);
   }
 
   // Business fields shown in the review table — a move in any of these makes

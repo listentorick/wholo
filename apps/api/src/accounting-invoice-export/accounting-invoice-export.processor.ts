@@ -1,5 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
+import { HttpException, Logger } from '@nestjs/common';
 import {
   AccountingConnection,
   AccountingConnectionStatus,
@@ -13,6 +14,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { Job } from 'bullmq';
+import { loggableError } from '@wholo/nest-telemetry';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingTaxTypeService } from '../accounting/accounting-tax-type.service';
@@ -26,6 +28,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { ACCOUNTING_INVOICE_EXPORT_QUEUE } from '../queues/queue.constants';
+import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
 interface InvoiceExportJobData {
   eventId: string;
@@ -49,8 +52,8 @@ const PROCESSING_STALE_MS = 15 * 60 * 1000;
 // Business idempotency is the AccountingInvoiceExport row
 // (unique connectionId+orderId), claimed via status transitions before any
 // provider call is made.
-@Processor(ACCOUNTING_INVOICE_EXPORT_QUEUE)
-export class AccountingInvoiceExportProcessor extends WorkerHost {
+@Processor(ACCOUNTING_INVOICE_EXPORT_QUEUE, { ...ACCOUNTING_WORKER_SETTINGS })
+export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(AccountingInvoiceExportProcessor.name);
 
   constructor(
@@ -68,7 +71,10 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
   async process(job: Job<InvoiceExportJobData>): Promise<void> {
     const orderId = job.data.payload?.orderId;
     if (!orderId) {
-      this.logger.warn(`Job ${job.id} (${job.name}) carries no orderId — skipping`);
+      this.logger.warn(
+        { event: 'accounting.invoice_export.skipped', reason: 'no_order_id', jobId: job.id, jobName: job.name },
+        `Job ${job.id} (${job.name}) carries no orderId — skipping`,
+      );
       return;
     }
 
@@ -77,7 +83,10 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       include: { lines: true },
     });
     if (!order) {
-      this.logger.warn(`Order ${orderId} not found — skipping invoice export`);
+      this.logger.warn(
+        { event: 'accounting.invoice_export.skipped', reason: 'order_missing', orderId, jobId: job.id },
+        `Order ${orderId} not found — skipping invoice export`,
+      );
       return;
     }
     // Invoices go out on ACCEPTED; ACCEPTED/COMPLETED were the only
@@ -92,7 +101,10 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       OrderStatus.DELIVERY_FAILED,
     ];
     if (!invoiceEligibleStatuses.includes(order.status)) {
-      this.logger.log(`Order ${orderId} is ${order.status}, not invoiceable — skipping invoice export`);
+      this.logger.log(
+        { event: 'accounting.invoice_export.skipped', reason: 'not_invoiceable', orderId, distributorId: order.distributorId, orderStatus: order.status },
+        `Order ${orderId} is ${order.status}, not invoiceable — skipping invoice export`,
+      );
       return;
     }
 
@@ -102,7 +114,10 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       where: { distributorId: order.distributorId, status: AccountingConnectionStatus.CONNECTED },
     });
     if (!connection) {
-      this.logger.log(`No active accounting connection for distributor ${order.distributorId} — skipping invoice export`);
+      this.logger.log(
+        { event: 'accounting.invoice_export.skipped', reason: 'no_connection', orderId, distributorId: order.distributorId },
+        `No active accounting connection for distributor ${order.distributorId} — skipping invoice export`,
+      );
       return;
     }
 
@@ -112,7 +127,10 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       where: { orderId, status: AccountingInvoiceExportStatus.COMPLETED },
     });
     if (completedElsewhere) {
-      this.logger.log(`Order ${orderId} already has a completed invoice export — skipping`);
+      this.logger.log(
+        { event: 'accounting.invoice_export.skipped', reason: 'already_exported', orderId, distributorId: order.distributorId },
+        `Order ${orderId} already has a completed invoice export — skipping`,
+      );
       return;
     }
 
@@ -156,14 +174,20 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
       case AccountingInvoiceExportStatus.PROCESSING: {
         const ageMs = Date.now() - existing.updatedAt.getTime();
         if (ageMs < PROCESSING_STALE_MS) {
-          this.logger.log(`Invoice export ${existing.id} already in flight — skipping`);
+          this.logger.log(
+            { event: 'accounting.invoice_export.skipped', reason: 'in_flight', exportId: existing.id, orderId: order.id, distributorId: order.distributorId },
+            `Invoice export ${existing.id} already in flight — skipping`,
+          );
           return null;
         }
         // Stale claim: the worker died mid-attempt. Resume WITHOUT bumping
         // retryCount so the provider idempotency key replays the interrupted
         // attempt — if the invoice was created before the crash, the provider
         // returns the cached result instead of a duplicate.
-        this.logger.warn(`Invoice export ${existing.id} is stale PROCESSING (${Math.round(ageMs / 1000)}s) — resuming`);
+        this.logger.warn(
+          { event: 'accounting.invoice_export.resumed_stale', exportId: existing.id, orderId: order.id, distributorId: order.distributorId, ageMs },
+          `Invoice export ${existing.id} is stale PROCESSING (${Math.round(ageMs / 1000)}s) — resuming`,
+        );
         return this.prisma.accountingInvoiceExport.update({
           where: { id: existing.id },
           data: { status: AccountingInvoiceExportStatus.PROCESSING },
@@ -357,6 +381,12 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
         });
       });
       this.logger.log(
+        {
+          event: 'accounting.invoice_export.completed',
+          ...this.logFields(connection, exportRow),
+          externalInvoiceId: result.externalInvoiceId,
+          retryCount: exportRow.retryCount,
+        },
         `Created ${connection.provider} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
       );
       // Direct write, no outbox — same terminal-write reasoning as the bulk
@@ -370,24 +400,68 @@ export class AccountingInvoiceExportProcessor extends WorkerHost {
         payload: { orderId: order.id, exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // Provider errors carry a message that is already safe to persist and
+      // show (adapters guarantee it). Anything else is unexpected — our bug —
+      // so the stored/displayed message is generic and the real error goes to
+      // the log with its stack.
+      const providerError = err instanceof AccountingProviderError ? err : null;
+      // Our own HTTP exceptions (e.g. NotFound when the connection was
+      // disconnected mid-export) carry messages written for users — expected.
+      const expected = providerError !== null || err instanceof HttpException;
+      if (!expected) {
+        this.logger.error(
+          { event: 'accounting.invoice_export.unexpected_error', ...this.logFields(connection, exportRow), err: loggableError(err) },
+          `Invoice export ${exportRow.id} failed unexpectedly`,
+        );
+      }
+      const message = expected
+        ? (err as Error).message
+        : 'Unexpected error while creating the invoice — it will be retried automatically.';
       // Permanent provider rejections (validation, authorisation) wait for
       // user action + manual retry. Everything else — transient provider
       // faults, token refresh failures — is marked FAILED for visibility and
       // rethrown so BullMQ retries with backoff (the next attempt claims the
       // FAILED row again).
-      const permanent = err instanceof AccountingProviderError && !err.transient;
-      await this.markFailed(exportRow, 'PROVIDER_ERROR', message);
+      const permanent = providerError !== null && !providerError.transient;
+      await this.markFailed(exportRow, 'PROVIDER_ERROR', message, {
+        provider: connection.provider,
+        connectionId: connection.id,
+        code: providerError?.code,
+        statusCode: providerError?.statusCode,
+        transient: providerError ? providerError.transient : true,
+      });
       if (!permanent) throw err;
     }
+  }
+
+  private logFields(connection: AccountingConnection, exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>) {
+    return {
+      provider: connection.provider,
+      distributorId: exportRow.distributorId,
+      connectionId: connection.id,
+      externalOrgId: connection.externalOrganisationId,
+      exportId: exportRow.id,
+      orderId: exportRow.orderId,
+    };
   }
 
   private async markFailed(
     exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>,
     errorCode: string,
     errorMessage: string,
+    extraFields: Record<string, unknown> = {},
   ): Promise<void> {
-    this.logger.warn(`Invoice export ${exportRow.id} failed (${errorCode}): ${errorMessage}`);
+    this.logger.warn(
+      {
+        event: 'accounting.invoice_export.failed',
+        distributorId: exportRow.distributorId,
+        exportId: exportRow.id,
+        orderId: exportRow.orderId,
+        errorCode,
+        ...extraFields,
+      },
+      `Invoice export ${exportRow.id} failed (${errorCode}): ${errorMessage}`,
+    );
     await this.prisma.$transaction(async (tx) => {
       await tx.accountingInvoiceExport.update({
         where: { id: exportRow.id },

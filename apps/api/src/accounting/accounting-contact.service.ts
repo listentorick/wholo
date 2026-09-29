@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AccountingBulkImportRecordType,
   AccountingConnectionStatus,
@@ -38,6 +38,8 @@ export type ContactRow = Prisma.ExternalAccountingContactGetPayload<{ include: t
 
 @Injectable()
 export class AccountingContactService {
+  private readonly logger = new Logger(AccountingContactService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
@@ -331,6 +333,7 @@ export class AccountingContactService {
       userId,
     );
 
+    this.logMappingAction('imported_as_new', { distributorId, userId, externalRecordId: externalContactId });
     return relationship;
   }
 
@@ -343,7 +346,7 @@ export class AccountingContactService {
       throw new NotFoundException('Suggestion not found or already resolved');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
         connection.id,
@@ -358,6 +361,8 @@ export class AccountingContactService {
         data: { status: AccountingContactMatchStatus.ACCEPTED, reviewedByUserId: userId, reviewedAt: new Date() },
       });
     });
+    this.logMappingAction('suggestion_confirmed', { distributorId, userId, suggestionId });
+    return result;
   }
 
   async matchToExistingCustomer(
@@ -395,6 +400,7 @@ export class AccountingContactService {
         data: { status: AccountingContactMatchStatus.SUPERSEDED },
       });
     });
+    this.logMappingAction('matched_manually', { distributorId, userId, externalRecordId: externalContactId, targetId: tradeRelationshipId });
   }
 
   async ignore(distributorId: string, userId: string, externalContactId: string): Promise<void> {
@@ -411,6 +417,7 @@ export class AccountingContactService {
         data: { status: AccountingContactMatchStatus.REJECTED, reviewedByUserId: userId, reviewedAt: new Date() },
       }),
     ]);
+    this.logMappingAction('ignored', { distributorId, userId, externalRecordId: externalContactId });
   }
 
   async unlink(distributorId: string, mappingId: string): Promise<void> {
@@ -425,6 +432,7 @@ export class AccountingContactService {
       where: { id: mapping.id },
       data: { unlinkedAt: new Date() },
     });
+    this.logMappingAction('unlinked', { distributorId, mappingId });
   }
 
   // Clears the "changed since sync" highlight on a cache row — an explicit
@@ -561,5 +569,14 @@ export class AccountingContactService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  // User-initiated mapping changes aren't in the audit log, so this line is
+  // the record of who linked/unlinked/ignored what (ADR-064 addendum).
+  private logMappingAction(action: string, fields: Record<string, unknown>): void {
+    this.logger.log(
+      { event: `accounting.mapping.${action}`, recordType: 'contact', ...fields },
+      `Accounting contact mapping ${action}`,
+    );
   }
 }

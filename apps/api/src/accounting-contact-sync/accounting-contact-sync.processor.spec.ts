@@ -1,4 +1,5 @@
-import { Job } from 'bullmq';
+import { Logger } from '@nestjs/common';
+import { Job, UnrecoverableError } from 'bullmq';
 import { AccountingContactMatchMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
@@ -6,6 +7,7 @@ import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-ada
 import { AccountingContactMatcherService } from '../accounting/matching/accounting-contact-matcher.service';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
+import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { AccountingContactSyncProcessor } from './accounting-contact-sync.processor';
 
 function makeJob(connectionId = 'conn-1', payload: Record<string, unknown> = {}): Job {
@@ -84,7 +86,13 @@ describe('AccountingContactSyncProcessor', () => {
         scope: 'openid accounting.contacts',
       }),
     };
-    adapters = { get: jest.fn().mockReturnValue({ listContacts }) };
+    // The adapter returns a page ({ records, nextCursor }); tests stub just
+    // the records via `listContacts` and assert on the cursor it was given.
+    adapters = {
+      get: jest.fn().mockReturnValue({
+        listContacts: async (...args: unknown[]) => ({ records: await listContacts(...args), nextCursor: 'cursor-next' }),
+      }),
+    };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
     ingestionRuns = {
@@ -132,7 +140,7 @@ describe('AccountingContactSyncProcessor', () => {
     expect(ingestionRuns.claim).toHaveBeenCalledWith('run-7');
     expect(ingestionRuns.ensureRun).not.toHaveBeenCalled();
     expect(ingestionRuns.setTotal).toHaveBeenCalledWith('run-7', 1);
-    expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object));
+    expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), expect.anything());
   });
 
   it('does nothing when the run cannot be claimed (already running or done)', async () => {
@@ -160,27 +168,123 @@ describe('AccountingContactSyncProcessor', () => {
 
     expect(accountingConnectionService.getValidTokenSet).toHaveBeenCalledWith('dist-1', 'XERO');
     expect(adapters.get).toHaveBeenCalledWith('XERO');
-    expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
+    expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
     expect(prisma.accountingConnection.update).toHaveBeenCalledWith({
       where: { id: 'conn-1' },
       data: { lastSyncedAt: expect.any(Date) },
     });
   });
 
-  it('always does a full fetch, never passing lastSyncedAt as modifiedSince', async () => {
-    // lastSyncedAt also means "last token refresh" (see
-    // AccountingConnectionService.getValidTokenSet) — reusing it as an
-    // incremental-sync cursor previously caused Xero to silently return zero
-    // contacts whenever a token refresh happened after the contacts were
-    // last modified. Every sync must be a full fetch until this feature
-    // gets its own dedicated cursor field.
-    const since = new Date('2026-01-01T00:00:00.000Z');
-    prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, lastSyncedAt: since });
+  describe('full vs incremental pulls', () => {
+    const scheduledRun = (overrides: Record<string, unknown> = {}) => ({
+      id: 'run-7',
+      trigger: 'SCHEDULED',
+      cursor: 'cursor-stored',
+      lastFullRunAt: new Date(),
+      ...overrides,
+    });
 
-    await processor.process(makeJob());
+    it('does a full pull (null cursor) when the run has no cursor yet — never connection.lastSyncedAt', async () => {
+      prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, lastSyncedAt: new Date('2026-01-01') });
+      ingestionRuns.claim.mockResolvedValue(scheduledRun({ cursor: null }));
 
-    expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
-    expect(listContacts.mock.calls[0]).toHaveLength(2);
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), {
+        cursor: 'cursor-next',
+        full: true,
+      });
+    });
+
+    it('pulls incrementally from the stored cursor on a scheduled run', async () => {
+      ingestionRuns.claim.mockResolvedValue(scheduledRun());
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', 'cursor-stored');
+      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), {
+        cursor: 'cursor-next',
+        full: false,
+      });
+    });
+
+    it('always pulls in full when a person asked (manual Sync)', async () => {
+      ingestionRuns.claim.mockResolvedValue(scheduledRun({ trigger: 'MANUAL' }));
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
+    });
+
+    it('falls back to a full pull once the last full one is a day old', async () => {
+      ingestionRuns.claim.mockResolvedValue(scheduledRun({ lastFullRunAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }));
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
+
+      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
+    });
+  });
+
+  describe('failures', () => {
+    it('stops BullMQ retrying a permanent provider rejection, and logs it with its ids', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      listContacts.mockRejectedValue(
+        new AccountingProviderError('Xero getContacts failed with HTTP 403', false, undefined, 'HTTP_403', { statusCode: 403 }),
+      );
+
+      const err = await processor.process(makeJob('conn-1', { runId: 'run-7' })).catch((e) => e);
+
+      expect(err).toBeInstanceOf(UnrecoverableError);
+      expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero getContacts failed with HTTP 403');
+      expect(warn.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.sync.failed')?.[0]).toMatchObject({
+        distributorId: 'dist-1',
+        connectionId: 'conn-1',
+        runId: 'run-7',
+        resourceType: 'contact',
+        statusCode: 403,
+        transient: false,
+      });
+      warn.mockRestore();
+    });
+
+    it('puts the run back to QUEUED on a transient failure with attempts left, so the retry can claim it', async () => {
+      (ingestionRuns as unknown as { requeueForRetry: jest.Mock }).requeueForRetry = jest.fn().mockResolvedValue(undefined);
+      listContacts.mockRejectedValue(new AccountingProviderError('Xero 503', true, undefined, 'HTTP_503'));
+      const job = { ...makeJob('conn-1', { runId: 'run-7' }), attemptsMade: 0, opts: { attempts: 3 } } as unknown as Job;
+
+      await processor.process(job).catch(() => undefined);
+
+      expect((ingestionRuns as unknown as { requeueForRetry: jest.Mock }).requeueForRetry).toHaveBeenCalledWith('run-7', 'Xero 503');
+      expect(ingestionRuns.finalizeFailure).not.toHaveBeenCalled();
+    });
+
+    it('marks the run FAILED on the last attempt', async () => {
+      listContacts.mockRejectedValue(new AccountingProviderError('Xero 503', true, undefined, 'HTTP_503'));
+      const job = { ...makeJob('conn-1', { runId: 'run-7' }), attemptsMade: 2, opts: { attempts: 3 } } as unknown as Job;
+
+      await processor.process(job).catch(() => undefined);
+
+      expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero 503');
+    });
+
+    it('rethrows a transient provider failure unchanged so the backoff can honour Retry-After', async () => {
+      const rateLimited = new AccountingProviderError('Xero rate limit', true, undefined, 'HTTP_429', { retryAfterMs: 5_000 });
+      listContacts.mockRejectedValue(rateLimited);
+
+      await expect(processor.process(makeJob('conn-1', { runId: 'run-7' }))).rejects.toBe(rateLimited);
+    });
+
+    it('logs an unexpected (non-provider) failure at error, with the stack', async () => {
+      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      listContacts.mockRejectedValue(new TypeError('boom'));
+
+      await processor.process(makeJob('conn-1', { runId: 'run-7' })).catch(() => undefined);
+
+      const [fields] = error.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.sync.failed')!;
+      expect((fields as { err: Error }).err.stack).toContain('TypeError: boom');
+      error.mockRestore();
+    });
   });
 
   it('upserts an ExternalAccountingContact row per fetched contact', async () => {
@@ -382,6 +486,7 @@ describe('AccountingContactSyncProcessor', () => {
       expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
         'run-7',
         expect.objectContaining({ recordsCreated: 1, recordsUpdated: 0, recordsRemoved: 0 }),
+        expect.anything(),
       );
     });
 
@@ -395,6 +500,7 @@ describe('AccountingContactSyncProcessor', () => {
       expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
         'run-7',
         expect.objectContaining({ recordsCreated: 0, recordsUpdated: 1, recordsRemoved: 0 }),
+        expect.anything(),
       );
     });
 
@@ -408,6 +514,7 @@ describe('AccountingContactSyncProcessor', () => {
       expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
         'run-7',
         expect.objectContaining({ recordsCreated: 0, recordsUpdated: 0, recordsRemoved: 0 }),
+        expect.anything(),
       );
     });
 
@@ -421,6 +528,7 @@ describe('AccountingContactSyncProcessor', () => {
       expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
         'run-7',
         expect.objectContaining({ recordsCreated: 0, recordsUpdated: 0, recordsRemoved: 1 }),
+        expect.anything(),
       );
     });
   });

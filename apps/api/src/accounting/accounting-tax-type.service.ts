@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AccountingConnectionStatus, AccountingTaxTypeMatchMethod, AccountingTaxTypeMatchStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TaxTypesService } from '../tax-types/tax-types.service';
@@ -35,6 +35,8 @@ export type AccountingTaxTypeStatus =
 
 @Injectable()
 export class AccountingTaxTypeService {
+  private readonly logger = new Logger(AccountingTaxTypeService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly taxTypes: TaxTypesService,
@@ -145,6 +147,7 @@ export class AccountingTaxTypeService {
       userId,
     );
 
+    this.logMappingAction('imported_as_new', { distributorId, userId, externalRecordId: externalTaxTypeId });
     return taxType;
   }
 
@@ -157,7 +160,7 @@ export class AccountingTaxTypeService {
       throw new NotFoundException('Suggestion not found or already resolved');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
         connection.id,
@@ -172,6 +175,8 @@ export class AccountingTaxTypeService {
         data: { status: AccountingTaxTypeMatchStatus.ACCEPTED, reviewedByUserId: userId, reviewedAt: new Date() },
       });
     });
+    this.logMappingAction('suggestion_confirmed', { distributorId, userId, suggestionId });
+    return result;
   }
 
   async matchToExistingTaxType(
@@ -207,6 +212,7 @@ export class AccountingTaxTypeService {
         data: { status: AccountingTaxTypeMatchStatus.SUPERSEDED },
       });
     });
+    this.logMappingAction('matched_manually', { distributorId, userId, externalRecordId: externalTaxTypeId, targetId: taxTypeId });
   }
 
   async ignore(distributorId: string, userId: string, externalTaxTypeId: string): Promise<void> {
@@ -223,6 +229,7 @@ export class AccountingTaxTypeService {
         data: { status: AccountingTaxTypeMatchStatus.REJECTED, reviewedByUserId: userId, reviewedAt: new Date() },
       }),
     ]);
+    this.logMappingAction('ignored', { distributorId, userId, externalRecordId: externalTaxTypeId });
   }
 
   async unlink(distributorId: string, mappingId: string): Promise<void> {
@@ -237,6 +244,7 @@ export class AccountingTaxTypeService {
       where: { id: mapping.id },
       data: { unlinkedAt: new Date() },
     });
+    this.logMappingAction('unlinked', { distributorId, mappingId });
   }
 
   // Clears the "changed since sync" highlight on a cache row — an explicit
@@ -411,5 +419,14 @@ export class AccountingTaxTypeService {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
+  }
+
+  // User-initiated mapping changes aren't in the audit log, so this line is
+  // the record of who linked/unlinked/ignored what (ADR-064 addendum).
+  private logMappingAction(action: string, fields: Record<string, unknown>): void {
+    this.logger.log(
+      { event: `accounting.mapping.${action}`, recordType: 'tax_type', ...fields },
+      `Accounting tax_type mapping ${action}`,
+    );
   }
 }

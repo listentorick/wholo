@@ -109,4 +109,26 @@ describe('loggableError', () => {
     expect(safe).toBeInstanceOf(Error);
     expect(safe.message).toBe('weird string failure');
   });
+
+  it('withholds a JSON-string rejection (xero-node rejects with the whole HTTP response as a string)', () => {
+    const rejection = JSON.stringify({
+      response: { statusCode: 400, headers: { 'xero-correlation-id': 'abc' }, body: { Email: 'jane@customer.com' } },
+    });
+    const safe = loggableError(rejection);
+
+    expect(safe.message).toContain('withheld');
+    expect(JSON.stringify({ ...safe, message: safe.message, stack: safe.stack })).not.toContain('jane@customer.com');
+  });
+
+  it('withholds a long plain string', () => {
+    const safe = loggableError('x'.repeat(500));
+
+    expect(safe.message).toBe('Non-Error string thrown (500 chars, withheld: may contain response data)');
+  });
+
+  it('withholds a non-Error object', () => {
+    const safe = loggableError({ response: { body: { email: 'jane@customer.com' } } });
+
+    expect(safe.message).toBe('Non-Error object thrown (withheld: may contain response data)');
+  });
 });

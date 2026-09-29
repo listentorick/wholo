@@ -7,12 +7,15 @@ import {
   AccountingExternalOrganisation,
   AccountingExternalProduct,
   AccountingExternalTaxRate,
+  AccountingFetchResult,
   AccountingInvoiceRequest,
   AccountingInvoiceResult,
   AccountingInvoiceTargetStatusValue,
   AccountingTokenSet,
 } from './accounting-connection-adapter.interface';
 import { AccountingProviderError } from './accounting-provider.error';
+import { AccountingCallBudgetService } from '../accounting-call-budget.service';
+import { parseXeroSdkError, ParsedXeroError, readRateLimitHeaders } from './xero-errors';
 
 // Xero requests all scopes up front (including contacts/settings, unused
 // until Phases 2-3) because Xero scopes cannot be silently expanded after
@@ -45,6 +48,54 @@ const XERO_TOKEN_ENDPOINT = 'https://identity.xero.com/connect/token';
 // refresh lock's TTL (ACCOUNTING_REFRESH_LOCK_TTL_MS).
 const REFRESH_HTTP_TIMEOUT_MS = 10_000;
 
+// Xero's published limits are 60 calls/min, 5,000/day and 5 concurrent per
+// organisation (verified 2026-09-29, developer.xero.com rate limits). The
+// budget keeps a margin under the per-minute limit. Concurrency needs no
+// guard of its own: the sync dedupe allows one run per (connection, resource
+// type) and invoice export runs at concurrency 1, so at most 5 sequential
+// call streams exist per organisation — raise export concurrency and that
+// stops being true.
+const XERO_CALLS_PER_ORG_PER_MINUTE = 50;
+const XERO_DAILY_LIMIT = 5_000;
+const DAY_LIMIT_WARN_BELOW = XERO_DAILY_LIMIT / 10;
+// xero-node sets no request timeout, so a stalled connection would otherwise
+// hold a worker lane forever. On timeout the request may still complete at
+// Xero; every write we make carries an idempotency key, so a retry is safe.
+const XERO_CALL_TIMEOUT_MS = 60_000;
+// Contacts page size: Xero's maximum (verified); default is 100.
+const CONTACTS_PAGE_SIZE = 1000;
+// A cursor re-reads this much before the newest change it has seen, so a
+// record written in the same second as the last fetch is never skipped.
+// Re-reading is harmless: upserts compare fields.
+const CURSOR_OVERLAP_MS = 5 * 60 * 1000;
+
+class XeroCallTimeoutError extends Error {
+  constructor(op: string) {
+    super(`Xero ${op} did not respond within ${XERO_CALL_TIMEOUT_MS / 1000}s`);
+    this.name = 'XeroCallTimeoutError';
+  }
+}
+
+// The cursor is an ISO UTC timestamp — opaque to everything outside this
+// adapter. nextCursor never moves backwards.
+function nextXeroCursor(previous: string | null | undefined, updatedAt: Array<Date | string | undefined>): string | null {
+  const times = updatedAt
+    .map((u) => (u ? new Date(u).getTime() : NaN))
+    .filter((t) => Number.isFinite(t));
+  const prev = previous ? new Date(previous).getTime() : NaN;
+  if (times.length === 0) return Number.isFinite(prev) ? new Date(prev).toISOString() : null;
+  const candidate = Math.max(...times) - CURSOR_OVERLAP_MS;
+  return new Date(Number.isFinite(prev) ? Math.max(prev, candidate) : candidate).toISOString();
+}
+
+function cursorToDate(cursor: string | null | undefined): Date | undefined {
+  if (!cursor) return undefined;
+  const d = new Date(cursor);
+  return Number.isFinite(d.getTime()) ? d : undefined;
+}
+
+export { nextXeroCursor };
+
 const XERO_INVOICE_STATUS: Record<AccountingInvoiceTargetStatusValue, Invoice.StatusEnum> = {
   DRAFT: Invoice.StatusEnum.DRAFT,
   SUBMITTED: Invoice.StatusEnum.SUBMITTED,
@@ -58,7 +109,10 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
   private readonly clientSecret: string;
   private readonly redirectUri: string;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly budget: AccountingCallBudgetService,
+  ) {
     this.clientId = config.getOrThrow<string>('XERO_CLIENT_ID');
     this.clientSecret = config.getOrThrow<string>('XERO_CLIENT_SECRET');
     // This is apps/admin-api's public callback URL, not a route on this
@@ -213,50 +267,65 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
   async listContacts(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-    modifiedSince?: Date,
-  ): Promise<AccountingExternalContact[]> {
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalContact>> {
     const client = this.buildClient();
     client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    const modifiedSince = cursorToDate(cursor);
     const contacts: Contact[] = [];
     let page = 1;
-    // xero-node paginates at 100 contacts/page; loop until a short page ends it.
+    // Paged; loop until a short page ends it.
     for (;;) {
-      const { body } = await client.accountingApi.getContacts(
-        externalOrganisationId,
-        modifiedSince,
-        undefined, // where
-        undefined, // order
-        undefined, // iDs
-        page,
-        true, // includeArchived — Archived is a status this feature surfaces
+      const { body } = await this.call('getContacts', externalOrganisationId, () =>
+        client.accountingApi.getContacts(
+          externalOrganisationId,
+          modifiedSince,
+          undefined, // where
+          undefined, // order
+          undefined, // iDs
+          page,
+          true, // includeArchived — Archived is a status this feature surfaces
+          undefined, // summaryOnly
+          undefined, // searchTerm
+          CONTACTS_PAGE_SIZE,
+        ),
       );
       const batch = body.contacts ?? [];
       contacts.push(...batch);
-      if (batch.length < 100) break;
+      if (batch.length < CONTACTS_PAGE_SIZE) break;
       page += 1;
     }
-    return contacts.map((c) => this.toAccountingExternalContact(c));
+    return {
+      records: contacts.map((c) => this.toAccountingExternalContact(c)),
+      nextCursor: nextXeroCursor(cursor, contacts.map((c) => c.updatedDateUTC)),
+    };
   }
 
   async listProducts(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-    modifiedSince?: Date,
-  ): Promise<AccountingExternalProduct[]> {
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalProduct>> {
     const client = this.buildClient();
     client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
     // Unlike getContacts, Xero's Items endpoint has no pagination — one call
     // returns every item (item counts are small relative to contacts).
     // unitdp=4 opts in to four-decimal-place unit prices; the cache column is
     // Decimal(12,4) to hold them losslessly.
-    const { body } = await client.accountingApi.getItems(
-      externalOrganisationId,
-      modifiedSince,
-      undefined, // where
-      undefined, // order
-      4, // unitdp
+    const { body } = await this.call('getItems', externalOrganisationId, () =>
+      client.accountingApi.getItems(
+        externalOrganisationId,
+        cursorToDate(cursor),
+        undefined, // where
+        undefined, // order
+        4, // unitdp
+      ),
     );
-    return (body.items ?? []).map((item) => this.toAccountingExternalProduct(item));
+    const items = body.items ?? [];
+    return {
+      records: items.map((item) => this.toAccountingExternalProduct(item)),
+      nextCursor: nextXeroCursor(cursor, items.map((item) => item.updatedDateUTC)),
+    };
   }
 
   async listTaxRates(
@@ -267,7 +336,9 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
     // Unlike getContacts, Xero's TaxRates endpoint has no pagination — one
     // call returns every tax rate (org tax-rate counts are small).
-    const { body } = await client.accountingApi.getTaxRates(externalOrganisationId);
+    const { body } = await this.call('getTaxRates', externalOrganisationId, () =>
+      client.accountingApi.getTaxRates(externalOrganisationId),
+    );
     return (body.taxRates ?? []).map((taxRate) => this.toAccountingExternalTaxRate(taxRate));
   }
 
@@ -313,18 +384,15 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       lineItems,
     };
 
-    let body;
-    try {
-      ({ body } = await client.accountingApi.createInvoices(
+    const { body } = await this.call('createInvoices', externalOrganisationId, () =>
+      client.accountingApi.createInvoices(
         externalOrganisationId,
         { invoices: [invoice] },
         true, // summarizeErrors — all-or-nothing, a validation failure throws
         4, // unitdp
         idempotencyKey,
-      ));
-    } catch (err) {
-      throw this.toProviderError(err);
-    }
+      ),
+    );
 
     const created = body.invoices?.[0];
     if (!created?.invoiceID) {
@@ -340,37 +408,101 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     };
   }
 
-  // Xero SDK errors carry the HTTP response on err.response; classify by
-  // status: rate limits (429) and Xero-side faults (5xx) are worth retrying,
-  // validation (400) and authorisation (401/403) failures are not — they need
-  // user action (fix mappings/codes, or reconnect). No response = network
-  // fault = transient.
-  private toProviderError(err: unknown): AccountingProviderError {
-    const statusCode = (err as { response?: { statusCode?: number; status?: number } })?.response?.statusCode
-      ?? (err as { response?: { status?: number } })?.response?.status;
-    const transient = statusCode == null || statusCode === 429 || statusCode >= 500;
-    const detail = this.extractXeroErrorDetail(err);
-    const message = detail
-      ? `Xero rejected the invoice: ${detail}`
-      : statusCode
-        ? `Xero request failed with HTTP ${statusCode}`
-        : `Xero request failed: ${err instanceof Error ? err.message : String(err)}`;
-    return new AccountingProviderError(message, transient, err);
+  // The single path every Accounting API call takes: per-organisation call
+  // budget, a hard timeout, one structured log line per call, and failures
+  // turned into a clean AccountingProviderError. Nothing raw from the
+  // provider (body, headers, the SDK's error string) gets past this method.
+  private async call<T extends { response: { status?: number; headers?: unknown } }>(
+    op: string,
+    externalOrganisationId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    await this.budget.acquire('XERO', externalOrganisationId, XERO_CALLS_PER_ORG_PER_MINUTE);
+    const started = Date.now();
+    const baseFields = { provider: 'XERO', externalOrgId: externalOrganisationId, op };
+
+    let result: T;
+    try {
+      result = await this.withTimeout(op, fn());
+    } catch (err) {
+      const parsed = parseXeroSdkError(err);
+      const providerError = this.toProviderError(op, parsed);
+      this.logger.warn(
+        {
+          event: 'accounting.provider.call_failed',
+          ...baseFields,
+          statusCode: parsed.statusCode,
+          durationMs: Date.now() - started,
+          transient: providerError.transient,
+          retryAfterMs: parsed.retryAfterMs,
+          validationMessages: parsed.validationMessages.length > 0 ? parsed.validationMessages : undefined,
+          xeroCorrelationId: parsed.correlationId,
+        },
+        providerError.message,
+      );
+      throw providerError;
+    }
+
+    const limits = readRateLimitHeaders(result.response?.headers as Record<string, unknown> | undefined);
+    const fields = {
+      ...baseFields,
+      statusCode: result.response?.status,
+      durationMs: Date.now() - started,
+      minRemaining: limits.minRemaining,
+      dayRemaining: limits.dayRemaining,
+      appMinRemaining: limits.appMinRemaining,
+      xeroCorrelationId: limits.correlationId,
+    };
+    this.logger.debug({ event: 'accounting.provider.call', ...fields }, `Xero ${op} ${result.response?.status ?? ''}`);
+    if (limits.dayRemaining !== undefined && limits.dayRemaining < DAY_LIMIT_WARN_BELOW) {
+      this.logger.warn(
+        { event: 'accounting.provider.day_limit_low', ...fields },
+        `Xero daily call limit low for org ${externalOrganisationId}: ${limits.dayRemaining} of ${XERO_DAILY_LIMIT} left`,
+      );
+    }
+    return result;
   }
 
-  private extractXeroErrorDetail(err: unknown): string | undefined {
-    const body = (err as { response?: { body?: unknown } })?.response?.body as
-      | {
-          Message?: string;
-          Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>;
-        }
-      | undefined;
-    const validationMessages = (body?.Elements ?? [])
-      .flatMap((el) => el.ValidationErrors ?? [])
-      .map((v) => v.Message)
-      .filter((m): m is string => !!m);
-    if (validationMessages.length > 0) return validationMessages.join('; ');
-    return body?.Message;
+  private withTimeout<T>(op: string, pending: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new XeroCallTimeoutError(op)), XERO_CALL_TIMEOUT_MS);
+    });
+    return Promise.race([pending, timeout]).finally(() => clearTimeout(timer));
+  }
+
+  // Classification: rate limits (429), Xero-side faults (5xx) and transport
+  // failures are worth retrying; validation (400) and authorisation
+  // (401/403) failures are not — they need user action (fix mappings/codes,
+  // or reconnect). The message is built only from Xero's own validation /
+  // error text, never the raw response, so it is safe to persist on export
+  // rows, show in admin notifications, and log.
+  private toProviderError(op: string, parsed: ParsedXeroError): AccountingProviderError {
+    const { statusCode } = parsed;
+    const transient = statusCode === undefined || statusCode === 429 || statusCode >= 500;
+    const detail =
+      parsed.validationMessages.length > 0 ? parsed.validationMessages.join('; ') : parsed.xeroMessage;
+
+    let message: string;
+    if (statusCode === undefined) {
+      message = `Xero ${op} request failed: ${parsed.transportMessage ?? 'no response'}`;
+    } else if (op === 'createInvoices' && statusCode === 400 && detail) {
+      message = `Xero rejected the invoice: ${detail}`;
+    } else if (statusCode === 429) {
+      message = `Xero rate limit reached during ${op}${
+        parsed.retryAfterMs !== undefined ? ` — retry after ${Math.ceil(parsed.retryAfterMs / 1000)}s` : ''
+      }`;
+    } else {
+      message = `Xero ${op} failed with HTTP ${statusCode}${detail ? `: ${detail}` : ''}`;
+    }
+
+    return new AccountingProviderError(
+      message,
+      transient,
+      parsed,
+      statusCode === undefined ? 'NETWORK' : `HTTP_${statusCode}`,
+      { statusCode, retryAfterMs: parsed.retryAfterMs },
+    );
   }
 
   private toAccountingExternalProduct(item: Item): AccountingExternalProduct {

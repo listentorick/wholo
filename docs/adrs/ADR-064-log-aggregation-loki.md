@@ -118,6 +118,29 @@ the existing `dashboards/*.json` glob and is hand-imported into the ops Grafana
 in live. **Grafana → Explore → Loki is the primary log-viewing tool**; the
 dashboard is the at-a-glance view.
 
+### Addendum (2026-09-29): structured events and job failures
+- **Call shape.** `logger.<level>({ event, ...fields, err? }, 'one-line summary')` —
+  the object is merged by pino (precedent: `logHttpException`). `event` is a stable
+  dotted name (`accounting.sync.failed`, `accounting.provider.call_failed`,
+  `queue.job.failed`, …); queries and alerts key on `| json | event="…"`, never on
+  message text. `err` always goes through `loggableError()` (now exported from
+  `@wholo/nest-telemetry`), which also withholds long or JSON-shaped non-Error
+  rejections — some SDKs (xero-node) reject with the whole HTTP response as a string.
+- **Levels.** `error` = needs an engineer (bug, final job failure, fleet-wide
+  credential failure); `warn` = expected external / user-actionable failure or a
+  retry; `info` = lifecycle; `debug` = per provider call.
+- **Job failures.** Every BullMQ processor in `apps/api` extends `LoggedWorkerHost`
+  (`src/queues/logged-worker-host.ts`) instead of `WorkerHost`: one
+  `queue.job.failed` line per failed attempt (warn while retries remain, error once
+  BullMQ gives up or on `UnrecoverableError`) carrying `queue`, `jobId`, `eventId`,
+  `aggregateId`, `err`, plus a warn on stalled jobs. Previously a thrown job error
+  reached Redis only.
+- **Accounting.** Every accounting line carries `provider`, `distributorId`,
+  `connectionId` (+ `externalOrgId`, `runId`, `exportId`, `orderId` where
+  relevant). Email addresses are never logged — `userId` instead. Alert rules:
+  `helm/wholo/alerting/stocdup-accounting.yaml`; dashboard row "Accounting
+  integrations" in `stocdup-logs.json`.
+
 ## Consequences
 - Two new optional components (`loki`, `fluent-bit`); the chart's second RBAC
   set and second/third DaemonSet.

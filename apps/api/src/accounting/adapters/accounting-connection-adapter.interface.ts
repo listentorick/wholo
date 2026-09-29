@@ -130,6 +130,16 @@ export interface AccountingInvoiceResult {
   raw: unknown;
 }
 
+// One page of a record-type pull. `nextCursor` is opaque to every caller: the
+// adapter decides what it encodes (Xero: a modified-since timestamp; another
+// provider might use a sync token) and the framework only stores it on the
+// IngestionRun and hands it back on the next pull. null means "no incremental
+// position available — next pull must be full".
+export interface AccountingFetchResult<T> {
+  records: T[];
+  nextCursor: string | null;
+}
+
 // Phase 1 (connection lifecycle) + Phase 2 (listContacts) + Phase 3
 // (listProducts) + Phase 4 (createInvoice) + tax-type sync (listTaxRates).
 // Still has room to grow (getInvoicePdf) — not built now, deliberately.
@@ -145,19 +155,21 @@ export interface AccountingConnectionAdapter {
   // a revoked/already-consumed refresh token) causes — same contract as
   // createInvoice below.
   refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>;
-  // modifiedSince, when provided, asks the provider for an incremental diff
-  // rather than a full list — providers that can't support it should ignore
-  // it and return everything (the caller must be able to handle either).
+  // Incremental fetch contract (see AccountingFetchResult): a null/absent
+  // cursor means a full fetch; otherwise the adapter returns only records
+  // changed since the position the cursor encodes. An adapter that can't
+  // fetch incrementally ignores the cursor, returns everything and a null
+  // nextCursor — the caller handles either.
   listContacts(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-    modifiedSince?: Date,
-  ): Promise<AccountingExternalContact[]>;
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalContact>>;
   listProducts(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-    modifiedSince?: Date,
-  ): Promise<AccountingExternalProduct[]>;
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalProduct>>;
   // No modifiedSince — Xero's tax rates have no per-record modified
   // timestamp to filter on (unlike contacts/products), so every sync is a
   // full fetch.

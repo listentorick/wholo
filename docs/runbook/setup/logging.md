@@ -36,3 +36,22 @@ a read-only `pods`/`namespaces` ClusterRole) and the DaemonSet, which mounts
 `loki` output loaded with no repeated `connection refused` / `could not flush`;
 `kubectl -n wholo logs deploy/wholo-api | head` is single-line JSON;
 `{namespace="wholo"}` in the ops Grafana Explore returns lines within ~15s.
+
+## Accounting alerts
+
+`helm/wholo/alerting/stocdup-accounting.yaml` holds four Grafana alert rules that
+read Loki. Locally they are provisioned automatically; on the ops Grafana create
+them once by hand (Alerting → Alert rules → New, or import the file's rules),
+replacing `datasourceUid: stocdup-loki` with the ops Loki data source uid.
+
+| Rule | Fires when | What to do |
+|---|---|---|
+| Accounting job gave up | an accounting queue job failed its **final** attempt (`queue.job.failed`, `final="true"`) | Explore → Loki `{app=~".*worker"} \| json \| event="queue.job.failed" \| final="true"`; the line carries `queue`, `jobId`, `eventId`, `aggregateId`, `err`. Invoice exports can be retried from the order page. |
+| Xero rejected Stocdup application credentials | `accounting.connection.invalid_client` | `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` are wrong or revoked — affects every distributor. |
+| Accounting errors spike | more than 5 `level="error"` accounting lines in 15 min | error level means a bug or a give-up; routine provider rejections are `warn`. Group by `event`. |
+| Xero daily call limit low | `accounting.provider.day_limit_low` for an organisation | that organisation has used 90% of Xero's 5,000 calls/day; find it by `externalOrgId` in `accounting_connections`. |
+
+Every accounting log line carries a stable `event` plus `distributorId`,
+`connectionId`, `provider` (and `runId` / `exportId` / `orderId` where relevant),
+so `| json | distributorId="…"` narrows to one distributor.
+

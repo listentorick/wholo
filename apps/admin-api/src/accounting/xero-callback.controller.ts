@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Logger, Query, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AccountingService } from './accounting.service';
 
@@ -16,6 +16,8 @@ interface XeroCallbackQuery {
 // redirect back into the admin app itself (same origin — see main.ts).
 @Controller('accounting/xero')
 export class XeroCallbackController {
+  private readonly logger = new Logger(XeroCallbackController.name);
+
   constructor(private readonly service: AccountingService) {}
 
   @Get('callback')
@@ -37,6 +39,18 @@ export class XeroCallbackController {
     if (result.status === 'connected') {
       res.redirect('/integrations?status=connected');
     } else {
+      // Never log code/state — they are single-use credentials for the
+      // token exchange. `error` is Xero's own OAuth error name (e.g.
+      // access_denied when the user declined consent).
+      this.logger.warn(
+        {
+          event: 'accounting.connection.callback_failed',
+          provider: 'XERO',
+          reason: result.reason,
+          providerError: typeof query.error === 'string' ? query.error.slice(0, 100) : undefined,
+        },
+        `Xero connect callback failed: ${result.reason}`,
+      );
       res.redirect(`/integrations?status=error&reason=${encodeURIComponent(result.reason)}`);
     }
   }

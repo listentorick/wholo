@@ -1,24 +1,29 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { XeroAccountingAdapter } from './xero-connection.adapter';
 import { AccountingProviderError } from './accounting-provider.error';
+import { AccountingCallBudgetService } from '../accounting-call-budget.service';
 
 const mockGetContacts = jest.fn();
 const mockGetItems = jest.fn();
 const mockCreateInvoices = jest.fn();
+const mockGetTaxRates = jest.fn();
+const mockBudgetAcquire = jest.fn();
 
 const mockXeroClientInstance = {
   buildConsentUrl: jest.fn(),
   apiCallback: jest.fn(),
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
-  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices },
+  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices, getTaxRates: mockGetTaxRates },
 };
 
 jest.mock('xero-node', () => ({
   XeroClient: jest.fn().mockImplementation(() => mockXeroClientInstance),
   Contact: { ContactStatusEnum: { ACTIVE: 'ACTIVE', ARCHIVED: 'ARCHIVED', GDPRREQUEST: 'GDPRREQUEST' } },
   Address: { AddressTypeEnum: { POBOX: 'POBOX', STREET: 'STREET' } },
+  TaxRate: { StatusEnum: { ACTIVE: 'ACTIVE', DELETED: 'DELETED' } },
   Invoice: {
     TypeEnum: { ACCREC: 'ACCREC', ACCPAY: 'ACCPAY' },
     StatusEnum: { DRAFT: 'DRAFT', SUBMITTED: 'SUBMITTED', AUTHORISED: 'AUTHORISED', PAID: 'PAID' },
@@ -26,6 +31,20 @@ jest.mock('xero-node', () => ({
   CurrencyCode: { GBP: 'GBP', EUR: 'EUR', USD: 'USD' },
   LineAmountTypes: { Exclusive: 'Exclusive', Inclusive: 'Inclusive', NoTax: 'NoTax' },
 }));
+
+// The shape xero-node 18.1.0 actually rejects with (verified against the SDK
+// with a local HTTP server): a JSON *string* of ApiError.generateError().
+function xeroSdkRejection(statusCode: number, body: unknown, headers: Record<string, string> = {}): string {
+  return JSON.stringify({
+    response: {
+      statusCode,
+      body,
+      headers: { 'content-type': 'application/json', connection: 'keep-alive', ...headers },
+      request: { url: { protocol: 'https:', host: 'api.xero.com', path: '/api.xro/2.0/Invoices' }, headers: {}, method: 'PUT' },
+    },
+    body,
+  });
+}
 
 const makeConfig = () => ({
   getOrThrow: jest.fn((key: string) => {
@@ -43,10 +62,12 @@ describe('XeroAccountingAdapter', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockBudgetAcquire.mockResolvedValue(undefined);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         XeroAccountingAdapter,
         { provide: ConfigService, useValue: makeConfig() },
+        { provide: AccountingCallBudgetService, useValue: { acquire: mockBudgetAcquire } },
       ],
     }).compile();
     adapter = module.get(XeroAccountingAdapter);
@@ -274,7 +295,7 @@ describe('XeroAccountingAdapter', () => {
         },
       });
 
-      const contacts = await adapter.listContacts(tokenSet, 'tenant-1');
+      const { records: contacts } = await adapter.listContacts(tokenSet, 'tenant-1');
 
       expect(contacts).toEqual([
         {
@@ -311,6 +332,9 @@ describe('XeroAccountingAdapter', () => {
         undefined,
         1,
         true,
+        undefined,
+        undefined,
+        1000,
       );
     });
 
@@ -345,7 +369,9 @@ describe('XeroAccountingAdapter', () => {
         },
       });
 
-      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+      const {
+        records: [contact],
+      } = await adapter.listContacts(tokenSet, 'tenant-1');
 
       expect(contact.billingLine1).toBe('PO Box 42');
       expect(contact.billingPostcode).toBe('E1 2BB');
@@ -377,7 +403,9 @@ describe('XeroAccountingAdapter', () => {
         },
       });
 
-      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+      const {
+        records: [contact],
+      } = await adapter.listContacts(tokenSet, 'tenant-1');
 
       expect(contact.billingLine1).toBe('PO Box 7');
       expect(contact.deliveryLine1).toBeUndefined();
@@ -389,12 +417,14 @@ describe('XeroAccountingAdapter', () => {
         body: { contacts: [{ contactID: 'c-2', name: 'Old Co', contactStatus: 'ARCHIVED' }] },
       });
 
-      const [contact] = await adapter.listContacts(tokenSet, 'tenant-1');
+      const {
+        records: [contact],
+      } = await adapter.listContacts(tokenSet, 'tenant-1');
       expect(contact.isArchived).toBe(true);
     });
 
-    it('paginates until a short page is returned', async () => {
-      const fullPage = Array.from({ length: 100 }, (_, i) => ({
+    it('paginates at Xero\'s maximum page size until a short page is returned', async () => {
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({
         contactID: `c-${i}`,
         name: `Contact ${i}`,
       }));
@@ -402,20 +432,78 @@ describe('XeroAccountingAdapter', () => {
         .mockResolvedValueOnce({ body: { contacts: fullPage } })
         .mockResolvedValueOnce({ body: { contacts: [{ contactID: 'c-last', name: 'Last' }] } });
 
-      const contacts = await adapter.listContacts(tokenSet, 'tenant-1');
+      const { records: contacts } = await adapter.listContacts(tokenSet, 'tenant-1');
 
-      expect(contacts).toHaveLength(101);
+      expect(contacts).toHaveLength(1001);
       expect(mockGetContacts).toHaveBeenCalledTimes(2);
-      expect(mockGetContacts).toHaveBeenNthCalledWith(2, 'tenant-1', undefined, undefined, undefined, undefined, 2, true);
+      expect(mockGetContacts).toHaveBeenNthCalledWith(
+        2,
+        'tenant-1',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        2,
+        true,
+        undefined,
+        undefined,
+        1000,
+      );
     });
 
-    it('passes modifiedSince through to getContacts', async () => {
+    it('takes one call-budget slot per page, keyed by the organisation', async () => {
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({ contactID: `c-${i}`, name: `C ${i}` }));
+      mockGetContacts
+        .mockResolvedValueOnce({ body: { contacts: fullPage } })
+        .mockResolvedValueOnce({ body: { contacts: [] } });
+
+      await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(mockBudgetAcquire).toHaveBeenCalledTimes(2);
+      expect(mockBudgetAcquire).toHaveBeenCalledWith('XERO', 'tenant-1', 50);
+    });
+
+    it('turns the cursor into If-Modified-Since for an incremental fetch', async () => {
       mockGetContacts.mockResolvedValueOnce({ body: { contacts: [] } });
-      const since = new Date('2026-01-01T00:00:00.000Z');
 
-      await adapter.listContacts(tokenSet, 'tenant-1', since);
+      await adapter.listContacts(tokenSet, 'tenant-1', '2026-01-01T00:00:00.000Z');
 
-      expect(mockGetContacts).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, undefined, 1, true);
+      expect(mockGetContacts.mock.calls[0][1]).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+    });
+
+    it('returns a next cursor 5 minutes before the newest change seen, so same-second writes are not skipped', async () => {
+      mockGetContacts.mockResolvedValueOnce({
+        body: {
+          contacts: [
+            { contactID: 'a', name: 'A', updatedDateUTC: new Date('2026-05-01T10:00:00.000Z') },
+            { contactID: 'b', name: 'B', updatedDateUTC: new Date('2026-05-01T12:00:00.000Z') },
+          ],
+        },
+      });
+
+      const { nextCursor } = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(nextCursor).toBe('2026-05-01T11:55:00.000Z');
+    });
+
+    it('never moves the cursor backwards, and keeps it when nothing changed', async () => {
+      mockGetContacts.mockResolvedValueOnce({ body: { contacts: [] } });
+      const unchanged = await adapter.listContacts(tokenSet, 'tenant-1', '2026-05-01T11:55:00.000Z');
+      expect(unchanged.nextCursor).toBe('2026-05-01T11:55:00.000Z');
+
+      mockGetContacts.mockResolvedValueOnce({
+        body: { contacts: [{ contactID: 'old', name: 'Old', updatedDateUTC: new Date('2026-05-01T11:56:00.000Z') }] },
+      });
+      const overlap = await adapter.listContacts(tokenSet, 'tenant-1', '2026-05-01T11:55:00.000Z');
+      expect(overlap.nextCursor).toBe('2026-05-01T11:55:00.000Z');
+    });
+
+    it('has no cursor to offer after a full fetch of an empty organisation', async () => {
+      mockGetContacts.mockResolvedValueOnce({ body: { contacts: [] } });
+
+      const { nextCursor } = await adapter.listContacts(tokenSet, 'tenant-1');
+
+      expect(nextCursor).toBeNull();
     });
   });
 
@@ -448,7 +536,7 @@ describe('XeroAccountingAdapter', () => {
         },
       });
 
-      const products = await adapter.listProducts(tokenSet, 'tenant-1');
+      const { records: products } = await adapter.listProducts(tokenSet, 'tenant-1');
 
       expect(products).toEqual([
         {
@@ -488,7 +576,9 @@ describe('XeroAccountingAdapter', () => {
         body: { items: [{ itemID: 'item-2', code: 'MERLOT-CASE' }] },
       });
 
-      const [product] = await adapter.listProducts(tokenSet, 'tenant-1');
+      const {
+        records: [product],
+      } = await adapter.listProducts(tokenSet, 'tenant-1');
 
       expect(product.displayName).toBe('MERLOT-CASE');
     });
@@ -498,7 +588,9 @@ describe('XeroAccountingAdapter', () => {
         body: { items: [{ itemID: 'item-3', code: 'BARE' }] },
       });
 
-      const [product] = await adapter.listProducts(tokenSet, 'tenant-1');
+      const {
+        records: [product],
+      } = await adapter.listProducts(tokenSet, 'tenant-1');
 
       expect(product.isSold).toBe(true);
       expect(product.isPurchased).toBe(true);
@@ -508,13 +600,12 @@ describe('XeroAccountingAdapter', () => {
       expect(product.quantityOnHand).toBeUndefined();
     });
 
-    it('passes modifiedSince through to getItems', async () => {
+    it('turns the cursor into If-Modified-Since for getItems', async () => {
       mockGetItems.mockResolvedValueOnce({ body: { items: [] } });
-      const since = new Date('2026-03-01T00:00:00.000Z');
 
-      await adapter.listProducts(tokenSet, 'tenant-1', since);
+      await adapter.listProducts(tokenSet, 'tenant-1', '2026-03-01T00:00:00.000Z');
 
-      expect(mockGetItems).toHaveBeenCalledWith('tenant-1', since, undefined, undefined, 4);
+      expect(mockGetItems).toHaveBeenCalledWith('tenant-1', new Date('2026-03-01T00:00:00.000Z'), undefined, undefined, 4);
     });
   });
 
@@ -648,32 +739,65 @@ describe('XeroAccountingAdapter', () => {
     });
 
     it('classifies validation failures (400) as permanent and surfaces Xero validation messages', async () => {
-      mockCreateInvoices.mockRejectedValueOnce({
-        response: {
-          statusCode: 400,
-          body: {
-            Elements: [{ ValidationErrors: [{ Message: 'Account code 999 is not valid' }] }],
-          },
-        },
-      });
+      mockCreateInvoices.mockRejectedValueOnce(
+        xeroSdkRejection(400, {
+          Message: 'A validation exception occurred',
+          Elements: [{ ValidationErrors: [{ Message: 'Account code 999 is not valid' }] }],
+        }),
+      );
 
       const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
 
       expect(err).toBeInstanceOf(AccountingProviderError);
       expect(err.transient).toBe(false);
-      expect(err.message).toContain('Account code 999 is not valid');
+      expect(err.statusCode).toBe(400);
+      expect(err.message).toBe('Xero rejected the invoice: Account code 999 is not valid');
     });
 
-    it('classifies rate limits (429) and provider faults (5xx) as transient', async () => {
-      for (const statusCode of [429, 500, 503]) {
-        mockCreateInvoices.mockRejectedValueOnce({ response: { statusCode } });
+    it('never lets the raw SDK rejection (headers, request, body) into the error it throws', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(
+        xeroSdkRejection(400, { Elements: [{ ValidationErrors: [{ Message: 'Bad' }] }], ContactEmail: 'jane@customer.com' }),
+      );
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+      const everything = JSON.stringify({ message: err.message, cause: err.cause, details: err.details });
+
+      expect(everything).not.toContain('jane@customer.com');
+      expect(everything).not.toContain('/api.xro/2.0/Invoices');
+      expect(everything).not.toContain('keep-alive');
+    });
+
+    it('classifies rate limits (429) as transient and carries Retry-After for the queue backoff', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(xeroSdkRejection(429, 'Rate limit exceeded', { 'retry-after': '7' }));
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(true);
+      expect(err.code).toBe('HTTP_429');
+      expect(err.retryAfterMs).toBe(7_000);
+    });
+
+    it('classifies provider faults (5xx) as transient', async () => {
+      for (const statusCode of [500, 503]) {
+        mockCreateInvoices.mockRejectedValueOnce(xeroSdkRejection(statusCode, null));
         const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
         expect(err).toBeInstanceOf(AccountingProviderError);
         expect(err.transient).toBe(true);
       }
     });
 
-    it('classifies errors without an HTTP response (network faults) as transient', async () => {
+    it('classifies a transport failure (xero-node 18.1 rejects with statusCode 0) as transient', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(xeroSdkRejection(0, 'connect ECONNREFUSED 10.0.0.1:443'));
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err.transient).toBe(true);
+      expect(err.code).toBe('NETWORK');
+      expect(err.message).toContain('ECONNREFUSED');
+    });
+
+    it('classifies a thrown Error without an HTTP response as transient', async () => {
       mockCreateInvoices.mockRejectedValueOnce(new Error('socket hang up'));
 
       const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
@@ -681,6 +805,46 @@ describe('XeroAccountingAdapter', () => {
       expect(err).toBeInstanceOf(AccountingProviderError);
       expect(err.transient).toBe(true);
       expect(err.message).toContain('socket hang up');
+    });
+
+    it('logs one structured warn per failed call, with the ids needed to chase it', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      mockCreateInvoices.mockRejectedValueOnce(
+        xeroSdkRejection(400, { Elements: [{ ValidationErrors: [{ Message: 'Bad code' }] }] }, { 'xero-correlation-id': 'corr-1' }),
+      );
+
+      await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch(() => undefined);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toMatchObject({
+        event: 'accounting.provider.call_failed',
+        provider: 'XERO',
+        externalOrgId: 'tenant-1',
+        op: 'createInvoices',
+        statusCode: 400,
+        transient: false,
+        validationMessages: ['Bad code'],
+        xeroCorrelationId: 'corr-1',
+      });
+      warn.mockRestore();
+    });
+
+    it('warns when the organisation is close to its daily call limit', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      mockCreateInvoices.mockResolvedValueOnce({
+        response: { status: 200, headers: { 'x-daylimit-remaining': '120', 'x-minlimit-remaining': '55' } },
+        body: { invoices: [createdInvoice] },
+      });
+
+      await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key');
+
+      expect(warn.mock.calls[0][0]).toMatchObject({
+        event: 'accounting.provider.day_limit_low',
+        externalOrgId: 'tenant-1',
+        dayRemaining: 120,
+        minRemaining: 55,
+      });
+      warn.mockRestore();
     });
   });
 });

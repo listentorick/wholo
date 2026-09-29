@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
+import { loggableError } from '@wholo/nest-telemetry';
 import {
   AccountingConnection,
   AccountingConnectionStatus,
@@ -181,8 +182,14 @@ export class AccountingConnectionService {
       organisations = await adapter.listAvailableOrganisations(tokenSet);
     } catch (err) {
       this.logger.error(
+        {
+          event: 'accounting.connection.exchange_failed',
+          provider: stateRow.provider,
+          distributorId: stateRow.distributorId,
+          userId: stateRow.connectedByUserId,
+          err: loggableError(err),
+        },
         `Accounting token exchange failed for distributor ${stateRow.distributorId}`,
-        err instanceof Error ? err.stack : String(err),
       );
       throw new AccountingOAuthError('exchange_failed');
     }
@@ -192,6 +199,12 @@ export class AccountingConnectionService {
     }
     if (organisations.length > 1) {
       this.logger.warn(
+        {
+          event: 'accounting.connection.multiple_organisations',
+          provider: stateRow.provider,
+          distributorId: stateRow.distributorId,
+          organisationCount: organisations.length,
+        },
         `Accounting authorization for distributor ${stateRow.distributorId} returned ` +
           `${organisations.length} organisations; using the first (multi-org selection is not yet supported)`,
       );
@@ -200,8 +213,8 @@ export class AccountingConnectionService {
     const encryptedCredentialData = this.tokenEncryption.encrypt(JSON.stringify(tokenSet));
     const now = new Date();
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.accountingConnection.updateMany({
+    const created = await this.prisma.$transaction(async (tx) => {
+      const retired = await tx.accountingConnection.updateMany({
         // ERROR included, not just CONNECTED — a broken connection must be
         // retired by a successful reconnect too, or it lingers as an
         // orphaned row that findCurrentConnection could still surface.
@@ -211,7 +224,7 @@ export class AccountingConnectionService {
         },
         data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: now },
       });
-      await tx.accountingConnection.create({
+      const connection = await tx.accountingConnection.create({
         data: {
           distributorId: stateRow.distributorId,
           provider: stateRow.provider,
@@ -224,7 +237,20 @@ export class AccountingConnectionService {
           connectedAt: now,
         },
       });
+      return { connection, reconnect: retired.count > 0 };
     });
+    this.logger.log(
+      {
+        event: 'accounting.connection.connected',
+        provider: created.connection.provider,
+        distributorId: created.connection.distributorId,
+        connectionId: created.connection.id,
+        externalOrgId: created.connection.externalOrganisationId,
+        userId: stateRow.connectedByUserId,
+        reconnect: created.reconnect,
+      },
+      `Accounting connection ${created.connection.id} established for distributor ${created.connection.distributorId}`,
+    );
   }
 
   // The single place any Xero-API-calling code goes through to get a usable
@@ -332,8 +358,14 @@ export class AccountingConnectionService {
       if (permanentError && provider) {
         await this.notifyReconnectNeeded(distributorId, provider, permanentError).catch((notifyErr) => {
           this.logger.error(
-            `Failed to send accounting-reconnect notification for distributor ${distributorId}: ` +
-              `${notifyErr instanceof Error ? notifyErr.message : String(notifyErr)}`,
+            {
+              event: 'accounting.connection.notify_failed',
+              provider,
+              distributorId,
+              connectionId,
+              err: loggableError(notifyErr),
+            },
+            `Failed to send accounting-reconnect notification for distributor ${distributorId}`,
           );
         });
       }
@@ -359,9 +391,25 @@ export class AccountingConnectionService {
           err,
         );
 
-      this.logger.error(
-        `Accounting token refresh failed for distributor ${distributorId} (connection ${connection.id}): ${providerError.message}`,
-      );
+      const refreshFields = {
+        provider: connection.provider,
+        distributorId,
+        connectionId: connection.id,
+        externalOrgId: connection.externalOrganisationId,
+        code: providerError.code,
+        transient: providerError.transient,
+      };
+      if (providerError.transient) {
+        this.logger.warn(
+          { event: 'accounting.connection.refresh_failed', ...refreshFields },
+          `Accounting token refresh failed for distributor ${distributorId} (connection ${connection.id}), will retry: ${providerError.message}`,
+        );
+      } else {
+        this.logger.warn(
+          { event: 'accounting.connection.needs_reconnect', ...refreshFields },
+          `Accounting connection ${connection.id} for distributor ${distributorId} needs reconnecting: ${providerError.message}`,
+        );
+      }
 
       if (!providerError.transient) {
         await this.prisma.accountingConnection.update({
@@ -397,6 +445,12 @@ export class AccountingConnectionService {
       // re-read and return whatever is now current rather than assuming our
       // own refreshed value is still the right one to hand back.
       this.logger.error(
+        {
+          event: 'accounting.connection.refresh_race_lost',
+          provider: connection.provider,
+          distributorId,
+          connectionId: connection.id,
+        },
         `Accounting refresh CAS write lost the race for connection ${connection.id} (distributor ${distributorId}) — ` +
           'the refresh lock guarantee may have been violated',
       );
@@ -409,6 +463,15 @@ export class AccountingConnectionService {
       throw new AccountingProviderError('Accounting refresh write conflict — retry', true);
     }
 
+    this.logger.debug(
+      {
+        event: 'accounting.connection.refreshed',
+        provider: connection.provider,
+        distributorId,
+        connectionId: connection.id,
+      },
+      `Accounting token refreshed for connection ${connection.id}`,
+    );
     return refreshed;
   }
 
@@ -442,6 +505,7 @@ export class AccountingConnectionService {
       // one, so it's logged at a severity worth alerting on rather than
       // routed through the per-distributor notification channels.
       this.logger.error(
+        { event: 'accounting.connection.invalid_client', provider, distributorId },
         `Accounting connection for distributor ${distributorId} failed with invalid_client — this affects ` +
           'every distributor refresh and needs application-credential investigation, not a distributor reconnect',
       );
@@ -451,7 +515,7 @@ export class AccountingConnectionService {
     const [admins, distributor] = await Promise.all([
       this.prisma.membership.findMany({
         where: { organisationId: distributorId, roles: { some: { role: Role.DISTRIBUTOR_ADMIN } } },
-        select: { user: { select: { email: true } } },
+        select: { user: { select: { id: true, email: true } } },
       }),
       this.prisma.organisation.findUnique({ where: { id: distributorId }, select: { name: true } }),
     ]);
@@ -471,9 +535,16 @@ export class AccountingConnectionService {
             reason: error.message,
           })
           .catch((err) => {
+            // userId, never the email address — logs are not a PII store.
             this.logger.error(
-              `Failed to send accounting-reconnect email to ${admin.user.email}: ` +
-                `${err instanceof Error ? err.message : String(err)}`,
+              {
+                event: 'accounting.connection.reconnect_email_failed',
+                provider,
+                distributorId,
+                userId: admin.user.id,
+                err: loggableError(err),
+              },
+              `Failed to send accounting-reconnect email to user ${admin.user.id}`,
             );
           }),
       ),
@@ -491,5 +562,14 @@ export class AccountingConnectionService {
       where: { id: connection.id },
       data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
     });
+    this.logger.log(
+      {
+        event: 'accounting.connection.disconnected',
+        provider: connection.provider,
+        distributorId,
+        connectionId: connection.id,
+      },
+      `Accounting connection ${connection.id} disconnected for distributor ${distributorId}`,
+    );
   }
 }

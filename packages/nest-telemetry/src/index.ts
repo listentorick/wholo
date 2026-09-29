@@ -10,7 +10,7 @@ export { startMetricsServer, startMetricsServerFromEnv } from './metrics-server'
 
 export { LoggingModule } from './logging.module';
 export { buildPinoOptions } from './logging.config';
-export { logHttpException } from './problem-details';
+export { logHttpException, loggableError } from './problem-details';
 
 // Re-exported so the apps never depend on `nestjs-pino` directly.
 // `PinoAppLogger` is nestjs-pino's NestJS `LoggerService` — pass it to

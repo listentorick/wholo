@@ -13,6 +13,7 @@ import { AccountingConnectionService } from '../accounting/accounting-connection
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
   AccountingConnectionAdapter,
+  AccountingFetchResult,
   AccountingExternalContact,
   AccountingTokenSet,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
@@ -28,9 +29,10 @@ import {
 } from '../accounting/sync/accounting-sync-processor.base';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
+import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
 // Consumes AccountingContactSyncRequested — written to the outbox by both
-// AccountingContactSyncScheduler (periodic) and the "Sync now" HTTP endpoint
+// AccountingSyncScheduler (periodic) and the "Sync now" HTTP endpoint
 // (manual). One trigger, one path: the shared sync pipeline
 // (AccountingSyncProcessorBase) pulls contacts from the provider, caches
 // them, and runs the matcher against unmapped Wholo customers. Never writes a
@@ -38,7 +40,7 @@ import { IngestionRunService } from '../ingestion/ingestion-run.service';
 // concurrency 2: bounds the per-worker DB burst (2 jobs × 25-wide upsert
 // batches vs a 10-connection pool) while letting one slow org not block the
 // queue. See ADR-061 / "Concurrency".
-@Processor(ACCOUNTING_CONTACT_SYNC_QUEUE, { concurrency: 2 })
+@Processor(ACCOUNTING_CONTACT_SYNC_QUEUE, { concurrency: 2, ...ACCOUNTING_WORKER_SETTINGS })
 export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
   AccountingExternalContact,
   ExternalAccountingContact,
@@ -64,8 +66,9 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
     adapter: AccountingConnectionAdapter,
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
-  ): Promise<AccountingExternalContact[]> {
-    return adapter.listContacts(tokenSet, externalOrganisationId);
+    cursor: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalContact>> {
+    return adapter.listContacts(tokenSet, externalOrganisationId, cursor);
   }
 
   // Business fields shown in the review table — a move in any of these makes

@@ -1,4 +1,5 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor } from '@nestjs/bullmq';
+import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,7 +18,7 @@ interface StaffKeycloakDisableJobData {
 // Keycloak user is a no-op, so an at-least-once redelivery is harmless, and a
 // failure throws so BullMQ retries with backoff.
 @Processor(KEYCLOAK_USER_QUEUE)
-export class StaffKeycloakDisableProcessor extends WorkerHost {
+export class StaffKeycloakDisableProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(StaffKeycloakDisableProcessor.name);
 
   constructor(

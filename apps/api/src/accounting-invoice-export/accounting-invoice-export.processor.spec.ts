@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   AccountingConnectionStatus,
   AccountingInvoiceExportStatus,
@@ -508,6 +509,35 @@ describe('AccountingInvoiceExportProcessor', () => {
           errorMessage: 'Xero rejected the invoice: Account code 999 is not valid',
         }),
       );
+    });
+
+    it('never stores or shows an unexpected error text — it may carry query data — but logs it with the stack', async () => {
+      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      adapter.createInvoice.mockRejectedValue(new TypeError('Invalid `prisma.x()` invocation: { email: "jane@customer.com" }'));
+
+      await expect(processor.process(makeJob())).rejects.toThrow(TypeError);
+
+      const stored = failedUpdate()![0].data.errorMessage as string;
+      expect(stored).toBe('Unexpected error while creating the invoice — it will be retried automatically.');
+      const [fields] = error.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.invoice_export.unexpected_error')!;
+      expect(fields).toMatchObject({ distributorId: expect.any(String), exportId: expect.any(String), orderId: expect.any(String) });
+      expect((fields as { err: Error }).err.stack).toContain('TypeError');
+      jest.restoreAllMocks();
+    });
+
+    it('logs a provider failure once, structured, with the provider status for alerting', async () => {
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      adapter.createInvoice.mockRejectedValue(
+        new AccountingProviderError('Xero createInvoices failed with HTTP 503', true, undefined, 'HTTP_503', { statusCode: 503 }),
+      );
+
+      await processor.process(makeJob()).catch(() => undefined);
+
+      const failed = warn.mock.calls.filter(([f]) => (f as { event?: string }).event === 'accounting.invoice_export.failed');
+      expect(failed).toHaveLength(1);
+      expect(failed[0][0]).toMatchObject({ errorCode: 'PROVIDER_ERROR', code: 'HTTP_503', statusCode: 503, transient: true });
+      jest.restoreAllMocks();
     });
   });
 

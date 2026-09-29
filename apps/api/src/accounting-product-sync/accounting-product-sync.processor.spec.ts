@@ -84,7 +84,11 @@ describe('AccountingProductSyncProcessor', () => {
         scope: 'openid accounting.settings',
       }),
     };
-    adapters = { get: jest.fn().mockReturnValue({ listProducts }) };
+    adapters = {
+      get: jest.fn().mockReturnValue({
+        listProducts: async (...args: unknown[]) => ({ records: await listProducts(...args), nextCursor: 'cursor-next' }),
+      }),
+    };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
     ingestionRuns = ingestionRunsMock();
@@ -116,21 +120,28 @@ describe('AccountingProductSyncProcessor', () => {
 
     expect(accountingConnectionService.getValidTokenSet).toHaveBeenCalledWith('dist-1', 'XERO');
     expect(adapters.get).toHaveBeenCalledWith('XERO');
-    expect(listProducts).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
+    expect(listProducts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
     expect(prisma.accountingConnection.update).toHaveBeenCalledWith({
       where: { id: 'conn-1' },
       data: { lastSyncedAt: expect.any(Date) },
     });
   });
 
-  it('always does a full fetch, never passing lastSyncedAt as modifiedSince', async () => {
-    const since = new Date('2026-01-01T00:00:00.000Z');
-    prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, lastSyncedAt: since });
+  it('does a full pull (null cursor) when the run has no cursor — never connection.lastSyncedAt', async () => {
+    prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, lastSyncedAt: new Date('2026-01-01') });
 
     await processor.process(makeJob());
 
-    expect(listProducts).toHaveBeenCalledWith(expect.anything(), 'tenant-1');
-    expect(listProducts.mock.calls[0]).toHaveLength(2);
+    expect(listProducts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
+  });
+
+  it('does not deactivate cache rows missing from an incremental pull — absence only means deleted after a full pull', async () => {
+    ingestionRuns.claim.mockResolvedValue({ id: 'run-1', trigger: 'SCHEDULED', cursor: 'c-1', lastFullRunAt: new Date() });
+
+    await processor.process(makeJob());
+
+    expect(listProducts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', 'c-1');
+    expect(prisma.externalAccountingProduct.updateMany).not.toHaveBeenCalled();
   });
 
   it('upserts an ExternalAccountingProduct row per fetched product', async () => {
@@ -196,6 +207,7 @@ describe('AccountingProductSyncProcessor', () => {
     expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
       'run-7',
       expect.objectContaining({ recordsCreated: 1, recordsRemoved: 3 }),
+      expect.anything(),
     );
   });
 

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException } from '@nestjs/common';
@@ -199,6 +200,42 @@ describe('AccountingConnectionService', () => {
 
   describe('handleCallback', () => {
     const callbackUrl = 'http://localhost:3001/api/v1/accounting/xero/callback?code=abc&state=xyz';
+
+    beforeEach(() => {
+      // Real Prisma shapes: updateMany reports a count, create returns the row.
+      mockPrisma.accountingConnection.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.accountingConnection.create.mockImplementation(({ data }) => Promise.resolve({ id: 'conn-new', ...data }));
+    });
+
+    it('logs the new connection with its ids, and whether it replaced an older one', async () => {
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      mockPrisma.accountingOAuthState.findUnique.mockResolvedValue({
+        id: 'state-1',
+        state: 'xyz',
+        provider: AccountingProvider.XERO,
+        distributorId: 'dist-1',
+        connectedByUserId: 'user-1',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      mockAdapter.exchangeCodeForToken.mockResolvedValue(makeTokenSet());
+      mockAdapter.listAvailableOrganisations.mockResolvedValue([{ externalId: 'tenant-1', name: 'Acme Wines' }]);
+      mockTokenEncryption.encrypt.mockReturnValue('encrypted-blob');
+      mockPrisma.accountingConnection.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.handleCallback(callbackUrl, 'abc', 'xyz');
+
+      const [fields] = log.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.connection.connected')!;
+      expect(fields).toMatchObject({
+        provider: AccountingProvider.XERO,
+        distributorId: 'dist-1',
+        connectionId: 'conn-new',
+        externalOrgId: 'tenant-1',
+        userId: 'user-1',
+        reconnect: true,
+      });
+      expect(JSON.stringify(fields)).not.toContain('encrypted-blob');
+      log.mockRestore();
+    });
 
     it('rejects an unknown state without touching any connection', async () => {
       mockPrisma.accountingOAuthState.findUnique.mockResolvedValue(null);
