@@ -22,7 +22,7 @@ const data: CustomerHealthResponse = {
   distributorId: 'dist-1',
   timezone: 'UTC',
   generatedAt: '2026-09-24T12:00:00.000Z',
-  tiles: { activeCustomers90d: 3, atRiskCount: 1, salesLast30d: 1200 },
+  tiles: { activeCustomers90d: 3, atRiskCount: 1, salesLast30d: 1200, overdueBalance: 0, overdueInvoiceCount: 0 },
   tierCounts: { healthy: 1, watch: 1, at_risk: 1 },
   needingAttention: [
     { customerId: 'rel-1', customerName: 'Never Orders Ltd', tier: 'at_risk', reasons: [{ code: 'NEVER_ORDERED', category: 'no_relationship_yet', severity: 'at_risk', text: 'No orders since becoming a customer 70 days ago' }], spend30d: 0, lastOrderDate: null },

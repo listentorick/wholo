@@ -9,6 +9,7 @@ import { DetailPageHeader } from '@/components/detail/DetailPageHeader';
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
 import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
+import { InvoicePaymentCard } from '@/components/orders/InvoicePaymentCard';
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { Order, OrderLine, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
@@ -497,6 +498,11 @@ export default function OrderDetailPage() {
           {/* Accounting invoice export state */}
           {order.invoiceExport && accessToken && (
             <OrderInvoiceExportBadge invoiceExport={order.invoiceExport} />
+          )}
+
+          {/* Invoice payment position, synced back from the accounting system */}
+          {order.invoiceExport?.payment && (
+            <InvoicePaymentCard payment={order.invoiceExport.payment} currency={order.currency} />
           )}
 
           {/* Order lines */}

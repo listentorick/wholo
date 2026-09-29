@@ -8,6 +8,8 @@ import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 
 const mockPrisma = {
+  // Distributor local date for 'overdue' (ADR-072); UTC when unset.
+  distributorSettings: { findMany: jest.fn().mockResolvedValue([]) },
   order: {
     findMany: jest.fn(),
     findFirst: jest.fn(),
@@ -268,6 +270,37 @@ describe('AdminOrdersService', () => {
         errorCode: null,
         errorMessage: null,
         createdAt: '2026-07-09T18:44:00.000Z',
+        // Not yet seen by the invoice status sync (invoiceState null).
+        payment: null,
+      });
+    });
+
+    it('carries the synced payment position of the invoice, overdue measured on the distributor\'s local date', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({
+        ...makeOrder(),
+        invoiceExports: [
+          {
+            id: 'export-1', provider: 'XERO', status: 'COMPLETED', externalInvoiceId: 'inv-1',
+            externalInvoiceNumber: 'INV-0042', externalInvoiceStatus: 'AUTHORISED',
+            exportedAt: new Date('2026-07-09T18:45:00.000Z'), errorCode: null, errorMessage: null,
+            createdAt: new Date('2026-07-09T18:44:00.000Z'),
+            invoiceState: 'AWAITING_PAYMENT', invoiceTotal: '120.00', amountPaid: '20.00', amountCredited: '0',
+            amountDue: '100.00', dueDate: new Date('2020-01-31T00:00:00Z'), fullyPaidOn: null,
+          },
+        ],
+      });
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.invoiceExport?.payment).toEqual({
+        paymentStatus: 'PART_PAID',
+        isOverdue: true,
+        externalInvoiceNumber: 'INV-0042',
+        total: 120,
+        amountPaid: 20,
+        amountDue: 100,
+        dueDate: '2020-01-31',
+        fullyPaidOn: null,
       });
     });
   });

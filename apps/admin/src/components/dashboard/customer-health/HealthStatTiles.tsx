@@ -10,14 +10,13 @@ interface Props {
   currency: (value: number) => string;
 }
 
-// Three tiles for v1 — no overdue-balance tile: payment/invoice signals are
-// out of scope until Xero-synced data is reachable per customer. "Customers
-// at risk" doubles as a filter, like the Delivery dashboard's attention
-// tiles: clicking it narrows the needing-attention table below rather than
-// linking away.
+// "Customers at risk" doubles as a filter, like the Delivery dashboard's
+// attention tiles: clicking it narrows the needing-attention table below
+// rather than linking away. The overdue tile is invoice money past its due
+// date, synced back from the accounting system (ADR-072).
 export function HealthStatTiles({ tiles, riskOnly, onToggleRisk, currency }: Props) {
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3" role="group" aria-label="Customer health summary">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" role="group" aria-label="Customer health summary">
       <StatTileFrame
         label="Active customers"
         value={tiles.activeCustomers90d}
@@ -40,6 +39,18 @@ export function HealthStatTiles({ tiles, riskOnly, onToggleRisk, currency }: Pro
         label="Sales, last 30 days"
         value={currency(tiles.salesLast30d)}
         footer={<span className="text-xs font-medium text-muted">Qualifying orders</span>}
+      />
+
+      <StatTileFrame
+        label="Overdue invoices"
+        value={currency(tiles.overdueBalance)}
+        footer={
+          <span className="text-xs font-medium text-muted">
+            {tiles.overdueInvoiceCount === 0
+              ? 'Nothing overdue'
+              : `${tiles.overdueInvoiceCount} invoice${tiles.overdueInvoiceCount === 1 ? '' : 's'} past due`}
+          </span>
+        }
       />
     </div>
   );

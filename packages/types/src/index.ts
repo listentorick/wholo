@@ -322,12 +322,33 @@ export interface OrderInvoiceExportSummary {
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
+  payment?: OrderInvoicePayment | null;
 }
 
 export interface OrderInvoiceSummary {
   status: AccountingInvoiceExportStatus;
   externalInvoiceStatus: string | null;
+  /** Payment position synced back from the accounting system (ADR-072); null until the invoice exists there and has been synced. */
+  payment?: OrderInvoicePayment | null;
 }
+
+/** How paid an order's invoice is (ADR-072). Amounts are the accounting system's own figures. */
+export interface OrderInvoicePayment {
+  paymentStatus: InvoicePaymentStatus;
+  /** Past its due date with money still due, as of the distributor's local today. */
+  isOverdue: boolean;
+  externalInvoiceNumber: string | null;
+  total: number;
+  amountPaid: number;
+  amountDue: number;
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  /** YYYY-MM-DD */
+  fullyPaidOn: string | null;
+}
+
+/** Order-list filter on the invoice's payment position. */
+export type OrderPaymentFilter = 'UNPAID' | 'PART_PAID' | 'PAID' | 'OVERDUE';
 
 export interface OrderSummary {
   id: string;
@@ -376,6 +397,8 @@ export interface OrderListParams {
   // ACCEPTED orders with no delivery date at all — invisible on every dated
   // delivery-runs board. Wins over deliveryDateAfter/Before if both are sent.
   undated?: boolean;
+  /** Payment position of the order's invoice (ADR-072). */
+  payment?: OrderPaymentFilter;
   sortBy?: 'createdAt' | 'requestedDeliveryDate';
   sortOrder?: 'asc' | 'desc';
 }

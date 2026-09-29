@@ -15,6 +15,7 @@ import { AccountTab } from '@/components/customers/tabs/AccountTab';
 import { DeliveryTab } from '@/components/customers/tabs/DeliveryTab';
 import { CataloguePricingTab } from '@/components/customers/tabs/CataloguePricingTab';
 import { PortalAccessTab } from '@/components/customers/tabs/PortalAccessTab';
+import { PaymentsTab } from '@/components/customers/tabs/PaymentsTab';
 import type { TabSaveState } from '@/components/customers/tabs/tab-save-state';
 import { adminCustomersApi, adminOrderAsApi } from '@wholo/admin-api-client';
 import { TradeRelationshipStatus } from '@wholo/types';
@@ -32,7 +33,7 @@ const STATUS_META: Record<TradeRelationshipStatus, { label: string; tone: Status
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
-type TabKey = 'overview' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access';
+type TabKey = 'overview' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access' | 'payments';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
@@ -40,6 +41,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'delivery', label: 'Delivery' },
   { key: 'catalogue-pricing', label: 'Catalogue & Pricing' },
   { key: 'portal-access', label: 'Portal Access' },
+  { key: 'payments', label: 'Payments' },
 ];
 
 // ─── Inner page (uses hooks that require Suspense) ────────────────────────────
@@ -347,6 +349,7 @@ function CustomerPageInner() {
             onSaved={fetchCustomer}
           />
         )}
+        {activeTab === 'payments' && <PaymentsTab customer={customer} />}
       </DetailPageLayout>
     </>
   );

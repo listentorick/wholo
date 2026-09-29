@@ -74,7 +74,7 @@ describe('OrdersService — delivery date revalidation', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
-      distributorSettings: { findUnique: jest.fn() },
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       tradeRelationship: { findFirst: jest.fn() },
       order: { create: jest.fn() },
       orderLine: { createMany: jest.fn() },
@@ -426,7 +426,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
-      distributorSettings: { findUnique: jest.fn() },
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       tradeRelationship: { findFirst: jest.fn() },
       order: { create: jest.fn() },
       orderLine: { createMany: jest.fn() },
@@ -544,7 +544,7 @@ describe('OrdersService — tax calculation', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn(), delete: jest.fn() },
-      distributorSettings: { findUnique: jest.fn() },
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       tradeRelationship: { findFirst: jest.fn() },
       taxType: { findMany: jest.fn().mockResolvedValue([]) },
       order: { create: jest.fn() },
@@ -695,7 +695,7 @@ describe('OrdersService — listCustomerOrders', () => {
     const mockPrisma = {
       organisation: { findFirst: jest.fn() },
       cartOrder: { findUnique: jest.fn() },
-      distributorSettings: { findUnique: jest.fn() },
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       tradeRelationship: { findUnique: jest.fn() },
       order: { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), create: jest.fn() },
       orderLine: { createMany: jest.fn() },
@@ -766,7 +766,7 @@ describe('OrdersService — listCustomerOrders', () => {
     const result = await service.listCustomerOrders(CUSTOMER_ID, {});
 
     expect(result.data[0].requestedDeliveryDate).toBe('2024-06-14');
-    expect(result.data[0].invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'AUTHORISED' });
+    expect(result.data[0].invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'AUTHORISED', payment: null });
   });
 
   it('maps invoiceSummary as null and requestedDeliveryDate as null when absent', async () => {
@@ -828,6 +828,7 @@ describe('OrdersService — getCustomerOrder', () => {
   beforeEach(async () => {
     assetImageFindMany = jest.fn().mockResolvedValue([]);
     const mockPrisma = {
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       order: { findFirst: jest.fn() },
       assetImage: { findMany: assetImageFindMany },
     };
@@ -855,7 +856,7 @@ describe('OrdersService — getCustomerOrder', () => {
 
     const result = await service.getCustomerOrder('order-1', CUSTOMER_ID);
 
-    expect(result.invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'DRAFT' });
+    expect(result.invoiceSummary).toEqual({ status: 'COMPLETED', externalInvoiceStatus: 'DRAFT', payment: null });
   });
 
   it('maps invoiceSummary as null when no invoice export exists', async () => {
@@ -941,7 +942,11 @@ describe('OrdersService — getCustomerOrder', () => {
 
 describe('OrdersService — cancelCustomerOrder', () => {
   let service: OrdersService;
-  let prisma: { order: { findFirst: jest.Mock }; $transaction: jest.Mock };
+  let prisma: {
+    distributorSettings: { findUnique: jest.Mock; findMany: jest.Mock };
+    order: { findFirst: jest.Mock };
+    $transaction: jest.Mock;
+  };
   let outbox: { writeEvent: jest.Mock };
   let audit: { record: jest.Mock };
   let txUserFindUnique: jest.Mock;
@@ -978,6 +983,7 @@ describe('OrdersService — cancelCustomerOrder', () => {
 
   beforeEach(async () => {
     prisma = {
+      distributorSettings: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
       order: { findFirst: jest.fn() },
       $transaction: jest.fn(),
     };

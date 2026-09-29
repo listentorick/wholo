@@ -81,6 +81,25 @@ outbox event (export, order, distributor, customer, from → to, amounts, dates,
   anything is overdue, at risk when an invoice is over 30 days late) and
   `overdueBalance` / `overdueInvoiceCount` tiles.
 
+### Where payment shows
+- **Order read models.** Both the admin and the portal order resources (list and
+  detail) carry `invoiceSummary.payment` / `invoiceExport.payment`
+  (`OrderInvoicePayment`: payment status, overdue, invoice number, total, paid, due,
+  due date, fully-paid date), built by `toOrderInvoicePayment` with "overdue" measured
+  on the distributor's local date. `null` until the invoice has been synced — the UI
+  then shows no payment state rather than a guess.
+- **Admin orders.** A Payment column (`PaymentBadge`: Unpaid / Part paid / Paid /
+  Void, with Overdue taking precedence), a Payment filter (`?payment=UNPAID |
+  PART_PAID | PAID | OVERDUE`, the same definitions as a query), and an "Invoice &
+  payment" card on the order detail.
+- **Portal orders.** The Invoice column and a detail card use customer wording:
+  Paid / Part paid · £x due / Due 12 Oct / Overdue · £x due.
+- **Admin customer.** A read-only Payments tab: outstanding, overdue, average days to
+  pay, % paid on time, and the unpaid invoices.
+- **Customer health.** The overdue-invoices tile and the at-risk description now name
+  overdue invoices.
+- Labels always carry the meaning; colour is secondary.
+
 ## Consequences
 - "Order shows as paid" lags payment by up to ~15 minutes plus queue wait; the
   `accounting-invoice-sync` queue's oldest-waiting-age gauge measures it.

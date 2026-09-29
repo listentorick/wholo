@@ -15,7 +15,7 @@ echarts.use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 const ITEMS: Array<{ key: keyof CustomerHealthResponse['tierCounts']; label: string; note: string }> = [
   { key: 'healthy', label: 'Healthy', note: 'Buying regularly, no issues' },
   { key: 'watch', label: 'Watch', note: 'Some signs of decline' },
-  { key: 'at_risk', label: 'At risk', note: 'Low activity or delivery problems' },
+  { key: 'at_risk', label: 'At risk', note: 'Low activity, overdue invoices or delivery problems' },
 ];
 
 export function HealthTierBar({ counts }: { counts: CustomerHealthResponse['tierCounts'] }) {

@@ -11,6 +11,7 @@ import { Eyebrow } from '@/components/Eyebrow';
 import { OrderStatusBadge } from '@/components/OrderStatusBadge';
 import { OrderStatus, formatMoney } from '@wholo/types';
 import type { OrderSummary, OrderInvoiceSummary } from '@wholo/types';
+import { INVOICE_TONE_CLASS, invoiceLabel } from '@/lib/invoice-label';
 
 /** Same centred gutter as the storefront sections (the storefront chrome above
  *  this content is rendered by the distributor layout). */
@@ -24,20 +25,9 @@ const STATUS_FILTERS: { label: string; value: OrderStatus | null }[] = [
   { label: 'Cancelled', value: OrderStatus.CANCELLED },
 ];
 
-function invoiceStatusLabel(summary: OrderInvoiceSummary | null | undefined) {
-  if (!summary) return 'Not yet raised';
-  switch (summary.status) {
-    case 'COMPLETED':
-      return summary.externalInvoiceStatus ? `Raised (${summary.externalInvoiceStatus})` : 'Raised';
-    case 'FAILED':
-      return 'Export failed';
-    default:
-      return 'Raising invoice…';
-  }
-}
-
-function InvoiceCell({ summary }: { summary: OrderInvoiceSummary | null | undefined }) {
-  return <span className="text-sm text-foreground-tertiary">{invoiceStatusLabel(summary)}</span>;
+function InvoiceCell({ summary, currency }: { summary: OrderInvoiceSummary | null | undefined; currency: string }) {
+  const { text, tone } = invoiceLabel(summary, currency);
+  return <span className={`text-sm ${INVOICE_TONE_CLASS[tone]}`}>{text}</span>;
 }
 
 function Th({ align = 'left', children }: { align?: 'left' | 'right'; children: React.ReactNode }) {
@@ -297,7 +287,7 @@ export default function OrdersPage() {
                                 {order.requestedDeliveryDate ? fmtDate(order.requestedDeliveryDate) : '—'}
                               </td>
                               <td className="px-3 py-3">
-                                <InvoiceCell summary={order.invoiceSummary} />
+                                <InvoiceCell summary={order.invoiceSummary} currency={order.currency} />
                               </td>
                               <td className="px-3 py-3 text-right text-sm font-medium tabular-nums text-foreground">
                                 {formatMoney(order.totalAmount, order.currency)}

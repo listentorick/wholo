@@ -10,6 +10,7 @@ import { ordersApi, ApiError } from '@wholo/api-client';
 import type { AddressSnapshot, Order } from '@wholo/types';
 import { formatMoney } from '@wholo/types';
 import { formatAddress } from '@/lib/format-address';
+import { INVOICE_TONE_CLASS, invoiceLabel } from '@/lib/invoice-label';
 
 /** White 8px card — matches the checkout / product-detail restyle language. */
 const CARD = 'od-section rounded-lg border border-border bg-surface p-5 shadow-sm';
@@ -250,6 +251,32 @@ export default function OrderDetailPage() {
               {delivAddrText && (
                 <p className="text-[13px] leading-relaxed text-foreground">{delivAddrText}</p>
               )}
+            </div>
+          )}
+
+          {/* Invoice — payment position synced from the distributor's accounting system */}
+          {order.invoiceSummary?.payment && order.invoiceSummary.payment.paymentStatus !== 'NOT_SYNCED' && (
+            <div className={CARD} style={{ animationDelay: '0.28s' }}>
+              <Eyebrow className="mb-3">Invoice</Eyebrow>
+              {(() => {
+                const { text, tone } = invoiceLabel(order.invoiceSummary, order.currency);
+                const p = order.invoiceSummary.payment;
+                return (
+                  <>
+                    <p className={`text-[13px] font-medium ${INVOICE_TONE_CLASS[tone]}`}>{text}</p>
+                    <div className="mt-2 flex flex-col gap-1 text-[13px] text-muted">
+                      {p.externalInvoiceNumber && (
+                        <div className="flex justify-between"><span>Invoice</span><span>{p.externalInvoiceNumber}</span></div>
+                      )}
+                      {p.dueDate && (
+                        <div className="flex justify-between"><span>Due</span><span>{fmtDate(p.dueDate)}</span></div>
+                      )}
+                      <div className="flex justify-between"><span>Paid</span><span>{fmtAmt(p.amountPaid.toFixed(2), order.currency)}</span></div>
+                      <div className="flex justify-between"><span>Still due</span><span>{fmtAmt(p.amountDue.toFixed(2), order.currency)}</span></div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 

@@ -18,8 +18,9 @@ import { FilterBar } from '@/components/list/filter-bar/FilterBar';
 import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-bar/types';
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { ProofOfDeliveryDrawer } from '@/components/orders/ProofOfDeliveryDrawer';
+import { PaymentBadge } from '@/components/orders/PaymentBadge';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
-import type { OrderSummary, OrderListParams } from '@wholo/types';
+import type { OrderSummary, OrderListParams, OrderPaymentFilter } from '@wholo/types';
 import { OrderStatus, formatMoney } from '@wholo/types';
 
 // ─── Filter config ────────────────────────────────────────────────────────────
@@ -48,6 +49,18 @@ const ORDER_FILTER_FIELDS: FilterFieldConfig[] = [
     operators: [{ value: 'is', label: 'is' }, { value: 'is_not', label: 'is not' }],
     valueKind: 'multi-select',
     options: STATUS_OPTIONS,
+  },
+  {
+    field: 'payment',
+    label: 'Payment',
+    operators: [{ value: 'is', label: 'is' }],
+    valueKind: 'multi-select',
+    options: [
+      { value: 'UNPAID', label: 'Unpaid' },
+      { value: 'PART_PAID', label: 'Part paid' },
+      { value: 'PAID', label: 'Paid' },
+      { value: 'OVERDUE', label: 'Overdue' },
+    ],
   },
   {
     field: 'customerName',
@@ -81,6 +94,8 @@ function buildApiParams(
       const val = (Array.isArray(f.value) ? f.value[0] : f.value) as OrderStatus;
       if (f.operator === 'is') params.status = val;
       else if (f.operator === 'is_not') params.statusExclude = val;
+    } else if (f.field === 'payment') {
+      params.payment = (Array.isArray(f.value) ? f.value[0] : f.value) as OrderPaymentFilter;
     } else if (f.field === 'customerName') {
       params.customerName = f.value as string;
     } else if (f.field === 'requestedDeliveryDate') {
@@ -349,6 +364,9 @@ export default function OrdersPage() {
             renderExpanded={(order) => (
               <>
                 <MobileCardField label="Submitted" value={fmtDateStr(order.submittedAt)} />
+                {order.invoiceSummary?.payment && (
+                  <MobileCardField label="Payment" value={<PaymentBadge payment={order.invoiceSummary.payment} />} />
+                )}
                 {order.status === OrderStatus.SUBMITTED && accessToken && (
                   <QuickActions order={order} onUpdate={handleOrderUpdate} />
                 )}
@@ -375,6 +393,7 @@ export default function OrdersPage() {
                   <ListTh>Order</ListTh>
                   <ListTh>Customer</ListTh>
                   <ListTh>Status</ListTh>
+                  <ListTh>Payment</ListTh>
                   <ListTh>Total</ListTh>
                   <ListTh>
                     <button type="button" onClick={handleToggleDeliveryDateSort} className="flex items-center hover:text-text transition-colors">
@@ -407,6 +426,11 @@ export default function OrdersPage() {
                     <td className="py-3 px-4">
                       <Link href={`/orders/${order.id}`} className="block">
                         <OrderStatusBadge status={order.status} />
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Link href={`/orders/${order.id}`} className="block">
+                        <PaymentBadge payment={order.invoiceSummary?.payment} />
                       </Link>
                     </td>
                     <td className="py-3 px-4 text-sm text-text">

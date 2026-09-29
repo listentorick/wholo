@@ -22,10 +22,9 @@ describe('HealthTierBar', () => {
     expect(screen.getByText('Some signs of decline')).toBeInTheDocument();
   });
 
-  it('does not claim a payment signal — the tiers are built from ordering and delivery only', () => {
+  it('names what the tiers are built from — ordering, overdue invoices and delivery', () => {
     render(<HealthTierBar counts={{ healthy: 1, watch: 1, at_risk: 1 }} />);
-    expect(screen.queryByText(/payment/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Low activity or delivery problems')).toBeInTheDocument();
+    expect(screen.getByText('Low activity, overdue invoices or delivery problems')).toBeInTheDocument();
   });
 
   it('gives the proportion bar an accessible summary, since the plot itself is canvas', () => {

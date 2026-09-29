@@ -20,6 +20,7 @@ export class OrdersService {
     if (query.deliveryDateAfter) params.set('deliveryDateAfter', query.deliveryDateAfter);
     if (query.deliveryDateBefore) params.set('deliveryDateBefore', query.deliveryDateBefore);
     if (query.undated) params.set('undated', 'true');
+    if (query.payment) params.set('payment', query.payment);
     if (query.sortBy) params.set('sortBy', query.sortBy);
     if (query.sortOrder) params.set('sortOrder', query.sortOrder);
     const qs = params.toString();

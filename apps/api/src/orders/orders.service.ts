@@ -17,6 +17,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { distributorTodays, invoicePaymentSelect, toOrderInvoicePayment } from '../accounting/order-invoice-payment';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -101,7 +102,7 @@ const orderSelect = {
   invoiceExports: {
     orderBy: { createdAt: 'desc' as const },
     take: 1,
-    select: { status: true, externalInvoiceStatus: true },
+    select: { ...invoicePaymentSelect, externalInvoiceStatus: true },
   },
 } satisfies Prisma.OrderSelect;
 
@@ -464,10 +465,11 @@ export class OrdersService {
           submittedAt: true, acceptedAt: true, rejectedAt: true, cancelledAt: true,
           createdAt: true, requestedDeliveryDate: true,
           customer: { select: { id: true, name: true } },
+          distributorId: true,
           invoiceExports: {
             orderBy: { createdAt: 'desc' as const },
             take: 1,
-            select: { status: true, externalInvoiceStatus: true },
+            select: { ...invoicePaymentSelect, externalInvoiceStatus: true },
           },
         },
       }),
@@ -476,6 +478,7 @@ export class OrdersService {
 
     const hasMore = items.length > limit;
     const data = hasMore ? items.slice(0, limit) : items;
+    const todays = await distributorTodays(this.prisma, data.map((o) => o.distributorId));
     const last = data[data.length - 1];
     const nextCursor = hasMore && last
       ? Buffer.from(JSON.stringify({ createdAt: last.createdAt.toISOString(), id: last.id })).toString('base64url')
@@ -498,7 +501,11 @@ export class OrdersService {
           ? o.requestedDeliveryDate.toISOString().slice(0, 10)
           : null,
         invoiceSummary: o.invoiceExports[0]
-          ? { status: o.invoiceExports[0].status, externalInvoiceStatus: o.invoiceExports[0].externalInvoiceStatus }
+          ? {
+              status: o.invoiceExports[0].status,
+              externalInvoiceStatus: o.invoiceExports[0].externalInvoiceStatus,
+              payment: toOrderInvoicePayment(o.invoiceExports[0], todays.get(o.distributorId)!),
+            }
           : null,
       })),
       pagination: { nextCursor, hasMore, total },
@@ -597,6 +604,7 @@ export class OrdersService {
   }
 
   private async formatOrder(order: Prisma.OrderGetPayload<{ select: typeof orderSelect }>) {
+    const today = (await distributorTodays(this.prisma, [order.distributorId])).get(order.distributorId)!;
     const dec = (v: unknown) =>
       typeof v === 'object' && v !== null && 'toFixed' in v
         ? (v as { toFixed: (n: number) => string }).toFixed(2)
@@ -654,7 +662,11 @@ export class OrdersService {
       cancellationReason: order.cancellationReason,
       traderCustomer: order.customer ? { id: order.customer.id, name: order.customer.name } : null,
       invoiceSummary: order.invoiceExports[0]
-        ? { status: order.invoiceExports[0].status, externalInvoiceStatus: order.invoiceExports[0].externalInvoiceStatus }
+        ? {
+            status: order.invoiceExports[0].status,
+            externalInvoiceStatus: order.invoiceExports[0].externalInvoiceStatus,
+            payment: toOrderInvoicePayment(order.invoiceExports[0], today),
+          }
         : null,
       lines: order.lines.map((l) => ({
         id: l.id,

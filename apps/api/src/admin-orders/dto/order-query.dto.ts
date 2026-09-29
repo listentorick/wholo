@@ -1,5 +1,6 @@
+import type { OrderPaymentFilter } from '@wholo/types';
 import {
-  IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min, Max,
+  IsOptional, IsString, IsInt, IsEnum, IsBoolean, IsIn, Min, Max,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
@@ -54,4 +55,10 @@ export class OrderQueryDto {
   @IsOptional()
   @IsEnum(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc';
+
+  // Payment position of the order's invoice (ADR-072).
+  @ApiProperty({ enum: ['UNPAID', 'PART_PAID', 'PAID', 'OVERDUE'], required: false })
+  @IsOptional()
+  @IsIn(['UNPAID', 'PART_PAID', 'PAID', 'OVERDUE'])
+  payment?: OrderPaymentFilter;
 }

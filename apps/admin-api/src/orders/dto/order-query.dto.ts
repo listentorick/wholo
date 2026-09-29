@@ -1,5 +1,6 @@
 import {
   IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min, Max,
+  IsIn,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
@@ -49,4 +50,9 @@ export class OrderQueryDto {
   @IsOptional()
   @IsEnum(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc';
+
+  // Payment position of the order's invoice (ADR-072); apps/api validates it too.
+  @IsOptional()
+  @IsIn(['UNPAID', 'PART_PAID', 'PAID', 'OVERDUE'])
+  payment?: 'UNPAID' | 'PART_PAID' | 'PAID' | 'OVERDUE';
 }

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { HealthStatTiles } from './HealthStatTiles';
 
 const currency = (v: number) => `£${v}`;
-const tiles = { activeCustomers90d: 248, atRiskCount: 18, salesLast30d: 482000 };
+const tiles = { activeCustomers90d: 248, atRiskCount: 18, salesLast30d: 482000, overdueBalance: 1250, overdueInvoiceCount: 3 };
 
 describe('HealthStatTiles', () => {
   it('lays out two tiles per row on a phone, like the Sales and Delivery dashboards', () => {
@@ -12,13 +12,21 @@ describe('HealthStatTiles', () => {
     expect(screen.getByRole('group', { name: /customer health summary/i })).toHaveClass('grid-cols-2');
   });
 
-  it('shows the three v1 tiles — no overdue-balance tile', () => {
+  it('shows active customers, at-risk, sales and the overdue invoice balance', () => {
     render(<HealthStatTiles tiles={tiles} riskOnly={false} onToggleRisk={vi.fn()} currency={currency} />);
 
     expect(screen.getByText('Active customers').closest('div')).toHaveTextContent('248');
     expect(screen.getByRole('button', { name: /customers at risk/i })).toHaveTextContent('18');
     expect(screen.getByText('Sales, last 30 days').closest('div')).toHaveTextContent('£482000');
-    expect(screen.queryByText(/overdue balance/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Overdue invoices').closest('div')).toHaveTextContent('£1250');
+    expect(screen.getByText('3 invoices past due')).toBeInTheDocument();
+  });
+
+  it('says plainly when nothing is overdue', () => {
+    render(
+      <HealthStatTiles tiles={{ ...tiles, overdueBalance: 0, overdueInvoiceCount: 0 }} riskOnly={false} onToggleRisk={vi.fn()} currency={currency} />,
+    );
+    expect(screen.getByText('Nothing overdue')).toBeInTheDocument();
   });
 
   it('toggles the risk filter when the at-risk tile is clicked', async () => {

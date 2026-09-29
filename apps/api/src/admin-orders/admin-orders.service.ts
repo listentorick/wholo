@@ -19,6 +19,7 @@ import type {
   DeliverySignatureData,
 } from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
+import { distributorTodays, invoicePaymentSelect, paymentFilterWhere, toOrderInvoicePayment } from '../accounting/order-invoice-payment';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
@@ -102,6 +103,7 @@ const orderSelect = {
     orderBy: { createdAt: 'desc' as const },
     take: 1,
     select: {
+      ...invoicePaymentSelect,
       id: true,
       provider: true,
       status: true,
@@ -126,6 +128,7 @@ export class AdminOrdersService {
   ) {}
 
   async listOrders(distributorId: string, query: OrderQueryDto) {
+    const today = (await distributorTodays(this.prisma, [distributorId])).get(distributorId)!;
     const limit = query.limit ?? 20;
     const take = limit + 1;
     const sortBy = query.sortBy ?? 'createdAt';
@@ -154,6 +157,7 @@ export class AdminOrdersService {
         customer: { name: { contains: query.customerName, mode: 'insensitive' } },
       }),
       ...(requestedDeliveryDateFilter !== undefined && { requestedDeliveryDate: requestedDeliveryDateFilter }),
+      ...(query.payment && paymentFilterWhere(query.payment, today)),
     };
 
     let cursorWhere: Prisma.OrderWhereInput = {};
@@ -220,6 +224,11 @@ export class AdminOrdersService {
           createdAt: true,
           requestedDeliveryDate: true,
           customer: { select: { id: true, name: true } },
+          invoiceExports: {
+            orderBy: { createdAt: 'desc' as const },
+            take: 1,
+            select: { ...invoicePaymentSelect, externalInvoiceStatus: true },
+          },
         },
       }),
       this.prisma.order.count({ where: baseWhere }),
@@ -254,6 +263,13 @@ export class AdminOrdersService {
         cancelledAt: o.cancelledAt?.toISOString() ?? null,
         createdAt: o.createdAt.toISOString(),
         requestedDeliveryDate: o.requestedDeliveryDate?.toISOString().slice(0, 10) ?? null,
+        invoiceSummary: o.invoiceExports[0]
+          ? {
+              status: o.invoiceExports[0].status,
+              externalInvoiceStatus: o.invoiceExports[0].externalInvoiceStatus,
+              payment: toOrderInvoicePayment(o.invoiceExports[0], today),
+            }
+          : null,
       })),
       pagination: { nextCursor, hasMore, total },
     };
@@ -269,7 +285,7 @@ export class AdminOrdersService {
       select: orderSelect,
     });
     if (!order) throw new NotFoundException('Order not found');
-    return this.formatOrder(order);
+    return this.formatOrder(order, await this.todayFor(order.distributorId));
   }
 
   async getOrderAuditLog(orderId: string, distributorId: string, query: AuditLogQueryDto) {
@@ -489,7 +505,7 @@ export class AdminOrdersService {
       return u;
     });
 
-    return this.formatOrder(updated);
+    return this.formatOrder(updated, await this.todayFor(updated.distributorId));
   }
 
   // Synchronous, order-accept-time gate: if the distributor has an active
@@ -596,7 +612,7 @@ export class AdminOrdersService {
       return u;
     });
 
-    return this.formatOrder(updated);
+    return this.formatOrder(updated, await this.todayFor(updated.distributorId));
   }
 
   async cancelOrder(
@@ -658,10 +674,14 @@ export class AdminOrdersService {
       return u;
     });
 
-    return this.formatOrder(updated);
+    return this.formatOrder(updated, await this.todayFor(updated.distributorId));
   }
 
-  private formatOrder(order: Prisma.OrderGetPayload<{ select: typeof orderSelect }>) {
+  private async todayFor(distributorId: string): Promise<string> {
+    return (await distributorTodays(this.prisma, [distributorId])).get(distributorId)!;
+  }
+
+  private formatOrder(order: Prisma.OrderGetPayload<{ select: typeof orderSelect }>, today: string) {
     const dec = (v: unknown) =>
       typeof v === 'object' && v !== null && 'toFixed' in v
         ? (v as { toFixed: (n: number) => string }).toFixed(2)
@@ -708,6 +728,7 @@ export class AdminOrdersService {
             errorCode: order.invoiceExports[0].errorCode,
             errorMessage: order.invoiceExports[0].errorMessage,
             createdAt: order.invoiceExports[0].createdAt.toISOString(),
+            payment: toOrderInvoicePayment(order.invoiceExports[0], today),
           }
         : null,
       lines: order.lines.map((l) => ({

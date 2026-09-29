@@ -24,6 +24,7 @@ export const adminOrdersApi = {
     if (params.deliveryDateAfter) qs.set('deliveryDateAfter', params.deliveryDateAfter);
     if (params.deliveryDateBefore) qs.set('deliveryDateBefore', params.deliveryDateBefore);
     if (params.undated) qs.set('undated', 'true');
+    if (params.payment) qs.set('payment', params.payment);
     if (params.sortBy) qs.set('sortBy', params.sortBy);
     if (params.sortOrder) qs.set('sortOrder', params.sortOrder);
     return apiFetch<PaginatedResponse<OrderSummary>>(`/api/v1/orders?${qs.toString()}`);
