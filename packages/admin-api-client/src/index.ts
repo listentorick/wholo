@@ -17,6 +17,7 @@ export { adminAccountingApi } from './accounting';
 export { adminOnboardingApi } from './onboarding';
 export { adminAnalyticsApi } from './analytics';
 export { adminCustomerHealthApi } from './customer-health';
+export { adminCustomerPaymentsApi } from './customer-payments';
 export { adminDeliveryOverviewApi } from './delivery-overview';
 export { adminNotificationsApi } from './notifications';
 export { adminTeamApi } from './team';

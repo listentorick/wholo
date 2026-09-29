@@ -6,6 +6,7 @@ import { ANALYTICS_FACTS_QUEUE } from '../queues/queue.constants';
 import { OrderEventPayload, OrderFactsService } from './order-facts.service';
 import { RELATIONSHIP_EVENT_TYPES, RelationshipEventPayload, RelationshipFactsService } from './relationship-facts.service';
 import { DELIVERY_EVENT_TYPES, DeliveryEventPayload, DeliveryFactsService, toOrderEventPayload } from './delivery-facts.service';
+import { INVOICE_EVENT_TYPES, InvoiceEventPayload, InvoiceFactsService } from './invoice-facts.service';
 
 export interface OutboxEventJobData {
   eventId: string;
@@ -27,6 +28,7 @@ export class AnalyticsFactsProcessor extends LoggedWorkerHost {
     private readonly orderFacts: OrderFactsService,
     private readonly deliveryFacts: DeliveryFactsService,
     private readonly relationshipFacts: RelationshipFactsService,
+    private readonly invoiceFacts: InvoiceFactsService,
   ) {
     super();
   }
@@ -47,6 +49,10 @@ export class AnalyticsFactsProcessor extends LoggedWorkerHost {
     }
     if (RELATIONSHIP_EVENT_TYPES.has(job.name)) {
       await this.relationshipFacts.handleRelationshipEvent(job.data.eventId, job.name, job.data.payload as RelationshipEventPayload);
+      return;
+    }
+    if (INVOICE_EVENT_TYPES.has(job.name)) {
+      await this.invoiceFacts.handleInvoiceEvent(job.data.eventId, job.name, job.data.payload as InvoiceEventPayload);
       return;
     }
     this.logger.warn(`No analytics-facts handler for event type '${job.name}' (event ${job.data.eventId}); ignoring`);

@@ -1,4 +1,5 @@
 import {
+  evaluateOverdueInvoices,
   DELIVERY_AT_RISK_COUNT,
   DELIVERY_MIN_ATTEMPTS,
   DELIVERY_WATCH_COUNT,
@@ -271,3 +272,21 @@ describe('buildSalesConcentration', () => {
     expect(result).toEqual({ periodDays: 90, totalValue: 0, top5Share: null, topCustomers: [], otherValue: 0, otherShare: null });
   });
 });
+
+describe('evaluateOverdueInvoices', () => {
+  it('says nothing when nothing is overdue', () => {
+    expect(evaluateOverdueInvoices({ overdueCount: 0, oldestDaysOverdue: null })).toEqual([]);
+  });
+
+  it('watches a customer with a recently overdue invoice', () => {
+    expect(evaluateOverdueInvoices({ overdueCount: 1, oldestDaysOverdue: 3 })).toEqual([
+      { code: 'OVERDUE_INVOICES', category: 'customer_behaviour', severity: 'watch', text: '1 overdue invoice, oldest 3 days past due' },
+    ]);
+  });
+
+  it('puts a customer at risk once an invoice is more than 30 days late', () => {
+    expect(evaluateOverdueInvoices({ overdueCount: 2, oldestDaysOverdue: 31 })[0].severity).toBe('at_risk');
+    expect(evaluateOverdueInvoices({ overdueCount: 2, oldestDaysOverdue: 30 })[0].severity).toBe('watch');
+  });
+});
+

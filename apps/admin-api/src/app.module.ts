@@ -23,6 +23,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
 import { TeamModule } from './team/team.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CustomerHealthModule } from './customer-health/customer-health.module';
+import { CustomerPaymentsModule } from './customer-payments/customer-payments.module';
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 
@@ -53,6 +54,7 @@ import { HealthController } from './health.controller';
     TeamModule,
     AnalyticsModule,
     CustomerHealthModule,
+    CustomerPaymentsModule,
     DeliveryOverviewModule,
   ],
   controllers: [HealthController],

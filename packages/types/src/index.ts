@@ -1957,7 +1957,14 @@ export interface ActionItemsResponse {
 
 export type CustomerHealthTier = 'healthy' | 'watch' | 'at_risk';
 
-export type CustomerHealthSignalCode = 'MISSED_ORDER' | 'SPEND_DOWN' | 'LATE_DELIVERY' | 'NEVER_ORDERED' | 'OUR_MISTAKES' | 'RANGE_NARROWING';
+export type CustomerHealthSignalCode =
+  | 'MISSED_ORDER'
+  | 'SPEND_DOWN'
+  | 'LATE_DELIVERY'
+  | 'NEVER_ORDERED'
+  | 'OUR_MISTAKES'
+  | 'RANGE_NARROWING'
+  | 'OVERDUE_INVOICES';
 
 export interface CustomerHealthReason {
   code: CustomerHealthSignalCode;
@@ -2010,6 +2017,9 @@ export interface CustomerHealthResponse {
     activeCustomers90d: number;
     atRiskCount: number;
     salesLast30d: number;
+    /** Sum still due on invoices past their due date, across all customers (ADR-072). */
+    overdueBalance: number;
+    overdueInvoiceCount: number;
   };
   tierCounts: { healthy: number; watch: number; at_risk: number };
   needingAttention: FlaggedCustomer[];
@@ -2110,3 +2120,41 @@ export interface AdminNotification {
 export interface UnreadCountResponse {
   count: number;
 }
+
+// ─── Invoice payments (ADR-072) ──────────────────────────────────────────────
+
+/** How paid an invoice is, as synced back from the accounting system. Overdue is a separate flag. */
+export type InvoicePaymentStatus = 'NOT_SYNCED' | 'UNPAID' | 'PART_PAID' | 'PAID' | 'VOID';
+
+export interface CustomerOpenInvoice {
+  orderId: string;
+  orderNumber: string;
+  externalInvoiceNumber: string | null;
+  currency: string;
+  total: number;
+  amountDue: number;
+  /** YYYY-MM-DD */
+  dueDate: string | null;
+  paymentStatus: InvoicePaymentStatus;
+  isOverdue: boolean;
+  /** Whole days past the due date; 0 when not overdue. */
+  daysOverdue: number;
+}
+
+/** A customer's payment position with one distributor: right now (live) and how they have paid (last 90 days). */
+export interface CustomerPaymentSummary {
+  customerId: string;
+  /** Distributor-local date the figures were computed for (YYYY-MM-DD). */
+  asOf: string;
+  outstanding: { amount: number; count: number };
+  overdue: { amount: number; count: number; oldestDaysOverdue: number | null };
+  last90Days: {
+    paidCount: number;
+    /** Mean days from invoice date to fully paid; null with nothing paid in the window. */
+    averageDaysToPay: number | null;
+    /** Share of those paid on or before their due date, 0–100; null with nothing paid. */
+    paidOnTimePercent: number | null;
+  };
+  openInvoices: CustomerOpenInvoice[];
+}
+

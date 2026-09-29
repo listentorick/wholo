@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { CustomerHealthBuyingTrendWeek, CustomerHealthReason, CustomerHealthResponse, CustomerHealthTier, FlaggedCustomer } from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
+import { CustomerPaymentsService } from '../customer-payments/customer-payments.service';
 import { distributorLocalDate } from '../common/distributor-local-date';
 import { QUALIFYING_STATUSES } from '../analytics/analytics.service';
 import { resolvePeriod } from '../analytics/period';
@@ -15,6 +16,7 @@ import {
   evaluateMistakes,
   evaluateNeverOrdered,
   evaluateRangeNarrowing,
+  evaluateOverdueInvoices,
   evaluateSpendTrend,
   rollUpTier,
 } from './customer-health.logic';
@@ -76,7 +78,10 @@ interface RangeRow {
 // joins, since each signal has a different shape and window.
 @Injectable()
 export class CustomerHealthService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly payments: CustomerPaymentsService,
+  ) {}
 
   /** `now` is injectable for tests (matching period.ts's resolvePeriod), defaulting to the real current time. */
   async getHealth(distributorId: string, now: Date = new Date()): Promise<CustomerHealthResponse> {
@@ -112,6 +117,7 @@ export class CustomerHealthService {
       placedWeekRows,
       baselineOrderCount,
       salesRows,
+      openInvoices,
     ] = await Promise.all([
       this.rosterRows(distributorId),
       this.neverOrderedSet(distributorId),
@@ -126,7 +132,14 @@ export class CustomerHealthService {
       this.placedWeekRows(distributorId, trendWindowStart, trendWindowEnd),
       this.baselineOrderCount(distributorId, baselineStart, baselineEnd),
       this.spendRows(distributorId, rolling90.current.start, rolling90.current.end),
+      this.payments.openInvoices(distributorId, isoDate(today)),
     ]);
+    const overdueInvoices = openInvoices.filter((i) => i.isOverdue);
+    const overdueByCustomer = new Map<string, { count: number; oldest: number }>();
+    for (const invoice of overdueInvoices) {
+      const entry = overdueByCustomer.get(invoice.customerId) ?? { count: 0, oldest: 0 };
+      overdueByCustomer.set(invoice.customerId, { count: entry.count + 1, oldest: Math.max(entry.oldest, invoice.daysOverdue) });
+    }
 
     const missedByCustomer = new Map(missedOrderRows.map((r) => [r.traderCustomerId, r]));
     const spendCurrentByCustomer = new Map(spendCurrentRows.map((r) => [r.traderCustomerId, r.value]));
@@ -160,6 +173,10 @@ export class CustomerHealthService {
         ...(range
           ? evaluateRangeNarrowing({ currentAvgSku: range.currentAvgSku, currentOrders: range.currentOrders, baselineAvgSku: range.baselineAvgSku, baselineOrders: range.baselineOrders })
           : []),
+        ...evaluateOverdueInvoices({
+          overdueCount: overdueByCustomer.get(customer.organisationId)?.count ?? 0,
+          oldestDaysOverdue: overdueByCustomer.get(customer.organisationId)?.oldest ?? null,
+        }),
       ];
 
       const tier = rollUpTier(reasons);
@@ -200,7 +217,13 @@ export class CustomerHealthService {
       distributorId,
       timezone,
       generatedAt: new Date().toISOString(),
-      tiles: { activeCustomers90d, atRiskCount: tierCounts.at_risk, salesLast30d },
+      tiles: {
+        activeCustomers90d,
+        atRiskCount: tierCounts.at_risk,
+        salesLast30d,
+        overdueBalance: Math.round(overdueInvoices.reduce((sum, i) => sum + i.amountDue, 0) * 100) / 100,
+        overdueInvoiceCount: overdueInvoices.length,
+      },
       tierCounts,
       needingAttention,
       buyingTrends,

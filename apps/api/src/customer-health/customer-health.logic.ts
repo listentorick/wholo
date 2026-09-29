@@ -180,6 +180,27 @@ export function evaluateRangeNarrowing(input: RangeNarrowingInput): CustomerHeal
  * or >=2 rules fire at watch severity together. "our_fault" reasons are
  * displayed but excluded from this roll-up entirely (see evaluateMistakes).
  */
+export const OVERDUE_AT_RISK_DAYS = 30;
+
+export interface OverdueInvoicesInput {
+  overdueCount: number;
+  /** Days the oldest overdue invoice is past its due date; null when none are overdue. */
+  oldestDaysOverdue: number | null;
+}
+
+/**
+ * Invoices past their due date in the accounting system (ADR-072). Any overdue
+ * invoice is worth watching; one more than OVERDUE_AT_RISK_DAYS late puts the
+ * customer at risk. Customer behaviour, so it counts towards the tier.
+ */
+export function evaluateOverdueInvoices(input: OverdueInvoicesInput): CustomerHealthReason[] {
+  const { overdueCount: count, oldestDaysOverdue: oldest } = input;
+  if (count === 0 || oldest === null) return [];
+  const invoices = `${count} overdue invoice${count === 1 ? '' : 's'}`;
+  const age = `oldest ${oldest} day${oldest === 1 ? '' : 's'} past due`;
+  return reason('OVERDUE_INVOICES', 'customer_behaviour', oldest > OVERDUE_AT_RISK_DAYS ? 'at_risk' : 'watch', `${invoices}, ${age}`);
+}
+
 export function rollUpTier(reasons: CustomerHealthReason[]): CustomerHealthTier {
   const risk = reasons.filter((r) => r.category !== 'our_fault');
   if (risk.some((r) => r.code === 'NEVER_ORDERED' || r.severity === 'at_risk')) return 'at_risk';

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CustomerHealthService } from './customer-health.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { CustomerPaymentsService } from '../customer-payments/customer-payments.service';
 
 // $queryRaw is a tagged template; Prisma invokes it as `strings, ...values`.
 // getHealth fires thirteen $queryRaw calls inside one Promise.all, and three of
@@ -50,6 +51,7 @@ function mockQueries(
 describe('CustomerHealthService', () => {
   let service: CustomerHealthService;
   let prisma: { distributorSettings: { findUnique: jest.Mock }; $queryRaw: jest.Mock };
+  let payments: { openInvoices: jest.Mock };
   const now = new Date('2026-09-24T12:00:00.000Z');
 
   beforeEach(async () => {
@@ -57,8 +59,13 @@ describe('CustomerHealthService', () => {
       distributorSettings: { findUnique: jest.fn().mockResolvedValue({ timezone: 'UTC' }) },
       $queryRaw: jest.fn().mockResolvedValue([]),
     };
+    payments = { openInvoices: jest.fn().mockResolvedValue([]) };
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CustomerHealthService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        CustomerHealthService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: CustomerPaymentsService, useValue: payments },
+      ],
     }).compile();
     service = module.get(CustomerHealthService);
   });
@@ -70,7 +77,7 @@ describe('CustomerHealthService', () => {
 
     expect(result.distributorId).toBe('dist-1');
     expect(result.timezone).toBe('UTC');
-    expect(result.tiles).toEqual({ activeCustomers90d: 0, atRiskCount: 0, salesLast30d: 0 });
+    expect(result.tiles).toEqual({ activeCustomers90d: 0, atRiskCount: 0, salesLast30d: 0, overdueBalance: 0, overdueInvoiceCount: 0 });
     expect(result.tierCounts).toEqual({ healthy: 0, watch: 0, at_risk: 0 });
     expect(result.needingAttention).toEqual([]);
   });
@@ -98,7 +105,7 @@ describe('CustomerHealthService', () => {
     const result = await service.getHealth('dist-1', now);
 
     expect(result.tierCounts).toEqual({ healthy: 2, watch: 0, at_risk: 1 });
-    expect(result.tiles).toEqual({ activeCustomers90d: 2, atRiskCount: 1, salesLast30d: 700 });
+    expect(result.tiles).toEqual({ activeCustomers90d: 2, atRiskCount: 1, salesLast30d: 700, overdueBalance: 0, overdueInvoiceCount: 0 });
 
     expect(result.needingAttention).toHaveLength(1);
     expect(result.needingAttention[0]).toMatchObject({
@@ -223,5 +230,36 @@ describe('CustomerHealthService', () => {
     const result = await service.getHealth('dist-1', now);
 
     expect(result.timezone).toBe('UTC');
+  });
+
+  it('flags a customer with overdue invoices and totals the overdue balance across customers', async () => {
+    mockQueries(prisma, {
+      roster: [{ organisationId: 'org-late', customerName: 'Late Payer Ltd', activeSince: new Date('2026-01-01T00:00:00.000Z') }],
+      spendCurrent: [{ traderCustomerId: 'org-late', value: 300 }],
+      spendComparison: [{ traderCustomerId: 'org-late', value: 300 }],
+      activeCustomers: [{ count: 1 }],
+    });
+    const invoice = (over: Record<string, unknown>) => ({
+      orderId: 'o', orderNumber: 'N', externalInvoiceNumber: null, currency: 'GBP', total: 100, dueDate: '2026-08-01',
+      paymentStatus: 'UNPAID', customerId: 'org-late', ...over,
+    });
+    payments.openInvoices.mockResolvedValue([
+      invoice({ amountDue: 100, isOverdue: true, daysOverdue: 40 }),
+      invoice({ amountDue: 50.5, isOverdue: true, daysOverdue: 5 }),
+      invoice({ amountDue: 999, isOverdue: false, daysOverdue: 0 }),
+    ]);
+
+    const result = await service.getHealth('dist-1', now);
+
+    expect(payments.openInvoices).toHaveBeenCalledWith('dist-1', '2026-09-24');
+    expect(result.tiles).toMatchObject({ overdueBalance: 150.5, overdueInvoiceCount: 2 });
+    const flagged = result.needingAttention.find((c) => c.customerId === 'org-late');
+    expect(flagged?.tier).toBe('at_risk');
+    expect(flagged?.reasons).toContainEqual({
+      code: 'OVERDUE_INVOICES',
+      category: 'customer_behaviour',
+      severity: 'at_risk',
+      text: '2 overdue invoices, oldest 40 days past due',
+    });
   });
 });

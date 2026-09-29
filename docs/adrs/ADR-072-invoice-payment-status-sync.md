@@ -62,6 +62,25 @@ when the derived payment status changed, writes an `InvoicePaymentStatusChanged`
 outbox event (export, order, distributor, customer, from → to, amounts, dates,
 `occurredAt` = provider update time).
 
+### Payment facts and stats
+- `InvoicePaymentStatusChanged` routes to `analytics-facts`. `InvoiceFactsService`
+  appends `invoice_facts` (a Timescale hypertable on `occurredAt`; the migration is the
+  generated SQL plus the one `create_hypertable` statement) and projects
+  `invoice_analytics_state` (one row per export) with Prisma queries only —
+  `createMany({ skipDuplicates })` then an `updateMany` guarded by `lastEventAt`, so a
+  replay is idempotent and an older event arriving late never regresses the row.
+- Per the stats taxonomy: "right now" figures are live queries on the synced export
+  rows; "how they pay" comes from the facts.
+- `GET distributors/:distributorId/customers/:customerId/payments` (`CUSTOMERS_READ`;
+  customerId is the organisation id) returns outstanding and overdue totals, the open
+  invoices (payment status, due date, days overdue) and, over the last 90 days, how
+  many invoices were paid, the mean days from invoice date to fully paid, and the
+  share paid on or before the due date. Every query is scoped by distributorId, so a
+  customer shared by two distributors has separate figures with each.
+- Customer health gains an `OVERDUE_INVOICES` reason (customer behaviour: watch when
+  anything is overdue, at risk when an invoice is over 30 days late) and
+  `overdueBalance` / `overdueInvoiceCount` tiles.
+
 ## Consequences
 - "Order shows as paid" lags payment by up to ~15 minutes plus queue wait; the
   `accounting-invoice-sync` queue's oldest-waiting-age gauge measures it.

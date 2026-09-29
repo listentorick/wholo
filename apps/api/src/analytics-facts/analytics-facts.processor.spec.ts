@@ -4,6 +4,7 @@ import { AnalyticsFactsProcessor } from './analytics-facts.processor';
 import { OrderFactsService } from './order-facts.service';
 import { DeliveryFactsService } from './delivery-facts.service';
 import { RelationshipFactsService } from './relationship-facts.service';
+import { InvoiceFactsService } from './invoice-facts.service';
 
 const makeJob = (name: string, payload: Record<string, unknown> = {}) =>
   ({
@@ -16,15 +17,18 @@ describe('AnalyticsFactsProcessor', () => {
   let orderFacts: { handleOrderEvent: jest.Mock };
   let deliveryFacts: { handleDeliveryEvent: jest.Mock };
   let relationshipFacts: { handleRelationshipEvent: jest.Mock };
+  let invoiceFacts: { handleInvoiceEvent: jest.Mock };
 
   beforeEach(() => {
     orderFacts = { handleOrderEvent: jest.fn().mockResolvedValue(undefined) };
     deliveryFacts = { handleDeliveryEvent: jest.fn().mockResolvedValue(undefined) };
     relationshipFacts = { handleRelationshipEvent: jest.fn().mockResolvedValue(undefined) };
+    invoiceFacts = { handleInvoiceEvent: jest.fn().mockResolvedValue(undefined) };
     processor = new AnalyticsFactsProcessor(
       orderFacts as unknown as OrderFactsService,
       deliveryFacts as unknown as DeliveryFactsService,
       relationshipFacts as unknown as RelationshipFactsService,
+      invoiceFacts as unknown as InvoiceFactsService,
     );
   });
 
@@ -85,5 +89,14 @@ describe('AnalyticsFactsProcessor', () => {
   it('logs and ignores an unrouted event type rather than throwing', async () => {
     await expect(processor.process(makeJob('SomethingElse'))).resolves.toBeUndefined();
     expect(orderFacts.handleOrderEvent).not.toHaveBeenCalled();
+  });
+
+  it('dispatches InvoicePaymentStatusChanged to InvoiceFactsService and nothing else', async () => {
+    const payload = { exportId: 'exp-1', toStatus: 'PAID' };
+    await processor.process(makeJob('InvoicePaymentStatusChanged', payload));
+
+    expect(invoiceFacts.handleInvoiceEvent).toHaveBeenCalledWith('evt-1', 'InvoicePaymentStatusChanged', payload);
+    expect(orderFacts.handleOrderEvent).not.toHaveBeenCalled();
+    expect(relationshipFacts.handleRelationshipEvent).not.toHaveBeenCalled();
   });
 });
