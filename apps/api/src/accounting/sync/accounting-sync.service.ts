@@ -8,6 +8,7 @@ import { AccountingConnectionService } from '../accounting-connection.service';
 import {
   ACCOUNTING_SOURCE_TYPE,
   ACCOUNTING_SYNC_EVENT_TYPE,
+  ACCOUNTING_MAPPING_RESOURCE_TYPES,
   ACCOUNTING_SYNC_INTERVAL_MS,
   ACCOUNTING_SYNC_RESOURCE_TYPES,
   AccountingSyncResourceType,
@@ -38,7 +39,8 @@ export class AccountingSyncService {
     private readonly connections: AccountingConnectionService,
   ) {}
 
-  // Manual "Sync with Xero" — all three resource types, in one transaction.
+  // Manual "Sync with Xero" — every resource type (invoice status included),
+  // in one transaction.
   async requestSync(distributorId: string, trigger: IngestionRunTrigger): Promise<AccountingSyncStatusResponse> {
     const connection = await this.connections.getActiveConnectionOrThrow(distributorId);
     const queued = await this.enqueue(distributorId, connection.id, [...ACCOUNTING_SYNC_RESOURCE_TYPES], trigger);
@@ -98,6 +100,14 @@ export class AccountingSyncService {
     });
   }
 
+  // Scheduler path for a due row with nothing to do (e.g. no unsettled
+  // invoices): move its slot on without queueing a provider pull.
+  async skipDue(runId: string, resourceType: AccountingSyncResourceType, slot: Date, now: Date): Promise<Date> {
+    const nextRunAt = nextSlotAfter(slot, now, ACCOUNTING_SYNC_INTERVAL_MS[resourceType]);
+    await this.prisma.$transaction((tx) => this.ingestionRuns.advanceSchedule(tx, runId, nextRunAt));
+    return nextRunAt;
+  }
+
   async getStatus(distributorId: string): Promise<AccountingSyncStatusResponse> {
     const connection = await this.connections.getCurrentConnection(distributorId);
     if (!connection) {
@@ -108,8 +118,13 @@ export class AccountingSyncService {
       sourceType: ACCOUNTING_SOURCE_TYPE,
       sourceRef: connection.id,
     });
-    const runs = rows.map(toSummary);
-    const lastSucceededAt = rows
+    // The status panel is about the mapping pulls; the invoice status sync has
+    // nothing to review and is not shown.
+    const mappingRows = rows.filter((r) =>
+      (ACCOUNTING_MAPPING_RESOURCE_TYPES as readonly string[]).includes(r.resourceType),
+    );
+    const runs = mappingRows.map(toSummary);
+    const lastSucceededAt = mappingRows
       .filter((r) => r.status === 'COMPLETED' && r.finishedAt)
       .map((r) => r.finishedAt as Date)
       .sort((a, b) => b.getTime() - a.getTime())[0];

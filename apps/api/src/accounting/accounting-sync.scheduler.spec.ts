@@ -34,21 +34,30 @@ describe('firstSlot', () => {
 describe('AccountingSyncScheduler.runOnce', () => {
   let scheduler: AccountingSyncScheduler;
   let connections: Array<{ id: string; distributorId: string; connectedAt: Date }>;
-  let scheduled: Array<{ sourceRef: string; resourceType: string; nextRunAt: Date | null }>;
+  let scheduled: Array<{ id?: string; sourceRef: string; resourceType: string; nextRunAt: Date | null }>;
   let enqueueDue: jest.Mock;
   let fillMissingSchedules: jest.Mock;
+  let skipDue: jest.Mock;
+  let unsettledConnectionIds: string[];
 
   beforeEach(() => {
     connections = [{ id: 'conn-1', distributorId: 'dist-1', connectedAt: new Date('2026-01-01') }];
     scheduled = [];
     enqueueDue = jest.fn().mockResolvedValue({ enqueued: true, nextRunAt: NOW });
+    skipDue = jest.fn().mockResolvedValue(NOW);
     fillMissingSchedules = jest.fn().mockImplementation(async (rows: unknown[]) => rows.length);
-    const prisma = { accountingConnection: { findMany: jest.fn(async () => connections) } };
+    unsettledConnectionIds = ['conn-1'];
+    const prisma = {
+      accountingConnection: { findMany: jest.fn(async () => connections) },
+      accountingInvoiceExport: {
+        groupBy: jest.fn(async () => unsettledConnectionIds.map((id) => ({ accountingConnectionId: id }))),
+      },
+    };
     const ingestionRuns = { listScheduled: jest.fn(async () => scheduled), fillMissingSchedules };
     scheduler = new AccountingSyncScheduler(
       prisma as unknown as PrismaService,
       ingestionRuns as unknown as IngestionRunService,
-      { enqueueDue } as unknown as AccountingSyncService,
+      { enqueueDue, skipDue } as unknown as AccountingSyncService,
     );
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -59,8 +68,9 @@ describe('AccountingSyncScheduler.runOnce', () => {
   it('treats a never-run (connection, resource type) as due now', async () => {
     const summary = await scheduler.runOnce(NOW);
 
-    expect(summary.due).toBe(3);
+    expect(summary.due).toBe(4);
     expect(enqueueDue).toHaveBeenCalledWith('dist-1', 'conn-1', 'contact', null, NOW);
+    expect(enqueueDue).toHaveBeenCalledWith('dist-1', 'conn-1', 'invoice', null, NOW);
   });
 
   it('enqueues every row whose slot has passed — no per-tick cap — and leaves future ones alone', async () => {
@@ -73,6 +83,7 @@ describe('AccountingSyncScheduler.runOnce', () => {
       { sourceRef: c.id, resourceType: 'contact', nextRunAt: new Date(NOW.getTime() - MIN) },
       { sourceRef: c.id, resourceType: 'product', nextRunAt: new Date(NOW.getTime() + 10 * MIN) },
       { sourceRef: c.id, resourceType: 'tax_type', nextRunAt: new Date(NOW.getTime() + 60 * MIN) },
+      { sourceRef: c.id, resourceType: 'invoice', nextRunAt: new Date(NOW.getTime() + 5 * MIN) },
     ]);
 
     const summary = await scheduler.runOnce(NOW);
@@ -87,11 +98,12 @@ describe('AccountingSyncScheduler.runOnce', () => {
       { sourceRef: 'conn-1', resourceType: 'contact', nextRunAt: null },
       { sourceRef: 'conn-1', resourceType: 'product', nextRunAt: null },
       { sourceRef: 'conn-1', resourceType: 'tax_type', nextRunAt: null },
+      { sourceRef: 'conn-1', resourceType: 'invoice', nextRunAt: null },
     ];
 
     const summary = await scheduler.runOnce(NOW);
 
-    expect(summary.seeded).toBe(3);
+    expect(summary.seeded).toBe(4);
     expect(enqueueDue).not.toHaveBeenCalled();
   });
 
@@ -100,7 +112,7 @@ describe('AccountingSyncScheduler.runOnce', () => {
 
     const summary = await scheduler.runOnce(NOW);
 
-    expect(summary).toMatchObject({ due: 3, enqueued: 2, skippedInFlight: 1 });
+    expect(summary).toMatchObject({ due: 4, enqueued: 3, skippedInFlight: 1 });
   });
 
   it('keeps going when one row fails, and logs it with its ids', async () => {
@@ -108,7 +120,7 @@ describe('AccountingSyncScheduler.runOnce', () => {
 
     const summary = await scheduler.runOnce(NOW);
 
-    expect(summary).toMatchObject({ due: 3, enqueued: 2, failed: 1 });
+    expect(summary).toMatchObject({ due: 4, enqueued: 3, failed: 1 });
     const errorSpy = Logger.prototype.error as unknown as jest.Mock;
     expect(errorSpy.mock.calls[0][0]).toMatchObject({
       event: 'accounting.scheduler.enqueue_failed',
@@ -122,6 +134,23 @@ describe('AccountingSyncScheduler.runOnce', () => {
 
     const logSpy = Logger.prototype.log as unknown as jest.Mock;
     const tick = logSpy.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.scheduler.tick');
-    expect(tick?.[0]).toMatchObject({ connections: 1, due: 3, enqueued: 3, durationMs: expect.any(Number) });
+    expect(tick?.[0]).toMatchObject({ connections: 1, due: 4, enqueued: 4, durationMs: expect.any(Number) });
+  });
+
+  it('makes no provider call for the invoice sync when a connection has nothing unsettled — just moves the slot on', async () => {
+    unsettledConnectionIds = [];
+    const slot = new Date(NOW.getTime() - MIN);
+    scheduled = [
+      { id: 'run-inv', sourceRef: 'conn-1', resourceType: 'invoice', nextRunAt: slot },
+      { id: 'run-c', sourceRef: 'conn-1', resourceType: 'contact', nextRunAt: new Date(NOW.getTime() + MIN) },
+      { id: 'run-p', sourceRef: 'conn-1', resourceType: 'product', nextRunAt: new Date(NOW.getTime() + MIN) },
+      { id: 'run-t', sourceRef: 'conn-1', resourceType: 'tax_type', nextRunAt: new Date(NOW.getTime() + MIN) },
+    ] as typeof scheduled;
+
+    const summary = await scheduler.runOnce(NOW);
+
+    expect(summary).toMatchObject({ due: 1, enqueued: 0, skippedNothingToDo: 1 });
+    expect(enqueueDue).not.toHaveBeenCalled();
+    expect(skipDue).toHaveBeenCalledWith('run-inv', 'invoice', slot, NOW);
   });
 });

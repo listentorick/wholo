@@ -220,6 +220,18 @@ enum AccountingInvoiceTargetStatus {
   AUTHORISED
 }
 
+// Lifecycle of an invoice in the accounting system, as last synced back
+// (provider-neutral; each adapter maps its own vocabulary onto it — Xero:
+// DRAFT / SUBMITTED / AUTHORISED / PAID / VOIDED / DELETED).
+enum AccountingInvoiceState {
+  DRAFT
+  AWAITING_APPROVAL
+  AWAITING_PAYMENT
+  PAID
+  VOIDED
+  DELETED
+}
+
 enum AccountingBulkImportRecordType {
   PRODUCT
   CONTACT
@@ -1316,6 +1328,21 @@ model AccountingInvoiceExport {
   externalInvoiceNumber  String?
   // Provider vocabulary, stored verbatim (e.g. Xero "DRAFT"/"AUTHORISED").
   externalInvoiceStatus  String?
+  // Synced back from the accounting system (the system of record for
+  // invoices and payments, ADR-006) by the invoice status sync. null until the
+  // first sync sees the invoice. Amounts are the provider's own figures —
+  // amountDue already reflects payments, credit notes and overpayments.
+  invoiceState           AccountingInvoiceState?
+  invoiceTotal           Decimal?                      @db.Decimal(12, 2)
+  amountPaid             Decimal?                      @db.Decimal(12, 2)
+  amountCredited         Decimal?                      @db.Decimal(12, 2)
+  amountDue              Decimal?                      @db.Decimal(12, 2)
+  // Calendar dates in the accounting organisation's own calendar.
+  issueDate              DateTime?                     @db.Date
+  dueDate                DateTime?                     @db.Date
+  fullyPaidOn            DateTime?                     @db.Date
+  providerUpdatedAt      DateTime?
+  stateSyncedAt          DateTime?
   exportedAt             DateTime?
   failedAt               DateTime?
   errorCode              String?
@@ -1329,7 +1356,12 @@ model AccountingInvoiceExport {
   order       Order                @relation(fields: [orderId], references: [id])
 
   @@unique([accountingConnectionId, orderId])
+  // Lookup for the status sync (and one Stocdup row per provider invoice).
+  // externalInvoiceId is null until the export completes; Postgres treats
+  // nulls as distinct, so unexported rows never collide.
+  @@unique([accountingConnectionId, externalInvoiceId])
   @@index([distributorId, status])
+  @@index([distributorId, invoiceState])
   @@index([orderId])
   @@map("accounting_invoice_exports")
 }

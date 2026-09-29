@@ -1,10 +1,11 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import { AccountingConnectionStatus } from '@prisma/client';
+import { AccountingConnectionStatus, AccountingInvoiceExportStatus } from '@prisma/client';
 import { loggableError } from '@wholo/nest-telemetry';
 import { PrismaService } from '../prisma/prisma.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingSyncService } from './sync/accounting-sync.service';
+import { SETTLED_INVOICE_STATES } from './invoice-payment-status';
 import {
   ACCOUNTING_SOURCE_TYPE,
   ACCOUNTING_SYNC_INTERVAL_MS,
@@ -32,6 +33,7 @@ interface DueSync {
   resourceType: AccountingSyncResourceType;
   // null = the triple has never run (no row yet) — due now.
   slot: Date | null;
+  runId?: string;
 }
 
 export interface TickSummary {
@@ -41,6 +43,9 @@ export interface TickSummary {
   skippedInFlight: number;
   failed: number;
   seeded: number;
+  // Due, but nothing to pull (invoice sync for a connection with no unsettled
+  // invoices) — slot advanced, no provider call.
+  skippedNothingToDo: number;
 }
 
 // One scheduler for every accounting resource type (ADR-061 "Scheduling"),
@@ -86,6 +91,22 @@ export class AccountingSyncScheduler implements OnModuleInit {
     }
   }
 
+  // Connections with at least one exported invoice not yet known to be
+  // settled (never synced, or not PAID / VOIDED / DELETED).
+  private async connectionsWithUnsettledInvoices(connectionIds: string[]): Promise<Set<string>> {
+    if (connectionIds.length === 0) return new Set();
+    const rows = await this.prisma.accountingInvoiceExport.groupBy({
+      by: ['accountingConnectionId'],
+      where: {
+        accountingConnectionId: { in: connectionIds },
+        status: AccountingInvoiceExportStatus.COMPLETED,
+        externalInvoiceId: { not: null },
+        OR: [{ invoiceState: null }, { invoiceState: { notIn: SETTLED_INVOICE_STATES } }],
+      },
+    });
+    return new Set(rows.map((r) => r.accountingConnectionId));
+  }
+
   async runOnce(now: Date): Promise<TickSummary> {
     const started = Date.now();
     const connections = await this.prisma.accountingConnection.findMany({
@@ -114,18 +135,29 @@ export class AccountingSyncScheduler implements OnModuleInit {
             nextRunAt: firstSlot(now, connection.connectedAt, ACCOUNTING_SYNC_INTERVAL_MS[resourceType]),
           });
         } else if (row.nextRunAt.getTime() <= now.getTime()) {
-          due.push({ ...base, slot: row.nextRunAt });
+          due.push({ ...base, slot: row.nextRunAt, runId: row.id });
         }
       }
     }
 
     const seeded = await this.ingestionRuns.fillMissingSchedules(toSeed);
+    const withUnsettledInvoices = await this.connectionsWithUnsettledInvoices(
+      due.filter((d) => d.resourceType === 'invoice').map((d) => d.connectionId),
+    );
 
     let enqueued = 0;
     let skippedInFlight = 0;
+    let skippedNothingToDo = 0;
     let failed = 0;
     for (const item of due) {
       try {
+        if (item.resourceType === 'invoice' && !withUnsettledInvoices.has(item.connectionId)) {
+          // Nothing outstanding on this connection: zero provider calls. A
+          // never-run triple simply stays unscheduled until an invoice exists.
+          if (item.runId && item.slot) await this.accountingSync.skipDue(item.runId, item.resourceType, item.slot, now);
+          skippedNothingToDo += 1;
+          continue;
+        }
         const result = await this.accountingSync.enqueueDue(
           item.distributorId,
           item.connectionId,
@@ -157,6 +189,7 @@ export class AccountingSyncScheduler implements OnModuleInit {
       skippedInFlight,
       failed,
       seeded,
+      skippedNothingToDo,
     };
     // Every tick, even an idle one: the steady line is what shows the
     // scheduler is alive, and due vs enqueued shows whether we keep up.

@@ -1,0 +1,186 @@
+/**
+ * Integration tests for the invoice status sync (ADR-072): against a real
+ * database, a sync for one distributor's connection updates only that
+ * distributor's invoice exports — even when two distributors' accounting
+ * systems happen to use the same external invoice id — and a payment status
+ * change is written together with its outbox event.
+ *
+ * Prerequisites:
+ *   kubectl port-forward svc/wholo-postgresql 5432:5432
+ *   DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo (from .env.example)
+ */
+import { Test } from '@nestjs/testing';
+import {
+  AccountingConnectionStatus,
+  AccountingInvoiceExportStatus,
+  AccountingProvider,
+  OrderStatus,
+  OrganisationType,
+  Prisma,
+} from '@prisma/client';
+import { PrismaModule } from '../src/prisma/prisma.module';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { OutboxService } from '../src/outbox/outbox.service';
+import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
+import { AccountingConnectionService } from '../src/accounting/accounting-connection.service';
+import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting-adapter.registry';
+import { AccountingExternalInvoiceStatus } from '../src/accounting/adapters/accounting-connection-adapter.interface';
+import { AccountingInvoiceSyncProcessor } from '../src/accounting-invoice-sync/accounting-invoice-sync.processor';
+import { INVOICE_PAYMENT_STATUS_CHANGED } from '../src/accounting/invoice-payment-status';
+
+const DIST_A = 'test-invsync-dist-a';
+const DIST_B = 'test-invsync-dist-b';
+const USER = 'test-invsync-user';
+
+describe('Invoice status sync (integration)', () => {
+  let prisma: PrismaService;
+  let processor: AccountingInvoiceSyncProcessor;
+  let close: () => Promise<void>;
+
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({ imports: [PrismaModule] }).compile();
+    prisma = module.get(PrismaService);
+    close = () => module.close();
+    processor = new AccountingInvoiceSyncProcessor(
+      prisma,
+      {} as AccountingConnectionService,
+      {} as AccountingAdapterRegistry,
+      {} as IngestionRunService,
+      new OutboxService(),
+    );
+    for (const id of [DIST_A, DIST_B]) {
+      await prisma.organisation.upsert({
+        where: { id },
+        create: { id, name: `Invoice Sync Test ${id}`, type: OrganisationType.DISTRIBUTOR },
+        update: {},
+      });
+    }
+    await prisma.user.upsert({
+      where: { id: USER },
+      create: { id: USER, email: 'invsync@integration.test', keycloakId: 'kc-invsync', firstName: 'I', lastName: 'S' },
+      update: {},
+    });
+  });
+
+  const cleanup = async () => {
+    const exports = await prisma.accountingInvoiceExport.findMany({
+      where: { distributorId: { in: [DIST_A, DIST_B] } },
+      select: { id: true },
+    });
+    await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: exports.map((e) => e.id) } } });
+    await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+  };
+
+  beforeEach(cleanup);
+
+  afterAll(async () => {
+    await cleanup();
+    await prisma.user.deleteMany({ where: { id: USER } });
+    await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
+    await close();
+  });
+
+  async function exportedInvoice(distributorId: string, externalInvoiceId: string) {
+    const connection = await prisma.accountingConnection.create({
+      data: {
+        distributorId,
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationId: `tenant-${distributorId}`,
+        externalOrganisationName: 'Org',
+        scopes: 'openid accounting.invoices',
+        encryptedCredentialData: 'irrelevant',
+        connectedByUserId: USER,
+        connectedAt: new Date(),
+      },
+    });
+    const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
+    const order = await prisma.order.create({
+      data: {
+        distributorId,
+        traderCustomerId: distributorId,
+        placedByUserId: USER,
+        orderNumber: `TEST-INVSYNC-${nextval}`,
+        currency: 'GBP',
+        status: OrderStatus.ACCEPTED,
+        acceptanceModeSnapshot: 'MANUAL',
+        acceptanceModeSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
+        subtotalAmount: new Prisma.Decimal('100.00'),
+        taxAmount: new Prisma.Decimal('20.00'),
+        totalAmount: new Prisma.Decimal('120.00'),
+        acceptedAt: new Date(),
+      },
+    });
+    const exp = await prisma.accountingInvoiceExport.create({
+      data: {
+        distributorId,
+        accountingConnectionId: connection.id,
+        provider: AccountingProvider.XERO,
+        orderId: order.id,
+        status: AccountingInvoiceExportStatus.COMPLETED,
+        externalInvoiceId,
+        exportedAt: new Date(),
+      },
+    });
+    return { connection, order, exp };
+  }
+
+  const paid = (externalInvoiceId: string): AccountingExternalInvoiceStatus => ({
+    externalInvoiceId,
+    externalInvoiceNumber: 'INV-1',
+    state: 'PAID',
+    rawStatus: 'PAID',
+    currency: 'GBP',
+    total: '120',
+    amountPaid: '120',
+    amountCredited: '0',
+    amountDue: '0',
+    issueDate: '2026-09-01',
+    dueDate: '2026-09-30',
+    fullyPaidOn: '2026-09-20',
+    providerUpdatedAt: new Date('2026-09-20T09:00:00Z'),
+  });
+
+  it("updates only the syncing connection's invoice, even when another distributor's has the same external id", async () => {
+    const a = await exportedInvoice(DIST_A, 'shared-inv-id');
+    const b = await exportedInvoice(DIST_B, 'shared-inv-id');
+
+    const result = await processor.applyStatuses(a.connection, [paid('shared-inv-id')]);
+
+    expect(result).toEqual({ matched: 1, updated: 1, statusChanges: 1 });
+    const afterA = await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: a.exp.id } });
+    const afterB = await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: b.exp.id } });
+    expect(afterA.invoiceState).toBe('PAID');
+    expect(afterA.amountDue?.toFixed(2)).toBe('0.00');
+    expect(afterA.fullyPaidOn?.toISOString().slice(0, 10)).toBe('2026-09-20');
+    expect(afterB.invoiceState).toBeNull();
+  });
+
+  it('writes the payment status change and its outbox event together', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-a');
+
+    await processor.applyStatuses(a.connection, [paid('inv-a')]);
+
+    const events = await prisma.outboxEvent.findMany({ where: { aggregateId: a.exp.id } });
+    expect(events).toHaveLength(1);
+    expect(events[0].eventType).toBe(INVOICE_PAYMENT_STATUS_CHANGED);
+    expect(events[0].payload).toMatchObject({
+      distributorId: DIST_A,
+      orderId: a.order.id,
+      fromStatus: 'NOT_SYNCED',
+      toStatus: 'PAID',
+    });
+  });
+
+  it('is idempotent — re-applying the same snapshot changes nothing and emits nothing', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-a');
+
+    await processor.applyStatuses(a.connection, [paid('inv-a')]);
+    const second = await processor.applyStatuses(a.connection, [paid('inv-a')]);
+
+    expect(second).toEqual({ matched: 1, updated: 0, statusChanges: 0 });
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: a.exp.id } })).toBe(1);
+  });
+});

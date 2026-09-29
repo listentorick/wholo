@@ -130,6 +130,39 @@ export interface AccountingInvoiceResult {
   raw: unknown;
 }
 
+// Lifecycle of an invoice in the accounting system — mirrors the Prisma
+// AccountingInvoiceState enum (this file stays Prisma-free).
+export type AccountingInvoiceStateValue =
+  | 'DRAFT'
+  | 'AWAITING_APPROVAL'
+  | 'AWAITING_PAYMENT'
+  | 'PAID'
+  | 'VOIDED'
+  | 'DELETED';
+
+// The status/payment facts of one invoice, as the accounting system (the
+// system of record for invoices and payments, ADR-006) reports them. Amounts
+// are the provider's own: amountDue already nets off payments, credit notes,
+// overpayments and prepayments. Decimal strings, same convention as prices.
+export interface AccountingExternalInvoiceStatus {
+  externalInvoiceId: string;
+  externalInvoiceNumber?: string;
+  state: AccountingInvoiceStateValue;
+  // Provider vocabulary, verbatim (for AccountingInvoiceExport.externalInvoiceStatus).
+  rawStatus: string;
+  currency?: string;
+  total: string;
+  amountPaid: string;
+  amountCredited: string;
+  amountDue: string;
+  // Calendar dates (YYYY-MM-DD) in the accounting organisation's calendar.
+  issueDate: string | null;
+  dueDate: string | null;
+  fullyPaidOn: string | null;
+  // When the provider last changed the invoice (UTC instant).
+  providerUpdatedAt: Date | null;
+}
+
 // One page of a record-type pull. `nextCursor` is opaque to every caller: the
 // adapter decides what it encodes (Xero: a modified-since timestamp; another
 // provider might use a sync token) and the framework only stores it on the
@@ -183,6 +216,18 @@ export interface AccountingConnectionAdapter {
   // fast with a "reconnect" message instead of a provider 403 (some providers,
   // Xero included, cannot expand scopes without a fresh consent).
   hasInvoiceCreationScope(grantedScopes: string): boolean;
+  // Whether the granted scopes permit reading invoice status/payments (the
+  // invoice status sync checks this before calling listInvoiceStatuses).
+  hasInvoiceReadScope(grantedScopes: string): boolean;
+  // Status and payment facts for the invoices this application created —
+  // never other invoices in the organisation. Same cursor contract as
+  // listContacts: null = every such invoice (the full reconcile), otherwise
+  // only those changed since the cursor's position.
+  listInvoiceStatuses(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalInvoiceStatus>>;
   // Creates one sales invoice. idempotencyKey makes provider-side retries
   // safe: replaying the same key must not create a second invoice (providers
   // without native support must implement an equivalent guard). Failures

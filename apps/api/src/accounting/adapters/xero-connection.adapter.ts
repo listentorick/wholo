@@ -7,8 +7,10 @@ import {
   AccountingExternalOrganisation,
   AccountingExternalProduct,
   AccountingExternalTaxRate,
+  AccountingExternalInvoiceStatus,
   AccountingFetchResult,
   AccountingInvoiceRequest,
+  AccountingInvoiceStateValue,
   AccountingInvoiceResult,
   AccountingInvoiceTargetStatusValue,
   AccountingTokenSet,
@@ -62,8 +64,38 @@ const DAY_LIMIT_WARN_BELOW = XERO_DAILY_LIMIT / 10;
 // hold a worker lane forever. On timeout the request may still complete at
 // Xero; every write we make carries an idempotency key, so a retry is safe.
 const XERO_CALL_TIMEOUT_MS = 60_000;
-// Contacts page size: Xero's maximum (verified); default is 100.
+// Page size for paged endpoints: Xero's maximum (verified); default is 100.
 const CONTACTS_PAGE_SIZE = 1000;
+const INVOICES_PAGE_SIZE = 1000;
+
+const XERO_TO_INVOICE_STATE: Record<string, AccountingInvoiceStateValue> = {
+  DRAFT: 'DRAFT',
+  SUBMITTED: 'AWAITING_APPROVAL',
+  AUTHORISED: 'AWAITING_PAYMENT',
+  PAID: 'PAID',
+  VOIDED: 'VOIDED',
+  DELETED: 'DELETED',
+};
+
+// Xero's JSON sends date-only fields (Date, DueDate, FullyPaidOnDate) as
+// "/Date(1759104000000+0000)/" — midnight UTC of the organisation's calendar
+// date — and xero-node 18 passes them through as raw strings (verified). Take
+// the UTC date part; never shift through a local time zone. ISO forms are
+// accepted too, in case a future SDK deserialises them.
+export function parseXeroCalendarDate(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const msDate = /^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/.exec(value);
+  if (msDate) {
+    const d = new Date(Number(msDate[1]));
+    return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+  }
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  return iso ? iso[1] : null;
+}
+
+function decimalString(value: number | undefined | null): string {
+  return value == null ? '0' : String(value);
+}
 // A cursor re-reads this much before the newest change it has seen, so a
 // record written in the same second as the last fetch is never skipped.
 // Re-reading is harmless: upserts compare fields.
@@ -350,6 +382,59 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     return scopes.includes('accounting.invoices') || scopes.includes('accounting.transactions');
   }
 
+  hasInvoiceReadScope(grantedScopes: string): boolean {
+    const scopes = grantedScopes.split(' ');
+    return ['accounting.invoices', 'accounting.invoices.read', 'accounting.transactions'].some((s) => scopes.includes(s));
+  }
+
+  // Only ACCREC invoices this application created (createdByMyApp) — Stocdup
+  // never reads the rest of the organisation's invoices. A null cursor lists
+  // them all (the periodic full reconcile: Xero documents that some edits to a
+  // part-paid invoice, e.g. its DueDate, don't move UpdatedDateUTC, so an
+  // If-Modified-Since pull alone would miss them).
+  async listInvoiceStatuses(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    cursor?: string | null,
+  ): Promise<AccountingFetchResult<AccountingExternalInvoiceStatus>> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    const modifiedSince = cursorToDate(cursor);
+    const invoices: Invoice[] = [];
+    let page = 1;
+    for (;;) {
+      const { body } = await this.call('getInvoices', externalOrganisationId, () =>
+        client.accountingApi.getInvoices(
+          externalOrganisationId,
+          modifiedSince,
+          'Type=="ACCREC"', // where
+          undefined, // order
+          undefined, // iDs
+          undefined, // invoiceNumbers
+          undefined, // contactIDs
+          undefined, // statuses
+          page,
+          true, // includeArchived
+          true, // createdByMyApp
+          undefined, // unitdp
+          // summaryOnly left off: Xero's docs don't say whether it keeps the
+          // payment fields (AmountDue/AmountPaid/FullyPaidOnDate), and correctness
+          // beats payload size here.
+          undefined, // summaryOnly
+          INVOICES_PAGE_SIZE,
+        ),
+      );
+      const batch = body.invoices ?? [];
+      invoices.push(...batch);
+      if (batch.length < INVOICES_PAGE_SIZE) break;
+      page += 1;
+    }
+    return {
+      records: invoices.filter((i) => !!i.invoiceID).map((i) => this.toAccountingExternalInvoiceStatus(i)),
+      nextCursor: nextXeroCursor(cursor, invoices.map((i) => i.updatedDateUTC)),
+    };
+  }
+
   async createInvoice(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
@@ -529,6 +614,26 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       quantityOnHand: item.quantityOnHand != null ? String(item.quantityOnHand) : undefined,
       updatedAt: item.updatedDateUTC ? new Date(item.updatedDateUTC).toISOString() : undefined,
       raw: item,
+    };
+  }
+
+  private toAccountingExternalInvoiceStatus(invoice: Invoice): AccountingExternalInvoiceStatus {
+    // The generated enums are string-valued at runtime ('PAID' etc.).
+    const rawStatus = invoice.status != null ? String(invoice.status) : 'DRAFT';
+    return {
+      externalInvoiceId: invoice.invoiceID as string,
+      externalInvoiceNumber: invoice.invoiceNumber || undefined,
+      state: XERO_TO_INVOICE_STATE[rawStatus] ?? 'DRAFT',
+      rawStatus,
+      currency: invoice.currencyCode != null ? String(invoice.currencyCode) : undefined,
+      total: decimalString(invoice.total),
+      amountPaid: decimalString(invoice.amountPaid),
+      amountCredited: decimalString(invoice.amountCredited),
+      amountDue: decimalString(invoice.amountDue),
+      issueDate: parseXeroCalendarDate(invoice.date),
+      dueDate: parseXeroCalendarDate(invoice.dueDate),
+      fullyPaidOn: parseXeroCalendarDate(invoice.fullyPaidOnDate),
+      providerUpdatedAt: invoice.updatedDateUTC ? new Date(invoice.updatedDateUTC) : null,
     };
   }
 

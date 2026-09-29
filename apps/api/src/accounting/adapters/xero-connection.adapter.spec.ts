@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { XeroAccountingAdapter } from './xero-connection.adapter';
+import { parseXeroCalendarDate, XeroAccountingAdapter } from './xero-connection.adapter';
 import { AccountingProviderError } from './accounting-provider.error';
 import { AccountingCallBudgetService } from '../accounting-call-budget.service';
 
@@ -9,6 +9,7 @@ const mockGetContacts = jest.fn();
 const mockGetItems = jest.fn();
 const mockCreateInvoices = jest.fn();
 const mockGetTaxRates = jest.fn();
+const mockGetInvoices = jest.fn();
 const mockBudgetAcquire = jest.fn();
 
 const mockXeroClientInstance = {
@@ -16,7 +17,7 @@ const mockXeroClientInstance = {
   apiCallback: jest.fn(),
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
-  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices, getTaxRates: mockGetTaxRates },
+  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices, getTaxRates: mockGetTaxRates, getInvoices: mockGetInvoices },
 };
 
 jest.mock('xero-node', () => ({
@@ -846,5 +847,112 @@ describe('XeroAccountingAdapter', () => {
       });
       warn.mockRestore();
     });
+  });
+
+  describe('listInvoiceStatuses', () => {
+    const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'accounting.invoices' };
+
+    // Shapes as xero-node 18 returns them: date-only fields are raw
+    // "/Date(ms+0000)/" strings, updatedDateUTC is already a Date.
+    const xeroInvoice = {
+      invoiceID: 'inv-1',
+      invoiceNumber: 'INV-0042',
+      status: 'AUTHORISED',
+      currencyCode: 'GBP',
+      total: 120,
+      amountPaid: 50,
+      amountCredited: 0,
+      amountDue: 70,
+      date: '/Date(1756684800000+0000)/', // 2025-09-01
+      dueDate: '/Date(1759190400000+0000)/', // 2025-09-30
+      updatedDateUTC: new Date('2025-09-10T08:00:00.000Z'),
+    };
+
+    it('asks Xero only for sales invoices this app created, a whole page at a time', async () => {
+      mockGetInvoices.mockResolvedValueOnce({ body: { invoices: [] } });
+
+      await adapter.listInvoiceStatuses(tokenSet, 'tenant-1');
+
+      const args = mockGetInvoices.mock.calls[0];
+      expect(args[0]).toBe('tenant-1');
+      expect(args[1]).toBeUndefined(); // full pull: no If-Modified-Since
+      expect(args[2]).toBe('Type=="ACCREC"');
+      expect(args[10]).toBe(true); // createdByMyApp
+      expect(args[13]).toBe(1000); // pageSize
+    });
+
+    it('maps a part-paid Xero invoice to the provider-neutral status, with calendar dates', async () => {
+      mockGetInvoices.mockResolvedValueOnce({ body: { invoices: [xeroInvoice] } });
+
+      const { records, nextCursor } = await adapter.listInvoiceStatuses(tokenSet, 'tenant-1');
+
+      expect(records).toEqual([
+        {
+          externalInvoiceId: 'inv-1',
+          externalInvoiceNumber: 'INV-0042',
+          state: 'AWAITING_PAYMENT',
+          rawStatus: 'AUTHORISED',
+          currency: 'GBP',
+          total: '120',
+          amountPaid: '50',
+          amountCredited: '0',
+          amountDue: '70',
+          issueDate: '2025-09-01',
+          dueDate: '2025-09-30',
+          fullyPaidOn: null,
+          providerUpdatedAt: new Date('2025-09-10T08:00:00.000Z'),
+        },
+      ]);
+      expect(nextCursor).toBe('2025-09-10T07:55:00.000Z');
+    });
+
+    it('maps every Xero status onto the neutral lifecycle', async () => {
+      const statuses = ['DRAFT', 'SUBMITTED', 'AUTHORISED', 'PAID', 'VOIDED', 'DELETED'];
+      mockGetInvoices.mockResolvedValueOnce({
+        body: { invoices: statuses.map((st, i) => ({ ...xeroInvoice, invoiceID: `i${i}`, status: st })) },
+      });
+
+      const { records } = await adapter.listInvoiceStatuses(tokenSet, 'tenant-1');
+
+      expect(records.map((r) => r.state)).toEqual(['DRAFT', 'AWAITING_APPROVAL', 'AWAITING_PAYMENT', 'PAID', 'VOIDED', 'DELETED']);
+    });
+
+    it('pages until a short page and passes the cursor as If-Modified-Since', async () => {
+      const full = Array.from({ length: 1000 }, (_, i) => ({ ...xeroInvoice, invoiceID: `i${i}` }));
+      mockGetInvoices.mockResolvedValueOnce({ body: { invoices: full } }).mockResolvedValueOnce({ body: { invoices: [] } });
+
+      const { records } = await adapter.listInvoiceStatuses(tokenSet, 'tenant-1', '2025-09-01T00:00:00.000Z');
+
+      expect(records).toHaveLength(1000);
+      expect(mockGetInvoices).toHaveBeenCalledTimes(2);
+      expect(mockGetInvoices.mock.calls[0][1]).toEqual(new Date('2025-09-01T00:00:00.000Z'));
+      expect(mockGetInvoices.mock.calls[1][8]).toBe(2); // page
+    });
+  });
+
+  describe('hasInvoiceReadScope', () => {
+    it('accepts the granular invoices scope (read-write or read-only) and the legacy broad scope', () => {
+      expect(adapter.hasInvoiceReadScope('openid accounting.invoices')).toBe(true);
+      expect(adapter.hasInvoiceReadScope('openid accounting.invoices.read')).toBe(true);
+      expect(adapter.hasInvoiceReadScope('openid accounting.transactions')).toBe(true);
+      expect(adapter.hasInvoiceReadScope('openid accounting.contacts')).toBe(false);
+    });
+  });
+});
+
+describe('parseXeroCalendarDate', () => {
+  it('takes the UTC calendar date of a Xero /Date(ms+0000)/ value, never shifting time zones', () => {
+    expect(parseXeroCalendarDate('/Date(1759190400000+0000)/')).toBe('2025-09-30');
+  });
+
+  it('accepts ISO dates and date-times', () => {
+    expect(parseXeroCalendarDate('2025-09-30')).toBe('2025-09-30');
+    expect(parseXeroCalendarDate('2025-09-30T00:00:00')).toBe('2025-09-30');
+  });
+
+  it('returns null for missing or unrecognised values', () => {
+    expect(parseXeroCalendarDate(undefined)).toBeNull();
+    expect(parseXeroCalendarDate('')).toBeNull();
+    expect(parseXeroCalendarDate('next tuesday')).toBeNull();
   });
 });

@@ -159,11 +159,14 @@ export class IngestionRunService {
   }
 
   // Rows that exist for these sources (used to spot missing triples to seed).
-  listScheduled(sourceType: string, sourceRefs: string[]): Promise<Array<Pick<IngestionRun, 'sourceRef' | 'resourceType' | 'nextRunAt'>>> {
+  listScheduled(
+    sourceType: string,
+    sourceRefs: string[],
+  ): Promise<Array<Pick<IngestionRun, 'id' | 'sourceRef' | 'resourceType' | 'nextRunAt'>>> {
     if (sourceRefs.length === 0) return Promise.resolve([]);
     return this.prisma.ingestionRun.findMany({
       where: { sourceType, sourceRef: { in: sourceRefs } },
-      select: { sourceRef: true, resourceType: true, nextRunAt: true },
+      select: { id: true, sourceRef: true, resourceType: true, nextRunAt: true },
     });
   }
 

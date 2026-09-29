@@ -56,14 +56,16 @@ describe('AccountingSyncService', () => {
       requestRun
         .mockResolvedValueOnce({ run: { id: 'r-contact' }, shouldEnqueue: true })
         .mockResolvedValueOnce({ run: { id: 'r-product' }, shouldEnqueue: false })
-        .mockResolvedValueOnce({ run: { id: 'r-tax' }, shouldEnqueue: true });
+        .mockResolvedValueOnce({ run: { id: 'r-tax' }, shouldEnqueue: true })
+        .mockResolvedValueOnce({ run: { id: 'r-invoice' }, shouldEnqueue: true });
 
       await service.requestSync('dist-1', 'MANUAL');
 
-      expect(writeEvent).toHaveBeenCalledTimes(2);
+      expect(writeEvent).toHaveBeenCalledTimes(3);
       expect(writeEvent.mock.calls.map((c) => c[3])).toEqual([
         'AccountingContactSyncRequested',
         'AccountingTaxTypeSyncRequested',
+        'AccountingInvoiceSyncRequested', // a manual Sync refreshes payment status too
       ]);
     });
 
@@ -105,6 +107,27 @@ describe('AccountingSyncService', () => {
       const result = await service.enqueueDue('dist-1', 'conn-1', 'tax_type', null, now);
 
       expect(result.nextRunAt).toEqual(new Date('2026-09-29T16:00:00Z')); // tax types: every 6 h
+    });
+  });
+
+  describe('getStatus', () => {
+    it('shows the mapping pulls only — the invoice status sync has nothing to review', async () => {
+      const run = (resourceType: string) => ({
+        id: resourceType,
+        resourceType,
+        status: 'COMPLETED',
+        queuedAt: new Date(),
+        finishedAt: new Date(),
+        startedAt: null,
+      });
+      (service as unknown as { ingestionRuns: { listRuns: jest.Mock } }).ingestionRuns.listRuns.mockResolvedValue([
+        run('contact'),
+        run('invoice'),
+      ]);
+
+      const status = await service.getStatus('dist-1');
+
+      expect(status.runs.map((r) => r.resourceType)).toEqual(['contact']);
     });
   });
 });
