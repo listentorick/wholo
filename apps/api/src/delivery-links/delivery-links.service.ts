@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { OrderCompletionService } from '../orders/order-completion.service';
 import { DeliveryTokenSigner } from './delivery-token.signer';
 import { DeliveryPhotoService, DeliveryPhotoDto } from './delivery-photo.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
@@ -71,6 +72,7 @@ export class DeliveryLinksService {
     private outbox: OutboxService,
     private signer: DeliveryTokenSigner,
     private deliveryPhoto: DeliveryPhotoService,
+    private orderCompletion: OrderCompletionService,
   ) {}
 
   async uploadPhoto(rawToken: string, file: Express.Multer.File): Promise<DeliveryPhotoDto> {
@@ -202,6 +204,10 @@ export class DeliveryLinksService {
           runId: allocation?.runId ?? null,
           routeId: allocation?.routeId ?? null,
         });
+        // An invoice already paid before delivery completes the order now.
+        // The status update above holds the order row lock, which the payment
+        // sync also takes first — see OrderCompletionService.lockOrder.
+        if (isDelivered) await this.orderCompletion.reconcile(tx, order.id, { type: ActorType.SYSTEM });
 
         return created;
       });

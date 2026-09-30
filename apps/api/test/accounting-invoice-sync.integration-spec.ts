@@ -3,7 +3,8 @@
  * database, a sync for one distributor's connection updates only that
  * distributor's invoice exports — even when two distributors' accounting
  * systems happen to use the same external invoice id — and a payment status
- * change is written together with its outbox event.
+ * change is written together with its outbox event, an audit row on the
+ * order's timeline, and the order's completion (delivered + paid → COMPLETED).
  *
  * Prerequisites:
  *   kubectl port-forward svc/wholo-postgresql 5432:5432
@@ -27,6 +28,9 @@ import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting
 import { AccountingExternalInvoiceStatus } from '../src/accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingInvoiceSyncProcessor } from '../src/accounting-invoice-sync/accounting-invoice-sync.processor';
 import { INVOICE_PAYMENT_STATUS_CHANGED } from '../src/accounting/invoice-payment-status';
+import { InvoicePaymentStateService } from '../src/accounting/invoice-payment-state.service';
+import { AuditService } from '../src/audit/audit.service';
+import { OrderCompletionService } from '../src/orders/order-completion.service';
 
 const DIST_A = 'test-invsync-dist-a';
 const DIST_B = 'test-invsync-dist-b';
@@ -46,7 +50,11 @@ describe('Invoice status sync (integration)', () => {
       {} as AccountingConnectionService,
       {} as AccountingAdapterRegistry,
       {} as IngestionRunService,
-      new OutboxService(),
+      new InvoicePaymentStateService(
+        new AuditService(),
+        new OutboxService(),
+        new OrderCompletionService(new AuditService(), new OutboxService()),
+      ),
     );
     for (const id of [DIST_A, DIST_B]) {
       await prisma.organisation.upsert({
@@ -67,7 +75,11 @@ describe('Invoice status sync (integration)', () => {
       where: { distributorId: { in: [DIST_A, DIST_B] } },
       select: { id: true },
     });
-    await prisma.outboxEvent.deleteMany({ where: { aggregateId: { in: exports.map((e) => e.id) } } });
+    const orders = await prisma.order.findMany({ where: { distributorId: { in: [DIST_A, DIST_B] } }, select: { id: true } });
+    await prisma.outboxEvent.deleteMany({
+      where: { aggregateId: { in: [...exports.map((e) => e.id), ...orders.map((o) => o.id)] } },
+    });
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -82,7 +94,7 @@ describe('Invoice status sync (integration)', () => {
     await close();
   });
 
-  async function exportedInvoice(distributorId: string, externalInvoiceId: string) {
+  async function exportedInvoice(distributorId: string, externalInvoiceId: string, status: OrderStatus = OrderStatus.ACCEPTED) {
     const connection = await prisma.accountingConnection.create({
       data: {
         distributorId,
@@ -104,7 +116,7 @@ describe('Invoice status sync (integration)', () => {
         placedByUserId: USER,
         orderNumber: `TEST-INVSYNC-${nextval}`,
         currency: 'GBP',
-        status: OrderStatus.ACCEPTED,
+        status,
         acceptanceModeSnapshot: 'MANUAL',
         acceptanceModeSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
         subtotalAmount: new Prisma.Decimal('100.00'),
@@ -182,5 +194,77 @@ describe('Invoice status sync (integration)', () => {
 
     expect(second).toEqual({ matched: 1, updated: 0, statusChanges: 0 });
     expect(await prisma.outboxEvent.count({ where: { aggregateId: a.exp.id } })).toBe(1);
+  });
+
+  const unpaid = (externalInvoiceId: string): AccountingExternalInvoiceStatus => ({
+    ...paid(externalInvoiceId),
+    state: 'AWAITING_PAYMENT',
+    rawStatus: 'AUTHORISED',
+    amountPaid: '0',
+    amountDue: '120',
+    fullyPaidOn: null,
+    providerUpdatedAt: new Date('2026-09-21T09:00:00Z'),
+  });
+
+  const timeline = (orderId: string) => prisma.auditLog.findMany({ where: { entityType: 'ORDER', entityId: orderId } });
+  // Rows written in one transaction share a createdAt, so compare as a sorted list.
+  const actions = async (orderId: string) => (await timeline(orderId)).map((e) => e.action).sort();
+
+  it("records the payment on the order's timeline", async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-a');
+
+    await processor.applyStatuses(a.connection, [paid('inv-a')]);
+
+    const entries = await timeline(a.order.id);
+    expect(entries).toEqual([
+      expect.objectContaining({
+        distributorId: DIST_A,
+        action: 'INVOICE_PAYMENT_STATUS_CHANGED',
+        actorType: 'SYSTEM',
+        summary: 'Invoice INV-1 marked paid in XERO',
+      }),
+    ]);
+  });
+
+  it('leaves an undelivered order ACCEPTED when its invoice is paid', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-a');
+
+    await processor.applyStatuses(a.connection, [paid('inv-a')]);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: a.order.id } })).status).toBe(OrderStatus.ACCEPTED);
+  });
+
+  it('completes a delivered order when its invoice is paid, and reopens it if the payment is reversed', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-a', OrderStatus.DELIVERED);
+
+    await processor.applyStatuses(a.connection, [paid('inv-a')]);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: a.order.id } })).status).toBe(OrderStatus.COMPLETED);
+    expect(await actions(a.order.id)).toEqual(['INVOICE_PAYMENT_STATUS_CHANGED', 'ORDER_COMPLETED']);
+    const completed = await prisma.outboxEvent.findFirstOrThrow({ where: { aggregateId: a.order.id, eventType: 'OrderCompleted' } });
+    expect(completed.payload).toMatchObject({ orderId: a.order.id, distributorId: DIST_A, status: OrderStatus.COMPLETED });
+
+    await processor.applyStatuses(a.connection, [unpaid('inv-a')]);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: a.order.id } })).status).toBe(OrderStatus.DELIVERED);
+    expect(await actions(a.order.id)).toEqual([
+      'INVOICE_PAYMENT_STATUS_CHANGED',
+      'INVOICE_PAYMENT_STATUS_CHANGED',
+      'ORDER_COMPLETED',
+      'ORDER_COMPLETION_REVERSED',
+    ]);
+    const reopened = (await timeline(a.order.id)).find((e) => e.action === 'ORDER_COMPLETION_REVERSED');
+    expect(reopened?.summary).toBe('Order reopened — invoice INV-1 is no longer paid');
+  });
+
+  it("does not complete another distributor's order sharing the external invoice id", async () => {
+    const a = await exportedInvoice(DIST_A, 'shared-inv-id', OrderStatus.DELIVERED);
+    const b = await exportedInvoice(DIST_B, 'shared-inv-id', OrderStatus.DELIVERED);
+
+    await processor.applyStatuses(a.connection, [paid('shared-inv-id')]);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: a.order.id } })).status).toBe(OrderStatus.COMPLETED);
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: b.order.id } })).status).toBe(OrderStatus.DELIVERED);
+    expect(await timeline(b.order.id)).toHaveLength(0);
   });
 });

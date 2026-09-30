@@ -121,6 +121,34 @@ export default tseslint.config(
     },
   },
 
-  // (h) Keep this explicit so a future ESLint default change can't red the build.
+  // (h) Single writers for invoice payment state and order completion. Each
+  //     has side effects that must never be skipped (outbox event, order
+  //     timeline audit row, completion reconcile), so every other write path is
+  //     an error — go through the service instead.
+  {
+    files: ['apps/api/src/**/*.ts'],
+    ignores: [
+      '**/*.spec.ts',
+      'apps/api/src/accounting/invoice-payment-state.service.ts',
+      'apps/api/src/orders/order-completion.service.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.property.name='accountingInvoiceExport'][callee.property.name=/^(create|createMany|update|updateMany|upsert)$/] Property[key.name='data'] Property[key.name=/^(invoiceState|invoiceTotal|amountPaid|amountCredited|amountDue|fullyPaidOn)$/]",
+          message: 'Write invoice payment state through InvoicePaymentStateService so the audit trail and order completion are recorded.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.property.name='order'][callee.property.name=/^(create|createMany|update|updateMany|upsert)$/] Property[key.name='data'] Property[key.name='status'][value.property.name='COMPLETED']",
+          message: 'Move orders into COMPLETED only through OrderCompletionService.',
+        },
+      ],
+    },
+  },
+
+  // (i) Keep this explicit so a future ESLint default change can't red the build.
   { linterOptions: { reportUnusedDisableDirectives: 'warn' } },
 );

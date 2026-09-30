@@ -63,3 +63,30 @@ export const SETTLED_INVOICE_STATES: AccountingInvoiceState[] = [
   AccountingInvoiceState.VOIDED,
   AccountingInvoiceState.DELETED,
 ];
+
+// Timeline wording for a payment status change on an order's invoice.
+// `source` names where the change came from (the accounting provider today).
+export function paymentStatusSummary(
+  fromStatus: InvoicePaymentStatus,
+  toStatus: InvoicePaymentStatus,
+  ctx: { invoiceRef: string | null; source: string; amountDue?: Amount; currency?: string | null },
+): string {
+  const invoice = ctx.invoiceRef ? `invoice ${ctx.invoiceRef}` : 'the invoice';
+  const Invoice = invoice.charAt(0).toUpperCase() + invoice.slice(1);
+  switch (toStatus) {
+    case 'PAID':
+      return `${Invoice} marked paid in ${ctx.source}`;
+    case 'PART_PAID': {
+      const due = `${ctx.currency ? `${ctx.currency} ` : ''}${toNumber(ctx.amountDue).toFixed(2)}`;
+      return `Part payment recorded on ${invoice} in ${ctx.source} — ${due} due`;
+    }
+    case 'UNPAID':
+      return fromStatus === 'NOT_SYNCED'
+        ? `${Invoice} awaiting payment in ${ctx.source}`
+        : `Payment removed from ${invoice} in ${ctx.source} — now unpaid`;
+    case 'VOID':
+      return `${Invoice} voided in ${ctx.source}`;
+    case 'NOT_SYNCED':
+      return `${Invoice} is no longer found in ${ctx.source}`;
+  }
+}

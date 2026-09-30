@@ -92,7 +92,9 @@ export function buildQueue(lists: Record<DeliveryOverviewQueueKind, QueueOrderRo
   return QUEUE_ORDER.flatMap((kind) => lists[kind].map((order) => toQueueItem(kind, order)));
 }
 
-const attempted = (status: OrderStatus) => status === OrderStatus.DELIVERED || status === OrderStatus.DELIVERY_FAILED;
+// COMPLETED = delivered and paid, so it counts as delivered here.
+const delivered = (status: OrderStatus) => status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED;
+const attempted = (status: OrderStatus) => delivered(status) || status === OrderStatus.DELIVERY_FAILED;
 
 export function summariseRuns(runs: RunRow[]): DeliveryOverviewRun[] {
   return runs.map((run) => {
@@ -120,8 +122,8 @@ export function summariseRuns(runs: RunRow[]): DeliveryOverviewRun[] {
  */
 export function summariseProgress(runs: RunRow[], notOnRunCount: number): DeliveryOverview['progress'] {
   const orders = runs.flatMap((run) => run.orders.map((ro) => ro.order));
-  const delivered = orders.filter((o) => o.status === OrderStatus.DELIVERED).length;
+  const deliveredCount = orders.filter((o) => delivered(o.status)).length;
   const failed = orders.filter((o) => o.status === OrderStatus.DELIVERY_FAILED).length;
   const remaining = orders.filter((o) => o.status === OrderStatus.ACCEPTED).length + notOnRunCount;
-  return { planned: delivered + failed + remaining, delivered, failed, remaining };
+  return { planned: deliveredCount + failed + remaining, delivered: deliveredCount, failed, remaining };
 }

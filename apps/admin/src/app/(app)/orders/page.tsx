@@ -129,9 +129,10 @@ function OrderStatusBadge({ status }: { status: OrderStatus }) {
 }
 
 // Any order with a recorded delivery outcome — status is outcome-driven, so it's
-// a reliable proxy for "a proof-of-delivery row exists".
+// a reliable proxy for "a proof-of-delivery row exists". COMPLETED is only
+// reached from DELIVERED (delivered and paid).
 function hasProof(status: OrderStatus) {
-  return status === OrderStatus.DELIVERED || status === OrderStatus.DELIVERY_FAILED;
+  return status === OrderStatus.DELIVERED || status === OrderStatus.COMPLETED || status === OrderStatus.DELIVERY_FAILED;
 }
 
 // ─── Sort icon ────────────────────────────────────────────────────────────────

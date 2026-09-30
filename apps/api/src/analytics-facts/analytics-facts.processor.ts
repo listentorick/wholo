@@ -6,6 +6,7 @@ import { ANALYTICS_FACTS_QUEUE } from '../queues/queue.constants';
 import { OrderEventPayload, OrderFactsService } from './order-facts.service';
 import { RELATIONSHIP_EVENT_TYPES, RelationshipEventPayload, RelationshipFactsService } from './relationship-facts.service';
 import { DELIVERY_EVENT_TYPES, DeliveryEventPayload, DeliveryFactsService, toOrderEventPayload } from './delivery-facts.service';
+import { ORDER_COMPLETED, ORDER_COMPLETION_REVERSED } from '../orders/order-completion.service';
 import { INVOICE_EVENT_TYPES, InvoiceEventPayload, InvoiceFactsService } from './invoice-facts.service';
 
 export interface OutboxEventJobData {
@@ -15,7 +16,14 @@ export interface OutboxEventJobData {
   payload: unknown;
 }
 
-const ORDER_EVENT_TYPES = new Set(['OrderSubmitted', 'OrderAccepted', 'OrderRejected', 'OrderCancelled']);
+const ORDER_EVENT_TYPES = new Set([
+  'OrderSubmitted',
+  'OrderAccepted',
+  'OrderRejected',
+  'OrderCancelled',
+  ORDER_COMPLETED,
+  ORDER_COMPLETION_REVERSED,
+]);
 
 // Job name == outbox eventType (set by OutboxPublisherService). Only routed
 // event types reach this queue, so an unexpected name is a routing bug — warn

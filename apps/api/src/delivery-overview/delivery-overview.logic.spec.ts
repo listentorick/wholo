@@ -61,6 +61,12 @@ describe('summariseProgress', () => {
     expect(progress).toEqual({ planned: 5, delivered: 2, failed: 1, remaining: 2 });
   });
 
+  it('counts a completed order (delivered and paid) as delivered', () => {
+    const progress = summariseProgress([run({ orders: [runOrder('COMPLETED'), runOrder('DELIVERED')] })], 0);
+    expect(progress).toEqual({ planned: 2, delivered: 2, failed: 0, remaining: 0 });
+    expect(summariseRuns([run({ orders: [runOrder('COMPLETED')] })])[0]).toMatchObject({ attemptedCount: 1 });
+  });
+
   it('counts an accepted order no run has picked up yet as still to deliver', () => {
     const progress = summariseProgress([run({ orders: [runOrder('DELIVERED')] })], 3);
     expect(progress).toEqual({ planned: 4, delivered: 1, failed: 0, remaining: 3 });

@@ -6,6 +6,7 @@ import { OutboxModule } from '../outbox/outbox.module';
 import { IngestionRunModule } from '../ingestion/ingestion-run.module';
 import { AuditModule } from '../audit/audit.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { OrderCompletionModule } from '../orders/order-completion.module';
 import { AccountingConnectionController } from './accounting-connection.controller';
 import { AccountingContactController } from './accounting-contact.controller';
 import { AccountingInvoiceExportController } from './accounting-invoice-export.controller';
@@ -18,6 +19,7 @@ import { AccountingRefreshLockService } from './accounting-refresh-lock.service'
 import { AccountingCallBudgetService } from './accounting-call-budget.service';
 import { AccountingContactService } from './accounting-contact.service';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
+import { InvoicePaymentStateService } from './invoice-payment-state.service';
 import { AccountingProductService } from './accounting-product.service';
 import { AccountingTaxTypeService } from './accounting-tax-type.service';
 import { AccountingChangeDetectionService } from './accounting-change-detection.service';
@@ -37,6 +39,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     IngestionRunModule,
     AuditModule,
     AdminNotificationsModule,
+    OrderCompletionModule,
   ],
   controllers: [
     AccountingConnectionController,
@@ -53,6 +56,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     AccountingCallBudgetService,
     AccountingContactService,
     AccountingInvoiceExportService,
+    InvoicePaymentStateService,
     AccountingProductService,
     AccountingTaxTypeService,
     AccountingChangeDetectionService,
@@ -70,6 +74,8 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
   // AccountingTaxTypeSyncModule). AccountingContactService/AccountingProductService
   // are used by AccountingBulkImportProcessor (AccountingBulkImportModule) to
   // reuse the same per-item import/match logic the row actions use.
+  // InvoicePaymentStateService is the single writer of invoice payment state,
+  // used by the invoice status sync (AccountingInvoiceSyncModule).
   exports: [
     // Re-exported so the worker-side sync processor modules (which import
     // AccountingModule) can inject IngestionRunService.
@@ -84,6 +90,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     AccountingContactMatcherService,
     AccountingProductMatcherService,
     AccountingTaxTypeMatcherService,
+    InvoicePaymentStateService,
   ],
 })
 export class AccountingModule {}

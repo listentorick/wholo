@@ -22,6 +22,7 @@ const STATUS_FILTERS: { label: string; value: OrderStatus | null }[] = [
   { label: 'Awaiting confirmation', value: OrderStatus.SUBMITTED },
   { label: 'Accepted', value: OrderStatus.ACCEPTED },
   { label: 'Delivered', value: OrderStatus.DELIVERED },
+  { label: 'Completed', value: OrderStatus.COMPLETED },
   { label: 'Cancelled', value: OrderStatus.CANCELLED },
 ];
 

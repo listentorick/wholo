@@ -150,15 +150,16 @@ describe('OrdersPage', () => {
   it('renders the customer-facing status label via the badge', async () => {
     vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder({ status: OrderStatus.COMPLETED })]));
     render(<OrdersPage />);
-    // one badge in the desktop table, one in the mobile card ("Completed" is not a chip label)
-    await waitFor(() => expect(screen.getAllByText('Completed').length).toBe(2));
+    // one badge in the desktop table, one in the mobile card, plus the "Completed" filter chip
+    await waitFor(() => expect(screen.getAllByText('Completed').length).toBe(3));
+    expect(screen.getAllByRole('button', { name: 'Completed' })).toHaveLength(1);
   });
 
   it('renders the per-status filter chips', async () => {
     vi.mocked(ordersApi.listOrders).mockResolvedValue(makeResponse([makeOrder()]));
     render(<OrdersPage />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'All' })).toBeTruthy());
-    for (const label of ['Awaiting confirmation', 'Delivered', 'Cancelled']) {
+    for (const label of ['Awaiting confirmation', 'Delivered', 'Completed', 'Cancelled']) {
       expect(screen.getByRole('button', { name: label })).toBeTruthy();
     }
     // "Accepted" is both a chip and (potentially) a badge — assert the chip exists

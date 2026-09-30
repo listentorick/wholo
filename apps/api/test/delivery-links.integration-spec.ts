@@ -15,7 +15,14 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
-import { OrderStatus, OrganisationType, Prisma } from '@prisma/client';
+import {
+  AccountingConnectionStatus,
+  AccountingInvoiceExportStatus,
+  AccountingProvider,
+  OrderStatus,
+  OrganisationType,
+  Prisma,
+} from '@prisma/client';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const sharp: typeof import('sharp').default = require('sharp');
 import { AppModule } from '../src/app.module';
@@ -100,6 +107,8 @@ describe('Delivery links (integration)', () => {
     // integration file's still-pending events sharing aggregateType 'Order'.
     if (orderIds.length) await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'Order', aggregateId: { in: orderIds } } });
     await prisma.orderLine.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
   });
 
@@ -286,6 +295,46 @@ describe('Delivery links (integration)', () => {
       traderCustomerId: CUSTOMER,
       unableReason: null,
     }));
+  });
+
+  it('completes an order whose invoice was already paid, in the same transaction as the delivery', async () => {
+    const order = await createOrder();
+    const connection = await prisma.accountingConnection.create({
+      data: {
+        distributorId: DIST,
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationId: 'tenant-dlink',
+        externalOrganisationName: 'Org',
+        scopes: 'openid accounting.invoices',
+        encryptedCredentialData: 'irrelevant',
+        connectedByUserId: ADMIN_USER,
+        connectedAt: new Date(),
+      },
+    });
+    await prisma.accountingInvoiceExport.create({
+      data: {
+        distributorId: DIST,
+        accountingConnectionId: connection.id,
+        provider: AccountingProvider.XERO,
+        orderId: order.id,
+        status: AccountingInvoiceExportStatus.COMPLETED,
+        externalInvoiceId: 'inv-dlink',
+        invoiceState: 'PAID',
+        invoiceTotal: new Prisma.Decimal('30.00'),
+        amountPaid: new Prisma.Decimal('30.00'),
+        amountDue: new Prisma.Decimal('0.00'),
+      },
+    });
+
+    await submitOutcome(signer.sign(order.id), HANDED_TO_PERSON).expect(200);
+
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(OrderStatus.COMPLETED);
+    // Same transaction, so the same createdAt — compare as a set.
+    const actions = (await prisma.auditLog.findMany({ where: { entityId: order.id } })).map((r) => r.action);
+    expect(actions.sort()).toEqual(['DELIVERY_OUTCOME_RECORDED', 'ORDER_COMPLETED']);
+    const eventTypes = (await prisma.outboxEvent.findMany({ where: { aggregateType: 'Order', aggregateId: order.id } })).map((e) => e.eventType);
+    expect(eventTypes.sort()).toEqual(['OrderCompleted', 'OrderDelivered']);
   });
 
   it('transitions Order.status to DELIVERY_FAILED and writes a correctly-shaped OrderDeliveryFailed outbox event', async () => {

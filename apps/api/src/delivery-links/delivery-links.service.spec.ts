@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { DeliveryTokenSigner } from './delivery-token.signer';
+import { OrderCompletionService } from '../orders/order-completion.service';
 
 const order = {
   id: 'order-1',
@@ -59,6 +60,7 @@ describe('DeliveryLinksService', () => {
   let audit: { record: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
   let signer: { verify: jest.Mock };
+  let orderCompletion: { reconcile: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -75,6 +77,7 @@ describe('DeliveryLinksService', () => {
     audit = { record: jest.fn() };
     outbox = { writeEvent: jest.fn() };
     signer = { verify: jest.fn().mockReturnValue('order-1') };
+    orderCompletion = { reconcile: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -83,6 +86,7 @@ describe('DeliveryLinksService', () => {
         { provide: AuditService, useValue: audit },
         { provide: OutboxService, useValue: outbox },
         { provide: DeliveryTokenSigner, useValue: signer },
+        { provide: OrderCompletionService, useValue: orderCompletion },
         { provide: DeliveryPhotoService, useValue: { uploadPhoto: jest.fn(), deletePhoto: jest.fn() } },
       ],
     }).compile();
@@ -201,6 +205,21 @@ describe('DeliveryLinksService', () => {
           unableReason: null,
         }),
       );
+    });
+
+    it('reconciles order completion on a delivery, in the same transaction (an already-paid order completes)', async () => {
+      await service.submitOutcome('order-1.sig', deliveredDto as any);
+
+      expect(orderCompletion.reconcile).toHaveBeenCalledWith(prisma, 'order-1', { type: 'SYSTEM' });
+    });
+
+    it('does not reconcile completion when the delivery failed', async () => {
+      await service.submitOutcome('order-1.sig', {
+        outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER,
+        unableReason: UnableToDeliverReason.CUSTOMER_REFUSED,
+      } as any);
+
+      expect(orderCompletion.reconcile).not.toHaveBeenCalled();
     });
 
     it('carries what the delivery-facts consumer needs: the committed date, route and run, and how it was dropped', async () => {

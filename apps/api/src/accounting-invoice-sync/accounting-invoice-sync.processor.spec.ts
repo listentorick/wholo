@@ -9,6 +9,9 @@ import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-ada
 import { AccountingExternalInvoiceStatus } from '../accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingInvoiceSyncProcessor } from './accounting-invoice-sync.processor';
 import { INVOICE_PAYMENT_STATUS_CHANGED } from '../accounting/invoice-payment-status';
+import { InvoicePaymentStateService } from '../accounting/invoice-payment-state.service';
+import { AuditService } from '../audit/audit.service';
+import { OrderCompletionService } from '../orders/order-completion.service';
 
 const connection = {
   id: 'conn-1',
@@ -24,6 +27,7 @@ function exportRow(over: Record<string, unknown> = {}) {
     id: 'exp-1',
     distributorId: 'dist-1',
     accountingConnectionId: 'conn-1',
+    provider: 'XERO',
     orderId: 'order-1',
     status: 'COMPLETED',
     externalInvoiceId: 'inv-1',
@@ -76,6 +80,8 @@ describe('AccountingInvoiceSyncProcessor', () => {
   let exports: ReturnType<typeof exportRow>[];
   let updates: Array<{ where: { id: string }; data: Record<string, unknown> }>;
   let events: Array<{ eventType: string; payload: Record<string, unknown> }>;
+  let audits: Array<Record<string, unknown>>;
+  let reconciled: string[];
   let listInvoiceStatuses: jest.Mock;
   let ingestionRuns: Record<string, jest.Mock>;
   let hasInvoiceReadScope: jest.Mock;
@@ -84,6 +90,8 @@ describe('AccountingInvoiceSyncProcessor', () => {
     exports = [exportRow()];
     updates = [];
     events = [];
+    audits = [];
+    reconciled = [];
     listInvoiceStatuses = jest.fn().mockResolvedValue({ records: [], nextCursor: 'cursor-next' });
     hasInvoiceReadScope = jest.fn().mockReturnValue(true);
     const tx = {
@@ -114,7 +122,14 @@ describe('AccountingInvoiceSyncProcessor', () => {
       { getValidTokenSet: jest.fn().mockResolvedValue({}) } as unknown as AccountingConnectionService,
       { get: () => ({ listInvoiceStatuses, hasInvoiceReadScope }) } as unknown as AccountingAdapterRegistry,
       ingestionRuns as unknown as IngestionRunService,
-      outbox as unknown as OutboxService,
+      new InvoicePaymentStateService(
+        { record: jest.fn(async (_tx, params) => audits.push(params)) } as unknown as AuditService,
+        outbox as unknown as OutboxService,
+        {
+          lockOrder: jest.fn(),
+          reconcile: jest.fn(async (_tx, orderId: string) => reconciled.push(orderId)),
+        } as unknown as OrderCompletionService,
+      ),
     );
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -163,6 +178,16 @@ describe('AccountingInvoiceSyncProcessor', () => {
         }),
       },
     ]);
+    expect(audits).toEqual([
+      expect.objectContaining({
+        entityType: 'ORDER',
+        entityId: 'order-1',
+        action: 'INVOICE_PAYMENT_STATUS_CHANGED',
+        actorType: 'SYSTEM',
+        summary: 'Invoice INV-0001 marked paid in XERO',
+      }),
+    ]);
+    expect(reconciled).toEqual(['order-1']);
     expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith(
       'run-1',
       expect.objectContaining({ recordsProcessed: 1, recordsUpdated: 1, detailCount: 1 }),
@@ -191,6 +216,8 @@ describe('AccountingInvoiceSyncProcessor', () => {
 
     expect(updates[0].data).toMatchObject({ dueDate: new Date('2026-10-15T00:00:00.000Z') });
     expect(events).toHaveLength(0);
+    expect(audits).toHaveLength(0);
+    expect(reconciled).toHaveLength(0);
   });
 
   it('writes nothing when nothing changed', async () => {

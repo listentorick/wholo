@@ -1,5 +1,5 @@
 import { AccountingInvoiceState } from '@prisma/client';
-import { derivePaymentStatus, isOverdue } from './invoice-payment-status';
+import { derivePaymentStatus, isOverdue, paymentStatusSummary } from './invoice-payment-status';
 
 const awaiting = (over: Record<string, unknown> = {}) => ({
   invoiceState: AccountingInvoiceState.AWAITING_PAYMENT,
@@ -72,5 +72,21 @@ describe('isOverdue', () => {
 
   it('is not overdue without a due date', () => {
     expect(isOverdue(awaiting({ dueDate: null }), '2027-01-01')).toBe(false);
+  });
+});
+
+describe('paymentStatusSummary', () => {
+  const ctx = { invoiceRef: 'INV-0001', source: 'XERO', amountDue: '40', currency: 'GBP' };
+
+  it('describes each payment status change for the order timeline', () => {
+    expect(paymentStatusSummary('UNPAID', 'PAID', ctx)).toBe('Invoice INV-0001 marked paid in XERO');
+    expect(paymentStatusSummary('UNPAID', 'PART_PAID', ctx)).toBe('Part payment recorded on invoice INV-0001 in XERO — GBP 40.00 due');
+    expect(paymentStatusSummary('PAID', 'UNPAID', ctx)).toBe('Payment removed from invoice INV-0001 in XERO — now unpaid');
+    expect(paymentStatusSummary('NOT_SYNCED', 'UNPAID', ctx)).toBe('Invoice INV-0001 awaiting payment in XERO');
+    expect(paymentStatusSummary('UNPAID', 'VOID', ctx)).toBe('Invoice INV-0001 voided in XERO');
+  });
+
+  it('still reads when the invoice has no reference yet', () => {
+    expect(paymentStatusSummary('UNPAID', 'PAID', { ...ctx, invoiceRef: null })).toBe('The invoice marked paid in XERO');
   });
 });

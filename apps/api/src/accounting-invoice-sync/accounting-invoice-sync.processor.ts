@@ -3,23 +3,21 @@ import { Logger } from '@nestjs/common';
 import {
   AccountingConnection,
   AccountingConnectionStatus,
-  AccountingInvoiceExport,
   AccountingInvoiceExportStatus,
   AccountingInvoiceState,
+  ActorType,
   IngestionRunTrigger,
-  Prisma,
 } from '@prisma/client';
 import { Job, UnrecoverableError } from 'bullmq';
 import { loggableError } from '@wholo/nest-telemetry';
 import { PrismaService } from '../prisma/prisma.service';
-import { OutboxService } from '../outbox/outbox.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import { AccountingExternalInvoiceStatus } from '../accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
-import { derivePaymentStatus, INVOICE_PAYMENT_STATUS_CHANGED } from '../accounting/invoice-payment-status';
+import { ExportWithOrder, InvoicePaymentStateService, SyncedState, syncedStateChanged } from '../accounting/invoice-payment-state.service';
 import { ACCOUNTING_SOURCE_TYPE } from '../accounting/sync/accounting-sync.constants';
 import { shouldRunFull } from '../accounting/sync/accounting-sync-processor.base';
 import { LoggedWorkerHost } from '../queues/logged-worker-host';
@@ -35,34 +33,8 @@ interface OutboxEventJobData {
 const RESOURCE_TYPE = 'invoice';
 const LOOKUP_CHUNK = 500;
 
-
-type ExportWithOrder = AccountingInvoiceExport & { order: { traderCustomerId: string; currency: string } };
-
-// The synced columns, as the accounting system now reports them.
-interface SyncedState {
-  invoiceState: AccountingInvoiceState;
-  invoiceTotal: string;
-  amountPaid: string;
-  amountCredited: string;
-  amountDue: string;
-  issueDate: Date | null;
-  dueDate: Date | null;
-  fullyPaidOn: Date | null;
-  providerUpdatedAt: Date | null;
-  externalInvoiceNumber: string | null;
-  externalInvoiceStatus: string;
-}
-
 function calendarDate(value: string | null): Date | null {
   return value ? new Date(`${value}T00:00:00.000Z`) : null;
-}
-
-function sameAmount(a: Prisma.Decimal | null, b: string): boolean {
-  return a !== null && Number(a.toString()).toFixed(2) === Number(b).toFixed(2);
-}
-
-function sameDate(a: Date | null, b: Date | null): boolean {
-  return (a?.getTime() ?? null) === (b?.getTime() ?? null);
 }
 
 export function toSyncedState(record: AccountingExternalInvoiceStatus): SyncedState {
@@ -81,22 +53,6 @@ export function toSyncedState(record: AccountingExternalInvoiceStatus): SyncedSt
   };
 }
 
-// Whether anything Stocdup shows or derives from has moved.
-export function syncedStateChanged(current: AccountingInvoiceExport, next: SyncedState): boolean {
-  return (
-    current.invoiceState !== next.invoiceState ||
-    !sameAmount(current.invoiceTotal, next.invoiceTotal) ||
-    !sameAmount(current.amountPaid, next.amountPaid) ||
-    !sameAmount(current.amountCredited, next.amountCredited) ||
-    !sameAmount(current.amountDue, next.amountDue) ||
-    !sameDate(current.issueDate, next.issueDate) ||
-    !sameDate(current.dueDate, next.dueDate) ||
-    !sameDate(current.fullyPaidOn, next.fullyPaidOn) ||
-    (next.externalInvoiceNumber !== null && current.externalInvoiceNumber !== next.externalInvoiceNumber) ||
-    current.externalInvoiceStatus !== next.externalInvoiceStatus
-  );
-}
-
 // Invoice status sync (ADR-072): pulls the status and payment facts of the
 // invoices Stocdup created in the distributor's accounting system and writes
 // them onto the matching AccountingInvoiceExport rows. The accounting system
@@ -107,8 +63,10 @@ export function syncedStateChanged(current: AccountingInvoiceExport, next: Synce
 // mapping pulls (ADR-061). Provider-neutral: everything provider-specific is
 // behind adapter.listInvoiceStatuses.
 //
-// Each change in derived payment status (Unpaid → Part paid → Paid, Void)
-// writes an InvoicePaymentStatusChanged outbox event in the same transaction.
+// Writing the facts, and everything a payment status change triggers (outbox
+// event, order timeline audit row, order completion), is
+// InvoicePaymentStateService's job — this processor only decides which rows
+// the fetched snapshot applies to.
 @Processor(ACCOUNTING_INVOICE_SYNC_QUEUE, { concurrency: 2, ...ACCOUNTING_WORKER_SETTINGS })
 export class AccountingInvoiceSyncProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(AccountingInvoiceSyncProcessor.name);
@@ -118,7 +76,7 @@ export class AccountingInvoiceSyncProcessor extends LoggedWorkerHost {
     private readonly accountingConnectionService: AccountingConnectionService,
     private readonly adapters: AccountingAdapterRegistry,
     private readonly ingestionRuns: IngestionRunService,
-    private readonly outbox: OutboxService,
+    private readonly paymentState: InvoicePaymentStateService,
   ) {
     super();
   }
@@ -277,50 +235,16 @@ export class AccountingInvoiceSyncProcessor extends LoggedWorkerHost {
         ) {
           continue;
         }
+        // Checked here too so unchanged invoices don't each cost a transaction.
         if (!syncedStateChanged(current, next)) continue;
-
-        const fromStatus = derivePaymentStatus(current);
-        const toStatus = derivePaymentStatus(next);
-        await this.prisma.$transaction(async (tx) => {
-          await tx.accountingInvoiceExport.update({
-            where: { id: current.id },
-            data: {
-              invoiceState: next.invoiceState,
-              invoiceTotal: next.invoiceTotal,
-              amountPaid: next.amountPaid,
-              amountCredited: next.amountCredited,
-              amountDue: next.amountDue,
-              issueDate: next.issueDate,
-              dueDate: next.dueDate,
-              fullyPaidOn: next.fullyPaidOn,
-              providerUpdatedAt: next.providerUpdatedAt,
-              externalInvoiceStatus: next.externalInvoiceStatus,
-              ...(next.externalInvoiceNumber ? { externalInvoiceNumber: next.externalInvoiceNumber } : {}),
-              stateSyncedAt: new Date(),
-            },
-          });
-          if (fromStatus !== toStatus) {
-            await this.outbox.writeEvent(tx, 'AccountingInvoiceExport', current.id, INVOICE_PAYMENT_STATUS_CHANGED, {
-              exportId: current.id,
-              orderId: current.orderId,
-              distributorId: current.distributorId,
-              customerId: current.order.traderCustomerId,
-              provider: connection.provider,
-              fromStatus,
-              toStatus,
-              invoiceState: next.invoiceState,
-              currency: record.currency ?? current.order.currency,
-              total: next.invoiceTotal,
-              amountPaid: next.amountPaid,
-              amountCredited: next.amountCredited,
-              amountDue: next.amountDue,
-              issueDate: record.issueDate,
-              dueDate: record.dueDate,
-              fullyPaidOn: record.fullyPaidOn,
-              occurredAt: (next.providerUpdatedAt ?? new Date()).toISOString(),
-            });
-          }
-        });
+        const { changed, fromStatus, toStatus } = await this.prisma.$transaction((tx) =>
+          this.paymentState.apply(tx, current, next, {
+            source: connection.provider,
+            currency: record.currency,
+            actor: { type: ActorType.SYSTEM },
+          }),
+        );
+        if (!changed) continue;
         updated += 1;
         if (fromStatus !== toStatus) {
           statusChanges += 1;
