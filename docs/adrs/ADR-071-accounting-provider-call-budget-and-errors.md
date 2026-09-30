@@ -51,7 +51,13 @@ Every Accounting API call in `XeroAccountingAdapter` goes through a private
    only from Xero's validation/error text, `code` `HTTP_<status>` / `NETWORK`,
    `details { statusCode, retryAfterMs }`, and the *parsed* object as `cause` —
    nothing raw from the provider can reach storage, notifications or logs.
-   429 / 5xx / transport → transient; other 4xx → permanent.
+   429 / 5xx / transport / 401 → transient; other 4xx (incl. 403) → permanent.
+   401 is an expired or invalid access token: the token is read once per job,
+   so a long paged sync can outlive it, and each retry begins with
+   `getValidTokenSet`, which refreshes it. A dead refresh token fails that
+   refresh permanently (`invalid_grant` → connection ERROR), so a 401 cannot
+   retry forever. 403 means the token is valid but not allowed for the
+   organisation (e.g. `AuthenticationUnsuccessful`), which needs a reconnect.
 
 No per-organisation concurrency guard: the sync dedupe (ADR-061) allows one run per
 (connection, resource type) and invoice export runs at concurrency 1, so at most 5

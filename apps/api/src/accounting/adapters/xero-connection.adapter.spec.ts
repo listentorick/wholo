@@ -788,6 +788,30 @@ describe('XeroAccountingAdapter', () => {
       }
     });
 
+    it('classifies an expired or invalid access token (401) as transient — the retry refreshes it', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(
+        xeroSdkRejection(401, { Type: null, Title: 'Unauthorized', Status: 401, Detail: 'TokenExpired: token expired at 09/30/2026 10:00:00' }),
+      );
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(true);
+      expect(err.code).toBe('HTTP_401');
+    });
+
+    it('classifies forbidden (403) as permanent — a valid token not allowed for this organisation needs a reconnect', async () => {
+      mockCreateInvoices.mockRejectedValueOnce(
+        xeroSdkRejection(403, { Type: null, Title: 'Forbidden', Status: 403, Detail: 'AuthenticationUnsuccessful' }),
+      );
+
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+
+      expect(err).toBeInstanceOf(AccountingProviderError);
+      expect(err.transient).toBe(false);
+      expect(err.code).toBe('HTTP_403');
+    });
+
     it('classifies a transport failure (xero-node 18.1 rejects with statusCode 0) as transient', async () => {
       mockCreateInvoices.mockRejectedValueOnce(xeroSdkRejection(0, 'connect ECONNREFUSED 10.0.0.1:443'));
 

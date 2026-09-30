@@ -556,15 +556,20 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     return Promise.race([pending, timeout]).finally(() => clearTimeout(timer));
   }
 
-  // Classification: rate limits (429), Xero-side faults (5xx) and transport
-  // failures are worth retrying; validation (400) and authorisation
-  // (401/403) failures are not — they need user action (fix mappings/codes,
-  // or reconnect). The message is built only from Xero's own validation /
+  // Classification: rate limits (429), Xero-side faults (5xx), transport
+  // failures and 401 are worth retrying; validation (400) and 403 are not —
+  // they need user action (fix mappings/codes, or reconnect). 401 is Xero's
+  // "access token expired/invalid" (TokenExpired): the token is read once per
+  // job, so a long paged sync can outlive it, and every retry starts with
+  // getValidTokenSet, which refreshes it. If the refresh token itself is dead
+  // that refresh fails permanently (invalid_grant → connection ERROR), so a
+  // 401 can't retry forever. 403 (AuthenticationUnsuccessful) means the token
+  // is valid but not allowed for this organisation — a refresh won't fix it. The message is built only from Xero's own validation /
   // error text, never the raw response, so it is safe to persist on export
   // rows, show in admin notifications, and log.
   private toProviderError(op: string, parsed: ParsedXeroError): AccountingProviderError {
     const { statusCode } = parsed;
-    const transient = statusCode === undefined || statusCode === 429 || statusCode >= 500;
+    const transient = statusCode === undefined || statusCode === 401 || statusCode === 429 || statusCode >= 500;
     const detail =
       parsed.validationMessages.length > 0 ? parsed.validationMessages.join('; ') : parsed.xeroMessage;
 
