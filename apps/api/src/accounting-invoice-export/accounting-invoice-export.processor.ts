@@ -24,6 +24,7 @@ import {
   AccountingInvoiceRequest,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
+import { CALL_BUDGET_EXHAUSTED } from '../accounting/accounting-call-budget.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
@@ -137,7 +138,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     const exportRow = await this.claimExport(connection, order);
     if (!exportRow) return;
 
-    await this.runExport(exportRow, connection, order);
+    await this.runExport(exportRow, connection, order, job);
   }
 
   // Acquire the (connection, order) export row and move it to PROCESSING, or
@@ -206,6 +207,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     exportRow: AccountingInvoiceExport,
     connection: AccountingConnection,
     order: Order & { lines: OrderLine[] },
+    job: Job<InvoiceExportJobData>,
   ): Promise<void> {
     const adapter = this.adapters.get(connection.provider);
 
@@ -405,6 +407,23 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       // so the stored/displayed message is generic and the real error goes to
       // the log with its stack.
       const providerError = err instanceof AccountingProviderError ? err : null;
+      // Our own call budget ran out (ADR-071): the call was never sent, and
+      // the queue's backoff retries at exactly retryAfterMs. That's a wait, not
+      // a failure — put the row back to PENDING (so the retry can claim it)
+      // without the FAILED status, timeline entry or admin notification.
+      // Only the final attempt falls through and is reported as a failure.
+      const lastAttempt = (job.attemptsMade ?? 0) + 1 >= (job.opts?.attempts ?? 1);
+      if (providerError?.code === CALL_BUDGET_EXHAUSTED && !lastAttempt) {
+        await this.prisma.accountingInvoiceExport.update({
+          where: { id: exportRow.id },
+          data: { status: AccountingInvoiceExportStatus.PENDING },
+        });
+        this.logger.log(
+          { event: 'accounting.invoice_export.deferred', ...this.logFields(connection, exportRow), retryAfterMs: providerError.retryAfterMs },
+          `Invoice export ${exportRow.id} deferred — ${connection.provider} call budget exhausted`,
+        );
+        throw err;
+      }
       // Our own HTTP exceptions (e.g. NotFound when the connection was
       // disconnected mid-export) carry messages written for users — expected.
       const expected = providerError !== null || err instanceof HttpException;

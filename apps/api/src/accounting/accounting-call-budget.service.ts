@@ -13,6 +13,8 @@ const COMMAND_TIMEOUT_MS = 3_000;
 // and let the job's backoff reschedule it instead.
 export const MAX_BUDGET_WAIT_MS = 20_000;
 const WAIT_JITTER_MS = 250;
+// Error code thrown when a wait would pass MAX_BUDGET_WAIT_MS.
+export const CALL_BUDGET_EXHAUSTED = 'CALL_BUDGET_EXHAUSTED';
 
 // Sliding-window log: one sorted-set member per call, scored by the Redis
 // server's own clock (TIME) so every process agrees on "now". Admits the
@@ -77,7 +79,7 @@ export class AccountingCallBudgetService implements OnModuleDestroy {
           `${provider} call budget for this organisation is exhausted — retrying later`,
           true,
           undefined,
-          'CALL_BUDGET_EXHAUSTED',
+          CALL_BUDGET_EXHAUSTED,
           { retryAfterMs: waitMs },
         );
       }

@@ -69,6 +69,13 @@ otherwise 30 s × 2^(attempt−1) as before.
 - A failed Xero call is one clean, structured warn line; alerts in
   `helm/wholo/alerting/stocdup-accounting.yaml` (ADR-064 addendum) cover give-ups,
   `invalid_client`, error spikes and the daily limit.
+- Budget exhaustion still uses up a BullMQ attempt (the backoff waits exactly
+  `retryAfterMs`), but the invoice export does not report it as a failure while
+  attempts remain: the call was never sent, so the export goes back to `PENDING`
+  quietly (log `accounting.invoice_export.deferred`), with no FAILED status,
+  timeline entry or admin notification. The final attempt is reported as a normal
+  failure, so an export that never gets a slot stays visible and retryable. Xero
+  429s and 5xx are real provider faults and are still reported on every attempt.
 - Existing FAILED invoice exports created before this change may hold a raw SDK
   string (possibly an access token, 30-minute lifetime) in `errorMessage`; they are
   overwritten on the next retry.

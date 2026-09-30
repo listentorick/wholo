@@ -488,6 +488,38 @@ describe('AccountingInvoiceExportProcessor', () => {
       );
     });
 
+    describe('when our own call budget is exhausted (ADR-071)', () => {
+      const budgetExhausted = () =>
+        new AccountingProviderError('XERO call budget for this organisation is exhausted — retrying later', true, undefined, 'CALL_BUDGET_EXHAUSTED', {
+          retryAfterMs: 12_000,
+        });
+      const withAttempts = (attemptsMade: number, attempts: number) =>
+        ({ ...(makeJob() as object), attemptsMade, opts: { attempts } }) as unknown as Job;
+
+      it('defers quietly with attempts left: back to PENDING, rethrown for backoff, nothing reported', async () => {
+        adapter.createInvoice.mockRejectedValue(budgetExhausted());
+
+        await expect(processor.process(withAttempts(1, 5))).rejects.toThrow('call budget');
+
+        expect(prisma.accountingInvoiceExport.update).toHaveBeenLastCalledWith(
+          expect.objectContaining({ data: { status: AccountingInvoiceExportStatus.PENDING } }),
+        );
+        expect(failedUpdate()).toBeUndefined();
+        expect(audit.record).not.toHaveBeenCalled();
+        expect(outbox.writeEvent).not.toHaveBeenCalled();
+        expect(adminNotifications.notifyOrganisationAdmins).not.toHaveBeenCalled();
+      });
+
+      it('reports it as a failure on the final attempt, so a stuck export is visible and retryable', async () => {
+        adapter.createInvoice.mockRejectedValue(budgetExhausted());
+
+        await expect(processor.process(withAttempts(4, 5))).rejects.toThrow('call budget');
+
+        expect(failedUpdate()![0].data).toEqual(expect.objectContaining({ status: AccountingInvoiceExportStatus.FAILED }));
+        expect(adminNotifications.notifyOrganisationAdmins).toHaveBeenCalled();
+      });
+    });
+
     it('marks FAILED and rethrows token refresh failures (transient)', async () => {
       connectionService.getValidTokenSet.mockRejectedValue(new Error('refresh failed'));
 
