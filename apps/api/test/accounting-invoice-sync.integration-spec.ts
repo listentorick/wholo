@@ -267,4 +267,46 @@ describe('Invoice status sync (integration)', () => {
     expect((await prisma.order.findUniqueOrThrow({ where: { id: b.order.id } })).status).toBe(OrderStatus.DELIVERED);
     expect(await timeline(b.order.id)).toHaveLength(0);
   });
+
+  async function reconnect(distributorId: string, externalOrganisationId: string) {
+    await prisma.accountingConnection.updateMany({
+      where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+      data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
+    });
+    return prisma.accountingConnection.create({
+      data: {
+        distributorId,
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationId,
+        externalOrganisationName: 'Org',
+        scopes: 'openid accounting.invoices',
+        encryptedCredentialData: 'irrelevant',
+        connectedByUserId: USER,
+        connectedAt: new Date(),
+      },
+    });
+  }
+
+  it('after a reconnect to the same organisation, still updates invoices exported under the old connection', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-before-reconnect');
+    const newConnection = await reconnect(DIST_A, a.connection.externalOrganisationId);
+
+    const result = await processor.applyStatuses(newConnection, [paid('inv-before-reconnect')]);
+
+    expect(result).toEqual({ matched: 1, updated: 1, statusChanges: 1 });
+    const after = await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: a.exp.id } });
+    expect(after.invoiceState).toBe('PAID');
+    expect(after.accountingConnectionId).toBe(a.connection.id); // history untouched
+  });
+
+  it('after a reconnect to a different organisation, leaves the old organisation\'s invoices alone', async () => {
+    const a = await exportedInvoice(DIST_A, 'inv-old-org');
+    const newConnection = await reconnect(DIST_A, 'a-different-org');
+
+    const result = await processor.applyStatuses(newConnection, [paid('inv-old-org')]);
+
+    expect(result).toEqual({ matched: 0, updated: 0, statusChanges: 0 });
+    expect((await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: a.exp.id } })).invoiceState).toBeNull();
+  });
 });

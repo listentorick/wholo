@@ -33,12 +33,19 @@ describe('firstSlot', () => {
 
 describe('AccountingSyncScheduler.runOnce', () => {
   let scheduler: AccountingSyncScheduler;
-  let connections: Array<{ id: string; distributorId: string; connectedAt: Date }>;
+  let connections: Array<{ id: string; distributorId: string; provider?: string; externalOrganisationId?: string; connectedAt: Date }>;
   let scheduled: Array<{ id?: string; sourceRef: string; resourceType: string; nextRunAt: Date | null }>;
   let enqueueDue: jest.Mock;
   let fillMissingSchedules: jest.Mock;
   let skipDue: jest.Mock;
   let unsettledConnectionIds: string[];
+  // Connection rows that aren't CONNECTED (e.g. retired by a reconnect).
+  let extraConnections: Array<{ id: string; distributorId: string; provider?: string; externalOrganisationId?: string }>;
+  const orgOf = (c: { id: string; distributorId: string; provider?: string; externalOrganisationId?: string }) => ({
+    distributorId: c.distributorId,
+    provider: c.provider ?? 'XERO',
+    externalOrganisationId: c.externalOrganisationId ?? `org-${c.id}`,
+  });
 
   beforeEach(() => {
     connections = [{ id: 'conn-1', distributorId: 'dist-1', connectedAt: new Date('2026-01-01') }];
@@ -47,10 +54,15 @@ describe('AccountingSyncScheduler.runOnce', () => {
     skipDue = jest.fn().mockResolvedValue(NOW);
     fillMissingSchedules = jest.fn().mockImplementation(async (rows: unknown[]) => rows.length);
     unsettledConnectionIds = ['conn-1'];
+    extraConnections = [];
     const prisma = {
-      accountingConnection: { findMany: jest.fn(async () => connections) },
-      accountingInvoiceExport: {
-        groupBy: jest.fn(async () => unsettledConnectionIds.map((id) => ({ accountingConnectionId: id }))),
+      accountingConnection: {
+        // Second query: which organisations have unsettled invoices (any connection row).
+        findMany: jest.fn(async (args: { where: { invoiceExports?: unknown } }) =>
+          args.where.invoiceExports
+            ? [...connections, ...extraConnections].filter((c) => unsettledConnectionIds.includes(c.id)).map(orgOf)
+            : connections.map((c) => ({ provider: 'XERO', externalOrganisationId: `org-${c.id}`, ...c })),
+        ),
       },
     };
     const ingestionRuns = { listScheduled: jest.fn(async () => scheduled), fillMissingSchedules };
@@ -152,5 +164,50 @@ describe('AccountingSyncScheduler.runOnce', () => {
     expect(summary).toMatchObject({ due: 1, enqueued: 0, skippedNothingToDo: 1 });
     expect(enqueueDue).not.toHaveBeenCalled();
     expect(skipDue).toHaveBeenCalledWith('run-inv', 'invoice', slot, NOW);
+  });
+
+  describe('after a reconnect (a new connection row for the same organisation)', () => {
+    const invoiceOnlyDue = () => {
+      const slot = new Date(NOW.getTime() - MIN);
+      scheduled = [
+        { id: 'run-inv', sourceRef: 'conn-new', resourceType: 'invoice', nextRunAt: slot },
+        { id: 'run-c', sourceRef: 'conn-new', resourceType: 'contact', nextRunAt: new Date(NOW.getTime() + MIN) },
+        { id: 'run-p', sourceRef: 'conn-new', resourceType: 'product', nextRunAt: new Date(NOW.getTime() + MIN) },
+        { id: 'run-t', sourceRef: 'conn-new', resourceType: 'tax_type', nextRunAt: new Date(NOW.getTime() + MIN) },
+      ] as typeof scheduled;
+    };
+
+    beforeEach(() => {
+      connections = [{ id: 'conn-new', distributorId: 'dist-1', provider: 'XERO', externalOrganisationId: 'org-x', connectedAt: new Date('2026-01-01') }];
+      invoiceOnlyDue();
+    });
+
+    it('still syncs invoices when the only unsettled ones were exported under the old connection row', async () => {
+      extraConnections = [{ id: 'conn-old', distributorId: 'dist-1', provider: 'XERO', externalOrganisationId: 'org-x' }];
+      unsettledConnectionIds = ['conn-old'];
+
+      const summary = await scheduler.runOnce(NOW);
+
+      expect(summary).toMatchObject({ due: 1, enqueued: 1, skippedNothingToDo: 0 });
+      expect(enqueueDue).toHaveBeenCalledWith('dist-1', 'conn-new', 'invoice', expect.any(Date), NOW);
+    });
+
+    it('does not sync for unsettled invoices in a different organisation the distributor used before', async () => {
+      extraConnections = [{ id: 'conn-old', distributorId: 'dist-1', provider: 'XERO', externalOrganisationId: 'org-y' }];
+      unsettledConnectionIds = ['conn-old'];
+
+      const summary = await scheduler.runOnce(NOW);
+
+      expect(summary).toMatchObject({ enqueued: 0, skippedNothingToDo: 1 });
+    });
+
+    it("does not sync for another distributor's unsettled invoices in the same organisation", async () => {
+      extraConnections = [{ id: 'conn-other', distributorId: 'dist-2', provider: 'XERO', externalOrganisationId: 'org-x' }];
+      unsettledConnectionIds = ['conn-other'];
+
+      const summary = await scheduler.runOnce(NOW);
+
+      expect(summary).toMatchObject({ enqueued: 0, skippedNothingToDo: 1 });
+    });
   });
 });

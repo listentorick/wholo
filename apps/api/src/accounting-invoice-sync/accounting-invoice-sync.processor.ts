@@ -18,6 +18,7 @@ import { AccountingExternalInvoiceStatus } from '../accounting/adapters/accounti
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 import { ExportWithOrder, InvoicePaymentStateService, SyncedState, syncedStateChanged } from '../accounting/invoice-payment-state.service';
+import { exportsForOrganisation } from '../accounting/accounting-organisation';
 import { ACCOUNTING_SOURCE_TYPE } from '../accounting/sync/accounting-sync.constants';
 import { shouldRunFull } from '../accounting/sync/accounting-sync-processor.base';
 import { LoggedWorkerHost } from '../queues/logged-worker-host';
@@ -196,7 +197,8 @@ export class AccountingInvoiceSyncProcessor extends LoggedWorkerHost {
     throw err;
   }
 
-  // Writes provider facts onto our export rows. Invoices Stocdup didn't
+  // Writes provider facts onto our export rows — those made under any of the
+  // distributor's connections to this organisation. Invoices Stocdup didn't
   // create (or whose export row is gone) are ignored. Returns how many
   // fetched invoices were ours, how many rows changed, and how many derived
   // payment-status transitions were emitted.
@@ -212,7 +214,9 @@ export class AccountingInvoiceSyncProcessor extends LoggedWorkerHost {
       const chunk = records.slice(i, i + LOOKUP_CHUNK);
       const exports = (await this.prisma.accountingInvoiceExport.findMany({
         where: {
-          accountingConnectionId: connection.id,
+          // Any connection row for this organisation — invoices exported
+          // before a reconnect still belong to it.
+          ...exportsForOrganisation(connection),
           status: AccountingInvoiceExportStatus.COMPLETED,
           externalInvoiceId: { in: chunk.map((r) => r.externalInvoiceId) },
         },

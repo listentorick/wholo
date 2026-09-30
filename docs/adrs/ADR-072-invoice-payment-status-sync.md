@@ -17,9 +17,9 @@ customers pay.
 A fourth accounting resource type, `invoice`, runs through the ADR-061 scheduler,
 dedupe and cursor rules and the ADR-071 call budget / Retry-After / error handling:
 
-- Every 15 minutes, **only for connections with at least one exported invoice not yet
-  known to be settled** (never synced, or not PAID / VOIDED / DELETED). Other
-  connections make no provider call; their slot just moves on.
+- Every 15 minutes, **only for connections whose organisation has at least one exported
+  invoice not yet known to be settled** (never synced, or not PAID / VOIDED / DELETED).
+  Other connections make no provider call; their slot just moves on.
 - A manual Sync also refreshes invoice status. The invoice sync has nothing to review,
   so it is not shown in the sync progress panel (`getStatus` returns mapping pulls only).
 - Webhooks are deliberately out of scope; if added later they only trigger this sync.
@@ -55,10 +55,20 @@ is before the distributor's local today. Overdue is never stored — it depends 
 date.
 
 ### Applying a snapshot
-`AccountingInvoiceSyncProcessor` matches fetched invoices to export rows on the
-syncing connection only, skips unchanged rows, never lets an older
-`providerUpdatedAt` overwrite a newer one, and in one transaction updates the row and,
-when the derived payment status changed, writes an `InvoicePaymentStatusChanged`
+`AccountingInvoiceSyncProcessor` matches fetched invoices to export rows made under any
+of the distributor's connections to the syncing connection's provider organisation
+(same `distributorId`, `provider`, `externalOrganisationId`) — not just the syncing
+connection row. A reconnect creates a new connection row (ADR-051 keeps the old ones),
+but invoices exported before it still live in the same organisation and must keep
+syncing; the scheduler's "anything unsettled?" check matches the same way
+(`accounting-organisation.ts`). Invoices from an organisation the distributor is no
+longer connected to can't be read and keep their last known state.
+
+It skips unchanged rows and never lets an older `providerUpdatedAt` overwrite a newer
+one. The write goes through `InvoicePaymentStateService`, the only writer of payment
+columns: in one transaction it updates the row and, when the derived payment status
+changed, writes an order audit row (the order timeline), reconciles the order's
+COMPLETED status (delivered + paid), and writes an `InvoicePaymentStatusChanged`
 outbox event (export, order, distributor, customer, from → to, amounts, dates,
 `occurredAt` = provider update time).
 

@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingSyncService } from './sync/accounting-sync.service';
 import { SETTLED_INVOICE_STATES } from './invoice-payment-status';
+import { AccountingOrganisationRef, organisationKey } from './accounting-organisation';
 import {
   ACCOUNTING_SOURCE_TYPE,
   ACCOUNTING_SYNC_INTERVAL_MS,
@@ -25,6 +26,10 @@ const INITIAL_DELAY_MS = 90 * 1000;
 export function firstSlot(now: Date, connectedAt: Date, intervalMs: number, random: () => number = Math.random): Date {
   if (now.getTime() - connectedAt.getTime() < intervalMs) return now;
   return new Date(now.getTime() + Math.floor(random() * intervalMs));
+}
+
+interface SchedulerConnection extends AccountingOrganisationRef {
+  id: string;
 }
 
 interface DueSync {
@@ -91,27 +96,34 @@ export class AccountingSyncScheduler implements OnModuleInit {
     }
   }
 
-  // Connections with at least one exported invoice not yet known to be
-  // settled (never synced, or not PAID / VOIDED / DELETED).
-  private async connectionsWithUnsettledInvoices(connectionIds: string[]): Promise<Set<string>> {
-    if (connectionIds.length === 0) return new Set();
-    const rows = await this.prisma.accountingInvoiceExport.groupBy({
-      by: ['accountingConnectionId'],
+  // Connections whose provider organisation has at least one exported invoice
+  // not yet known to be settled (never synced, or not PAID / VOIDED /
+  // DELETED). Matched by organisation, not connection row: after a reconnect
+  // the unpaid invoices may all have been exported under the old row.
+  private async connectionsWithUnsettledInvoices(connections: SchedulerConnection[]): Promise<Set<string>> {
+    if (connections.length === 0) return new Set();
+    const withUnsettled = await this.prisma.accountingConnection.findMany({
       where: {
-        accountingConnectionId: { in: connectionIds },
-        status: AccountingInvoiceExportStatus.COMPLETED,
-        externalInvoiceId: { not: null },
-        OR: [{ invoiceState: null }, { invoiceState: { notIn: SETTLED_INVOICE_STATES } }],
+        distributorId: { in: [...new Set(connections.map((c) => c.distributorId))] },
+        invoiceExports: {
+          some: {
+            status: AccountingInvoiceExportStatus.COMPLETED,
+            externalInvoiceId: { not: null },
+            OR: [{ invoiceState: null }, { invoiceState: { notIn: SETTLED_INVOICE_STATES } }],
+          },
+        },
       },
+      select: { distributorId: true, provider: true, externalOrganisationId: true },
     });
-    return new Set(rows.map((r) => r.accountingConnectionId));
+    const keys = new Set(withUnsettled.map(organisationKey));
+    return new Set(connections.filter((c) => keys.has(organisationKey(c))).map((c) => c.id));
   }
 
   async runOnce(now: Date): Promise<TickSummary> {
     const started = Date.now();
     const connections = await this.prisma.accountingConnection.findMany({
       where: { status: AccountingConnectionStatus.CONNECTED },
-      select: { id: true, distributorId: true, connectedAt: true },
+      select: { id: true, distributorId: true, provider: true, externalOrganisationId: true, connectedAt: true },
     });
     const scheduled = await this.ingestionRuns.listScheduled(
       ACCOUNTING_SOURCE_TYPE,
@@ -141,9 +153,8 @@ export class AccountingSyncScheduler implements OnModuleInit {
     }
 
     const seeded = await this.ingestionRuns.fillMissingSchedules(toSeed);
-    const withUnsettledInvoices = await this.connectionsWithUnsettledInvoices(
-      due.filter((d) => d.resourceType === 'invoice').map((d) => d.connectionId),
-    );
+    const invoiceDue = new Set(due.filter((d) => d.resourceType === 'invoice').map((d) => d.connectionId));
+    const withUnsettledInvoices = await this.connectionsWithUnsettledInvoices(connections.filter((c) => invoiceDue.has(c.id)));
 
     let enqueued = 0;
     let skippedInFlight = 0;
