@@ -173,8 +173,8 @@ describe('Customer payments (integration)', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.outstanding).toEqual({ amount: 120, count: 1 });
-    expect(res.body.overdue).toMatchObject({ amount: 120, count: 1 });
+    expect(res.body.outstanding).toEqual({ amounts: [{ currency: 'GBP', amount: 120 }], count: 1 });
+    expect(res.body.overdue).toMatchObject({ amounts: [{ currency: 'GBP', amount: 120 }], count: 1 });
     expect(res.body.openInvoices).toHaveLength(1);
     expect(res.body.openInvoices[0]).toMatchObject({ paymentStatus: 'UNPAID', isOverdue: true });
     expect(res.body.last90Days).toEqual({ paidCount: 0, averageDaysToPay: null, paidOnTimePercent: null });

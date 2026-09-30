@@ -95,7 +95,7 @@ function buildApiParams(
       if (f.operator === 'is') params.status = val;
       else if (f.operator === 'is_not') params.statusExclude = val;
     } else if (f.field === 'payment') {
-      params.payment = (Array.isArray(f.value) ? f.value[0] : f.value) as OrderPaymentFilter;
+      params.payment = (Array.isArray(f.value) ? f.value : [f.value]) as OrderPaymentFilter[];
     } else if (f.field === 'customerName') {
       params.customerName = f.value as string;
     } else if (f.field === 'requestedDeliveryDate') {

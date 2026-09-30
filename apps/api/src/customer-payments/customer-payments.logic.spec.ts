@@ -60,12 +60,32 @@ describe('summarisePaid', () => {
 });
 
 describe('summariseOpen', () => {
+  const inv = (amountDue: number, isOverdue: boolean, daysOverdue: number, currency = 'GBP') =>
+    ({ amountDue, isOverdue, daysOverdue, currency }) as Parameters<typeof summariseOpen>[0][number];
+
   it('totals what is outstanding and what is overdue', () => {
-    const inv = (amountDue: number, isOverdue: boolean, daysOverdue: number) =>
-      ({ amountDue, isOverdue, daysOverdue }) as Parameters<typeof summariseOpen>[0][number];
     expect(summariseOpen([inv(100, true, 12), inv(50.25, true, 3), inv(80, false, 0)])).toEqual({
-      outstanding: { amount: 230.25, count: 3 },
-      overdue: { amount: 150.25, count: 2, oldestDaysOverdue: 12 },
+      outstanding: { amounts: [{ currency: 'GBP', amount: 230.25 }], count: 3 },
+      overdue: { amounts: [{ currency: 'GBP', amount: 150.25 }], count: 2, oldestDaysOverdue: 12 },
+    });
+  });
+
+  it('never adds amounts in different currencies together', () => {
+    const summary = summariseOpen([inv(100, true, 5, 'GBP'), inv(40, false, 0, 'EUR'), inv(10, true, 2, 'EUR')]);
+    expect(summary.outstanding.amounts).toEqual([
+      { currency: 'EUR', amount: 50 },
+      { currency: 'GBP', amount: 100 },
+    ]);
+    expect(summary.overdue.amounts).toEqual([
+      { currency: 'EUR', amount: 10 },
+      { currency: 'GBP', amount: 100 },
+    ]);
+  });
+
+  it('has no amounts at all when nothing is owed (the UI shows zero in the distributor currency)', () => {
+    expect(summariseOpen([])).toEqual({
+      outstanding: { amounts: [], count: 0 },
+      overdue: { amounts: [], count: 0, oldestDaysOverdue: null },
     });
   });
 });

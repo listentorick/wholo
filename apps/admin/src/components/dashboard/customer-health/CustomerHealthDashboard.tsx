@@ -61,7 +61,13 @@ export function CustomerHealthDashboard({ nav }: { nav?: DashboardNav }) {
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800">Could not refresh — showing the last loaded data.</div>
         )}
 
-        <HealthStatTiles tiles={data.tiles} riskOnly={riskOnly} onToggleRisk={() => setRiskOnly((v) => !v)} currency={currency} />
+        <HealthStatTiles
+          tiles={data.tiles}
+          riskOnly={riskOnly}
+          onToggleRisk={() => setRiskOnly((v) => !v)}
+          currency={currency}
+          currencyCode={user.organisationCurrencyCode ?? 'GBP'}
+        />
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
           <div className="lg:col-span-2">

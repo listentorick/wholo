@@ -58,56 +58,68 @@ const OPEN: AccountingInvoiceState[] = [
   AccountingInvoiceState.AWAITING_PAYMENT,
 ];
 
-// Order-list filter on payment position — the same definitions as
-// derivePaymentStatus / isOverdue, expressed as a query.
-export function paymentFilterWhere(filter: OrderPaymentFilter, today: string): Prisma.OrderWhereInput {
-  const completed = { status: AccountingInvoiceExportStatus.COMPLETED };
+// Invoice is overdue: approved, money due, due date before the distributor's
+// local today — isOverdue as a query.
+const overdue = (today: string): Prisma.AccountingInvoiceExportWhereInput => ({
+  invoiceState: AccountingInvoiceState.AWAITING_PAYMENT,
+  amountDue: { gt: 0 },
+  dueDate: { lt: new Date(`${today}T00:00:00.000Z`) },
+});
+
+// The negation of `overdue`, spelled out so a null due date counts as "not
+// overdue" (a NOT over a nullable comparison would drop those rows in SQL).
+const notOverdue = (today: string): Prisma.AccountingInvoiceExportWhereInput => ({
+  OR: [
+    { invoiceState: { not: AccountingInvoiceState.AWAITING_PAYMENT } },
+    { amountDue: { lte: 0 } },
+    { dueDate: null },
+    { dueDate: { gte: new Date(`${today}T00:00:00.000Z`) } },
+  ],
+});
+
+// One payment position, as a condition on an export row. The positions are
+// the same ones the badge shows (paymentLabel): Overdue replaces Unpaid /
+// Part paid, so those two exclude overdue invoices.
+function paymentCondition(filter: OrderPaymentFilter, today: string): Prisma.AccountingInvoiceExportWhereInput {
   switch (filter) {
     case 'PAID':
       return {
-        invoiceExports: {
-          some: {
-            ...completed,
-            OR: [
-              { invoiceState: AccountingInvoiceState.PAID },
-              { invoiceState: AccountingInvoiceState.AWAITING_PAYMENT, amountDue: { lte: 0 }, invoiceTotal: { gt: 0 } },
-            ],
-          },
-        },
+        OR: [
+          { invoiceState: AccountingInvoiceState.PAID },
+          { invoiceState: AccountingInvoiceState.AWAITING_PAYMENT, amountDue: { lte: 0 }, invoiceTotal: { gt: 0 } },
+        ],
       };
     case 'PART_PAID':
       return {
-        invoiceExports: {
-          some: {
-            ...completed,
-            invoiceState: { in: OPEN },
-            amountDue: { gt: 0 },
-            OR: [{ amountPaid: { gt: 0 } }, { amountCredited: { gt: 0 } }],
-          },
-        },
+        AND: [
+          { invoiceState: { in: OPEN }, amountDue: { gt: 0 } },
+          { OR: [{ amountPaid: { gt: 0 } }, { amountCredited: { gt: 0 } }] },
+          notOverdue(today),
+        ],
       };
     case 'UNPAID':
       return {
-        invoiceExports: {
-          some: {
-            ...completed,
-            invoiceState: { in: OPEN },
-            amountPaid: { lte: 0 },
-            amountCredited: { lte: 0 },
-            NOT: { invoiceState: AccountingInvoiceState.AWAITING_PAYMENT, amountDue: { lte: 0 }, invoiceTotal: { gt: 0 } },
-          },
-        },
+        AND: [
+          { invoiceState: { in: OPEN }, amountPaid: { lte: 0 }, amountCredited: { lte: 0 } },
+          { NOT: { invoiceState: AccountingInvoiceState.AWAITING_PAYMENT, amountDue: { lte: 0 }, invoiceTotal: { gt: 0 } } },
+          notOverdue(today),
+        ],
       };
     case 'OVERDUE':
-      return {
-        invoiceExports: {
-          some: {
-            ...completed,
-            invoiceState: AccountingInvoiceState.AWAITING_PAYMENT,
-            amountDue: { gt: 0 },
-            dueDate: { lt: new Date(`${today}T00:00:00.000Z`) },
-          },
-        },
-      };
+      return overdue(today);
   }
+}
+
+// Order-list filter on payment position — the same definitions as
+// derivePaymentStatus / isOverdue / the badge, expressed as a query. Several
+// positions match any of them.
+export function paymentFilterWhere(filters: OrderPaymentFilter[], today: string): Prisma.OrderWhereInput {
+  return {
+    invoiceExports: {
+      some: {
+        status: AccountingInvoiceExportStatus.COMPLETED,
+        OR: [...new Set(filters)].map((f) => paymentCondition(f, today)),
+      },
+    },
+  };
 }

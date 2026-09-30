@@ -10,7 +10,7 @@ const response = (generatedAt = '2026-09-24T12:00:00.000Z'): CustomerHealthRespo
   distributorId: 'd',
   timezone: 'UTC',
   generatedAt,
-  tiles: { activeCustomers90d: 1, atRiskCount: 0, salesLast30d: 0, overdueBalance: 0, overdueInvoiceCount: 0 },
+  tiles: { activeCustomers90d: 1, atRiskCount: 0, salesLast30d: 0, overdueBalances: [], overdueInvoiceCount: 0 },
   tierCounts: { healthy: 1, watch: 0, at_risk: 0 },
   needingAttention: [],
   buyingTrends: [],

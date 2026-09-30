@@ -398,7 +398,8 @@ export interface OrderListParams {
   // delivery-runs board. Wins over deliveryDateAfter/Before if both are sent.
   undated?: boolean;
   /** Payment position of the order's invoice (ADR-072). */
-  payment?: OrderPaymentFilter;
+  /** Any of these payment positions. */
+  payment?: OrderPaymentFilter[];
   sortBy?: 'createdAt' | 'requestedDeliveryDate';
   sortOrder?: 'asc' | 'desc';
 }
@@ -2040,8 +2041,8 @@ export interface CustomerHealthResponse {
     activeCustomers90d: number;
     atRiskCount: number;
     salesLast30d: number;
-    /** Sum still due on invoices past their due date, across all customers (ADR-072). */
-    overdueBalance: number;
+    /** Sum still due on invoices past their due date, across all customers, per currency (ADR-072). */
+    overdueBalances: MoneyAmount[];
     overdueInvoiceCount: number;
   };
   tierCounts: { healthy: number; watch: number; at_risk: number };
@@ -2165,12 +2166,22 @@ export interface CustomerOpenInvoice {
 }
 
 /** A customer's payment position with one distributor: right now (live) and how they have paid (last 90 days). */
+/**
+ * A sum of money in one currency. Totals are never added across currencies: a
+ * distributor trades in one currency, but orders snapshot it, so invoices from
+ * before a currency change keep theirs. Empty means nothing to total.
+ */
+export interface MoneyAmount {
+  currency: string;
+  amount: number;
+}
+
 export interface CustomerPaymentSummary {
   customerId: string;
   /** Distributor-local date the figures were computed for (YYYY-MM-DD). */
   asOf: string;
-  outstanding: { amount: number; count: number };
-  overdue: { amount: number; count: number; oldestDaysOverdue: number | null };
+  outstanding: { amounts: MoneyAmount[]; count: number };
+  overdue: { amounts: MoneyAmount[]; count: number; oldestDaysOverdue: number | null };
   last90Days: {
     paidCount: number;
     /** Mean days from invoice date to fully paid; null with nothing paid in the window. */

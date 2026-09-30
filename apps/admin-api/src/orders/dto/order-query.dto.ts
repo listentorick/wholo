@@ -1,6 +1,6 @@
 import {
   IsOptional, IsString, IsInt, IsEnum, IsBoolean, Min, Max,
-  IsIn,
+  IsIn, IsArray,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { OrderStatus } from '@prisma/client';
@@ -51,8 +51,11 @@ export class OrderQueryDto {
   @IsEnum(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc';
 
-  // Payment position of the order's invoice (ADR-072); apps/api validates it too.
+  // Payment position of the order's invoice (ADR-072): one or more, comma-separated
+  // (payment=UNPAID,OVERDUE); an order matches any of them; apps/api validates it too.
   @IsOptional()
-  @IsIn(['UNPAID', 'PART_PAID', 'PAID', 'OVERDUE'])
-  payment?: 'UNPAID' | 'PART_PAID' | 'PAID' | 'OVERDUE';
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').filter(Boolean) : value))
+  @IsArray()
+  @IsIn(['UNPAID', 'PART_PAID', 'PAID', 'OVERDUE'], { each: true })
+  payment?: Array<'UNPAID' | 'PART_PAID' | 'PAID' | 'OVERDUE'>;
 }

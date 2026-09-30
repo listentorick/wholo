@@ -2,19 +2,23 @@
 
 import type { CustomerHealthResponse } from '@wholo/types';
 import { StatTileFrame } from '../StatTile';
+import { makeCurrencyFormatter } from '../currency';
+import { formatAmounts } from '@/lib/money-amounts';
 
 interface Props {
   tiles: CustomerHealthResponse['tiles'];
   riskOnly: boolean;
   onToggleRisk: () => void;
   currency: (value: number) => string;
+  /** The distributor's trading currency — what a zero overdue balance is shown in. */
+  currencyCode: string;
 }
 
 // "Customers at risk" doubles as a filter, like the Delivery dashboard's
 // attention tiles: clicking it narrows the needing-attention table below
 // rather than linking away. The overdue tile is invoice money past its due
 // date, synced back from the accounting system (ADR-072).
-export function HealthStatTiles({ tiles, riskOnly, onToggleRisk, currency }: Props) {
+export function HealthStatTiles({ tiles, riskOnly, onToggleRisk, currency, currencyCode }: Props) {
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" role="group" aria-label="Customer health summary">
       <StatTileFrame
@@ -43,7 +47,7 @@ export function HealthStatTiles({ tiles, riskOnly, onToggleRisk, currency }: Pro
 
       <StatTileFrame
         label="Overdue invoices"
-        value={currency(tiles.overdueBalance)}
+        value={formatAmounts(tiles.overdueBalances, currencyCode, (amount, code) => makeCurrencyFormatter(code)(amount))}
         footer={
           <span className="text-xs font-medium text-muted">
             {tiles.overdueInvoiceCount === 0

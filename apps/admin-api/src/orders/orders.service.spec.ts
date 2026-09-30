@@ -14,6 +14,26 @@ describe('OrdersService (BFF)', () => {
     service = new OrdersService(api as unknown as ApiClientService);
   });
 
+  describe('listOrders', () => {
+    it('forwards every selected payment position to apps/api, comma-separated', async () => {
+      api.get.mockResolvedValue({ data: [] });
+
+      await service.listOrders('dist-1', { payment: ['UNPAID', 'OVERDUE'] }, 'token');
+
+      const url = new URL(api.get.mock.calls[0][0], 'http://api');
+      expect(url.pathname).toBe('/distributors/dist-1/orders');
+      expect(url.searchParams.get('payment')).toBe('UNPAID,OVERDUE');
+    });
+
+    it('sends no payment filter when none is selected', async () => {
+      api.get.mockResolvedValue({ data: [] });
+
+      await service.listOrders('dist-1', { payment: [] }, 'token');
+
+      expect(api.get.mock.calls[0][0]).not.toContain('payment');
+    });
+  });
+
   describe('acceptOrder', () => {
     it('posts the dto body to the upstream accept route', async () => {
       api.post.mockResolvedValue({ id: 'order-1', status: 'ACCEPTED' });

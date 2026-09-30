@@ -1,4 +1,4 @@
-import type { CustomerOpenInvoice, CustomerPaymentSummary } from '@wholo/types';
+import type { CustomerOpenInvoice, CustomerPaymentSummary, MoneyAmount } from '@wholo/types';
 import { derivePaymentStatus, InvoicePaymentFacts, isOverdue } from '../accounting/invoice-payment-status';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -58,13 +58,24 @@ export function summarisePaid(rows: PaidInvoiceRow[]): CustomerPaymentSummary['l
   return { paidCount: paid.length, averageDaysToPay, paidOnTimePercent };
 }
 
+const round = (n: number) => Math.round(n * 100) / 100;
+
+// What is still due, totalled per currency (never across currencies), in
+// currency-code order so the result is stable.
+export function sumDueByCurrency(invoices: Array<Pick<CustomerOpenInvoice, 'currency' | 'amountDue'>>): MoneyAmount[] {
+  const totals = new Map<string, number>();
+  for (const i of invoices) totals.set(i.currency, (totals.get(i.currency) ?? 0) + i.amountDue);
+  return [...totals]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => ({ currency, amount: round(amount) }));
+}
+
 export function summariseOpen(invoices: CustomerOpenInvoice[]): Pick<CustomerPaymentSummary, 'outstanding' | 'overdue'> {
-  const round = (n: number) => Math.round(n * 100) / 100;
   const overdue = invoices.filter((i) => i.isOverdue);
   return {
-    outstanding: { amount: round(invoices.reduce((s, i) => s + i.amountDue, 0)), count: invoices.length },
+    outstanding: { amounts: sumDueByCurrency(invoices), count: invoices.length },
     overdue: {
-      amount: round(overdue.reduce((s, i) => s + i.amountDue, 0)),
+      amounts: sumDueByCurrency(overdue),
       count: overdue.length,
       oldestDaysOverdue: overdue.length === 0 ? null : Math.max(...overdue.map((i) => i.daysOverdue)),
     },

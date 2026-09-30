@@ -77,7 +77,7 @@ describe('CustomerHealthService', () => {
 
     expect(result.distributorId).toBe('dist-1');
     expect(result.timezone).toBe('UTC');
-    expect(result.tiles).toEqual({ activeCustomers90d: 0, atRiskCount: 0, salesLast30d: 0, overdueBalance: 0, overdueInvoiceCount: 0 });
+    expect(result.tiles).toEqual({ activeCustomers90d: 0, atRiskCount: 0, salesLast30d: 0, overdueBalances: [], overdueInvoiceCount: 0 });
     expect(result.tierCounts).toEqual({ healthy: 0, watch: 0, at_risk: 0 });
     expect(result.needingAttention).toEqual([]);
   });
@@ -105,7 +105,7 @@ describe('CustomerHealthService', () => {
     const result = await service.getHealth('dist-1', now);
 
     expect(result.tierCounts).toEqual({ healthy: 2, watch: 0, at_risk: 1 });
-    expect(result.tiles).toEqual({ activeCustomers90d: 2, atRiskCount: 1, salesLast30d: 700, overdueBalance: 0, overdueInvoiceCount: 0 });
+    expect(result.tiles).toEqual({ activeCustomers90d: 2, atRiskCount: 1, salesLast30d: 700, overdueBalances: [], overdueInvoiceCount: 0 });
 
     expect(result.needingAttention).toHaveLength(1);
     expect(result.needingAttention[0]).toMatchObject({
@@ -252,7 +252,7 @@ describe('CustomerHealthService', () => {
     const result = await service.getHealth('dist-1', now);
 
     expect(payments.openInvoices).toHaveBeenCalledWith('dist-1', '2026-09-24');
-    expect(result.tiles).toMatchObject({ overdueBalance: 150.5, overdueInvoiceCount: 2 });
+    expect(result.tiles).toMatchObject({ overdueBalances: [{ currency: 'GBP', amount: 150.5 }], overdueInvoiceCount: 2 });
     const flagged = result.needingAttention.find((c) => c.customerId === 'org-late');
     expect(flagged?.tier).toBe('at_risk');
     expect(flagged?.reasons).toContainEqual({

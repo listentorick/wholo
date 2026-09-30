@@ -34,20 +34,21 @@ describe('toOrderInvoicePayment', () => {
 });
 
 describe('paymentFilterWhere', () => {
+  const conditions = (filters: Parameters<typeof paymentFilterWhere>[0]) =>
+    (paymentFilterWhere(filters, '2026-10-01') as { invoiceExports: { some: { status: string; OR: unknown[] } } }).invoiceExports.some;
+
   it('filters overdue on the distributor-local date, strictly before today', () => {
-    const where = paymentFilterWhere('OVERDUE', '2026-10-01');
-    expect(where.invoiceExports).toEqual({
-      some: expect.objectContaining({
-        status: 'COMPLETED',
-        invoiceState: 'AWAITING_PAYMENT',
-        amountDue: { gt: 0 },
-        dueDate: { lt: new Date('2026-10-01T00:00:00.000Z') },
-      }),
+    expect(conditions(['OVERDUE'])).toEqual({
+      status: 'COMPLETED',
+      OR: [{ invoiceState: 'AWAITING_PAYMENT', amountDue: { gt: 0 }, dueDate: { lt: new Date('2026-10-01T00:00:00.000Z') } }],
     });
   });
 
+  it('matches any of several positions, once each', () => {
+    expect(conditions(['UNPAID', 'OVERDUE', 'UNPAID']).OR).toHaveLength(2);
+  });
+
   it('treats a provider-PAID invoice as paid', () => {
-    const where = paymentFilterWhere('PAID', '2026-10-01') as { invoiceExports: { some: { OR: unknown[] } } };
-    expect(where.invoiceExports.some.OR).toContainEqual({ invoiceState: 'PAID' });
+    expect(JSON.stringify(conditions(['PAID']))).toContain('"invoiceState":"PAID"');
   });
 });

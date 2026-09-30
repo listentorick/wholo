@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { adminCustomerPaymentsApi } from '@wholo/admin-api-client';
 import { formatMoney, type Customer, type CustomerPaymentSummary } from '@wholo/types';
 import { PaymentBadge } from '@/components/orders/PaymentBadge';
+import { useAuth } from '@/lib/auth-context';
+import { formatAmounts } from '@/lib/money-amounts';
 
 function fmtDate(iso: string | null) {
   if (!iso) return '—';
@@ -25,6 +27,7 @@ function Stat({ label, value, detail }: { label: string; value: string; detail?:
 // owe now, what is overdue, and how promptly they have paid over the last 90
 // days. Read-only — payments are recorded in the accounting system.
 export function PaymentsTab({ customer }: { customer: Customer }) {
+  const { user } = useAuth();
   const [summary, setSummary] = useState<CustomerPaymentSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,20 +46,22 @@ export function PaymentsTab({ customer }: { customer: Customer }) {
   if (error) return <p className="text-sm text-red-700">{error}</p>;
   if (!summary) return <p className="text-sm text-muted">Loading payments…</p>;
 
-  const currency = summary.openInvoices[0]?.currency ?? 'GBP';
   const { outstanding, overdue, last90Days } = summary;
+  // Zero totals show in the distributor's own currency.
+  const money = (amounts: typeof outstanding.amounts) =>
+    formatAmounts(amounts, user?.organisationCurrencyCode ?? 'GBP', (amount, currency) => formatMoney(amount.toFixed(2), currency));
 
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Outstanding"
-          value={formatMoney(outstanding.amount.toFixed(2), currency)}
+          value={money(outstanding.amounts)}
           detail={`${outstanding.count} unpaid invoice${outstanding.count === 1 ? '' : 's'}`}
         />
         <Stat
           label="Overdue"
-          value={formatMoney(overdue.amount.toFixed(2), currency)}
+          value={money(overdue.amounts)}
           detail={
             overdue.count === 0
               ? 'Nothing overdue'

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { CustomerHealthBuyingTrendWeek, CustomerHealthReason, CustomerHealthResponse, CustomerHealthTier, FlaggedCustomer } from '@wholo/types';
 import { PrismaService } from '../prisma/prisma.service';
 import { CustomerPaymentsService } from '../customer-payments/customer-payments.service';
+import { sumDueByCurrency } from '../customer-payments/customer-payments.logic';
 import { distributorLocalDate } from '../common/distributor-local-date';
 import { QUALIFYING_STATUSES } from '../analytics/analytics.service';
 import { resolvePeriod } from '../analytics/period';
@@ -221,7 +222,7 @@ export class CustomerHealthService {
         activeCustomers90d,
         atRiskCount: tierCounts.at_risk,
         salesLast30d,
-        overdueBalance: Math.round(overdueInvoices.reduce((sum, i) => sum + i.amountDue, 0) * 100) / 100,
+        overdueBalances: sumDueByCurrency(overdueInvoices),
         overdueInvoiceCount: overdueInvoices.length,
       },
       tierCounts,

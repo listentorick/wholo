@@ -157,7 +157,7 @@ export class AdminOrdersService {
         customer: { name: { contains: query.customerName, mode: 'insensitive' } },
       }),
       ...(requestedDeliveryDateFilter !== undefined && { requestedDeliveryDate: requestedDeliveryDateFilter }),
-      ...(query.payment && paymentFilterWhere(query.payment, today)),
+      ...(query.payment?.length && paymentFilterWhere(query.payment, today)),
     };
 
     let cursorWhere: Prisma.OrderWhereInput = {};
