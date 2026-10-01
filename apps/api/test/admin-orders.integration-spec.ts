@@ -355,8 +355,14 @@ describe('Admin Orders (integration)', () => {
       expect(res.body.location).toMatchObject({ available: true, latitude: 51.51, longitude: -0.12 });
       expect(res.body.photos).toHaveLength(1);
       expect(res.body.photos[0].url).toMatch(/^https:\/\/signed\.example\//);
-      // no raw R2 keys leak in the response
-      expect(JSON.stringify(res.body)).not.toContain('deliveries/');
+      expect(res.body.photos[0].thumbnailUrl).toMatch(/^https:\/\/signed\.example\//);
+      // Only signed URLs are exposed — never the stored R2 keys (`variants`).
+      // (A signed URL necessarily contains the object path, so this checks the
+      // fields returned rather than searching the body for a path fragment.)
+      expect(Object.keys(res.body.photos[0]).sort()).toEqual(
+        ['capturedAt', 'height', 'id', 'sortOrder', 'thumbnailUrl', 'url', 'width'].sort(),
+      );
+      expect(JSON.stringify(res.body)).not.toContain('variants');
     });
 
     it('returns 404 when the order belongs to a different distributor', async () => {

@@ -52,6 +52,8 @@ describe('Distributor onboarding (integration)', () => {
       select: { id: true },
     });
     const userIds = users.map((u) => u.id);
+    // Onboarding gives the new membership a MembershipRole row (ADR-066); delete those first.
+    await prisma.membershipRole.deleteMany({ where: { membership: { userId: { in: userIds } } } });
     await prisma.membership.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.organisation.deleteMany({ where: { slug: { startsWith: 'integ-onboard-' } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -225,7 +227,9 @@ describe('Distributor onboarding (integration)', () => {
       .set('Authorization', `Bearer ${token}`)
       .expect(200);
 
-    expect(me.body).toMatchObject({ role: Role.DISTRIBUTOR_ADMIN, organisationId: created.body.id });
+    // /auth/me returns roles[] (multi-role RBAC, ADR-066), not a single role.
+    expect(me.body).toMatchObject({ organisationId: created.body.id });
+    expect(me.body.roles).toContain(Role.DISTRIBUTOR_ADMIN);
   });
 
   it('rejects missing required fields with 400', async () => {

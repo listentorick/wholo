@@ -25,6 +25,7 @@ import { AdminNotificationsService } from '../src/admin-notifications/admin-noti
 import { PrismaService } from '../src/prisma/prisma.service';
 import { NOTIFICATION_DELIVERY_QUEUE } from '../src/queues/queue.constants';
 import { OrderPlacedNotificationService } from '../src/notifications/order-placed-notification.service';
+import { R2StorageService } from '../src/asset-images/r2-storage.service';
 
 const DIST = 'test-notif-dist';
 const DIST_OTHER = 'test-notif-dist-other';
@@ -58,6 +59,8 @@ describe('Order-placed notifications (integration)', () => {
         AdminNotificationsService,
         PrismaService,
         { provide: getQueueToken(NOTIFICATION_DELIVERY_QUEUE), useValue: { add: queueAdd } },
+        // Only used to build the distributor logo URL for the email — no real R2 calls.
+        { provide: R2StorageService, useValue: { getPublicUrl: (key: string) => `https://cdn.example.com/${key}` } },
       ],
     }).compile();
 
@@ -121,16 +124,17 @@ describe('Order-placed notifications (integration)', () => {
     // hard-to-fake setup that proves the org filter itself, not just "this
     // user happens to belong to only one org" (see notifyOrganisationAdmins
     // scoping tests below).
-    await prisma.membership.upsert({
-      where: { userId_organisationId: { userId: ADMIN_USER, organisationId: DIST } },
-      create: { userId: ADMIN_USER, organisationId: DIST, role: Role.DISTRIBUTOR_ADMIN },
-      update: {},
-    });
-    await prisma.membership.upsert({
-      where: { userId_organisationId: { userId: ADMIN_USER, organisationId: DIST_OTHER } },
-      create: { userId: ADMIN_USER, organisationId: DIST_OTHER, role: Role.DISTRIBUTOR_ADMIN },
-      update: {},
-    });
+    // Roles are resolved from MembershipRole (multi-role RBAC, ADR-066) — admin
+    // notifications go to members holding DISTRIBUTOR_ADMIN there.
+    for (const organisationId of [DIST, DIST_OTHER]) {
+      const membership = await prisma.membership.upsert({
+        where: { userId_organisationId: { userId: ADMIN_USER, organisationId } },
+        create: { userId: ADMIN_USER, organisationId, role: Role.DISTRIBUTOR_ADMIN },
+        update: {},
+      });
+      await prisma.membershipRole.deleteMany({ where: { membershipId: membership.id } });
+      await prisma.membershipRole.create({ data: { membershipId: membership.id, role: Role.DISTRIBUTOR_ADMIN } });
+    }
     await prisma.order.upsert({
       where: { id: ORDER },
       create: {
@@ -164,6 +168,7 @@ describe('Order-placed notifications (integration)', () => {
     await prisma.notification.deleteMany({ where: { distributorId: DIST } });
     await prisma.adminNotification.deleteMany({ where: { organisationId: { in: [DIST, DIST_OTHER] } } });
     await prisma.order.deleteMany({ where: { id: ORDER } });
+    await prisma.membershipRole.deleteMany({ where: { membership: { userId: ADMIN_USER } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
     await prisma.user.deleteMany({ where: { id: { in: [USER, ADMIN_USER] } } });
     await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
