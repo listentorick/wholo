@@ -1122,6 +1122,8 @@ export type AccountingContactMatchMethod =
 export interface AccountingContactMappingSummary {
   id: string;
   tradeRelationshipId: string;
+  /** The customer's organisation id — what `/customers/:id` addresses (not the trade-relationship id). */
+  customerId: string;
   customerName: string;
   matchMethod: AccountingContactMatchMethod;
   linkedAt: string;

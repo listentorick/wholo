@@ -53,7 +53,7 @@ export function ContactRowActions({ contact, providerLabel, onActionComplete }: 
 
   if (!canImport) {
     return contact.status === 'LINKED' && contact.mapping ? (
-      <Link href={`/customers/${contact.mapping.tradeRelationshipId}`} className="text-xs text-primary hover:underline">
+      <Link href={`/customers/${contact.mapping.customerId}`} className="text-xs text-primary hover:underline">
         View customer
       </Link>
     ) : null;
@@ -130,7 +130,7 @@ export function ContactRowActions({ contact, providerLabel, onActionComplete }: 
         {contact.status === 'LINKED' && contact.mapping && (
           <>
             <Link
-              href={`/customers/${contact.mapping.tradeRelationshipId}`}
+              href={`/customers/${contact.mapping.customerId}`}
               className="text-xs text-primary hover:underline"
             >
               View customer

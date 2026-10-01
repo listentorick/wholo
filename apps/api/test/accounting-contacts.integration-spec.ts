@@ -192,6 +192,33 @@ describe('Accounting contact sync routes (integration)', () => {
       expect(relationship?.customer.name).toBe('New Imported Co');
       expect(relationship?.invitations).toHaveLength(0);
     });
+
+    it("a linked contact's mapping carries the customer id that opens the customer record (the View customer link)", async () => {
+      const contact = await createContact(connectionA.id, DIST_A, 'xero-a-link');
+      await request(app.getHttpServer())
+        .post(`/api/v1/distributors/${DIST_A}/accounting/contacts/${contact.id}/import`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Linked Co' })
+        .expect(201);
+
+      const list = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/accounting/contacts`)
+        .set('Authorization', `Bearer ${token}`);
+      const linked = list.body.data.find((c: { id: string }) => c.id === contact.id);
+      expect(linked.status).toBe('LINKED');
+
+      // customerId is the customer's organisation id, not the relationship id …
+      const relationship = await prisma.tradeRelationship.findUniqueOrThrow({ where: { id: linked.mapping.tradeRelationshipId } });
+      expect(linked.mapping.customerId).toBe(relationship.customerId);
+      expect(linked.mapping.customerId).not.toBe(linked.mapping.tradeRelationshipId);
+
+      // … and it resolves against the real customer endpoint.
+      const customer = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customers/${linked.mapping.customerId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(customer.status).toBe(200);
+      expect(customer.body).toMatchObject({ organisationId: linked.mapping.customerId, organisation: { name: 'Linked Co' } });
+    });
   });
 
   describe('CustomerAccountingMapping partial unique constraints', () => {

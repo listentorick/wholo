@@ -551,6 +551,9 @@ export class AccountingContactService {
         ? {
             id: mapping.id,
             tradeRelationshipId: mapping.tradeRelationshipId,
+            // The customer's organisation id — what the customer record
+            // (distributors/:distributorId/customers/:customerId) resolves by.
+            customerId: mapping.tradeRelationship.customer.id,
             customerName: mapping.tradeRelationship.customer.name,
             matchMethod: mapping.matchMethod,
             linkedAt: mapping.linkedAt,

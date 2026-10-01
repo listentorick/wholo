@@ -89,6 +89,8 @@ describe('AccountingContactService', () => {
       const { data } = await service.listContacts('dist-1', {});
       expect(data[0].status).toBe('LINKED');
       expect(data[0].mapping?.customerName).toBe('Blackbird Vine & Co');
+      // The customer's organisation id (what the customer record resolves by), alongside the relationship id.
+      expect(data[0].mapping).toMatchObject({ customerId: 'org-1', tradeRelationshipId: 'tr-1' });
     });
 
     it('computes SUGGESTED for a contact with a pending suggestion', async () => {

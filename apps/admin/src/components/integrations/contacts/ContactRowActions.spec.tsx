@@ -118,6 +118,7 @@ describe('ContactRowActions', () => {
       mapping: {
         id: 'mapping-1',
         tradeRelationshipId: 'tr-1',
+        customerId: 'org-1',
         customerName: 'Blackbird Vine & Co',
         matchMethod: 'MANUAL',
         linkedAt: '2026-01-01T00:00:00.000Z',
@@ -126,7 +127,7 @@ describe('ContactRowActions', () => {
     const user = userEvent.setup();
 
     render(<ContactRowActions contact={contact} providerLabel="Xero" onActionComplete={onActionComplete} />);
-    expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/tr-1');
+    expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/org-1');
 
     await user.click(screen.getByText('Unlink'));
 
@@ -166,11 +167,11 @@ describe('ContactRowActions — without accounting:import', () => {
   it('still lets a viewer follow a linked contact to the customer, but not unlink it', () => {
     const contact = makeContact({
       status: 'LINKED',
-      mapping: { id: 'mapping-1', tradeRelationshipId: 'tr-1', customerName: 'Blackbird', matchMethod: 'MANUAL', linkedAt: '2026-01-01T00:00:00.000Z' },
+      mapping: { id: 'mapping-1', tradeRelationshipId: 'tr-1', customerId: 'org-1', customerName: 'Blackbird', matchMethod: 'MANUAL', linkedAt: '2026-01-01T00:00:00.000Z' },
     });
     render(<ContactRowActions contact={contact} providerLabel="Xero" onActionComplete={() => {}} />);
 
-    expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/tr-1');
+    expect(screen.getByText('View customer').closest('a')).toHaveAttribute('href', '/customers/org-1');
     expect(screen.queryByText('Unlink')).not.toBeInTheDocument();
   });
 });
