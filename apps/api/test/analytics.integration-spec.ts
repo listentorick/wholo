@@ -37,7 +37,6 @@ describe('Analytics (integration)', () => {
   let token: string;
   let relationshipA1Id: string;
   let relationshipA2Id: string;
-  let relationshipA1DistCId: string;
 
   beforeAll(async () => {
     jwtServer = await startJwtTestServer();
@@ -95,13 +94,12 @@ describe('Analytics (integration)', () => {
     });
     relationshipA2Id = relA2.id;
     // Same customer organisation, a *different* distributor's relationship — proves the
-    // customer-rankings join can't leak DIST_C's relationship id into DIST_A's rankings.
-    const relA1DistC = await prisma.tradeRelationship.upsert({
+    // customer-rankings join only matches this distributor's relationship (no double count).
+    await prisma.tradeRelationship.upsert({
       where: { distributorId_customerId: { distributorId: DIST_C, customerId: CUSTOMER_A1 } },
       create: { distributorId: DIST_C, customerId: CUSTOMER_A1, status: TradeRelationshipStatus.ACTIVE },
       update: { status: TradeRelationshipStatus.ACTIVE, deletedAt: null },
     });
-    relationshipA1DistCId = relA1DistC.id;
 
     await prisma.product.upsert({
       where: { id: PRODUCT_A1 },
@@ -265,10 +263,11 @@ describe('Analytics (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.customers).toHaveLength(1);
-      // customerId must be the trade-relationship id — the id the customer detail page
-      // resolves by — never the underlying organisation id.
-      expect(res.body.customers[0].customerId).toBe(relationshipA1Id);
-      expect(res.body.customers[0].customerId).not.toBe(CUSTOMER_A1);
+      // customerId is the customer's organisation id — the id the customer record
+      // (distributors/:distributorId/customers/:customerId) resolves by — not the
+      // trade-relationship id.
+      expect(res.body.customers[0].customerId).toBe(CUSTOMER_A1);
+      expect(res.body.customers[0].customerId).not.toBe(relationshipA1Id);
     });
 
     it('resolves against the real customer detail endpoint (proves the link the dashboard builds actually works)', async () => {
@@ -288,10 +287,10 @@ describe('Analytics (integration)', () => {
       expect(detailRes.status).toBe(200);
     });
 
-    it("returns distributor A's own relationship id for a customer shared with another distributor", async () => {
+    it('counts a customer shared with another distributor once, from this distributor\'s orders only', async () => {
       // CUSTOMER_A1 has a TradeRelationship with both DIST_A and DIST_C (see beforeAll).
-      // Only the order placed under DIST_A should surface, and it must carry DIST_A's
-      // relationship id — never DIST_C's — proving the join's distributorId match works.
+      // Only the order placed under DIST_A should surface, and counted once — a join
+      // that matched DIST_C's relationship too would double the value and order count.
       await seedOrderState({ orderId: 'test-analytics-order-a7' });
 
       const res = await request(app.getHttpServer())
@@ -301,13 +300,12 @@ describe('Analytics (integration)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.customers).toHaveLength(1);
-      expect(res.body.customers[0].customerId).toBe(relationshipA1Id);
-      expect(res.body.customers[0].customerId).not.toBe(relationshipA1DistCId);
+      expect(res.body.customers[0]).toMatchObject({ customerId: CUSTOMER_A1, value: 100, orderCount: 1 });
     });
   });
 
   describe('GET /api/v1/distributors/:distributorId/action-items', () => {
-    it('lists never-ordered customers keyed by trade-relationship id, not organisation id', async () => {
+    it('lists never-ordered customers keyed by organisation id, and that id opens the customer record', async () => {
       // CUSTOMER_A2 has an ACTIVE relationship with DIST_A (see beforeAll) and no orders
       // seeded for it in this suite's beforeEach-cleared state.
       const res = await request(app.getHttpServer())
@@ -315,9 +313,15 @@ describe('Analytics (integration)', () => {
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      const entry = res.body.neverOrdered.find((c: { customerId: string }) => c.customerId === relationshipA2Id);
+      const entry = res.body.neverOrdered.find((c: { customerId: string }) => c.customerId === CUSTOMER_A2);
       expect(entry).toBeDefined();
-      expect(res.body.neverOrdered.some((c: { customerId: string }) => c.customerId === CUSTOMER_A2)).toBe(false);
+      expect(res.body.neverOrdered.some((c: { customerId: string }) => c.customerId === relationshipA2Id)).toBe(false);
+
+      // The link the dashboard builds from it resolves.
+      const detailRes = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/customers/${entry.customerId}`)
+        .set('Authorization', `Bearer ${token}`);
+      expect(detailRes.status).toBe(200);
     });
   });
 

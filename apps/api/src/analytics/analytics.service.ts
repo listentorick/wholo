@@ -151,9 +151,13 @@ export class AnalyticsService {
     const { timezone, period } = await this.resolve(distributorId, query);
     const limit = query.limit ?? 10;
 
+    // customerId is the customer's organisation id — what the customer record
+    // (distributors/:distributorId/customers/:customerId) resolves by. The
+    // trade_relationships join only keeps customers with a live relationship
+    // to THIS distributor, so every row links to a record that exists.
     const [rankings, totalRow, earliest] = await Promise.all([
       this.prisma.$queryRaw<Array<{ customerId: string; organisationId: string; customerName: string; value: number; orderCount: number; selfServeCount: number }>>`
-        SELECT tr.id AS "customerId", s."traderCustomerId" AS "organisationId", o.name AS "customerName",
+        SELECT s."traderCustomerId" AS "customerId", s."traderCustomerId" AS "organisationId", o.name AS "customerName",
           COALESCE(SUM(s."subtotalAmount"), 0)::float AS value, COUNT(*)::int AS "orderCount",
           COUNT(*) FILTER (WHERE NOT s."isOrderedByDelegate")::int AS "selfServeCount"
         FROM order_analytics_state s
@@ -163,7 +167,7 @@ export class AnalyticsService {
         WHERE s."distributorId" = ${distributorId}
           AND s."distributorLocalDate" BETWEEN ${period.current.start} AND ${period.current.end}
           AND s.status IN ${QUALIFYING_STATUSES}
-        GROUP BY tr.id, s."traderCustomerId", o.name
+        GROUP BY s."traderCustomerId", o.name
         ORDER BY value DESC
         LIMIT ${limit}
       `,
@@ -276,7 +280,7 @@ export class AnalyticsService {
         select: { id: true, orderId: true, errorCode: true, errorMessage: true, failedAt: true },
       }),
       this.prisma.$queryRaw<Array<{ customerId: string; customerName: string }>>`
-        SELECT tr."id" AS "customerId", o.name AS "customerName"
+        SELECT tr."customerId" AS "customerId", o.name AS "customerName"
         FROM trade_relationships tr
         JOIN organisations o ON o.id = tr."customerId"
         WHERE tr."distributorId" = ${distributorId}

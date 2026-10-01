@@ -121,8 +121,8 @@ describe('AnalyticsService', () => {
         {
           match: (sql) => sql.includes('organisations'),
           rows: [
-            { customerId: 'rel-1', organisationId: 'org-1', customerName: 'Alpha', value: 700, orderCount: 5, selfServeCount: 4 },
-            { customerId: 'rel-2', organisationId: 'org-2', customerName: 'Beta', value: 300, orderCount: 2, selfServeCount: 0 },
+            { customerId: 'org-1', organisationId: 'org-1', customerName: 'Alpha', value: 700, orderCount: 5, selfServeCount: 4 },
+            { customerId: 'org-2', organisationId: 'org-2', customerName: 'Beta', value: 300, orderCount: 2, selfServeCount: 0 },
           ],
         },
         {
@@ -136,11 +136,9 @@ describe('AnalyticsService', () => {
       expect(result.totalQualifyingValue).toBe(1000);
       expect(result.top5Share).toBe(1);
       expect(result.customers[0]).toEqual(
-        expect.objectContaining({ customerId: 'rel-1', value: 700, share: 0.7, selfServeShare: 0.8 }),
+        expect.objectContaining({ customerId: 'org-1', value: 700, share: 0.7, selfServeShare: 0.8 }),
       );
       expect(result.customers[1].selfServeShare).toBe(0);
-      // customerId must be the trade-relationship id, never the underlying organisation id.
-      expect(result.customers[0].customerId).not.toBe('org-1');
     });
   });
 
@@ -173,7 +171,7 @@ describe('AnalyticsService', () => {
         { id: 'exp-1', orderId: 'order-3', errorCode: 'PROVIDER_ERROR', errorMessage: 'boom', failedAt: new Date() },
       ]);
       prisma.$queryRaw = makeQueryRawMock([
-        { match: (sql) => sql.includes('trade_relationships'), rows: [{ customerId: 'rel-3', customerName: 'Gamma' }] },
+        { match: (sql) => sql.includes('trade_relationships'), rows: [{ customerId: 'org-3', customerName: 'Gamma' }] },
       ]);
 
       const result = await service.actionItems('dist-1');
@@ -181,7 +179,7 @@ describe('AnalyticsService', () => {
       expect(result.awaitingAcceptance).toHaveLength(1);
       expect(result.dueForFulfilment).toHaveLength(1);
       expect(result.invoiceFailures).toHaveLength(1);
-      expect(result.neverOrdered).toEqual([{ customerId: 'rel-3', customerName: 'Gamma' }]);
+      expect(result.neverOrdered).toEqual([{ customerId: 'org-3', customerName: 'Gamma' }]);
 
       expect(prisma.order.findMany).toHaveBeenNthCalledWith(1, expect.objectContaining({ where: { distributorId: 'dist-1', status: 'SUBMITTED' } }));
       expect(prisma.order.findMany).toHaveBeenNthCalledWith(
