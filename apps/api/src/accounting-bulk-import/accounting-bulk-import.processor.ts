@@ -9,6 +9,7 @@ import { AccountingProductService, productInclude } from '../accounting/accounti
 import { AccountingContactService, contactInclude } from '../accounting/accounting-contact.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { ACCOUNTING_BULK_IMPORT_QUEUE } from '../queues/queue.constants';
+import { HEARTBEAT_ITEM_INTERVAL, HEARTBEAT_TIME_INTERVAL_MS } from '../ingestion/ingestion-run.service';
 
 interface BulkImportJobData {
   eventId: string;
@@ -32,8 +33,6 @@ interface ItemResult {
 // a bulk import can legitimately run for many minutes on a large batch, so a
 // flat age check alone can't tell "still working" from "worker died").
 const PROCESSING_STALE_MS = 5 * 60 * 1000;
-const HEARTBEAT_ITEM_INTERVAL = 25;
-const HEARTBEAT_TIME_INTERVAL_MS = 5_000;
 
 function tally(results: ItemResult[]) {
   return {

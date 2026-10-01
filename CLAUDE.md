@@ -54,6 +54,7 @@ The current route layout of `apps/api` is acknowledged as messy and is being inc
 
 - **Mobile-first**: all core workflows (ordering, stock receiving, delivery confirmation, signature capture) must work well on mobile.
 - **Xero integration-first**: invoices flow Wholo → Xero; pricing authority stays in Wholo.
+- **Accounting integration is a provider-neutral framework** (Xero is the first of many providers). Before touching anything under `apps/api/src/accounting*`, read the framework overview and the provider contract at the top of `apps/api/src/accounting/adapters/accounting-connection-adapter.interface.ts`, and the pull guide in `apps/api/src/accounting/sync/accounting-pull-processor.base.ts`. Follow those patterns rather than re-implementing them; `accounting-framework.arch.spec.ts` and `test/accounting-framework.integration-spec.ts` (a fake, non-Xero provider) fail when the code drifts.
 - **Industry-agnostic core**: no wine-specific assumptions in data models or workflows.
 - **Minimal training**: operational simplicity over ERP complexity.
 

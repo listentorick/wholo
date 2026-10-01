@@ -164,7 +164,7 @@ describe('AccountingInvoiceExportProcessor', () => {
       prisma as unknown as PrismaService,
       connectionService as unknown as AccountingConnectionService,
       accountingTaxTypes as unknown as AccountingTaxTypeService,
-      { get: jest.fn().mockReturnValue(adapter) } as unknown as AccountingAdapterRegistry,
+      { get: jest.fn().mockReturnValue(adapter), displayName: () => 'Xero' } as unknown as AccountingAdapterRegistry,
       outbox as unknown as OutboxService,
       audit as unknown as AuditService,
       adminNotifications as unknown as AdminNotificationsService,

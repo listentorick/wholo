@@ -68,6 +68,9 @@ export interface PaymentStateResult {
   toStatus: InvoicePaymentStatus;
 }
 
+// A single writer in the accounting integration framework (see
+// accounting/adapters/accounting-connection-adapter.interface.ts, layer 8).
+//
 // The only code that writes an invoice's payment columns (enforced by an
 // ESLint rule). Every derived payment-status change (Unpaid → Part paid →
 // Paid, Void) writes, in the caller's transaction and together:
@@ -90,11 +93,18 @@ export class InvoicePaymentStateService {
     next: SyncedState,
     ctx: PaymentStateContext,
   ): Promise<PaymentStateResult> {
-    const fromStatus = derivePaymentStatus(current);
     const toStatus = derivePaymentStatus(next);
-    if (!syncedStateChanged(current, next)) return { changed: false, fromStatus, toStatus };
+    if (!syncedStateChanged(current, next)) return { changed: false, fromStatus: derivePaymentStatus(current), toStatus };
 
+    // Lock, then re-read: `current` may be stale if another writer (an
+    // overlapping sync, a future manual "mark as paid") committed since the
+    // caller loaded it. Deciding from the fresh row means a second writer
+    // with the same facts writes nothing — no duplicate event or timeline entry.
     await this.orderCompletion.lockOrder(tx, current.orderId);
+    const fresh = await tx.accountingInvoiceExport.findUniqueOrThrow({ where: { id: current.id } });
+    const fromStatus = derivePaymentStatus(fresh);
+    if (!syncedStateChanged(fresh, next)) return { changed: false, fromStatus, toStatus };
+
     await tx.accountingInvoiceExport.update({
       where: { id: current.id },
       data: {

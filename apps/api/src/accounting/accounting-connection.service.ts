@@ -32,15 +32,6 @@ const WAITER_DEADLINE_MS = 45_000;
 const POLL_BASE_MS = 1_000;
 const POLL_JITTER_MS = 500;
 
-function providerDisplayName(provider: AccountingProvider): string {
-  switch (provider) {
-    case AccountingProvider.XERO:
-      return 'Xero';
-    default:
-      return provider;
-  }
-}
-
 @Injectable()
 export class AccountingConnectionService {
   private readonly logger = new Logger(AccountingConnectionService.name);
@@ -487,7 +478,7 @@ export class AccountingConnectionService {
     provider: AccountingProvider,
     error: AccountingProviderError,
   ): Promise<void> {
-    const providerName = providerDisplayName(provider);
+    const providerName = this.adapters.displayName(provider);
 
     await this.adminNotifications.notifyOrganisationAdmins(distributorId, {
       type: 'ACCOUNTING_CONNECTION_NEEDS_RECONNECT',

@@ -1,15 +1,7 @@
-import { LoggedWorkerHost } from '../../queues/logged-worker-host';
 import { Logger } from '@nestjs/common';
-import { AccountingConnection, AccountingConnectionStatus, IngestionRun, IngestionRunTrigger } from '@prisma/client';
-import { Job, UnrecoverableError } from 'bullmq';
-import { loggableError } from '@wholo/nest-telemetry';
+import { AccountingConnection } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import {
-  HEARTBEAT_ITEM_INTERVAL,
-  HEARTBEAT_TIME_INTERVAL_MS,
-  IngestionRunService,
-} from '../../ingestion/ingestion-run.service';
-import { ACCOUNTING_FULL_SYNC_INTERVAL_MS, ACCOUNTING_SOURCE_TYPE } from './accounting-sync.constants';
+import { IngestionRunService } from '../../ingestion/ingestion-run.service';
 import { AccountingConnectionService } from '../accounting-connection.service';
 import { AccountingAdapterRegistry } from '../adapters/accounting-adapter.registry';
 import {
@@ -17,19 +9,15 @@ import {
   AccountingFetchResult,
   AccountingTokenSet,
 } from '../adapters/accounting-connection-adapter.interface';
-import { AccountingProviderError } from '../adapters/accounting-provider.error';
 import {
   AccountingMatchResult,
   AccountingRecordMatcher,
 } from '../matching/accounting-record-matcher.interface';
 import { AccountingChangeDetectionService } from '../accounting-change-detection.service';
+import { AccountingPullProcessorBase, PullContext, PullResult } from './accounting-pull-processor.base';
 
-export interface OutboxEventJobData {
-  eventId: string;
-  aggregateType: string;
-  aggregateId: string; // AccountingConnection id
-  payload: unknown; // { runId?: string }
-}
+// Re-exported for the processors and specs that import them from here.
+export { OutboxEventJobData, shouldRunFull } from './accounting-pull-processor.base';
 
 // A domain suggestion row reduced to what the shared lifecycle logic needs:
 // its id and which Wholo candidate it currently proposes.
@@ -73,182 +61,56 @@ function fieldValuesEqual(a: unknown, b: unknown): boolean {
 // gives a natural point to heartbeat progress. See ADR-061 / "Concurrency".
 const UPSERT_BATCH_SIZE = 25;
 
-// Full or incremental? A pull is full when a person asked for it (manual
-// Sync), when there is no incremental position yet, or when the last full
-// pull is older than ACCOUNTING_FULL_SYNC_INTERVAL_MS — incremental pulls
-// can't see deletions or re-offer matches for records that haven't changed.
-export function shouldRunFull(
-  run: Pick<IngestionRun, 'trigger' | 'cursor' | 'lastFullRunAt'>,
-  now: Date = new Date(),
-): boolean {
-  if (run.trigger === IngestionRunTrigger.MANUAL) return true;
-  if (!run.cursor) return true;
-  if (!run.lastFullRunAt) return true;
-  return now.getTime() - run.lastFullRunAt.getTime() >= ACCOUNTING_FULL_SYNC_INTERVAL_MS;
-}
-
-// Framework template for one accounting record-type sync (contacts, products,
-// ...). The pipeline shape is always the same — pull provider data via the
-// adapter, upsert into the domain's cache table, run the domain's matcher
-// against unmapped Wholo candidates, maintain suggestions — so this base owns
-// that orchestration and subclasses supply only the domain hooks (which table,
-// which matcher, which candidate pool). A new record type, or a whole new
-// integration family, adds hooks and tables, never a new pipeline.
+// Pull base for record types the distributor reviews and maps (contacts,
+// products, tax rates) — AccountingPullProcessorBase (run lifecycle, token,
+// heartbeat, failure policy; the guide for pulls is in its header) plus the
+// cache → match → suggestion pipeline. The pipeline shape is always the same —
+// pull provider data via the adapter, upsert into the domain's cache table,
+// run the domain's matcher against unmapped Stocdup candidates, maintain
+// suggestions — so this base owns that orchestration and subclasses supply
+// only the domain hooks (which table, which matcher, which candidate pool). A
+// new record type, or a whole new provider, adds hooks and tables, never a
+// new pipeline.
 //
-// Progress + failure are tracked in an IngestionRun row (source-agnostic) so
-// the admin UI can show live progress that survives navigation. Mappings are
-// written exclusively by explicit user actions; the pipeline only ever
-// produces suggestions (see shouldAutoLink).
+// Mappings are written exclusively by explicit user actions; the pipeline only
+// ever produces suggestions (see shouldAutoLink).
 export abstract class AccountingSyncProcessorBase<
   TExternal,
   TCached extends { id: string },
   TCandidate,
   TMethod,
-> extends LoggedWorkerHost {
+> extends AccountingPullProcessorBase {
   protected abstract readonly logger: Logger;
-  // Used in log lines, e.g. 'contact' → "3 contact(s) fetched".
-  protected abstract readonly recordNoun: string;
-  // Opaque IngestionRun.resourceType, e.g. 'contact' | 'product' | 'tax_type'.
-  protected abstract readonly resourceType: string;
   protected abstract readonly matcher: AccountingRecordMatcher<TCached, TCandidate, TMethod>;
 
   constructor(
-    protected readonly prisma: PrismaService,
-    protected readonly accountingConnectionService: AccountingConnectionService,
-    protected readonly adapters: AccountingAdapterRegistry,
+    prisma: PrismaService,
+    accountingConnectionService: AccountingConnectionService,
+    adapters: AccountingAdapterRegistry,
     protected readonly changeDetection: AccountingChangeDetectionService,
-    protected readonly ingestionRuns: IngestionRunService,
+    ingestionRuns: IngestionRunService,
   ) {
-    super();
+    super(prisma, accountingConnectionService, adapters, ingestionRuns);
   }
 
-  async process(job: Job<OutboxEventJobData>): Promise<void> {
-    const connectionId = job.data.aggregateId;
-    const runIdFromPayload = (job.data.payload as { runId?: string } | undefined)?.runId ?? null;
-    const skipFields = { event: 'accounting.sync.skipped', connectionId, resourceType: this.resourceType };
-
-    const connection = await this.prisma.accountingConnection.findUnique({ where: { id: connectionId } });
-    if (!connection) {
-      this.logger.warn({ ...skipFields, reason: 'connection_missing' }, `AccountingConnection ${connectionId} no longer exists — skipping sync`);
-      if (runIdFromPayload) {
-        await this.ingestionRuns.finalizeFailure(runIdFromPayload, 'Accounting connection no longer exists');
-      }
-      return;
-    }
-    if (connection.status !== AccountingConnectionStatus.CONNECTED) {
-      this.logger.log(
-        { ...skipFields, reason: 'not_connected', distributorId: connection.distributorId, status: connection.status },
-        `AccountingConnection ${connectionId} is not CONNECTED — skipping sync`,
-      );
-      if (runIdFromPayload) {
-        await this.ingestionRuns.finalizeFailure(runIdFromPayload, 'Accounting connection is not connected');
-      }
-      return;
-    }
-
-    // Pre-`runId` jobs (a deploy straddling this change) have no runId in the
-    // payload — recreate the row so tracking still works.
-    const runId =
-      runIdFromPayload ??
-      (await this.ingestionRuns.ensureRun({
-        distributorId: connection.distributorId,
-        sourceType: ACCOUNTING_SOURCE_TYPE,
-        sourceRef: connection.id,
-        resourceType: this.resourceType,
-        trigger: IngestionRunTrigger.SCHEDULED,
-      }));
-
-    const run = await this.ingestionRuns.claim(runId);
-    if (!run) {
-      // Already COMPLETED, or a live attempt holds it.
-      return;
-    }
-
-    const full = shouldRunFull(run);
-    const logFields = {
-      provider: connection.provider,
-      distributorId: connection.distributorId,
-      connectionId: connection.id,
-      externalOrgId: connection.externalOrganisationId,
-      runId,
-      resourceType: this.resourceType,
-      trigger: run.trigger,
-      mode: full ? 'full' : 'incremental',
-      jobId: job.id,
-      eventId: job.data.eventId,
-    };
-    this.logger.log({ event: 'accounting.sync.started', ...logFields }, `Accounting ${this.recordNoun} sync started (${logFields.mode})`);
-    const started = Date.now();
-
-    try {
-      await this.runSync(connection, runId, full ? null : run.cursor, full, logFields, started);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const durationMs = Date.now() - started;
-      const permanent = err instanceof AccountingProviderError && !err.transient;
-      // attemptsMade counts previous failed attempts while this one runs.
-      const lastAttempt = (job.attemptsMade ?? 0) + 1 >= (job.opts?.attempts ?? 1);
-      if (permanent || lastAttempt) {
-        await this.ingestionRuns.finalizeFailure(runId, message);
-      } else {
-        await this.ingestionRuns.requeueForRetry(runId, message);
-      }
-      if (err instanceof AccountingProviderError) {
-        // An expected external failure: the provider said no, or is briefly
-        // unavailable. The message is already clean (adapters guarantee it).
-        this.logger.warn(
-          {
-            event: 'accounting.sync.failed',
-            ...logFields,
-            durationMs,
-            code: err.code,
-            statusCode: err.statusCode,
-            transient: err.transient,
-          },
-          `Accounting ${this.recordNoun} sync failed: ${message}`,
-        );
-        // Permanent (validation / authorisation / reconnect needed): another
-        // attempt would fail identically, so stop BullMQ retrying.
-        if (permanent) throw new UnrecoverableError(message);
-      } else {
-        // Anything else is our bug — log it with the stack.
-        this.logger.error(
-          { event: 'accounting.sync.failed', ...logFields, durationMs, err: loggableError(err) },
-          `Accounting ${this.recordNoun} sync failed unexpectedly`,
-        );
-      }
-      throw err; // transient: let BullMQ apply its backoff / attempts
-    }
-  }
-
-  private async runSync(
-    connection: AccountingConnection,
-    runId: string,
-    cursor: string | null,
-    full: boolean,
-    logFields: Record<string, unknown>,
-    started: number,
-  ): Promise<void> {
-    const tokenSet = await this.accountingConnectionService.getValidTokenSet(
-      connection.distributorId,
-      connection.provider,
-    );
-    const adapter = this.adapters.get(connection.provider);
-    // Incremental pulls pass the stored cursor (opaque, adapter-produced);
-    // a full pull passes null. The cursor lives on the IngestionRun, not on
-    // connection.lastSyncedAt — that field also means "last token refresh".
+  protected async pull({ connection, adapter, tokenSet, cursor, full, progress }: PullContext): Promise<PullResult> {
+    // Incremental pulls pass the stored cursor (opaque, adapter-produced); a
+    // full pull passes null.
     const fetched = await this.fetchExternalRecords(adapter, tokenSet, connection.externalOrganisationId, cursor);
     const externalRecords = fetched.records;
-    // The fetch is a single await with no heartbeat inside it; this marks the
-    // run live again straight after (see PROCESSING_STALE_MS).
-    await this.ingestionRuns.setTotal(runId, externalRecords.length);
+    await progress.setTotal(externalRecords.length);
 
     // Upsert in bounded batches, heartbeating progress between them.
     const cachedRecords: TCached[] = [];
     let created = 0;
     let updated = 0;
     let removed = 0;
-    let lastBeat = Date.now();
+    const upsertCounts = () => ({
+      recordsProcessed: cachedRecords.length,
+      recordsCreated: created,
+      recordsUpdated: updated,
+      recordsRemoved: removed,
+    });
     for (let i = 0; i < externalRecords.length; i += UPSERT_BATCH_SIZE) {
       const batch = externalRecords.slice(i, i + UPSERT_BATCH_SIZE);
       const results = await Promise.all(batch.map((record) => this.upsertCacheRecord(connection, record)));
@@ -258,22 +120,9 @@ export abstract class AccountingSyncProcessorBase<
         else if (result.change === 'updated') updated += 1;
         else if (result.change === 'removed') removed += 1;
       }
-      if (cachedRecords.length % (HEARTBEAT_ITEM_INTERVAL * 2) === 0 || Date.now() - lastBeat > HEARTBEAT_TIME_INTERVAL_MS) {
-        await this.ingestionRuns.heartbeat(runId, {
-          recordsProcessed: cachedRecords.length,
-          recordsCreated: created,
-          recordsUpdated: updated,
-          recordsRemoved: removed,
-        });
-        lastBeat = Date.now();
-      }
+      await progress.tick(upsertCounts(), batch.length);
     }
-    await this.ingestionRuns.heartbeat(runId, {
-      recordsProcessed: cachedRecords.length,
-      recordsCreated: created,
-      recordsUpdated: updated,
-      recordsRemoved: removed,
-    });
+    await progress.flush(upsertCounts());
 
     // Absence from the fetched set only means "deleted upstream" when the
     // fetch was full — an incremental pull returns just the changed records.
@@ -284,53 +133,22 @@ export abstract class AccountingSyncProcessorBase<
     const candidates = await this.loadMatchCandidates(connection);
 
     let suggestionsCreated = 0;
-    let matched = 0;
-    lastBeat = Date.now();
     for (const cached of cachedRecords) {
       const outcome = await this.runMatcherFor(connection, cached, candidates);
       if (outcome === 'created') suggestionsCreated += 1;
-      matched += 1;
-      if (matched % HEARTBEAT_ITEM_INTERVAL === 0 || Date.now() - lastBeat > HEARTBEAT_TIME_INTERVAL_MS) {
-        await this.ingestionRuns.heartbeat(runId, { detailCount: suggestionsCreated });
-        lastBeat = Date.now();
-      }
+      await progress.tick({ detailCount: suggestionsCreated });
     }
 
-    // lastSyncedAt is written by every record-type pipeline on this
-    // connection — its semantics are a loose "last successful provider
-    // round-trip", not per-record-type freshness (which would need dedicated
-    // fields if the UI ever wants it).
-    await this.prisma.accountingConnection.update({
-      where: { id: connection.id },
-      data: { lastSyncedAt: new Date() },
-    });
-
-    await this.ingestionRuns.finalizeSuccess(
-      runId,
-      {
-        recordsProcessed: cachedRecords.length,
-        recordsCreated: created,
-        recordsUpdated: updated,
-        recordsRemoved: removed,
-        detailCount: suggestionsCreated,
+    return {
+      counts: { ...upsertCounts(), recordsRemoved: removed, detailCount: suggestionsCreated },
+      nextCursor: fetched.nextCursor,
+      summary: {
+        fields: { fetched: externalRecords.length, created, updated, removed, suggestionsCreated },
+        message:
+          `Accounting ${this.recordNoun} sync complete: ${externalRecords.length} ${this.recordNoun}(s) fetched ` +
+          `(${created} new, ${updated} updated, ${removed} removed), ${suggestionsCreated} suggestion(s) created`,
       },
-      { cursor: fetched.nextCursor, full },
-    );
-
-    this.logger.log(
-      {
-        event: 'accounting.sync.completed',
-        ...logFields,
-        durationMs: Date.now() - started,
-        fetched: externalRecords.length,
-        created,
-        updated,
-        removed,
-        suggestionsCreated,
-      },
-      `Accounting ${this.recordNoun} sync complete: ${externalRecords.length} ${this.recordNoun}(s) fetched ` +
-        `(${created} new, ${updated} updated, ${removed} removed), ${suggestionsCreated} suggestion(s) created`,
-    );
+    };
   }
 
   // Classify a cache upsert for the "sync complete" breakdown: no previous row

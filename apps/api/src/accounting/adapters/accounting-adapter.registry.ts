@@ -3,8 +3,9 @@ import { AccountingProvider } from '@prisma/client';
 import { AccountingConnectionAdapter } from './accounting-connection-adapter.interface';
 import { XeroAccountingAdapter } from './xero-connection.adapter';
 
-// Adding a second provider is: write one more adapter class, register it
-// here — the service/controller never change.
+// Provider → adapter. The framework resolves every adapter here and never
+// names a provider itself. Adding a provider: implement the port, register it
+// here (see the checklist in accounting-connection-adapter.interface.ts).
 @Injectable()
 export class AccountingAdapterRegistry {
   private readonly adapters = new Map<AccountingProvider, AccountingConnectionAdapter>();
@@ -19,5 +20,10 @@ export class AccountingAdapterRegistry {
       throw new Error(`No accounting adapter registered for provider ${provider}`);
     }
     return adapter;
+  }
+
+  // The provider's name for user-facing text ("Xero", not "XERO").
+  displayName(provider: AccountingProvider): string {
+    return this.get(provider).displayName;
   }
 }

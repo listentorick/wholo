@@ -1,3 +1,88 @@
+// ═══ Accounting integration framework ══════════════════════════════════════
+//
+// Stocdup connects to a distributor's accounting system through a
+// PROVIDER-NEUTRAL framework. Xero is the first provider; others (QuickBooks,
+// Sage, MYOB, …) plug in the same way. This file is the framework's front
+// door: the overview below, then the port every provider implements.
+//
+// Who owns what (ADR-006): Stocdup owns products, prices and orders; the
+// accounting system is the system of record for invoices, payments and
+// balances. Stocdup never takes a price from the provider.
+//
+// ── The layers (and where each lives) ─────────────────────────────────────
+//  1. Provider boundary — AccountingConnectionAdapter (below), one class per
+//     provider under accounting/adapters/, registered in
+//     AccountingAdapterRegistry. EVERYTHING provider-specific stays behind it:
+//     SDK, OAuth details, field names and statuses, cursors, rate limits,
+//     error codes, display name. Nothing outside accounting/adapters/ may
+//     import a provider SDK or a concrete adapter, or branch on which
+//     provider it is (enforced by accounting/accounting-framework.arch.spec.ts).
+//  2. Tokens — AccountingConnectionService.getValidTokenSet is the only way
+//     to get a usable token (serialised refresh, ERROR-state handling).
+//  3. Triggers — scheduled pulls, manual Sync and retries all go through the
+//     outbox and IngestionRunService.requestRun (sync/accounting-sync.service.ts),
+//     never straight onto a queue.
+//  4. Pulls — every job that reads provider data extends
+//     AccountingPullProcessorBase (sync/accounting-pull-processor.base.ts —
+//     the guide and checklist for pulls). Reviewed-and-mapped record types
+//     extend AccountingSyncProcessorBase on top of it.
+//  5. Push — invoice export (accounting-invoice-export.processor.ts): its own
+//     processor because it is per order with an idempotency key and its own
+//     export row, but it uses the same token gateway, failure policy and
+//     timing constants as the pulls.
+//  6. Failures — classified once: adapters decide transient vs permanent
+//     (AccountingProviderError); classifyJobFailure (accounting-job-failure.ts)
+//     turns that into what the job does next.
+//  7. Identity — provider data that belongs to an organisation is matched by
+//     organisation (accounting-organisation.ts), not by connection row, so a
+//     reconnect to the same organisation keeps working.
+//  8. Derived state has one writer — invoice payment columns only through
+//     InvoicePaymentStateService, order COMPLETED only through
+//     OrderCompletionService (both enforced by ESLint).
+//
+// ── What every provider adapter must do ───────────────────────────────────
+//  - Route EVERY provider API call through one private call path that:
+//      · acquires AccountingCallBudgetService.acquire(provider, orgId,
+//        perMinute) first, with the provider's own declared per-organisation
+//        limit (kept safely under the provider's published limit);
+//      · applies a timeout (SDKs often have none);
+//      · logs one structured line per call (op, status, duration, limits left).
+//    See XeroAccountingAdapter.call() for the reference implementation.
+//  - Throw every failure as AccountingProviderError, classified the same way
+//    for every provider:
+//      · transient (retried with backoff): no response / network, rate limit
+//        (with retryAfterMs from the provider when it says how long), provider
+//        5xx, and an expired or invalid access token (the retry refreshes it);
+//      · permanent (needs the user — fix data, or reconnect): validation
+//        errors and other 4xx, including "forbidden for this organisation".
+//    Messages are built only from the provider's own validation / error text,
+//    never the raw response (it can carry tokens or personal data).
+//  - Keep cursors opaque: encode whatever the provider supports and hand it
+//    back in AccountingFetchResult.nextCursor; return null when it can't do
+//    incremental pulls (the framework then always pulls in full).
+//  - Cross the boundary in the neutral shapes below: decimals as strings,
+//    calendar dates as YYYY-MM-DD, provider vocabulary only in `raw` /
+//    `rawStatus` / `externalInvoiceStatus`.
+//  - Provide `displayName` and the scope checks.
+//
+// ── Checklist: adding a provider ──────────────────────────────────────────
+//  1. Add the value to the AccountingProvider enum (prisma migration; keep
+//     apps/admin-api's schema copy in sync).
+//  2. Implement AccountingConnectionAdapter in accounting/adapters/<provider>…
+//     meeting every obligation above; unit-test it against a mocked SDK.
+//  3. Register it in AccountingAdapterRegistry and AccountingModule.
+//  4. Add its OAuth start route and callback, and its connection card in the
+//     admin app. (Today these are Xero-named — the known provider-specific
+//     edges outside the adapter; generalise them when the second provider
+//     lands, along with the registry taking a list of adapters.)
+//  5. Nothing in sync, export, payment status, matching or scheduling should
+//     change. test/accounting-framework.integration-spec.ts drives the whole
+//     framework through a fake provider — if a new provider needs changes
+//     there, the port is leaking.
+//
+// Checklist for adding a new kind of PULL: see AccountingPullProcessorBase.
+// ═══════════════════════════════════════════════════════════════════════════
+
 export interface AccountingTokenSet {
   accessToken: string;
   refreshToken: string;
@@ -173,10 +258,14 @@ export interface AccountingFetchResult<T> {
   nextCursor: string | null;
 }
 
-// Phase 1 (connection lifecycle) + Phase 2 (listContacts) + Phase 3
-// (listProducts) + Phase 4 (createInvoice) + tax-type sync (listTaxRates).
-// Still has room to grow (getInvoicePdf) — not built now, deliberately.
+// The port. One implementation per provider (XeroAccountingAdapter is the
+// first); the framework only ever talks to this interface. Every method must
+// meet the obligations in the header above. Provider names appear in the
+// comments below only as examples of why a method is shaped the way it is.
 export interface AccountingConnectionAdapter {
+  // The provider's name as people know it ("Xero"), for every user-facing
+  // sentence that names the provider — never the enum value.
+  readonly displayName: string;
   buildAuthorizationUrl(state: string): Promise<string>;
   // callbackUrl is the full request URL (incl. querystring) the provider
   // redirected the browser to — some provider SDKs (xero-node included)

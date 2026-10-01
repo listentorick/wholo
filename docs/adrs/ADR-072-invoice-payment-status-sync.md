@@ -110,6 +110,13 @@ outbox event (export, order, distributor, customer, from → to, amounts, dates,
   overdue invoices.
 - Labels always carry the meaning; colour is secondary.
 
+## Update (2026-10-01): part of the accounting integration framework
+The invoice status sync now extends `AccountingPullProcessorBase` like every other pull
+(it previously copied the run lifecycle and had no heartbeat). User-facing text names the
+provider via the adapter's `displayName`. The framework overview, the provider contract
+and the drift guards are described at the top of
+`apps/api/src/accounting/adapters/accounting-connection-adapter.interface.ts`.
+
 ## Consequences
 - "Order shows as paid" lags payment by up to ~15 minutes plus queue wait; the
   `accounting-invoice-sync` queue's oldest-waiting-age gauge measures it.

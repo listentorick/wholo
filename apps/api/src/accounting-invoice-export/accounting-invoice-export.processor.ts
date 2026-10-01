@@ -23,8 +23,8 @@ import {
   AccountingInvoiceLineRequest,
   AccountingInvoiceRequest,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
-import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
-import { CALL_BUDGET_EXHAUSTED } from '../accounting/accounting-call-budget.service';
+import { classifyJobFailure } from '../accounting/accounting-job-failure';
+import { PROCESSING_STALE_MS } from '../ingestion/ingestion-run.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
@@ -38,12 +38,19 @@ interface InvoiceExportJobData {
   payload: { orderId?: string; distributorId?: string };
 }
 
-// A PROCESSING row younger than this is presumed to have a live attempt
-// behind it; older means the worker died mid-flight and the row may be
-// resumed (with the SAME idempotency key, so a crash after the provider call
-// succeeded replays into the provider's idempotency cache, not a duplicate).
-const PROCESSING_STALE_MS = 15 * 60 * 1000;
+// PROCESSING_STALE_MS (shared with every accounting pull): a PROCESSING export
+// row younger than this is presumed to have a live attempt behind it; older
+// means the worker died mid-flight and the row may be resumed (with the SAME
+// idempotency key, so a crash after the provider call succeeded replays into
+// the provider's idempotency cache, not a duplicate).
 
+// Part of the provider-neutral accounting integration framework — overview and
+// provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
+// The framework's push: deliberately its own processor rather than a pull
+// (one job per order, a provider idempotency key, state on its own export row),
+// but it shares the pulls' token gateway (getValidTokenSet), failure policy
+// (classifyJobFailure) and PROCESSING_STALE_MS.
+//
 // Creates one sales invoice in the distributor's connected accounting system
 // per accepted order. Consumes OrderAccepted (domain trigger) and
 // AccountingInvoiceExportRequested (manual retry) — one path for both, like
@@ -378,7 +385,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
           entityId: order.id,
           action: 'INVOICE_EXPORT_COMPLETED',
           actorType: ActorType.SYSTEM,
-          summary: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${connection.provider}`,
+          summary: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${this.adapters.displayName(connection.provider)}`,
           changes: { exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
         });
       });
@@ -389,7 +396,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
           externalInvoiceId: result.externalInvoiceId,
           retryCount: exportRow.retryCount,
         },
-        `Created ${connection.provider} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
+        `Created ${this.adapters.displayName(connection.provider)} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
       );
       // Direct write, no outbox — same terminal-write reasoning as the bulk
       // import notification (admin-notifications.module.ts): there's no
@@ -397,7 +404,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       await this.adminNotifications.notifyOrganisationAdmins(order.distributorId, {
         type: 'INVOICE_EXPORT_COMPLETED',
         title: 'Invoice created',
-        body: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${connection.provider} for order ${order.orderNumber}`,
+        body: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${this.adapters.displayName(connection.provider)} for order ${order.orderNumber}`,
         linkPath: `/orders/${order.id}`,
         payload: { orderId: order.id, exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
       });
@@ -406,21 +413,20 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       // show (adapters guarantee it). Anything else is unexpected — our bug —
       // so the stored/displayed message is generic and the real error goes to
       // the log with its stack.
-      const providerError = err instanceof AccountingProviderError ? err : null;
+      const { providerError, permanent, lastAttempt, budgetWait } = classifyJobFailure(err, job);
       // Our own call budget ran out (ADR-071): the call was never sent, and
       // the queue's backoff retries at exactly retryAfterMs. That's a wait, not
       // a failure — put the row back to PENDING (so the retry can claim it)
       // without the FAILED status, timeline entry or admin notification.
       // Only the final attempt falls through and is reported as a failure.
-      const lastAttempt = (job.attemptsMade ?? 0) + 1 >= (job.opts?.attempts ?? 1);
-      if (providerError?.code === CALL_BUDGET_EXHAUSTED && !lastAttempt) {
+      if (budgetWait && !lastAttempt) {
         await this.prisma.accountingInvoiceExport.update({
           where: { id: exportRow.id },
           data: { status: AccountingInvoiceExportStatus.PENDING },
         });
         this.logger.log(
-          { event: 'accounting.invoice_export.deferred', ...this.logFields(connection, exportRow), retryAfterMs: providerError.retryAfterMs },
-          `Invoice export ${exportRow.id} deferred — ${connection.provider} call budget exhausted`,
+          { event: 'accounting.invoice_export.deferred', ...this.logFields(connection, exportRow), retryAfterMs: providerError?.retryAfterMs },
+          `Invoice export ${exportRow.id} deferred — ${this.adapters.displayName(connection.provider)} call budget exhausted`,
         );
         throw err;
       }
@@ -441,7 +447,6 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       // faults, token refresh failures — is marked FAILED for visibility and
       // rethrown so BullMQ retries with backoff (the next attempt claims the
       // FAILED row again).
-      const permanent = providerError !== null && !providerError.transient;
       await this.markFailed(exportRow, 'PROVIDER_ERROR', message, {
         provider: connection.provider,
         connectionId: connection.id,

@@ -1,5 +1,4 @@
-import { Logger } from '@nestjs/common';
-import { Job, UnrecoverableError } from 'bullmq';
+import { Job } from 'bullmq';
 import { AccountingContactMatchMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
@@ -7,7 +6,6 @@ import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-ada
 import { AccountingContactMatcherService } from '../accounting/matching/accounting-contact-matcher.service';
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
-import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { AccountingContactSyncProcessor } from './accounting-contact-sync.processor';
 
 function makeJob(connectionId = 'conn-1', payload: Record<string, unknown> = {}): Job {
@@ -21,7 +19,7 @@ describe('AccountingContactSyncProcessor', () => {
   let processor: AccountingContactSyncProcessor;
   let prisma: any;
   let accountingConnectionService: { getValidTokenSet: jest.Mock };
-  let adapters: { get: jest.Mock };
+  let adapters: { get: jest.Mock; displayName: jest.Mock };
   let matcher: { findBestMatch: jest.Mock };
   let listContacts: jest.Mock;
   let ingestionRuns: {
@@ -92,6 +90,7 @@ describe('AccountingContactSyncProcessor', () => {
       get: jest.fn().mockReturnValue({
         listContacts: async (...args: unknown[]) => ({ records: await listContacts(...args), nextCursor: 'cursor-next' }),
       }),
+      displayName: jest.fn().mockReturnValue('Xero'),
     };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
@@ -114,54 +113,10 @@ describe('AccountingContactSyncProcessor', () => {
     );
   });
 
-  it('skips silently when the connection no longer exists', async () => {
-    prisma.accountingConnection.findUnique.mockResolvedValue(null);
-    await processor.process(makeJob());
-    expect(accountingConnectionService.getValidTokenSet).not.toHaveBeenCalled();
-  });
-
-  it('skips when the connection is not CONNECTED', async () => {
-    prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, status: 'DISCONNECTED' });
-    await processor.process(makeJob());
-    expect(accountingConnectionService.getValidTokenSet).not.toHaveBeenCalled();
-  });
-
-  it('marks the run FAILED when the connection is gone and the job carries a runId', async () => {
-    prisma.accountingConnection.findUnique.mockResolvedValue(null);
-    await processor.process(makeJob('conn-1', { runId: 'run-9' }));
-    expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-9', expect.any(String));
-  });
-
-  it('drives the ingestion run: claim → setTotal → finalizeSuccess', async () => {
-    listContacts.mockResolvedValue([
-      { externalId: 'x-1', displayName: 'Blackbird', isCustomer: true, isSupplier: false, isArchived: false, raw: {} },
-    ]);
-    await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-    expect(ingestionRuns.claim).toHaveBeenCalledWith('run-7');
-    expect(ingestionRuns.ensureRun).not.toHaveBeenCalled();
-    expect(ingestionRuns.setTotal).toHaveBeenCalledWith('run-7', 1);
-    expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), expect.anything());
-  });
-
-  it('does nothing when the run cannot be claimed (already running or done)', async () => {
-    ingestionRuns.claim.mockResolvedValue(null);
-    await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-    expect(accountingConnectionService.getValidTokenSet).not.toHaveBeenCalled();
-  });
-
-  it('marks the run FAILED and rethrows when the provider fetch throws', async () => {
-    listContacts.mockRejectedValue(new Error('Xero 500'));
-    await expect(processor.process(makeJob('conn-1', { runId: 'run-7' }))).rejects.toThrow('Xero 500');
-    expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero 500');
-  });
-
-  it('recreates a run row for a legacy job with no runId in the payload', async () => {
-    await processor.process(makeJob());
-    expect(ingestionRuns.ensureRun).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceType: 'accounting', sourceRef: 'conn-1', resourceType: 'contact' }),
-    );
-    expect(ingestionRuns.claim).toHaveBeenCalledWith('run-1');
-  });
+  // The run lifecycle (connection checks, claim, full vs incremental, failure
+  // policy) is shared by every pull and tested once, in
+  // accounting/sync/accounting-pull-processor.base.spec.ts. This spec covers
+  // the contact pipeline only.
 
   it('fetches a valid token, lists contacts via the resolved adapter, and updates lastSyncedAt', async () => {
     await processor.process(makeJob());
@@ -172,118 +127,6 @@ describe('AccountingContactSyncProcessor', () => {
     expect(prisma.accountingConnection.update).toHaveBeenCalledWith({
       where: { id: 'conn-1' },
       data: { lastSyncedAt: expect.any(Date) },
-    });
-  });
-
-  describe('full vs incremental pulls', () => {
-    const scheduledRun = (overrides: Record<string, unknown> = {}) => ({
-      id: 'run-7',
-      trigger: 'SCHEDULED',
-      cursor: 'cursor-stored',
-      lastFullRunAt: new Date(),
-      ...overrides,
-    });
-
-    it('does a full pull (null cursor) when the run has no cursor yet — never connection.lastSyncedAt', async () => {
-      prisma.accountingConnection.findUnique.mockResolvedValue({ ...connection, lastSyncedAt: new Date('2026-01-01') });
-      ingestionRuns.claim.mockResolvedValue(scheduledRun({ cursor: null }));
-
-      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-
-      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
-      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), {
-        cursor: 'cursor-next',
-        full: true,
-      });
-    });
-
-    it('pulls incrementally from the stored cursor on a scheduled run', async () => {
-      ingestionRuns.claim.mockResolvedValue(scheduledRun());
-
-      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-
-      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', 'cursor-stored');
-      expect(ingestionRuns.finalizeSuccess).toHaveBeenCalledWith('run-7', expect.any(Object), {
-        cursor: 'cursor-next',
-        full: false,
-      });
-    });
-
-    it('always pulls in full when a person asked (manual Sync)', async () => {
-      ingestionRuns.claim.mockResolvedValue(scheduledRun({ trigger: 'MANUAL' }));
-
-      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-
-      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
-    });
-
-    it('falls back to a full pull once the last full one is a day old', async () => {
-      ingestionRuns.claim.mockResolvedValue(scheduledRun({ lastFullRunAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }));
-
-      await processor.process(makeJob('conn-1', { runId: 'run-7' }));
-
-      expect(listContacts).toHaveBeenCalledWith(expect.anything(), 'tenant-1', null);
-    });
-  });
-
-  describe('failures', () => {
-    it('stops BullMQ retrying a permanent provider rejection, and logs it with its ids', async () => {
-      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-      listContacts.mockRejectedValue(
-        new AccountingProviderError('Xero getContacts failed with HTTP 403', false, undefined, 'HTTP_403', { statusCode: 403 }),
-      );
-
-      const err = await processor.process(makeJob('conn-1', { runId: 'run-7' })).catch((e) => e);
-
-      expect(err).toBeInstanceOf(UnrecoverableError);
-      expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero getContacts failed with HTTP 403');
-      expect(warn.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.sync.failed')?.[0]).toMatchObject({
-        distributorId: 'dist-1',
-        connectionId: 'conn-1',
-        runId: 'run-7',
-        resourceType: 'contact',
-        statusCode: 403,
-        transient: false,
-      });
-      warn.mockRestore();
-    });
-
-    it('puts the run back to QUEUED on a transient failure with attempts left, so the retry can claim it', async () => {
-      (ingestionRuns as unknown as { requeueForRetry: jest.Mock }).requeueForRetry = jest.fn().mockResolvedValue(undefined);
-      listContacts.mockRejectedValue(new AccountingProviderError('Xero 503', true, undefined, 'HTTP_503'));
-      const job = { ...makeJob('conn-1', { runId: 'run-7' }), attemptsMade: 0, opts: { attempts: 3 } } as unknown as Job;
-
-      await processor.process(job).catch(() => undefined);
-
-      expect((ingestionRuns as unknown as { requeueForRetry: jest.Mock }).requeueForRetry).toHaveBeenCalledWith('run-7', 'Xero 503');
-      expect(ingestionRuns.finalizeFailure).not.toHaveBeenCalled();
-    });
-
-    it('marks the run FAILED on the last attempt', async () => {
-      listContacts.mockRejectedValue(new AccountingProviderError('Xero 503', true, undefined, 'HTTP_503'));
-      const job = { ...makeJob('conn-1', { runId: 'run-7' }), attemptsMade: 2, opts: { attempts: 3 } } as unknown as Job;
-
-      await processor.process(job).catch(() => undefined);
-
-      expect(ingestionRuns.finalizeFailure).toHaveBeenCalledWith('run-7', 'Xero 503');
-    });
-
-    it('rethrows a transient provider failure unchanged so the backoff can honour Retry-After', async () => {
-      const rateLimited = new AccountingProviderError('Xero rate limit', true, undefined, 'HTTP_429', { retryAfterMs: 5_000 });
-      listContacts.mockRejectedValue(rateLimited);
-
-      await expect(processor.process(makeJob('conn-1', { runId: 'run-7' }))).rejects.toBe(rateLimited);
-    });
-
-    it('logs an unexpected (non-provider) failure at error, with the stack', async () => {
-      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
-      listContacts.mockRejectedValue(new TypeError('boom'));
-
-      await processor.process(makeJob('conn-1', { runId: 'run-7' })).catch(() => undefined);
-
-      const [fields] = error.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.sync.failed')!;
-      expect((fields as { err: Error }).err.stack).toContain('TypeError: boom');
-      error.mockRestore();
     });
   });
 

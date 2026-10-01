@@ -63,12 +63,18 @@ describe('InvoicePaymentStateService', () => {
   let audits: Array<Record<string, unknown>>;
   let locked: string[];
   let reconciled: Array<{ orderId: string; actor: unknown }>;
+  // What the database holds when the service re-reads the row after locking.
+  let stored: ExportWithOrder | null;
   const tx = {
-    accountingInvoiceExport: { update: jest.fn(async ({ data }) => rowWrites.push(data)) },
+    accountingInvoiceExport: {
+      update: jest.fn(async ({ data }) => rowWrites.push(data)),
+      findUniqueOrThrow: jest.fn(async () => stored),
+    },
   } as unknown as Prisma.TransactionClient;
 
   beforeEach(() => {
     rowWrites = [];
+    stored = current();
     events = [];
     audits = [];
     locked = [];
@@ -83,7 +89,7 @@ describe('InvoicePaymentStateService', () => {
     );
   });
 
-  const ctx = { source: 'XERO', currency: 'GBP', actor: { type: 'SYSTEM' as const } };
+  const ctx = { source: 'Xero', currency: 'GBP', actor: { type: 'SYSTEM' as const } };
 
   it('writes nothing when the snapshot has not changed', async () => {
     const result = await service.apply(tx, current(), next(), ctx);
@@ -134,7 +140,7 @@ describe('InvoicePaymentStateService', () => {
         entityId: 'order-1',
         action: 'INVOICE_PAYMENT_STATUS_CHANGED',
         actorType: 'SYSTEM',
-        summary: 'Invoice INV-0001 marked paid in XERO',
+        summary: 'Invoice INV-0001 marked paid in Xero',
         changes: expect.objectContaining({ fromStatus: 'UNPAID', toStatus: 'PAID' }),
       }),
     ]);
@@ -146,6 +152,25 @@ describe('InvoicePaymentStateService', () => {
 
     expect(audits[0]).toMatchObject({ actorType: 'USER', actorUserId: 'user-1', actorName: 'Pat', summary: 'Invoice INV-0001 marked paid in Stocdup' });
     expect(reconciled[0].actor).toEqual({ type: 'USER', userId: 'user-1', name: 'Pat' });
+  });
+
+  it('writes nothing when another writer already applied the same facts since the caller loaded the row', async () => {
+    stored = current({
+      invoiceState: 'PAID',
+      amountPaid: new Prisma.Decimal('120'),
+      amountDue: new Prisma.Decimal('0'),
+      fullyPaidOn: new Date('2026-09-20T00:00:00Z'),
+      providerUpdatedAt: new Date('2026-09-20T09:00:00Z'),
+      externalInvoiceStatus: 'PAID',
+    });
+
+    const result = await service.apply(tx, current(), paid, ctx);
+
+    expect(result.changed).toBe(false);
+    expect(rowWrites).toHaveLength(0);
+    expect(events).toHaveLength(0);
+    expect(audits).toHaveLength(0);
+    expect(reconciled).toHaveLength(0);
   });
 
   it("falls back to the order's currency when the source does not report one", async () => {

@@ -44,7 +44,7 @@ const mockAdapter = {
   refreshAccessToken: jest.fn(),
 };
 
-const mockRegistry = { get: jest.fn() };
+const mockRegistry = { get: jest.fn(), displayName: jest.fn().mockReturnValue('Xero') };
 
 const mockRefreshLock = { tryAcquire: jest.fn() };
 const mockAdminNotifications = { notifyOrganisationAdmins: jest.fn() };

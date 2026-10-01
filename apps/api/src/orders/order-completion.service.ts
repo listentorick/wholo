@@ -17,6 +17,9 @@ export function resolveCompletion(orderStatus: OrderStatus, paymentStatus: Invoi
   return null;
 }
 
+// A single writer in the accounting integration framework (see
+// accounting/adapters/accounting-connection-adapter.interface.ts, layer 8).
+//
 // The only code that moves an order into or out of COMPLETED. Callers are the
 // two things COMPLETED depends on: delivery confirmation and invoice payment
 // state (InvoicePaymentStateService). Every move writes an audit row and an

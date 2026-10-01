@@ -95,7 +95,10 @@ describe('AccountingInvoiceSyncProcessor', () => {
     listInvoiceStatuses = jest.fn().mockResolvedValue({ records: [], nextCursor: 'cursor-next' });
     hasInvoiceReadScope = jest.fn().mockReturnValue(true);
     const tx = {
-      accountingInvoiceExport: { update: jest.fn(async (args) => updates.push(args)) },
+      accountingInvoiceExport: {
+        update: jest.fn(async (args) => updates.push(args)),
+        findUniqueOrThrow: jest.fn(async ({ where }) => exports.find((e) => e.id === where.id)),
+      },
     };
     const prisma = {
       accountingConnection: { findUnique: jest.fn().mockResolvedValue(connection), update: jest.fn() },
@@ -113,6 +116,7 @@ describe('AccountingInvoiceSyncProcessor', () => {
       ensureRun: jest.fn(),
       claim: jest.fn().mockResolvedValue({ id: 'run-1', trigger: 'SCHEDULED', cursor: 'cursor-stored', lastFullRunAt: new Date() }),
       setTotal: jest.fn(),
+      heartbeat: jest.fn(),
       finalizeSuccess: jest.fn(),
       finalizeFailure: jest.fn(),
       requeueForRetry: jest.fn(),
@@ -120,7 +124,7 @@ describe('AccountingInvoiceSyncProcessor', () => {
     processor = new AccountingInvoiceSyncProcessor(
       prisma as unknown as PrismaService,
       { getValidTokenSet: jest.fn().mockResolvedValue({}) } as unknown as AccountingConnectionService,
-      { get: () => ({ listInvoiceStatuses, hasInvoiceReadScope }) } as unknown as AccountingAdapterRegistry,
+      { get: () => ({ listInvoiceStatuses, hasInvoiceReadScope }), displayName: () => 'Xero' } as unknown as AccountingAdapterRegistry,
       ingestionRuns as unknown as IngestionRunService,
       new InvoicePaymentStateService(
         { record: jest.fn(async (_tx, params) => audits.push(params)) } as unknown as AuditService,
@@ -184,7 +188,7 @@ describe('AccountingInvoiceSyncProcessor', () => {
         entityId: 'order-1',
         action: 'INVOICE_PAYMENT_STATUS_CHANGED',
         actorType: 'SYSTEM',
-        summary: 'Invoice INV-0001 marked paid in XERO',
+        summary: 'Invoice INV-0001 marked paid in Xero',
       }),
     ]);
     expect(reconciled).toEqual(['order-1']);
@@ -247,6 +251,18 @@ describe('AccountingInvoiceSyncProcessor', () => {
     await processor.process(makeJob());
 
     expect(updates).toHaveLength(0);
+  });
+
+  it('heartbeats the run while applying a large snapshot, so a live sync is never taken for a dead one', async () => {
+    listInvoiceStatuses.mockResolvedValue({
+      records: Array.from({ length: 60 }, (_, i) => status({ externalInvoiceId: `not-ours-${i}` })),
+      nextCursor: null,
+    });
+
+    await processor.process(makeJob());
+
+    expect(ingestionRuns.heartbeat.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(ingestionRuns.heartbeat).toHaveBeenCalledWith('run-1', expect.any(Object));
   });
 
   it('pulls incrementally from the stored cursor, and in full on a manual Sync', async () => {

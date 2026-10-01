@@ -31,6 +31,11 @@ import { AccountingChangeDetectionService } from '../accounting/accounting-chang
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
+// Part of the provider-neutral accounting integration framework — overview and
+// provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
+// A pull: extends AccountingSyncProcessorBase (see AccountingPullProcessorBase
+// for the pull pattern).
+//
 // Consumes AccountingContactSyncRequested — written to the outbox by both
 // AccountingSyncScheduler (periodic) and the "Sync now" HTTP endpoint
 // (manual). One trigger, one path: the shared sync pipeline
@@ -161,8 +166,8 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
       },
       notification: {
         type: 'ACCOUNTING_CONTACT_CHANGED',
-        title: 'Linked contact changed in Xero',
-        body: `"${updated.displayName}" changed in Xero (name or email) since it was linked — review before your next invoice export.`,
+        title: `Linked contact changed in ${this.adapters.displayName(connection.provider)}`,
+        body: `"${updated.displayName}" changed in ${this.adapters.displayName(connection.provider)} (name or email) since it was linked — review before your next invoice export.`,
         linkPath: '/integrations/accounting?tab=contacts',
         payload: { externalContactId: updated.id, distributorId: connection.distributorId },
       },

@@ -48,7 +48,7 @@ describe('Invoice status sync (integration)', () => {
     processor = new AccountingInvoiceSyncProcessor(
       prisma,
       {} as AccountingConnectionService,
-      {} as AccountingAdapterRegistry,
+      { displayName: () => 'Xero' } as unknown as AccountingAdapterRegistry,
       {} as IngestionRunService,
       new InvoicePaymentStateService(
         new AuditService(),
@@ -221,7 +221,7 @@ describe('Invoice status sync (integration)', () => {
         distributorId: DIST_A,
         action: 'INVOICE_PAYMENT_STATUS_CHANGED',
         actorType: 'SYSTEM',
-        summary: 'Invoice INV-1 marked paid in XERO',
+        summary: 'Invoice INV-1 marked paid in Xero',
       }),
     ]);
   });

@@ -28,7 +28,7 @@ describe('AccountingProductSyncProcessor', () => {
   let processor: AccountingProductSyncProcessor;
   let prisma: any;
   let accountingConnectionService: { getValidTokenSet: jest.Mock };
-  let adapters: { get: jest.Mock };
+  let adapters: { get: jest.Mock; displayName: jest.Mock };
   let matcher: { findBestMatch: jest.Mock };
   let listProducts: jest.Mock;
   let ingestionRuns: ReturnType<typeof ingestionRunsMock>;
@@ -88,6 +88,7 @@ describe('AccountingProductSyncProcessor', () => {
       get: jest.fn().mockReturnValue({
         listProducts: async (...args: unknown[]) => ({ records: await listProducts(...args), nextCursor: 'cursor-next' }),
       }),
+      displayName: jest.fn().mockReturnValue('Xero'),
     };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     const changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };

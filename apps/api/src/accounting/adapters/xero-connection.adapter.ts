@@ -134,8 +134,15 @@ const XERO_INVOICE_STATUS: Record<AccountingInvoiceTargetStatusValue, Invoice.St
   AUTHORISED: Invoice.StatusEnum.AUTHORISED,
 };
 
+// Xero — ONE implementation of the provider-neutral AccountingConnectionAdapter
+// port (see accounting-connection-adapter.interface.ts for the framework and
+// the obligations every adapter meets). Everything Xero-specific lives in this
+// file and xero-errors.ts; nothing else in Stocdup should know it is Xero.
+// call() below is the reference implementation of the single call path.
 @Injectable()
 export class XeroAccountingAdapter implements AccountingConnectionAdapter {
+  readonly displayName = 'Xero';
+
   private readonly logger = new Logger(XeroAccountingAdapter.name);
   private readonly clientId: string;
   private readonly clientSecret: string;

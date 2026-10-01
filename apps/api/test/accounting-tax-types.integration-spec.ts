@@ -23,6 +23,7 @@ import {
   AccountingConnectionStatus,
   AccountingProvider,
   AccountingTaxTypeMatchMethod,
+  IngestionRunTrigger,
   OrganisationType,
   Role,
   TaxClassification,
@@ -35,6 +36,7 @@ import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting
 import { AccountingChangeDetectionService } from '../src/accounting/accounting-change-detection.service';
 import { AccountingTaxTypeMatcherService } from '../src/accounting/matching/accounting-tax-type-matcher.service';
 import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
+import { ACCOUNTING_SOURCE_TYPE } from '../src/accounting/sync/accounting-sync.constants';
 import { AccountingExternalTaxRate } from '../src/accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingTaxTypeSyncProcessor } from '../src/accounting-tax-type-sync/accounting-tax-type-sync.processor';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
@@ -84,7 +86,7 @@ describe('Accounting tax type sync (integration)', () => {
           scope: 'openid accounting.settings',
         }),
       } as unknown as AccountingConnectionService,
-      { get: () => ({ listTaxRates }) } as unknown as AccountingAdapterRegistry,
+      { get: () => ({ listTaxRates }), displayName: () => 'Xero' } as unknown as AccountingAdapterRegistry,
       app.get(AccountingChangeDetectionService),
       app.get(IngestionRunService),
       app.get(AccountingTaxTypeMatcherService),
@@ -106,11 +108,15 @@ describe('Accounting tax type sync (integration)', () => {
       },
       update: { keycloakId: ADMIN_KEYCLOAK_ID },
     });
-    await prisma.membership.upsert({
+    const membership = await prisma.membership.upsert({
       where: { userId_organisationId: { userId: user.id, organisationId: DIST } },
       create: { userId: user.id, organisationId: DIST, role: Role.DISTRIBUTOR_ADMIN },
       update: {},
     });
+    // Roles are resolved from MembershipRole (multi-role RBAC) — admin
+    // notifications go to members holding DISTRIBUTOR_ADMIN there.
+    await prisma.membershipRole.deleteMany({ where: { membershipId: membership.id } });
+    await prisma.membershipRole.create({ data: { membershipId: membership.id, role: Role.DISTRIBUTOR_ADMIN } });
 
     token = jwtServer.signToken({ sub: ADMIN_KEYCLOAK_ID, email: 'acct-tax-types-admin@integration.test' });
   });
@@ -133,6 +139,8 @@ describe('Accounting tax type sync (integration)', () => {
   });
 
   afterEach(async () => {
+    // Sync runs reference the distributor; without this the org can't be deleted in afterAll.
+    await prisma.ingestionRun.deleteMany({ where: { distributorId: DIST } });
     await prisma.adminNotification.deleteMany({ where: { organisationId: DIST } });
     await prisma.accountingTaxTypeMatchSuggestion.deleteMany({ where: { distributorId: DIST } });
     await prisma.taxTypeAccountingMapping.deleteMany({ where: { distributorId: DIST } });
@@ -143,6 +151,7 @@ describe('Accounting tax type sync (integration)', () => {
   });
 
   afterAll(async () => {
+    await prisma.membershipRole.deleteMany({ where: { membership: { userId: ADMIN_USER } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
     await prisma.user.deleteMany({ where: { id: ADMIN_USER } });
     await prisma.organisation.deleteMany({ where: { id: DIST } });
@@ -161,10 +170,23 @@ describe('Accounting tax type sync (integration)', () => {
     };
   }
 
-  function runSync() {
+  // Each sync is requested the way a real one is (requestRun → a fresh QUEUED
+  // run carried in the payload). A payload without a runId reuses the
+  // COMPLETED run row, which claim() rightly refuses — so a second sync in
+  // the same test would silently do nothing.
+  async function runSync() {
+    const { run } = await prisma.$transaction((tx) =>
+      app.get(IngestionRunService).requestRun(tx, {
+        distributorId: DIST,
+        sourceType: ACCOUNTING_SOURCE_TYPE,
+        sourceRef: connection.id,
+        resourceType: 'tax_type',
+        trigger: IngestionRunTrigger.MANUAL,
+      }),
+    );
     return processor.process({
       name: 'AccountingTaxTypeSyncRequested',
-      data: { eventId: 'evt-1', aggregateType: 'AccountingConnection', aggregateId: connection.id, payload: {} },
+      data: { eventId: `evt-${run.id}`, aggregateType: 'AccountingConnection', aggregateId: connection.id, payload: { runId: run.id } },
     } as any);
   }
 

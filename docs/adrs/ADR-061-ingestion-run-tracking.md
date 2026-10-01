@@ -79,6 +79,14 @@ crash-recovery mechanism — a `finalizeFailure` write that is itself lost still
 gets cleaned up.
 
 ### Processor changes (`AccountingSyncProcessorBase`)
+> **Update (2026-10-01):** the run lifecycle described here now lives in
+> `AccountingPullProcessorBase` (`apps/api/src/accounting/sync/accounting-pull-processor.base.ts`),
+> shared by every accounting pull; `AccountingSyncProcessorBase` extends it with the
+> cache-and-match pipeline, and the invoice status sync (ADR-072) extends it directly.
+> Heartbeats go through its `RunProgress` helper; failures through `classifyJobFailure`.
+> The header of that file is the working guide (with a checklist for adding a pull);
+> `accounting-framework.arch.spec.ts` fails if a pull bypasses it.
+
 `process()` now: resolve `runId` from the payload (or `ensureRun` for a legacy
 job) → `claim` (bail if unclaimable) → wrap the body so any throw calls
 `finalizeFailure(runId, msg)` and rethrows (BullMQ backoff still applies) →

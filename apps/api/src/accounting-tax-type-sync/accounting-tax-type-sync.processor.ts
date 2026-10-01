@@ -31,6 +31,11 @@ import { AccountingChangeDetectionService } from '../accounting/accounting-chang
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 
+// Part of the provider-neutral accounting integration framework — overview and
+// provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
+// A pull: extends AccountingSyncProcessorBase (see AccountingPullProcessorBase
+// for the pull pattern).
+//
 // Consumes AccountingTaxTypeSyncRequested — written to the outbox by both
 // AccountingSyncScheduler (periodic) and the "Sync now" HTTP endpoint
 // (manual). Third implementation of the shared sync pipeline
@@ -129,8 +134,8 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
       },
       notification: {
         type: 'ACCOUNTING_TAX_TYPE_CHANGED',
-        title: 'Linked tax rate changed in Xero',
-        body: `"${updated.displayName}" changed in Xero (rate or status) since it was mapped — the Stocdup tax type's rate was not changed automatically. Review and update it if needed.`,
+        title: `Linked tax rate changed in ${this.adapters.displayName(connection.provider)}`,
+        body: `"${updated.displayName}" changed in ${this.adapters.displayName(connection.provider)} (rate or status) since it was mapped — the Stocdup tax type's rate was not changed automatically. Review and update it if needed.`,
         linkPath: '/integrations/accounting?tab=taxTypes',
         payload: { externalTaxTypeId: updated.id, distributorId: connection.distributorId },
       },

@@ -28,6 +28,10 @@ export interface EnqueueDueResult {
   nextRunAt: Date;
 }
 
+// Part of the provider-neutral accounting integration framework — overview and
+// provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
+// The single entry point for triggering pulls: manual Sync and the scheduler
+// both go through requestRun + the outbox here, never straight to a queue.
 @Injectable()
 export class AccountingSyncService {
   private readonly logger = new Logger(AccountingSyncService.name);

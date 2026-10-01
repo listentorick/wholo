@@ -28,7 +28,7 @@ describe('AccountingTaxTypeSyncProcessor', () => {
   let processor: AccountingTaxTypeSyncProcessor;
   let prisma: any;
   let accountingConnectionService: { getValidTokenSet: jest.Mock };
-  let adapters: { get: jest.Mock };
+  let adapters: { get: jest.Mock; displayName: jest.Mock };
   let matcher: { findBestMatch: jest.Mock };
   let changeDetection: { detectAndFlag: jest.Mock };
   let listTaxRates: jest.Mock;
@@ -83,7 +83,7 @@ describe('AccountingTaxTypeSyncProcessor', () => {
         scope: 'openid accounting.settings',
       }),
     };
-    adapters = { get: jest.fn().mockReturnValue({ listTaxRates }) };
+    adapters = { get: jest.fn().mockReturnValue({ listTaxRates }), displayName: jest.fn().mockReturnValue('Xero') };
     matcher = { findBestMatch: jest.fn().mockReturnValue(null) };
     changeDetection = { detectAndFlag: jest.fn().mockResolvedValue(undefined) };
 
