@@ -73,12 +73,15 @@ against one flat config, `eslint.config.mjs`. There are **no per-package lint
 scripts** and no `turbo` lint task. The ruleset is non-type-checked and currently
 tuned so the tree lints with zero errors — genuinely noisy rules are `warn`, not
 `error` (ratchet later). CI runs `pnpm lint` in the `test` job before the tests;
-it is informational and does not gate image publishing. `next build` does not lint
+it is informational and does not gate image publishing (the tests do — see
+"Testing"). `next build` does not lint
 (`eslint.ignoreDuringBuilds` is set in every `next.config.ts`).
 
 ## Testing
 
 Unit tests are **required** for all new code. Every service method, controller, and utility must have a corresponding `.spec.ts` (backend) or `.spec.tsx` (frontend) file alongside it.
+
+**Tests gate the build.** In `.github/workflows/build-images.yml` the `build` job needs both `test` (all unit tests, `pnpm turbo test`) and `integration` (`apps/api` integration specs against a TimescaleDB service container, migrations applied from empty). A failing test means no images are published, so nothing can be promoted to live. Keep both green; when a change makes an existing test fail, check the history to see whether the test or the code is out of date before changing either.
 
 ### Frameworks
 
@@ -218,7 +221,7 @@ To use it:
 
 Full runbook, one-time setup, and troubleshooting: `docs/deployment/live-k3s.md` (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:
 
-1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
+1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which runs the unit and integration tests and, only if both pass, builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
 2. Bump the `sha-` tags in `helm/wholo/values.live.yaml` (gitignored, not committed) to the new sha.
 3. Deploy: `pnpm helm:install:live` (`helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml`).
 
