@@ -25,6 +25,8 @@ import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 import { AccountingSyncScheduler } from '../src/accounting/accounting-sync.scheduler';
 import { AccountingSyncService } from '../src/accounting/sync/accounting-sync.service';
 import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
+// Manual Sync queues every resource type; derive the count so a new one doesn't make this stale.
+import { ACCOUNTING_SYNC_RESOURCE_TYPES } from '../src/accounting/sync/accounting-sync.constants';
 
 const DIST_A = 'test-ingest-dist-a';
 const DIST_B = 'test-ingest-dist-b';
@@ -106,14 +108,14 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
     expect(res.body.runs).toHaveLength(3);
 
     const runs = await prisma.ingestionRun.findMany({ where: { sourceRef: connectionA.id } });
-    expect(runs).toHaveLength(3);
-    expect(runs.map((r) => r.resourceType).sort()).toEqual(['contact', 'product', 'tax_type']);
+    expect(runs).toHaveLength(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
+    expect(runs.map((r) => r.resourceType).sort()).toEqual([...ACCOUNTING_SYNC_RESOURCE_TYPES].sort());
     expect(runs.every((r) => r.status === IngestionRunStatus.QUEUED && r.trigger === 'MANUAL')).toBe(true);
 
     const events = await prisma.outboxEvent.findMany({
       where: { aggregateType: 'AccountingConnection', aggregateId: connectionA.id },
     });
-    expect(events).toHaveLength(3);
+    expect(events).toHaveLength(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
     const runIds = new Set(runs.map((r) => r.id));
     for (const e of events) {
       expect(runIds.has((e.payload as { runId: string }).runId)).toBe(true);
@@ -124,8 +126,8 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
     await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
     await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
 
-    expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(3);
-    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+    expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
   });
 
   it('two concurrent sync requests still produce exactly one event per resource type (atomic create/reset)', async () => {
@@ -135,8 +137,8 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
       ),
     );
 
-    expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(3);
-    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+    expect(await prisma.ingestionRun.count({ where: { sourceRef: connectionA.id } })).toBe(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
+    expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(ACCOUNTING_SYNC_RESOURCE_TYPES.length);
   });
 
   it('re-queues a run left QUEUED for over an hour (its job gave up before claiming it)', async () => {

@@ -95,6 +95,8 @@ describe('Accounting invoice exports (integration)', () => {
   });
 
   afterAll(async () => {
+    // Export attempts write order audit rows that reference the distributor.
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -291,7 +293,7 @@ describe('Accounting invoice exports (integration)', () => {
       await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.FAILED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/orders/${order.id}`)
+        .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -308,7 +310,7 @@ describe('Accounting invoice exports (integration)', () => {
       await createExport(DIST_B, connectionB.id, orderB.id, AccountingInvoiceExportStatus.COMPLETED);
 
       const res = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_B}/orders/${orderB.id}`)
+        .get(`/api/v1/distributors/${DIST_B}/orders/${orderB.id}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(res.status).toBe(403);

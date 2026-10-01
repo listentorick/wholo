@@ -282,7 +282,7 @@ describe('Analytics (integration)', () => {
       const customerId = res.body.customers[0].customerId;
 
       const detailRes = await request(app.getHttpServer())
-        .get(`/api/v1/admin/distributors/${DIST_A}/customers/${customerId}`)
+        .get(`/api/v1/distributors/${DIST_A}/customers/${customerId}`)
         .set('Authorization', `Bearer ${token}`);
 
       expect(detailRes.status).toBe(200);

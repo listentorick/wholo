@@ -106,6 +106,8 @@ describe('Accounting product sync routes (integration)', () => {
   });
 
   afterEach(async () => {
+    // Sync runs reference the distributor; without this the org can't be deleted in afterAll.
+    await prisma.ingestionRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingProductMatchSuggestion.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.productAccountingMapping.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.externalAccountingProduct.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });

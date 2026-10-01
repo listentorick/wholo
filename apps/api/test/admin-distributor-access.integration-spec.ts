@@ -86,7 +86,7 @@ describe('DistributorAccessGuard (integration)', () => {
 
   it('allows access to the distributor the admin belongs to', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/admin/distributors/${DIST_A}/settings`)
+      .get(`/api/v1/distributors/${DIST_A}/settings`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
@@ -95,14 +95,14 @@ describe('DistributorAccessGuard (integration)', () => {
 
   it('rejects access to a distributor the admin does not belong to', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/admin/distributors/${DIST_B}/settings`)
+      .get(`/api/v1/distributors/${DIST_B}/settings`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(403);
   });
 
   it('rejects requests with no Authorization header at all', async () => {
-    const res = await request(app.getHttpServer()).get(`/api/v1/admin/distributors/${DIST_A}/settings`);
+    const res = await request(app.getHttpServer()).get(`/api/v1/distributors/${DIST_A}/settings`);
 
     expect(res.status).toBe(401);
   });
