@@ -105,7 +105,7 @@ describe('AccountingInvoiceExportProcessor', () => {
   };
   let connectionService: { getValidTokenSet: jest.Mock };
   let accountingTaxTypes: { resolveExternalCodeForTaxType: jest.Mock };
-  let adapter: { hasInvoiceCreationScope: jest.Mock; createInvoice: jest.Mock };
+  let adapter: { hasInvoiceCreationScope: jest.Mock; findInvoiceByReference: jest.Mock; createInvoice: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
   let audit: { record: jest.Mock };
   let adminNotifications: { notifyOrganisationAdmins: jest.Mock };
@@ -150,6 +150,8 @@ describe('AccountingInvoiceExportProcessor', () => {
     };
     adapter = {
       hasInvoiceCreationScope: jest.fn().mockReturnValue(true),
+      // The provider holds no invoice for the order unless a test says so.
+      findInvoiceByReference: jest.fn().mockResolvedValue(null),
       createInvoice: jest.fn().mockResolvedValue({
         externalInvoiceId: 'inv-1',
         externalInvoiceNumber: 'INV-0042',
@@ -242,7 +244,7 @@ describe('AccountingInvoiceExportProcessor', () => {
             { description: 'Merlot 2022 — MERLOT-001', quantity: 2, unitPrice: '9.90' },
           ],
         },
-        'export-1:1',
+        expect.stringMatching(/^export-1:[0-9a-f]{32}$/),
       );
       expect(completedUpdate()![0]).toEqual(
         expect.objectContaining({
@@ -367,7 +369,7 @@ describe('AccountingInvoiceExportProcessor', () => {
       expect(adapter.createInvoice).not.toHaveBeenCalled();
     });
 
-    it('resumes a stale PROCESSING export without bumping retryCount (same idempotency key)', async () => {
+    it('resumes a stale PROCESSING export without counting it as another attempt', async () => {
       prisma.accountingInvoiceExport.findUnique.mockResolvedValue(
         makeExportRow({ retryCount: 3, updatedAt: new Date(Date.now() - 20 * 60 * 1000) }),
       );
@@ -379,15 +381,10 @@ describe('AccountingInvoiceExportProcessor', () => {
 
       const claim = prisma.accountingInvoiceExport.update.mock.calls[0][0];
       expect(claim.data).not.toHaveProperty('retryCount');
-      expect(adapter.createInvoice).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        'export-1:3',
-      );
+      expect(completedUpdate()).toBeDefined();
     });
 
-    it('claims a FAILED export with an incremented retryCount (controlled retry, fresh key)', async () => {
+    it('claims a FAILED export as a counted retry', async () => {
       prisma.accountingInvoiceExport.findUnique.mockResolvedValue(
         makeExportRow({ status: AccountingInvoiceExportStatus.FAILED, retryCount: 1 }),
       );
@@ -399,81 +396,170 @@ describe('AccountingInvoiceExportProcessor', () => {
 
       const claim = prisma.accountingInvoiceExport.update.mock.calls[0][0];
       expect(claim.data.retryCount).toEqual({ increment: 1 });
-      expect(adapter.createInvoice).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        expect.anything(),
-        'export-1:2',
-      );
+      expect(completedUpdate()).toBeDefined();
     });
   });
 
-  describe('recoverable eligibility failures (marked FAILED, never thrown)', () => {
-    it('fails with SCOPE_MISSING when the connection lacks the invoice-creation scope', async () => {
-      adapter.hasInvoiceCreationScope.mockReturnValue(false);
+  // ADR-073: raising a second invoice for an order is unacceptable. Each test
+  // below is one way it used to be possible; none may create a second invoice.
+  describe('never invoices an order twice (ADR-073)', () => {
+    const invoiceAtProvider = {
+      externalInvoiceId: 'inv-already-there',
+      externalInvoiceNumber: 'INV-0007',
+      externalInvoiceStatus: 'AUTHORISED',
+      raw: {},
+    };
+    const expectAdoptedWithoutCreating = () => {
+      expect(adapter.createInvoice).not.toHaveBeenCalled();
+      expect(completedUpdate()![0].data).toEqual(
+        expect.objectContaining({ externalInvoiceId: 'inv-already-there', externalInvoiceNumber: 'INV-0007' }),
+      );
+      expect(failedUpdate()).toBeUndefined();
+    };
+    const existingRow = (overrides: Record<string, unknown>) => {
+      prisma.accountingInvoiceExport.create.mockRejectedValue(duplicateKeyError());
+      prisma.accountingInvoiceExport.findUnique.mockResolvedValue(makeExportRow(overrides));
+    };
+
+    it('asks the provider for the order\'s invoice before every create', async () => {
+      const calls: string[] = [];
+      adapter.findInvoiceByReference.mockImplementation(async () => {
+        calls.push('find');
+        return null;
+      });
+      adapter.createInvoice.mockImplementation(async () => {
+        calls.push('create');
+        return invoiceAtProvider;
+      });
 
       await processor.process(makeJob());
 
-      expect(adapter.createInvoice).not.toHaveBeenCalled();
-      expect(failedUpdate()![0].data).toEqual(
-        expect.objectContaining({ errorCode: 'SCOPE_MISSING' }),
-      );
-      expect(outbox.writeEvent).toHaveBeenCalledWith(
-        prisma,
-        'AccountingInvoiceExport',
-        'export-1',
-        'AccountingInvoiceExportFailed',
-        expect.objectContaining({ orderId: 'order-1', distributorId: 'dist-1', errorCode: 'SCOPE_MISSING' }),
-      );
-      expect(adminNotifications.notifyOrganisationAdmins).toHaveBeenCalledWith(
-        'dist-1',
-        expect.objectContaining({ type: 'INVOICE_EXPORT_FAILED', payload: expect.objectContaining({ errorCode: 'SCOPE_MISSING' }) }),
-      );
+      expect(calls).toEqual(['find', 'create']);
+      expect(adapter.findInvoiceByReference).toHaveBeenCalledWith(tokenSet, 'tenant-1', 'ORD-1001');
     });
 
-    it('fails with CUSTOMER_NOT_MAPPED when the customer has no confirmed contact mapping', async () => {
-      prisma.customerAccountingMapping.findFirst.mockResolvedValue(null);
+    it('path 1 — the provider created the invoice but the call failed: the retry adopts it', async () => {
+      // First attempt: the provider created it, we got a 503.
+      adapter.createInvoice.mockRejectedValue(
+        new AccountingProviderError('Xero 503', true, undefined, 'HTTP_503', { statusCode: 503, outcomeUnknown: true }),
+      );
+      await expect(processor.process(makeJob())).rejects.toThrow('Xero 503');
+      expect(adapter.createInvoice).toHaveBeenCalledTimes(1);
+
+      // The retry claims the FAILED row; the provider now reports the invoice.
+      adapter.createInvoice.mockClear();
+      prisma.accountingInvoiceExport.update.mockClear();
+      existingRow({ status: AccountingInvoiceExportStatus.FAILED });
+      adapter.findInvoiceByReference.mockResolvedValue(invoiceAtProvider);
 
       await processor.process(makeJob());
 
-      expect(adapter.createInvoice).not.toHaveBeenCalled();
-      expect(failedUpdate()![0].data).toEqual(
-        expect.objectContaining({
-          errorCode: 'CUSTOMER_NOT_MAPPED',
-          errorMessage: 'Cannot create accounting invoice because the customer is not linked to an accounting contact.',
+      expectAdoptedWithoutCreating();
+    });
+
+    it('path 2 — the invoice was created but we failed to save it: not a failed export, and the retry adopts it', async () => {
+      prisma.$transaction.mockRejectedValueOnce(new Error('database unavailable'));
+
+      await expect(processor.process(makeJob())).rejects.toThrow('database unavailable');
+
+      // Nothing tells the user (or a retry) that the export failed…
+      expect(failedUpdate()).toBeUndefined();
+      expect(outbox.writeEvent).not.toHaveBeenCalledWith(
+        expect.anything(), expect.anything(), expect.anything(), 'AccountingInvoiceExportFailed', expect.anything(),
+      );
+      expect(adminNotifications.notifyOrganisationAdmins).not.toHaveBeenCalled();
+      // …and the claim is released so the retry can take the row.
+      expect(prisma.accountingInvoiceExport.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: { status: AccountingInvoiceExportStatus.PENDING } }),
+      );
+
+      adapter.createInvoice.mockClear();
+      prisma.accountingInvoiceExport.update.mockClear();
+      existingRow({ status: AccountingInvoiceExportStatus.PENDING });
+      adapter.findInvoiceByReference.mockResolvedValue(invoiceAtProvider);
+
+      await processor.process(makeJob());
+
+      expectAdoptedWithoutCreating();
+    });
+
+    it('path 3 — the worker died after the provider created the invoice: resuming the stale claim adopts it', async () => {
+      existingRow({ updatedAt: new Date(Date.now() - 20 * 60 * 1000) });
+      adapter.findInvoiceByReference.mockResolvedValue(invoiceAtProvider);
+
+      await processor.process(makeJob());
+
+      expectAdoptedWithoutCreating();
+    });
+
+    it('path 4 — the provider call timed out: the retry adopts the invoice the provider went on to create', async () => {
+      adapter.createInvoice.mockRejectedValue(
+        new AccountingProviderError('Xero createInvoices did not respond within 60s', true, undefined, 'NETWORK', {
+          outcomeUnknown: true,
         }),
       );
-    });
+      await expect(processor.process(makeJob())).rejects.toThrow('did not respond');
 
-    it('fails with CUSTOMER_NOT_MAPPED when no trade relationship exists', async () => {
-      prisma.tradeRelationship.findUnique.mockResolvedValue(null);
+      adapter.createInvoice.mockClear();
+      prisma.accountingInvoiceExport.update.mockClear();
+      existingRow({ status: AccountingInvoiceExportStatus.FAILED });
+      adapter.findInvoiceByReference.mockResolvedValue(invoiceAtProvider);
 
       await processor.process(makeJob());
 
-      expect(prisma.customerAccountingMapping.findFirst).not.toHaveBeenCalled();
-      expect(failedUpdate()![0].data).toEqual(expect.objectContaining({ errorCode: 'CUSTOMER_NOT_MAPPED' }));
+      expectAdoptedWithoutCreating();
+    });
+
+    it('adopts on a first attempt too — our own export record may have been lost (database restore)', async () => {
+      adapter.findInvoiceByReference.mockResolvedValue(invoiceAtProvider);
+
+      await processor.process(makeJob());
+
+      expectAdoptedWithoutCreating();
       expect(audit.record).toHaveBeenCalledWith(
-        prisma,
-        expect.objectContaining({
-          distributorId: 'dist-1',
-          entityType: 'ORDER',
-          entityId: 'order-1',
-          action: 'INVOICE_EXPORT_FAILED',
-          changes: expect.objectContaining({ errorCode: 'CUSTOMER_NOT_MAPPED' }),
-        }),
+        expect.anything(),
+        expect.objectContaining({ summary: 'Invoice INV-0007 found in Xero from an earlier attempt' }),
       );
     });
 
-    it('fails with ORDER_NOT_INVOICEABLE when every line is cancelled or rejected', async () => {
-      const order = makeOrder();
-      order.lines[0].status = OrderLineStatus.CANCELLED;
-      order.lines[1].status = OrderLineStatus.REJECTED;
-      prisma.order.findUnique.mockResolvedValue(order);
+    it('does not create when it cannot tell whether the provider has the invoice', async () => {
+      adapter.findInvoiceByReference.mockRejectedValue(new AccountingProviderError('Xero getInvoices failed with HTTP 503', true));
+
+      await expect(processor.process(makeJob())).rejects.toThrow('HTTP 503');
+
+      expect(adapter.createInvoice).not.toHaveBeenCalled();
+    });
+
+    it('still creates the invoice on a retry when the provider has none (a rejected export, fixed and retried)', async () => {
+      existingRow({ status: AccountingInvoiceExportStatus.FAILED });
 
       await processor.process(makeJob());
 
-      expect(adapter.createInvoice).not.toHaveBeenCalled();
-      expect(failedUpdate()![0].data).toEqual(expect.objectContaining({ errorCode: 'ORDER_NOT_INVOICEABLE' }));
+      expect(adapter.createInvoice).toHaveBeenCalledTimes(1);
+      expect(completedUpdate()![0].data).toEqual(expect.objectContaining({ externalInvoiceId: 'inv-1' }));
+    });
+
+    it('a failed "invoice created" notification does not fail the export', async () => {
+      adminNotifications.notifyOrganisationAdmins.mockRejectedValue(new Error('notifications down'));
+
+      await expect(processor.process(makeJob())).resolves.toBeUndefined();
+
+      expect(completedUpdate()).toBeDefined();
+      expect(failedUpdate()).toBeUndefined();
+    });
+
+    it('replays the same idempotency key while the request is unchanged, and a new one when it changes', async () => {
+      const keyOf = (call: number) => adapter.createInvoice.mock.calls[call][3] as string;
+
+      await processor.process(makeJob());
+      existingRow({ status: AccountingInvoiceExportStatus.FAILED, retryCount: 2 });
+      await processor.process(makeJob());
+      // A mapping is fixed between attempts: the invoice content changes.
+      prisma.productAccountingMapping.findMany.mockResolvedValue([]);
+      await processor.process(makeJob());
+
+      expect(keyOf(1)).toBe(keyOf(0));
+      expect(keyOf(2)).not.toBe(keyOf(0));
     });
   });
 

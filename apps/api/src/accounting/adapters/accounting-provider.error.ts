@@ -16,9 +16,16 @@
 // the provider asked us to wait — the queue's backoff strategy honours it
 // (see accounting-backoff.ts). `message` must already be safe to show to a
 // distributor and to log: adapters never put raw provider responses in it.
+//
+// `outcomeUnknown` is set on a failed WRITE when the provider may have carried
+// it out anyway: no response (timeout, dropped connection), a provider 5xx, or
+// a success response we could not read. It is the opposite of "definitely not
+// done" (validation, authorisation, rate limit, our own call budget). The
+// caller must never repeat such a write blind — see ADR-073.
 export interface AccountingProviderErrorDetails {
   statusCode?: number;
   retryAfterMs?: number;
+  outcomeUnknown?: boolean;
 }
 
 export class AccountingProviderError extends Error {
@@ -39,5 +46,9 @@ export class AccountingProviderError extends Error {
 
   get retryAfterMs(): number | undefined {
     return this.details.retryAfterMs;
+  }
+
+  get outcomeUnknown(): boolean {
+    return this.details.outcomeUnknown === true;
   }
 }

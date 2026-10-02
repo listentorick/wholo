@@ -14,6 +14,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { Job } from 'bullmq';
+import { createHash } from 'crypto';
 import { loggableError } from '@wholo/nest-telemetry';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
@@ -22,6 +23,7 @@ import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-ada
 import {
   AccountingInvoiceLineRequest,
   AccountingInvoiceRequest,
+  AccountingInvoiceResult,
 } from '../accounting/adapters/accounting-connection-adapter.interface';
 import { classifyJobFailure } from '../accounting/accounting-job-failure';
 import { PROCESSING_STALE_MS } from '../ingestion/ingestion-run.service';
@@ -40,9 +42,16 @@ interface InvoiceExportJobData {
 
 // PROCESSING_STALE_MS (shared with every accounting pull): a PROCESSING export
 // row younger than this is presumed to have a live attempt behind it; older
-// means the worker died mid-flight and the row may be resumed (with the SAME
-// idempotency key, so a crash after the provider call succeeded replays into
-// the provider's idempotency cache, not a duplicate).
+// means the worker died mid-flight and the row may be resumed.
+
+// The provider idempotency key for an invoice request: the same key for as
+// long as the request is unchanged, a new one when it changes (a provider
+// rejects a replayed key carrying a different request — e.g. after a mapping
+// was fixed). Short-lived protection against acting twice on a call still in
+// flight; never the duplicate guard (ADR-073).
+export function invoiceIdempotencyKey(exportId: string, request: AccountingInvoiceRequest): string {
+  return `${exportId}:${createHash('sha256').update(JSON.stringify(request)).digest('hex').slice(0, 32)}`;
+}
 
 // Part of the provider-neutral accounting integration framework — overview and
 // provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
@@ -57,9 +66,17 @@ interface InvoiceExportJobData {
 // the sync processors. Everything provider-specific lives behind the adapter
 // registry; this class knows no Xero.
 //
-// Business idempotency is the AccountingInvoiceExport row
-// (unique connectionId+orderId), claimed via status transitions before any
-// provider call is made.
+// An order is NEVER invoiced twice (ADR-073). Two guards, in this order:
+//   1. our own record — the AccountingInvoiceExport row (unique
+//      connectionId+orderId), claimed via status transitions before any
+//      provider call, and a COMPLETED export on any connection ends the job;
+//   2. the provider's record — before EVERY createInvoice the export asks the
+//      provider for the order's invoice (findInvoiceByReference) and adopts it
+//      if it is there. This is the one that holds when our record is wrong or
+//      missing: the provider created the invoice but we never heard, we failed
+//      to save the result, the worker died, or the database was restored.
+// createInvoice has exactly one call site, directly after that lookup
+// (accounting-framework.arch.spec.ts fails otherwise).
 @Processor(ACCOUNTING_INVOICE_EXPORT_QUEUE, { ...ACCOUNTING_WORKER_SETTINGS })
 export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
   private readonly logger = new Logger(AccountingInvoiceExportProcessor.name);
@@ -188,10 +205,9 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
           );
           return null;
         }
-        // Stale claim: the worker died mid-attempt. Resume WITHOUT bumping
-        // retryCount so the provider idempotency key replays the interrupted
-        // attempt — if the invoice was created before the crash, the provider
-        // returns the cached result instead of a duplicate.
+        // Stale claim: the worker died mid-attempt, possibly after the
+        // provider created the invoice. Resuming is safe because runExport
+        // looks the invoice up before creating one.
         this.logger.warn(
           { event: 'accounting.invoice_export.resumed_stale', exportId: existing.id, orderId: order.id, distributorId: order.distributorId, ageMs },
           `Invoice export ${existing.id} is stale PROCESSING (${Math.round(ageMs / 1000)}s) — resuming`,
@@ -202,7 +218,9 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
         });
       }
       default:
-        // PENDING or FAILED → controlled retry: fresh attempt, fresh key.
+        // PENDING or FAILED → controlled retry. retryCount only counts
+        // attempts; the earlier one may have created the invoice, which
+        // runExport's lookup finds.
         return this.prisma.accountingInvoiceExport.update({
           where: { id: existing.id },
           data: { status: AccountingInvoiceExportStatus.PROCESSING, retryCount: { increment: 1 } },
@@ -333,6 +351,8 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       lines,
     };
 
+    let result: AccountingInvoiceResult;
+    let adopted: boolean;
     try {
       // getValidTokenSet is the only sanctioned token gateway (serialised
       // refresh, ERROR-state bookkeeping); never read encryptedCredentialData.
@@ -340,13 +360,96 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
         order.distributorId,
         connection.provider,
       );
-      const result = await adapter.createInvoice(
+      // ADR-073: never create without asking first. An earlier attempt (or a
+      // record we have since lost) may already have raised this order's
+      // invoice; if the provider has it, adopt it.
+      const existing = await adapter.findInvoiceByReference(
         tokenSet,
         connection.externalOrganisationId,
-        request,
-        `${exportRow.id}:${exportRow.retryCount}`,
+        request.reference,
       );
+      adopted = existing !== null;
+      result =
+        existing ??
+        (await adapter.createInvoice(
+          tokenSet,
+          connection.externalOrganisationId,
+          request,
+          invoiceIdempotencyKey(exportRow.id, request),
+        ));
+    } catch (err) {
+      // Only provider-call failures land here; once the provider has handed
+      // back an invoice nothing below may turn the export into a failure.
+      // Provider errors carry a message that is already safe to persist and
+      // show (adapters guarantee it). Anything else is unexpected — our bug —
+      // so the stored/displayed message is generic and the real error goes to
+      // the log with its stack.
+      const { providerError, permanent, lastAttempt, budgetWait } = classifyJobFailure(err, job);
+      // Our own call budget ran out (ADR-071): the call was never sent, and
+      // the queue's backoff retries at exactly retryAfterMs. That's a wait, not
+      // a failure — put the row back to PENDING (so the retry can claim it)
+      // without the FAILED status, timeline entry or admin notification.
+      // Only the final attempt falls through and is reported as a failure.
+      if (budgetWait && !lastAttempt) {
+        await this.prisma.accountingInvoiceExport.update({
+          where: { id: exportRow.id },
+          data: { status: AccountingInvoiceExportStatus.PENDING },
+        });
+        this.logger.log(
+          { event: 'accounting.invoice_export.deferred', ...this.logFields(connection, exportRow), retryAfterMs: providerError?.retryAfterMs },
+          `Invoice export ${exportRow.id} deferred — ${this.adapters.displayName(connection.provider)} call budget exhausted`,
+        );
+        throw err;
+      }
+      // Our own HTTP exceptions (e.g. NotFound when the connection was
+      // disconnected mid-export) carry messages written for users — expected.
+      const expected = providerError !== null || err instanceof HttpException;
+      if (!expected) {
+        this.logger.error(
+          { event: 'accounting.invoice_export.unexpected_error', ...this.logFields(connection, exportRow), err: loggableError(err) },
+          `Invoice export ${exportRow.id} failed unexpectedly`,
+        );
+      }
+      const message = expected
+        ? (err as Error).message
+        : 'Unexpected error while creating the invoice — it will be retried automatically.';
+      // Permanent provider rejections (validation, authorisation) wait for
+      // user action + manual retry. Everything else — transient provider
+      // faults, token refresh failures — is marked FAILED for visibility and
+      // rethrown so BullMQ retries with backoff (the next attempt claims the
+      // FAILED row again). FAILED never means "safe to create again": the
+      // provider may have created the invoice (outcomeUnknown), which is why
+      // every attempt starts with the lookup above.
+      await this.markFailed(exportRow, 'PROVIDER_ERROR', message, {
+        provider: connection.provider,
+        connectionId: connection.id,
+        code: providerError?.code,
+        statusCode: providerError?.statusCode,
+        transient: providerError ? providerError.transient : true,
+        outcomeUnknown: providerError?.outcomeUnknown ?? false,
+      });
+      if (!permanent) throw err;
+      return;
+    }
 
+    await this.recordCompleted(exportRow, connection, order, result, adopted);
+  }
+
+  // The provider holds this order's invoice; record it. Nothing here may mark
+  // the export FAILED — that would invite a retry to "fix" an export whose
+  // invoice exists (ADR-073). If we cannot save the result, the claim is
+  // released and the error rethrown: the retry finds the invoice by reference
+  // and completes.
+  private async recordCompleted(
+    exportRow: AccountingInvoiceExport,
+    connection: AccountingConnection,
+    order: Order & { lines: OrderLine[] },
+    result: AccountingInvoiceResult,
+    adopted: boolean,
+  ): Promise<void> {
+    const providerName = this.adapters.displayName(connection.provider);
+    const invoiceLabel = result.externalInvoiceNumber ?? result.externalInvoiceId;
+    try {
       await this.prisma.$transaction(async (tx) => {
         await tx.accountingInvoiceExport.update({
           where: { id: exportRow.id },
@@ -385,77 +488,60 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
           entityId: order.id,
           action: 'INVOICE_EXPORT_COMPLETED',
           actorType: ActorType.SYSTEM,
-          summary: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${this.adapters.displayName(connection.provider)}`,
-          changes: { exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
+          summary: adopted
+            ? `Invoice ${invoiceLabel} found in ${providerName} from an earlier attempt`
+            : `Invoice ${invoiceLabel} raised in ${providerName}`,
+          changes: { exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId, adopted },
         });
-      });
-      this.logger.log(
-        {
-          event: 'accounting.invoice_export.completed',
-          ...this.logFields(connection, exportRow),
-          externalInvoiceId: result.externalInvoiceId,
-          retryCount: exportRow.retryCount,
-        },
-        `Created ${this.adapters.displayName(connection.provider)} invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} for order ${order.orderNumber}`,
-      );
-      // Direct write, no outbox — same terminal-write reasoning as the bulk
-      // import notification (admin-notifications.module.ts): there's no
-      // further fan-out to trigger from an in-app inbox row.
-      await this.adminNotifications.notifyOrganisationAdmins(order.distributorId, {
-        type: 'INVOICE_EXPORT_COMPLETED',
-        title: 'Invoice created',
-        body: `Invoice ${result.externalInvoiceNumber ?? result.externalInvoiceId} raised in ${this.adapters.displayName(connection.provider)} for order ${order.orderNumber}`,
-        linkPath: `/orders/${order.id}`,
-        payload: { orderId: order.id, exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
       });
     } catch (err) {
-      // Provider errors carry a message that is already safe to persist and
-      // show (adapters guarantee it). Anything else is unexpected — our bug —
-      // so the stored/displayed message is generic and the real error goes to
-      // the log with its stack.
-      const { providerError, permanent, lastAttempt, budgetWait } = classifyJobFailure(err, job);
-      // Our own call budget ran out (ADR-071): the call was never sent, and
-      // the queue's backoff retries at exactly retryAfterMs. That's a wait, not
-      // a failure — put the row back to PENDING (so the retry can claim it)
-      // without the FAILED status, timeline entry or admin notification.
-      // Only the final attempt falls through and is reported as a failure.
-      if (budgetWait && !lastAttempt) {
-        await this.prisma.accountingInvoiceExport.update({
-          where: { id: exportRow.id },
-          data: { status: AccountingInvoiceExportStatus.PENDING },
-        });
-        this.logger.log(
-          { event: 'accounting.invoice_export.deferred', ...this.logFields(connection, exportRow), retryAfterMs: providerError?.retryAfterMs },
-          `Invoice export ${exportRow.id} deferred — ${this.adapters.displayName(connection.provider)} call budget exhausted`,
-        );
-        throw err;
-      }
-      // Our own HTTP exceptions (e.g. NotFound when the connection was
-      // disconnected mid-export) carry messages written for users — expected.
-      const expected = providerError !== null || err instanceof HttpException;
-      if (!expected) {
-        this.logger.error(
-          { event: 'accounting.invoice_export.unexpected_error', ...this.logFields(connection, exportRow), err: loggableError(err) },
-          `Invoice export ${exportRow.id} failed unexpectedly`,
-        );
-      }
-      const message = expected
-        ? (err as Error).message
-        : 'Unexpected error while creating the invoice — it will be retried automatically.';
-      // Permanent provider rejections (validation, authorisation) wait for
-      // user action + manual retry. Everything else — transient provider
-      // faults, token refresh failures — is marked FAILED for visibility and
-      // rethrown so BullMQ retries with backoff (the next attempt claims the
-      // FAILED row again).
-      await this.markFailed(exportRow, 'PROVIDER_ERROR', message, {
-        provider: connection.provider,
-        connectionId: connection.id,
-        code: providerError?.code,
-        statusCode: providerError?.statusCode,
-        transient: providerError ? providerError.transient : true,
-      });
-      if (!permanent) throw err;
+      this.logger.error(
+        {
+          event: 'accounting.invoice_export.persist_failed',
+          ...this.logFields(connection, exportRow),
+          externalInvoiceId: result.externalInvoiceId,
+          err: loggableError(err),
+        },
+        `Invoice ${invoiceLabel} exists in ${providerName} but export ${exportRow.id} could not be saved — will retry`,
+      );
+      // Release the claim so the retry can take the row straight away. Best
+      // effort: if this fails too, the row stays PROCESSING and is resumed
+      // once stale — either way the next attempt adopts the invoice.
+      await this.prisma.accountingInvoiceExport
+        .update({ where: { id: exportRow.id }, data: { status: AccountingInvoiceExportStatus.PENDING } })
+        .catch(() => undefined);
+      throw err;
     }
+
+    this.logger.log(
+      {
+        event: adopted ? 'accounting.invoice_export.adopted' : 'accounting.invoice_export.completed',
+        ...this.logFields(connection, exportRow),
+        externalInvoiceId: result.externalInvoiceId,
+        retryCount: exportRow.retryCount,
+      },
+      adopted
+        ? `Found existing ${providerName} invoice ${invoiceLabel} for order ${order.orderNumber} — no new invoice created`
+        : `Created ${providerName} invoice ${invoiceLabel} for order ${order.orderNumber}`,
+    );
+    // Direct write, no outbox — same terminal-write reasoning as the bulk
+    // import notification (admin-notifications.module.ts): there's no
+    // further fan-out to trigger from an in-app inbox row. Best effort: the
+    // export is already recorded, and a failed notification must not fail it.
+    await this.adminNotifications
+      .notifyOrganisationAdmins(order.distributorId, {
+        type: 'INVOICE_EXPORT_COMPLETED',
+        title: 'Invoice created',
+        body: `Invoice ${invoiceLabel} raised in ${providerName} for order ${order.orderNumber}`,
+        linkPath: `/orders/${order.id}`,
+        payload: { orderId: order.id, exportId: exportRow.id, externalInvoiceId: result.externalInvoiceId },
+      })
+      .catch((err: unknown) => {
+        this.logger.warn(
+          { event: 'accounting.invoice_export.notify_failed', ...this.logFields(connection, exportRow), err: loggableError(err) },
+          `Invoice export ${exportRow.id} completed but the admin notification could not be written`,
+        );
+      });
   }
 
   private logFields(connection: AccountingConnection, exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>) {

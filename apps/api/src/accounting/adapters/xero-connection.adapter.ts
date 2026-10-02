@@ -62,8 +62,16 @@ const XERO_DAILY_LIMIT = 5_000;
 const DAY_LIMIT_WARN_BELOW = XERO_DAILY_LIMIT / 10;
 // xero-node sets no request timeout, so a stalled connection would otherwise
 // hold a worker lane forever. On timeout the request may still complete at
-// Xero; every write we make carries an idempotency key, so a retry is safe.
+// Xero, so a timed-out WRITE is reported as outcomeUnknown and the caller must
+// look the record up before writing again (ADR-073). The idempotency key does
+// not make a retry safe on its own: Xero forgets keys after 6 minutes.
 const XERO_CALL_TIMEOUT_MS = 60_000;
+// Operations that change data at Xero. A failure of one of these with no
+// response, or a 5xx, may have been carried out anyway.
+const XERO_WRITE_OPS = new Set(['createInvoices']);
+// Invoice statuses that count as a live invoice (everything but VOIDED and
+// DELETED).
+const XERO_LIVE_INVOICE_STATUSES = ['DRAFT', 'SUBMITTED', 'AUTHORISED', 'PAID'];
 // Page size for paged endpoints: Xero's maximum (verified); default is 100.
 const CONTACTS_PAGE_SIZE = 1000;
 const INVOICES_PAGE_SIZE = 1000;
@@ -442,6 +450,55 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     };
   }
 
+  // The duplicate-invoice guard (ADR-073). Same filter as listInvoiceStatuses
+  // (sales invoices this app created), narrowed to one reference and to live
+  // statuses. More than one match means a duplicate already exists at Xero:
+  // logged for follow-up, and the oldest is returned so repeated exports keep
+  // settling on the same invoice.
+  async findInvoiceByReference(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    reference: string,
+  ): Promise<AccountingInvoiceResult | null> {
+    // The reference goes into a Xero `where` expression; refuse anything that
+    // could alter it rather than try to escape it.
+    if (!/^[\w .\-/#]+$/.test(reference)) {
+      throw new AccountingProviderError('Cannot look up a Xero invoice for this order reference', false);
+    }
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    const { body } = await this.call('getInvoices', externalOrganisationId, () =>
+      client.accountingApi.getInvoices(
+        externalOrganisationId,
+        undefined, // ifModifiedSince
+        `Type=="ACCREC" AND Reference=="${reference}"`, // where
+        'Date ASC', // order
+        undefined, // iDs
+        undefined, // invoiceNumbers
+        undefined, // contactIDs
+        XERO_LIVE_INVOICE_STATUSES,
+        1, // page
+        true, // includeArchived
+        true, // createdByMyApp
+      ),
+    );
+    const matches = (body.invoices ?? []).filter((i) => !!i.invoiceID);
+    if (matches.length === 0) return null;
+    if (matches.length > 1) {
+      this.logger.error(
+        {
+          event: 'accounting.invoice.duplicate_detected',
+          provider: 'XERO',
+          externalOrgId: externalOrganisationId,
+          reference,
+          externalInvoiceIds: matches.map((i) => i.invoiceID),
+        },
+        `Xero holds ${matches.length} live invoices for reference ${reference}`,
+      );
+    }
+    return this.toInvoiceResult(matches[0]);
+  }
+
   async createInvoice(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
@@ -488,15 +545,22 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
 
     const created = body.invoices?.[0];
     if (!created?.invoiceID) {
-      throw new AccountingProviderError('Xero returned no invoice for the create request', false);
+      // A success response we cannot read: Xero may well have created it.
+      throw new AccountingProviderError('Xero returned no invoice for the create request', false, undefined, undefined, {
+        outcomeUnknown: true,
+      });
     }
+    return this.toInvoiceResult(created);
+  }
+
+  private toInvoiceResult(invoice: Invoice): AccountingInvoiceResult {
     return {
-      externalInvoiceId: created.invoiceID,
-      externalInvoiceNumber: created.invoiceNumber || undefined,
+      externalInvoiceId: invoice.invoiceID as string,
+      externalInvoiceNumber: invoice.invoiceNumber || undefined,
       // The generated enums are string-valued at runtime ('DRAFT' etc.)
       // despite their numeric-looking declarations.
-      externalInvoiceStatus: created.status != null ? String(created.status) : undefined,
-      raw: created,
+      externalInvoiceStatus: invoice.status != null ? String(invoice.status) : undefined,
+      raw: invoice,
     };
   }
 
@@ -598,7 +662,14 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       transient,
       parsed,
       statusCode === undefined ? 'NETWORK' : `HTTP_${statusCode}`,
-      { statusCode, retryAfterMs: parsed.retryAfterMs },
+      {
+        statusCode,
+        retryAfterMs: parsed.retryAfterMs,
+        // No response at all (timeout, dropped connection) or a 5xx on a
+        // write: Xero may have carried it out. Every other failure is a
+        // definite "not done" (rejected before any change was made).
+        outcomeUnknown: XERO_WRITE_OPS.has(op) && (statusCode === undefined || statusCode >= 500),
+      },
     );
   }
 

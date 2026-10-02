@@ -873,6 +873,123 @@ describe('XeroAccountingAdapter', () => {
     });
   });
 
+  // ADR-073: the caller must know when a failed create may have gone through.
+  describe('createInvoice — was the invoice possibly created?', () => {
+    const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'accounting.invoices' };
+    const request = {
+      externalContactId: 'contact-1',
+      reference: 'ORD-1001',
+      currency: 'GBP',
+      issueDate: '2026-07-09',
+      targetStatus: 'DRAFT' as const,
+      lines: [{ description: 'Cabernet Sauvignon 2023', quantity: 6, unitPrice: '12.34' }],
+    };
+    const failure = (rejection: unknown) => {
+      mockCreateInvoices.mockRejectedValueOnce(rejection);
+      return adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+    };
+
+    it('reports an unknown outcome when Xero never answered or failed on its side', async () => {
+      expect((await failure(xeroSdkRejection(0, 'socket hang up'))).outcomeUnknown).toBe(true);
+      expect((await failure(new Error('socket hang up'))).outcomeUnknown).toBe(true);
+      expect((await failure(xeroSdkRejection(500, null))).outcomeUnknown).toBe(true);
+      expect((await failure(xeroSdkRejection(503, null))).outcomeUnknown).toBe(true);
+    });
+
+    it('reports an unknown outcome when the call times out — Xero may still complete it', async () => {
+      jest.useFakeTimers();
+      try {
+        mockCreateInvoices.mockReturnValueOnce(new Promise(() => undefined)); // never answers
+        const pending = adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+        await jest.advanceTimersByTimeAsync(61_000);
+        const err = await pending;
+        expect(err).toBeInstanceOf(AccountingProviderError);
+        expect(err.transient).toBe(true);
+        expect(err.outcomeUnknown).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('reports an unknown outcome when Xero answers success without an invoice', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [] }, response: { status: 200 } });
+      const err = await adapter.createInvoice(tokenSet, 'tenant-1', request, 'key').catch((e) => e);
+      expect(err.outcomeUnknown).toBe(true);
+    });
+
+    it('reports a definite "not created" when Xero refused the request', async () => {
+      for (const statusCode of [400, 401, 403, 429]) {
+        expect((await failure(xeroSdkRejection(statusCode, null))).outcomeUnknown).toBe(false);
+      }
+    });
+  });
+
+  describe('findInvoiceByReference', () => {
+    const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'accounting.invoices' };
+
+    it('asks Xero for live sales invoices this app created with that reference', async () => {
+      mockGetInvoices.mockResolvedValueOnce({ body: { invoices: [] } });
+
+      await adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'ORD-2026-00042');
+
+      const args = mockGetInvoices.mock.calls[0];
+      expect(args[0]).toBe('tenant-1');
+      expect(args[1]).toBeUndefined(); // no If-Modified-Since: whatever its age
+      expect(args[2]).toBe('Type=="ACCREC" AND Reference=="ORD-2026-00042"');
+      expect(args[7]).toEqual(['DRAFT', 'SUBMITTED', 'AUTHORISED', 'PAID']); // not VOIDED / DELETED
+      expect(args[10]).toBe(true); // createdByMyApp
+    });
+
+    it('returns null when Xero has no such invoice', async () => {
+      mockGetInvoices.mockResolvedValueOnce({ body: { invoices: [] } });
+
+      expect(await adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'ORD-1001')).toBeNull();
+    });
+
+    it('returns the invoice Xero holds, as a provider-neutral result', async () => {
+      mockGetInvoices.mockResolvedValueOnce({
+        body: { invoices: [{ invoiceID: 'inv-1', invoiceNumber: 'INV-0042', status: 'AUTHORISED' }] },
+      });
+
+      expect(await adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'ORD-1001')).toMatchObject({
+        externalInvoiceId: 'inv-1',
+        externalInvoiceNumber: 'INV-0042',
+        externalInvoiceStatus: 'AUTHORISED',
+      });
+    });
+
+    it('settles on the oldest when Xero already holds more than one, and reports the duplicate', async () => {
+      const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      mockGetInvoices.mockResolvedValueOnce({
+        body: { invoices: [{ invoiceID: 'inv-old', status: 'PAID' }, { invoiceID: 'inv-new', status: 'DRAFT' }] },
+      });
+
+      const found = await adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'ORD-1001');
+
+      expect(found?.externalInvoiceId).toBe('inv-old');
+      expect(errorLog).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'accounting.invoice.duplicate_detected', reference: 'ORD-1001' }),
+        expect.any(String),
+      );
+      errorLog.mockRestore();
+    });
+
+    it('throws rather than answer "no invoice" when the lookup fails', async () => {
+      mockGetInvoices.mockRejectedValueOnce(xeroSdkRejection(503, null));
+
+      await expect(adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'ORD-1001')).rejects.toBeInstanceOf(
+        AccountingProviderError,
+      );
+    });
+
+    it('refuses a reference that could alter the Xero filter', async () => {
+      await expect(adapter.findInvoiceByReference(tokenSet, 'tenant-1', 'X" OR Type=="ACCPAY')).rejects.toBeInstanceOf(
+        AccountingProviderError,
+      );
+      expect(mockGetInvoices).not.toHaveBeenCalled();
+    });
+  });
+
   describe('listInvoiceStatuses', () => {
     const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'accounting.invoices' };
 

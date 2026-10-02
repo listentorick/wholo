@@ -9,6 +9,10 @@ export const ACCOUNTING_BACKOFF_TYPE = 'accounting';
 // transient cause is a provider rate limit, not a blip.
 const BASE_DELAY_MS = 30_000;
 const RETRY_AFTER_JITTER_MS = 5_000;
+// After a write whose outcome is unknown (the provider may still be working
+// on it), wait at least this long before the retry looks the record up, so the
+// lookup does not race the original request (ADR-073).
+const UNKNOWN_OUTCOME_SETTLE_MS = 120_000;
 
 // When the provider told us how long to wait (Retry-After on a 429, or our
 // own call budget), wait exactly that plus a little jitter so a batch of jobs
@@ -19,7 +23,9 @@ export function computeAccountingBackoff(attemptsMade: number, err?: Error, rand
   if (retryAfterMs !== undefined && retryAfterMs >= 0) {
     return retryAfterMs + Math.floor(random() * RETRY_AFTER_JITTER_MS);
   }
-  return BASE_DELAY_MS * 2 ** Math.max(0, attemptsMade - 1);
+  const exponential = BASE_DELAY_MS * 2 ** Math.max(0, attemptsMade - 1);
+  const outcomeUnknown = err instanceof AccountingProviderError && err.outcomeUnknown;
+  return outcomeUnknown ? Math.max(exponential, UNKNOWN_OUTCOME_SETTLE_MS) : exponential;
 }
 
 // BullMQ's BackoffStrategy signature: (attemptsMade, type, err, job).

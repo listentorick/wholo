@@ -27,9 +27,11 @@
 //     the guide and checklist for pulls). Reviewed-and-mapped record types
 //     extend AccountingSyncProcessorBase on top of it.
 //  5. Push — invoice export (accounting-invoice-export.processor.ts): its own
-//     processor because it is per order with an idempotency key and its own
-//     export row, but it uses the same token gateway, failure policy and
-//     timing constants as the pulls.
+//     processor because it is per order with its own export row, but it uses
+//     the same token gateway, failure policy and timing constants as the
+//     pulls. An order is never invoiced twice (ADR-073): the export asks the
+//     provider for the order's invoice (findInvoiceByReference) before every
+//     createInvoice, and adopts it if it is already there.
 //  6. Failures — classified once: adapters decide transient vs permanent
 //     (AccountingProviderError); classifyJobFailure (accounting-job-failure.ts)
 //     turns that into what the job does next.
@@ -317,11 +319,26 @@ export interface AccountingConnectionAdapter {
     externalOrganisationId: string,
     cursor?: string | null,
   ): Promise<AccountingFetchResult<AccountingExternalInvoiceStatus>>;
-  // Creates one sales invoice. idempotencyKey makes provider-side retries
-  // safe: replaying the same key must not create a second invoice (providers
-  // without native support must implement an equivalent guard). Failures
-  // should be thrown as AccountingProviderError so callers can distinguish
-  // transient (retryable) from permanent (user-actionable) causes.
+  // The live sales invoice THIS APPLICATION created with the given reference
+  // (the Stocdup order number, unique across Stocdup), or null when there is
+  // none. "Live" excludes voided and deleted invoices: after a distributor
+  // voids an invoice, exporting the order again is a deliberate new invoice.
+  // This is the duplicate-invoice guard (ADR-073): the export calls it before
+  // every createInvoice, so it must reflect what the provider actually holds —
+  // no caching, and never "null" for "could not tell" (throw instead).
+  findInvoiceByReference(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+    reference: string,
+  ): Promise<AccountingInvoiceResult | null>;
+  // Creates one sales invoice, carrying request.reference so
+  // findInvoiceByReference can find it again. idempotencyKey is a second,
+  // short-lived safety net only — the same key is replayed while the request
+  // is unchanged, so a provider that honours it will not act twice on a call
+  // still in flight. It is NOT the duplicate guard: providers forget keys
+  // (Xero after 6 minutes). Failures are thrown as AccountingProviderError,
+  // classified transient/permanent, with `outcomeUnknown` set whenever the
+  // provider may have created the invoice despite the failure.
   createInvoice(
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,

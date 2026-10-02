@@ -23,4 +23,11 @@ describe('accountingBackoffStrategy', () => {
 
     expect(accountingBackoffStrategy(2, 'accounting', serverError)).toBe(60_000);
   });
+
+  it('waits at least two minutes after a write whose outcome is unknown, so the retry does not race it (ADR-073)', () => {
+    const noAnswer = new AccountingProviderError('Xero did not respond', true, undefined, 'NETWORK', { outcomeUnknown: true });
+    expect(accountingBackoffStrategy(1, 'accounting', noAnswer)).toBe(120_000);
+    expect(accountingBackoffStrategy(2, 'accounting', noAnswer)).toBe(120_000);
+    expect(accountingBackoffStrategy(4, 'accounting', noAnswer)).toBe(240_000);
+  });
 });

@@ -49,6 +49,27 @@ describe('accounting integration framework', () => {
     expect(offenders).toEqual(['accounting/accounting-backoff.ts', 'accounting/accounting-job-failure.ts']);
   });
 
+  // ADR-073: an order is never invoiced twice. The only code allowed to ask a
+  // provider to create an invoice is the export processor, in one place,
+  // straight after asking the provider whether the invoice already exists.
+  it('creates provider invoices in exactly one place, and only after looking the invoice up (ADR-073)', () => {
+    const outsideAdapters = files.filter((f) => !f.path.startsWith('accounting/adapters/'));
+    const creators = outsideAdapters
+      .map((f) => ({ path: f.path, calls: code(f.source).match(/\.createInvoice\(/g)?.length ?? 0 }))
+      .filter((f) => f.calls > 0);
+    expect(creators).toEqual([
+      { path: 'accounting-invoice-export/accounting-invoice-export.processor.ts', calls: 1 },
+    ]);
+
+    const processor = code(outsideAdapters.find((f) => f.path === creators[0].path)!.source);
+    const lookup = processor.indexOf('.findInvoiceByReference(');
+    const create = processor.indexOf('.createInvoice(');
+    // The lookup comes first, and its result decides whether create runs.
+    expect(lookup).toBeGreaterThan(-1);
+    expect(lookup).toBeLessThan(create);
+    expect(processor.slice(lookup, create)).toMatch(/existing\s*\?\?/);
+  });
+
   // Provider specifics stay behind the adapter port. The allow-list is the
   // known provider-specific edges outside it (OAuth entry points and module
   // wiring); generalise them when the second provider lands rather than
