@@ -45,3 +45,31 @@ client, `wholo-api-admin`, which holds only `realm-management: manage-users`.
   client exists, removal still works in Stocdup (the person is locked out at
   the API), but the queued Keycloak disables retry and fail — check the worker
   logs for `KEYCLOAK_ADMIN_CLIENT_SECRET` / `Keycloak could not …`.
+
+## Branded emails and error page
+
+Keycloak sends its own emails (verify email, password reset, security notices)
+and renders its own error page. Both are themed to match Stocdup: the theme
+ships inside the Keycloak image (`apps/keycloak/themes/wholo`), and two realm
+settings switch it on — the realm's email theme, and a base URL on the
+`wholo-admin` / `wholo-portal` clients (what the error page's "Back to Stocdup"
+button links to).
+
+- **Fresh realm:** set by the realm import — nothing to do.
+- **Existing realm** (import is first-boot-only): deploy a Keycloak image that
+  contains the theme, then run once:
+
+  ```bash
+  kubectl port-forward svc/wholo-keycloak 3080:8080 -n wholo &
+  REALM=<your realm, e.g. prod> KEYCLOAK_ADMIN=<admin user> KEYCLOAK_ADMIN_PASSWORD=<admin password> \
+  ADMIN_URL=<global.adminUrl> PORTAL_URL=<global.portalUrl> \
+  scripts/setup-keycloak-branding.sh
+  ```
+
+  Idempotent, and it only changes those three settings. Until it has run,
+  Keycloak keeps sending its stock emails.
+
+The email templates are generated, not hand-written: the layout and wording live
+in `apps/api/src/mail/keycloak-email.ts` (same header and footer as the emails
+`apps/api` sends). After changing them, run `pnpm --filter @wholo/api
+keycloak:emails`, commit the result and rebuild the Keycloak image.
