@@ -15,13 +15,16 @@ vi.mock('next/navigation', () => ({
 
 const login = vi.fn();
 const register = vi.fn();
-const logout = vi.fn();
+const logoutWithRedirect = vi.fn();
 const refreshSession = vi.fn();
-const auth: { accessToken: string | null; isLoading: boolean; identity: { email: string } | null } = {
-  accessToken: null, isLoading: false, identity: null,
-};
+const auth: {
+  accessToken: string | null;
+  isLoading: boolean;
+  identity: { email: string } | null;
+  identityEmail: string | null;
+} = { accessToken: null, isLoading: false, identity: null, identityEmail: null };
 vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({ ...auth, login, register, logout, refreshSession }),
+  useAuth: () => ({ ...auth, login, register, logoutWithRedirect, refreshSession }),
 }));
 
 const accept = vi.fn();
@@ -39,10 +42,40 @@ beforeEach(() => {
   auth.accessToken = null;
   auth.isLoading = false;
   auth.identity = null;
+  auth.identityEmail = null;
   refreshSession.mockResolvedValue(undefined);
 });
 
+// The state a tab is in once Keycloak has answered "nobody is signed in".
+const sessionAlreadyChecked = () => sessionStorage.setItem('stocdup_staff_invite_session_checked', 'emailed-token');
+
+describe('Accept invitation — checking for an existing sign-in first', () => {
+  it('silently asks Keycloak whether anyone is signed in before offering to create an account', () => {
+    render(<AcceptInvitePage />);
+
+    expect(login).toHaveBeenCalledTimes(1);
+    expect(login).toHaveBeenCalledWith('/accept-invite?token=emailed-token', { prompt: 'none' });
+    expect(screen.queryByRole('button', { name: 'Create your account' })).not.toBeInTheDocument();
+  });
+
+  it('asks only once, even when React runs the effect twice', () => {
+    render(<StrictMode><AcceptInvitePage /></StrictMode>);
+
+    expect(login).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks again for a different invitation opened in the same tab', () => {
+    sessionAlreadyChecked();
+    search.token = 'another-token';
+    render(<AcceptInvitePage />);
+
+    expect(login).toHaveBeenCalledWith('/accept-invite?token=another-token', { prompt: 'none' });
+  });
+});
+
 describe('Accept invitation — not signed in', () => {
+  beforeEach(sessionAlreadyChecked);
+
   it('offers to create an account or sign in, without naming the company (the link is a bearer token)', () => {
     render(<AcceptInvitePage />);
 
@@ -118,7 +151,7 @@ describe('Accept invitation — signed in', () => {
     expect(accept).toHaveBeenCalledWith('parked-token');
   });
 
-  it('explains a wrong-email sign-in, names who they are signed in as, and offers to sign out', async () => {
+  it('explains a wrong-email sign-in, names who they are signed in as, and signs out back to this invitation', async () => {
     auth.identity = { email: 'sam.p@gmail.com' };
     sessionStorage.setItem('stocdup_pending_staff_invite', 'emailed-token');
     accept.mockRejectedValue(new ApiError(problem('This invitation was sent to a different email address', 403), 403));
@@ -127,8 +160,17 @@ describe('Accept invitation — signed in', () => {
     expect(await screen.findByRole('heading', { name: 'This invitation was sent to a different email address' })).toBeInTheDocument();
     expect(screen.getByText('sam.p@gmail.com')).toBeInTheDocument();
     expect(sessionStorage.getItem('stocdup_pending_staff_invite')).toBe('emailed-token'); // still usable with the right address
-    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    expect(logout).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out and continue' }));
+    expect(logoutWithRedirect).toHaveBeenCalledWith('/accept-invite?token=emailed-token');
+  });
+
+  it('names a fully set-up account too (someone already using Stocdup in this browser)', async () => {
+    auth.identity = null; // only set for onboarding / access-denied sessions
+    auth.identityEmail = 'james@vineandco.com';
+    accept.mockRejectedValue(new ApiError(problem('This invitation was sent to a different email address', 403), 403));
+    render(<AcceptInvitePage />);
+
+    expect(await screen.findByText('james@vineandco.com')).toBeInTheDocument();
   });
 
   it.each([404, 410])('gives expired, withdrawn and unknown links one answer (%s)', async (status) => {

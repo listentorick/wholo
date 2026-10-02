@@ -24,12 +24,24 @@ interface AuthContextValue {
   accessDenied: boolean;
   /** Identity claims for prefilling the onboarding wizard, or for display on /access-denied. */
   identity: SessionIdentity | null;
+  /**
+   * Email of the signed-in Keycloak identity, whatever its Stocdup state —
+   * `identity` is only set for onboarding / access-denied, so this is what a
+   * page uses to name the account a fully set-up user is signed in as.
+   */
+  identityEmail: string | null;
   /** Re-fetch the session (e.g. right after onboarding completes). */
   refreshSession: () => Promise<void>;
-  login: (returnUrl?: string) => void;
+  /**
+   * `prompt: 'none'` asks Keycloak whether a session already exists without
+   * showing a screen — it comes straight back, signed in or not.
+   */
+  login: (returnUrl?: string, options?: { prompt?: 'none' }) => void;
   /** Send the visitor to Keycloak's sign-up form, returning to `returnUrl` (a same-origin path). */
   register: (returnUrl?: string) => void;
   logout: () => void;
+  /** Sign out, then land on `returnUrl` (a same-origin path) instead of /login. */
+  logoutWithRedirect: (returnUrl: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -62,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
+  const [identityEmail, setIdentityEmail] = useState<string | null>(null);
 
   const loadSession = useCallback(async () => {
     try {
@@ -110,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async (kc) => {
         if (!kc?.authenticated || !kc.token) return;
         setAccessToken(kc.token);
+        setIdentityEmail(kc.tokenParsed?.email ?? null);
         await loadSession();
       })
       .finally(() => setIsLoading(false));
@@ -121,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (getKeycloak()?.token) await loadSession();
   }, [loadSession]);
 
-  const login = useCallback((returnUrlOverride?: string) => {
+  const login = useCallback((returnUrlOverride?: string, options?: { prompt?: 'none' }) => {
     resetAuthTokenState();
     const params = new URLSearchParams(window.location.search);
     const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
@@ -130,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // redirect to an attacker-controlled host — reject anything but a path.
     const returnUrl = isSafeReturnUrl(requestedReturnUrl) ? requestedReturnUrl : '/';
     const redirectUri = window.location.origin + returnUrl;
-    ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
+    ensureKeycloak().then((kc) => kc?.login({ redirectUri, ...options }));
   }, []);
 
   const register = useCallback((returnUrl = '/') => {
@@ -139,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureKeycloak().then((kc) => kc?.register({ redirectUri: window.location.origin + safe }));
   }, []);
 
-  const logout = useCallback(() => {
+  const signOut = useCallback((landing: string) => {
     // Do NOT clear React auth state here first: nulling `user` re-renders the
     // shell, useRequireAuth sees `!user` and fires login() → kc.login(), whose
     // redirect to /authorize supersedes kc.logout()'s redirect to the
@@ -149,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resetAuthTokenState();
     const kc = getKeycloak();
     if (kc) {
-      kc.logout({ redirectUri: window.location.origin + '/login' });
+      kc.logout({ redirectUri: window.location.origin + landing });
       return;
     }
     // No instance to drive the OIDC end-session redirect — fall back to a local
@@ -160,8 +174,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOnboardingRequired(false);
     setAccessDenied(false);
     setIdentity(null);
-    window.location.href = '/login';
+    setIdentityEmail(null);
+    window.location.href = landing;
   }, []);
+
+  const logout = useCallback(() => signOut('/login'), [signOut]);
+  const logoutWithRedirect = useCallback(
+    (returnUrl: string) => signOut(isSafeReturnUrl(returnUrl) ? returnUrl : '/login'),
+    [signOut],
+  );
 
   return (
     <AuthContext.Provider
@@ -174,10 +195,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onboardingRequired,
         accessDenied,
         identity,
+        identityEmail,
         refreshSession,
         login,
         register,
         logout,
+        logoutWithRedirect,
       }}
     >
       {children}

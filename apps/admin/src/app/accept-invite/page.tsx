@@ -6,7 +6,13 @@ import { ApiError, adminTeamApi } from '@wholo/admin-api-client';
 import type { AcceptedStaffInvitation } from '@wholo/types';
 import { RoleChips } from '@/components/team/RoleChip';
 import { useAuth } from '@/lib/auth-context';
-import { clearPendingInviteToken, getPendingInviteToken, setPendingInviteToken } from '@/lib/pending-invite';
+import {
+  clearPendingInviteToken,
+  getPendingInviteToken,
+  isSessionCheckedFor,
+  markSessionCheckedFor,
+  setPendingInviteToken,
+} from '@/lib/pending-invite';
 
 type View =
   | { name: 'loading' }
@@ -47,9 +53,10 @@ const neutralBtn = 'block w-full rounded-md border border-border px-4 py-2.5 tex
 function AcceptInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { accessToken, isLoading, identity, login, register, logout, refreshSession } = useAuth();
+  const { accessToken, isLoading, identity, identityEmail, login, register, logoutWithRedirect, refreshSession } = useAuth();
   const [view, setView] = useState<View>({ name: 'loading' });
   const started = useRef(false);
+  const checkingSession = useRef(false);
 
   // The link's own token, or the copy parked before the Keycloak round trip.
   const token = searchParams.get('token') ?? getPendingInviteToken();
@@ -62,6 +69,19 @@ function AcceptInviteContent() {
     }
     if (!accessToken) {
       setPendingInviteToken(token);
+      if (checkingSession.current) return;
+      // The page can't tell on its own whether someone is already signed in
+      // to Keycloak in this browser (e.g. another account in this same app),
+      // so ask once, silently: prompt=none comes straight back with no screen.
+      // This must happen before "Create your account" is offered — opening
+      // Keycloak's sign-up under another account's session leaves the browser
+      // unable to sign in as anyone else until that session is ended.
+      if (!isSessionCheckedFor(token)) {
+        checkingSession.current = true;
+        markSessionCheckedFor(token);
+        login(`/accept-invite?token=${encodeURIComponent(token)}`, { prompt: 'none' });
+        return;
+      }
       setView({ name: 'landing' });
       return;
     }
@@ -94,8 +114,9 @@ function AcceptInviteContent() {
         started.current = false;
         setView({ name: 'error' });
       });
-  }, [isLoading, accessToken, token, refreshSession]);
+  }, [isLoading, accessToken, token, refreshSession, login]);
 
+  const signedInAs = identity?.email ?? identityEmail;
   const comeBack = useCallback(() => `/accept-invite${token ? `?token=${encodeURIComponent(token)}` : ''}`, [token]);
 
   if (view.name === 'loading') {
@@ -142,10 +163,10 @@ function AcceptInviteContent() {
         <Icon tone="amber"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="12.5" /><circle cx="12" cy="16" r="0.6" fill="currentColor" /></Icon>
         <h1 className="text-xl font-semibold leading-snug text-text">This invitation was sent to a different email address</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          {identity?.email ? <>You&rsquo;re signed in as <strong className="font-semibold text-text">{identity.email}</strong>. </> : null}
+          {signedInAs ? <>You&rsquo;re signed in as <strong className="font-semibold text-text">{signedInAs}</strong>. </> : null}
           Sign out, then create an account or sign in with the address the invitation was sent to.
         </p>
-        <div className="mt-6"><button type="button" className={primaryBtn} onClick={logout}>Sign out</button></div>
+        <div className="mt-6"><button type="button" className={primaryBtn} onClick={() => logoutWithRedirect(comeBack())}>Sign out and continue</button></div>
       </Shell>
     );
   }

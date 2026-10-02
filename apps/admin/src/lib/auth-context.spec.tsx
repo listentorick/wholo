@@ -29,6 +29,7 @@ vi.mock('keycloak-js', () => ({
     const kc: any = {
       authenticated: true,
       token: 'test-token',
+      tokenParsed: { email: 'james@vineandco.com' },
       updateToken: vi.fn().mockResolvedValue(true),
       login: vi.fn(),
       register: vi.fn(),
@@ -165,6 +166,52 @@ describe('AuthProvider', () => {
     const kc = (window as any).__kc;
     expect(kc.logout).toHaveBeenCalledWith({ redirectUri: `${window.location.origin}/login` });
     expect(screen.getByTestId('status').textContent).toBe('has-user');
+  });
+
+  it('logoutWithRedirect signs out and lands on the given same-origin path', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+    renderWithProbe(await loadContext(), (ctx) => (
+      <>
+        <button onClick={() => ctx.logoutWithRedirect('/accept-invite?token=t')}>out</button>
+        <button onClick={() => ctx.logoutWithRedirect('//evil.example')}>evil</button>
+      </>
+    ));
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
+
+    fireEvent.click(screen.getByText('out'));
+    fireEvent.click(screen.getByText('evil'));
+
+    const kc = (window as any).__kc;
+    expect(kc.logout).toHaveBeenNthCalledWith(1, { redirectUri: `${window.location.origin}/accept-invite?token=t` });
+    expect(kc.logout).toHaveBeenNthCalledWith(2, { redirectUri: `${window.location.origin}/login` });
+  });
+
+  it('login passes prompt=none through for a silent "is anyone signed in?" check', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({ status: 'ONBOARDING_REQUIRED', identity: null });
+    renderWithProbe(await loadContext(), (ctx) => (
+      <button onClick={() => ctx.login('/accept-invite?token=t', { prompt: 'none' })}>check</button>
+    ));
+    await waitFor(() => expect(screen.getByTestId('status').textContent).not.toBe('loading'));
+
+    fireEvent.click(screen.getByText('check'));
+
+    const kc = (window as any).__kc;
+    await waitFor(() =>
+      expect(kc.login).toHaveBeenCalledWith({ redirectUri: `${window.location.origin}/accept-invite?token=t`, prompt: 'none' }),
+    );
+  });
+
+  it('exposes the signed-in email for a fully set-up user, whose session carries no identity', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACTIVE',
+      user: { id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B', organisationId: 'org1' },
+    });
+    renderWithProbe(await loadContext(), (ctx) => <div data-testid="email">{ctx.identityEmail}</div>);
+
+    await waitFor(() => expect(screen.getByTestId('email').textContent).toBe('james@vineandco.com'));
   });
 
   it('shows the blocking session-expired panel and a working "Sign in again" button when a refresh fails', async () => {

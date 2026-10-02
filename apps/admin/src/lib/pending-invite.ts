@@ -22,6 +22,27 @@ export function setPendingInviteToken(token: string): void {
   }
 }
 
+// Which invitation this tab has already asked Keycloak "is anyone signed in?"
+// about (the accept page checks once per link per tab — see its effect).
+const CHECKED_KEY = 'stocdup_staff_invite_session_checked';
+
+export function isSessionCheckedFor(token: string): boolean {
+  try {
+    return sessionStorage.getItem(CHECKED_KEY) === token;
+  } catch {
+    // Without storage we can't remember the check; skip it rather than loop.
+    return true;
+  }
+}
+
+export function markSessionCheckedFor(token: string): void {
+  try {
+    sessionStorage.setItem(CHECKED_KEY, token);
+  } catch {
+    // isSessionCheckedFor already reports true without storage
+  }
+}
+
 export function clearPendingInviteToken(): void {
   try {
     sessionStorage.removeItem(KEY);
