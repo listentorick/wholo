@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { invitationsApi, ApiError } from '@wholo/api-client';
 
-type Status = 'loading' | 'unauthenticated' | 'error' | 'accepted' | 'already-accepted';
+type Status = 'loading' | 'unauthenticated' | 'wrong-account' | 'error' | 'accepted' | 'already-accepted';
 
 function StocdupLogo() {
   return (
@@ -33,14 +33,22 @@ function Spinner({ label }: { label: string }) {
 }
 
 const INVITE_TOKEN_STORAGE_KEY = 'wholo_pending_invite_token';
+// Holds the invite token this tab has already asked Keycloak about (see the
+// session check in the effect below), so the check runs once per link per tab.
+const SESSION_CHECKED_STORAGE_KEY = 'wholo_invite_session_checked';
+
+function inviteUrl(token: string | null): string {
+  return `${window.location.origin}/accept-invite${token ? `?token=${token}` : ''}`;
+}
 
 function AcceptInviteContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { accessToken, isLoading, loginWithRedirect, registerWithRedirect, refreshSession } = useAuth();
+  const { accessToken, identityEmail, isLoading, loginWithRedirect, registerWithRedirect, logoutWithRedirect, refreshSession } = useAuth();
 
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const checkingSession = useRef(false);
 
   // Token comes from the URL, or from sessionStorage after a Keycloak redirect
   // (keycloak-js cleans up its own params but can also strip non-OAuth query params
@@ -58,8 +66,21 @@ function AcceptInviteContent() {
     }
 
     if (!accessToken) {
-      // Show landing page — don't auto-redirect to Keycloak.
-      // Let the user choose to create an account or sign in.
+      if (checkingSession.current) return;
+      // The page can't tell on its own whether someone is already signed in to
+      // Keycloak in this browser, so ask once, silently (prompt=none comes
+      // straight back with no screen). This must happen before "Create account"
+      // is offered: opening Keycloak's registration page under another
+      // account's session leaves the browser unable to sign in as anyone else
+      // until that session is ended.
+      if (sessionStorage.getItem(SESSION_CHECKED_STORAGE_KEY) !== token) {
+        checkingSession.current = true;
+        sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
+        sessionStorage.setItem(SESSION_CHECKED_STORAGE_KEY, token);
+        loginWithRedirect(inviteUrl(token), { prompt: 'none' });
+        return;
+      }
+      // Nobody is signed in — let the user choose to create an account or sign in.
       setStatus('unauthenticated');
       return;
     }
@@ -82,6 +103,13 @@ function AcceptInviteContent() {
           router.replace('/');
           return;
         }
+        if (err instanceof ApiError && err.status === 403) {
+          // Signed in as someone other than the invited address. Keep the token:
+          // after signing out, the same invitation must still work.
+          sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
+          setStatus('wrong-account');
+          return;
+        }
         if (err instanceof ApiError && (err.status === 404 || err.status === 410)) {
           setErrorMessage('This invitation link has expired or is no longer valid. Please ask your distributor to send a new invitation.');
         } else {
@@ -89,20 +117,54 @@ function AcceptInviteContent() {
         }
         setStatus('error');
       });
-  }, [isLoading, accessToken, token, router, refreshSession]);
+  }, [isLoading, accessToken, token, router, refreshSession, loginWithRedirect]);
 
   const handleCreateAccount = useCallback(() => {
     if (token) sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
-    registerWithRedirect(`${window.location.origin}/accept-invite${token ? `?token=${token}` : ''}`);
+    registerWithRedirect(inviteUrl(token));
   }, [token, registerWithRedirect]);
 
   const handleSignIn = useCallback(() => {
     if (token) sessionStorage.setItem(INVITE_TOKEN_STORAGE_KEY, token);
-    loginWithRedirect(`${window.location.origin}/accept-invite${token ? `?token=${token}` : ''}`);
+    loginWithRedirect(inviteUrl(token));
   }, [token, loginWithRedirect]);
 
+  const handleSignOut = useCallback(() => {
+    logoutWithRedirect(inviteUrl(token));
+  }, [token, logoutWithRedirect]);
+
   if (status === 'loading' || status === 'accepted' || status === 'already-accepted') {
-    return <Spinner label={status === 'loading' ? 'Setting up your account…' : 'All done! Redirecting…'} />;
+    const loadingLabel = accessToken ? 'Setting up your account…' : 'Loading…';
+    return <Spinner label={status === 'loading' ? loadingLabel : 'All done! Redirecting…'} />;
+  }
+
+  if (status === 'wrong-account') {
+    return (
+      <div style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', padding: '24px' }}>
+        <div style={{ maxWidth: '400px', textAlign: 'center' }}>
+          <StocdupLogo />
+          <h1 style={{ fontFamily: 'system-ui, sans-serif', fontSize: '20px', fontWeight: 700, color: '#111', margin: '0 0 8px' }}>
+            This invitation was sent to a different email address
+          </h1>
+          <p style={{ fontFamily: 'system-ui, sans-serif', fontSize: '14px', color: '#6b7280', lineHeight: '1.6', margin: '0 0 28px' }}>
+            {identityEmail ? <>You&apos;re signed in as <strong style={{ color: '#111', fontWeight: 600 }}>{identityEmail}</strong>. </> : null}
+            Sign out to accept the invitation with the address it was sent to.
+          </p>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              display: 'block', width: '100%', padding: '12px 24px',
+              backgroundColor: 'hsl(var(--color-primary))', color: '#fff', border: 'none',
+              borderRadius: '8px', fontFamily: 'system-ui, sans-serif',
+              fontSize: '15px', fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            Sign out and continue
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (status === 'unauthenticated') {

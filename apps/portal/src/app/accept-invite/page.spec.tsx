@@ -16,15 +16,19 @@ vi.mock('next/navigation', () => ({
 
 const mockLoginWithRedirect = vi.fn();
 const mockRegisterWithRedirect = vi.fn();
+const mockLogoutWithRedirect = vi.fn();
 const mockRefreshSession = vi.fn();
 let mockAccessToken: string | null = null;
+let mockIdentityEmail: string | null = null;
 let mockIsLoading = false;
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({
     accessToken: mockAccessToken,
+    identityEmail: mockIdentityEmail,
     isLoading: mockIsLoading,
     loginWithRedirect: mockLoginWithRedirect,
     registerWithRedirect: mockRegisterWithRedirect,
+    logoutWithRedirect: mockLogoutWithRedirect,
     refreshSession: mockRefreshSession,
   }),
 }));
@@ -52,8 +56,14 @@ describe('AcceptInvitePage', () => {
     sessionStorage.clear();
     mockSearchParamsToken = 'tok-1';
     mockAccessToken = null;
+    mockIdentityEmail = null;
     mockIsLoading = false;
   });
+
+  // The state a tab is in once Keycloak has answered "nobody is signed in".
+  function sessionAlreadyChecked() {
+    sessionStorage.setItem('wholo_invite_session_checked', 'tok-1');
+  }
 
   it('shows an error when there is no invite token', async () => {
     mockSearchParamsToken = null;
@@ -64,7 +74,19 @@ describe('AcceptInvitePage', () => {
     });
   });
 
-  it('shows the landing screen when not yet authenticated, without redirecting automatically', async () => {
+  it('silently asks Keycloak whether someone is already signed in before offering to create an account', async () => {
+    render(<AcceptInvitePage />);
+
+    await waitFor(() => {
+      expect(mockLoginWithRedirect).toHaveBeenCalledTimes(1);
+    });
+    expect(mockLoginWithRedirect).toHaveBeenCalledWith(expect.stringContaining('/accept-invite?token=tok-1'), { prompt: 'none' });
+    expect(screen.queryByText('Create account')).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('wholo_pending_invite_token')).toBe('tok-1');
+  });
+
+  it('shows the landing screen, without redirecting again, once Keycloak has said nobody is signed in', async () => {
+    sessionAlreadyChecked();
     render(<AcceptInvitePage />);
 
     await waitFor(() => {
@@ -74,7 +96,18 @@ describe('AcceptInvitePage', () => {
     expect(mockRegisterWithRedirect).not.toHaveBeenCalled();
   });
 
+  it('checks again for a different invitation opened in the same tab', async () => {
+    sessionAlreadyChecked();
+    mockSearchParamsToken = 'tok-2';
+    render(<AcceptInvitePage />);
+
+    await waitFor(() => {
+      expect(mockLoginWithRedirect).toHaveBeenCalledWith(expect.stringContaining('token=tok-2'), { prompt: 'none' });
+    });
+  });
+
   it('stores the token and calls registerWithRedirect when "Create account" is clicked', async () => {
+    sessionAlreadyChecked();
     render(<AcceptInvitePage />);
     await waitFor(() => screen.getByText('Create account'));
 
@@ -114,6 +147,26 @@ describe('AcceptInvitePage', () => {
       expect(mockRouterReplace).toHaveBeenCalledWith('/');
     });
     expect(mockRefreshSession).not.toHaveBeenCalled();
+  });
+
+  it('names the signed-in account and offers to sign out when the invitation was sent to a different address', async () => {
+    mockAccessToken = 'access-tok';
+    mockIdentityEmail = 'james@vineandco.com';
+    mockAccept.mockRejectedValue(new ApiError({ type: 'about:blank', title: 'Forbidden', status: 403, detail: 'This invitation was sent to a different email address' }, 403));
+
+    render(<AcceptInvitePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('This invitation was sent to a different email address')).toBeInTheDocument();
+    });
+    expect(screen.getByText('james@vineandco.com')).toBeInTheDocument();
+    expect(screen.queryByText('Create account')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Sign out and continue'));
+
+    expect(mockLogoutWithRedirect).toHaveBeenCalledWith(expect.stringContaining('/accept-invite?token=tok-1'));
+    // The invitation must survive the sign-out round trip.
+    expect(sessionStorage.getItem('wholo_pending_invite_token')).toBe('tok-1');
   });
 
   it('shows an expired message on a 404/410', async () => {

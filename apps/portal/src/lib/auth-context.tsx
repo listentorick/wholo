@@ -24,6 +24,11 @@ interface OrderAsState {
 interface AuthContextValue {
   user: AuthUser | null;
   accessToken: string | null;
+  /**
+   * Email of the signed-in Keycloak identity, whether or not it has a Stocdup
+   * profile (`user` is null when it doesn't) — lets a page name the account.
+   */
+  identityEmail: string | null;
   isLoading: boolean;
   authError: string | null;
   /** Refresh has failed — authenticated requests are blocked until the user signs in again. */
@@ -33,10 +38,16 @@ interface AuthContextValue {
   orderAsCustomerName: string | null;
   orderAsDistributorId: string | null;
   login: (returnUrl?: string) => void;
-  loginWithRedirect: (redirectUri: string) => void;
+  /**
+   * `prompt: 'none'` asks Keycloak whether a session already exists without
+   * showing a screen — it comes straight back, signed in or not.
+   */
+  loginWithRedirect: (redirectUri: string, options?: { prompt?: 'none' }) => void;
   registerWithRedirect: (redirectUri: string) => void;
   changePassword: () => void;
   logout: () => void;
+  /** Sign out, then return to `redirectUri` instead of the login page. */
+  logoutWithRedirect: (redirectUri: string) => void;
   /** Re-fetch the profile (e.g. right after an action that just created it, like accepting an invite). */
   refreshSession: () => Promise<void>;
   setOrderAsSession: (data: OrderAsState) => void;
@@ -54,6 +65,7 @@ function isSafeReturnUrl(url: string): boolean {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [identityEmail, setIdentityEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -85,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async (kc) => {
         if (!kc?.authenticated || !kc.token) return;
         setAccessToken(kc.token);
+        setIdentityEmail(kc.tokenParsed?.email ?? null);
         await loadProfile();
       })
       .finally(() => setIsLoading(false));
@@ -111,9 +124,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
   }, []);
 
-  const loginWithRedirect = useCallback((redirectUri: string) => {
+  const loginWithRedirect = useCallback((redirectUri: string, options?: { prompt?: 'none' }) => {
     resetAuthTokenState();
-    ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
+    ensureKeycloak().then((kc) => kc?.login({ redirectUri, ...options }));
   }, []);
 
   const registerWithRedirect = useCallback((redirectUri: string) => {
@@ -139,6 +152,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const logoutWithRedirect = useCallback((redirectUri: string) => {
+    resetAuthTokenState();
+    sessionStorage.removeItem(ORDER_AS_STORAGE_KEY);
+    ensureKeycloak().then((kc) => kc?.logout({ redirectUri }));
+  }, []);
+
   const setOrderAsSession = useCallback((data: OrderAsState) => {
     // Store session token in sessionStorage (per-tab, survives refresh, not shared across tabs)
     sessionStorage.setItem(ORDER_AS_STORAGE_KEY, data.sessionToken);
@@ -162,6 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       user,
       accessToken,
+      identityEmail,
       isLoading,
       authError,
       sessionExpired,
@@ -174,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       registerWithRedirect,
       changePassword,
       logout,
+      logoutWithRedirect,
       refreshSession,
       setOrderAsSession,
       endOrderAsSession,

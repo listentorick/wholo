@@ -25,6 +25,7 @@ vi.mock('keycloak-js', () => ({
     const kc: any = {
       authenticated: true,
       token: 'test-token',
+      tokenParsed: { email: 'james@vineandco.com' },
       updateToken: vi.fn().mockResolvedValue(true),
       login: vi.fn(),
       register: vi.fn(),
@@ -130,6 +131,48 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByTestId('status').textContent).toBe('has-user');
     });
+  });
+
+  it('exposes the signed-in identity email even when the identity has no Stocdup profile', async () => {
+    (authApi.me as any).mockRejectedValue(
+      new ApiError({ type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'No Wholo user found for this identity' }, 401),
+    );
+
+    renderWithProbe(await loadContext(), (ctx) => <div data-testid="identity">{ctx.identityEmail}</div>);
+
+    await waitFor(() => expect(screen.getByTestId('identity').textContent).toBe('james@vineandco.com'));
+  });
+
+  it('loginWithRedirect passes prompt=none through to Keycloak for a silent session check', async () => {
+    (authApi.me as any).mockResolvedValue({ id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B' });
+
+    renderWithProbe(await loadContext(), (ctx) => (
+      <button onClick={() => ctx.loginWithRedirect('http://localhost/accept-invite?token=t', { prompt: 'none' })}>check</button>
+    ));
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
+
+    fireEvent.click(screen.getByText('check'));
+
+    const kc = (window as any).__kc;
+    await waitFor(() =>
+      expect(kc.login).toHaveBeenCalledWith({ redirectUri: 'http://localhost/accept-invite?token=t', prompt: 'none' }),
+    );
+  });
+
+  it('logoutWithRedirect signs out of Keycloak and returns to the given URL', async () => {
+    (authApi.me as any).mockResolvedValue({ id: 'u1', email: 'a@b.com', firstName: 'A', lastName: 'B' });
+    sessionStorage.setItem('orderAs_session', 'sess-1');
+
+    renderWithProbe(await loadContext(), (ctx) => (
+      <button onClick={() => ctx.logoutWithRedirect('http://localhost/accept-invite?token=t')}>out</button>
+    ));
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('has-user'));
+
+    fireEvent.click(screen.getByText('out'));
+
+    const kc = (window as any).__kc;
+    await waitFor(() => expect(kc.logout).toHaveBeenCalledWith({ redirectUri: 'http://localhost/accept-invite?token=t' }));
+    expect(sessionStorage.getItem('orderAs_session')).toBeNull();
   });
 
   it('shows the blocking session-expired panel and a working "Sign in again" button when a refresh fails', async () => {

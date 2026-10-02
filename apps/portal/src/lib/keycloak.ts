@@ -10,6 +10,7 @@
 
 export interface KeycloakInstance {
   token?: string;
+  tokenParsed?: { email?: string };
   authenticated?: boolean;
   onTokenExpired?: () => void;
   updateToken(minValidity: number): Promise<boolean>;
