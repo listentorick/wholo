@@ -156,6 +156,20 @@ describe('IngestionRunService', () => {
       expect(prisma.ingestionRun.update.mock.calls[0][0].data.finishedAt).toBeInstanceOf(Date);
     });
 
+    it('finalizeSuccess records when the run last succeeded, separately from its current status', async () => {
+      await service.finalizeSuccess('run-1', { recordsProcessed: 10 });
+      const { data } = prisma.ingestionRun.update.mock.calls[0][0];
+      expect(data.lastSucceededAt).toBeInstanceOf(Date);
+      expect(data.lastSucceededAt).toEqual(data.finishedAt);
+    });
+
+    it('a failed or re-queued attempt keeps the last success (ADR-061)', async () => {
+      await service.finalizeFailure('run-1', 'Xero getContacts failed with HTTP 403');
+      for (const call of prisma.ingestionRun.update.mock.calls) {
+        expect(call[0].data).not.toHaveProperty('lastSucceededAt');
+      }
+    });
+
     it('persists the new/updated/removed delta breakdown', async () => {
       await service.finalizeSuccess('run-1', {
         recordsProcessed: 10,

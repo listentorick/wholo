@@ -128,9 +128,13 @@ export class AccountingSyncService {
       (ACCOUNTING_MAPPING_RESOURCE_TYPES as readonly string[]).includes(r.resourceType),
     );
     const runs = mappingRows.map(toSummary);
+    // Not the current status: the run row is reused, so a failed latest
+    // attempt must not erase that this connection has synced (ADR-061).
+    // lastFullRunAt covers rows that last succeeded before lastSucceededAt
+    // existed (every first sync is a full one).
     const lastSucceededAt = mappingRows
-      .filter((r) => r.status === 'COMPLETED' && r.finishedAt)
-      .map((r) => r.finishedAt as Date)
+      .map((r) => r.lastSucceededAt ?? r.lastFullRunAt)
+      .filter((d): d is Date => d != null)
       .sort((a, b) => b.getTime() - a.getTime())[0];
     return { runs, lastSucceededAt: lastSucceededAt ? lastSucceededAt.toISOString() : null };
   }

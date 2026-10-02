@@ -26,7 +26,7 @@ import { AccountingSyncScheduler } from '../src/accounting/accounting-sync.sched
 import { AccountingSyncService } from '../src/accounting/sync/accounting-sync.service';
 import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
 // Manual Sync queues every resource type; derive the count so a new one doesn't make this stale.
-import { ACCOUNTING_SYNC_RESOURCE_TYPES } from '../src/accounting/sync/accounting-sync.constants';
+import { ACCOUNTING_MAPPING_RESOURCE_TYPES, ACCOUNTING_SYNC_RESOURCE_TYPES } from '../src/accounting/sync/accounting-sync.constants';
 
 const DIST_A = 'test-ingest-dist-a';
 const DIST_B = 'test-ingest-dist-b';
@@ -234,18 +234,41 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
   it('GET /accounting/sync/status returns the runs + lastSucceededAt', async () => {
     await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
     const contact = await prisma.ingestionRun.findFirst({ where: { sourceRef: connectionA.id, resourceType: 'contact' } });
-    const finishedAt = new Date();
-    await prisma.ingestionRun.update({
-      where: { id: contact!.id },
-      data: { status: IngestionRunStatus.COMPLETED, finishedAt },
-    });
+    await app.get(IngestionRunService).finalizeSuccess(contact!.id, { recordsProcessed: 1 });
+    const { finishedAt } = await prisma.ingestionRun.findUniqueOrThrow({ where: { id: contact!.id } });
 
     const res = await request(app.getHttpServer())
       .get(`/api/v1/distributors/${DIST_A}/accounting/sync/status`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.runs).toHaveLength(3);
-    expect(new Date(res.body.lastSucceededAt).getTime()).toBe(finishedAt.getTime());
+    expect(new Date(res.body.lastSucceededAt).getTime()).toBe(finishedAt!.getTime());
+  });
+
+  // ADR-061: the row is reused, so a later failed attempt must not erase the
+  // fact that the connection synced (this is what made the admin page show
+  // "nothing synced yet" once an expired Xero organisation failed every pull).
+  it('keeps reporting the last success after every resource type has since failed', async () => {
+    const runs = app.get(IngestionRunService);
+    await request(app.getHttpServer()).post(`/api/v1/distributors/${DIST_A}/accounting/sync`).set('Authorization', `Bearer ${token}`);
+    const rows = await prisma.ingestionRun.findMany({ where: { sourceRef: connectionA.id } });
+    for (const row of rows) await runs.finalizeSuccess(row.id, { recordsProcessed: 1 });
+    // The status reports the mapping pulls only (the invoice status sync is not shown).
+    const succeeded = await prisma.ingestionRun.findMany({
+      where: { sourceRef: connectionA.id, resourceType: { in: [...ACCOUNTING_MAPPING_RESOURCE_TYPES] } },
+    });
+    const lastSuccess = Math.max(...succeeded.map((r) => r.finishedAt!.getTime()));
+
+    // The next attempt of every type fails.
+    await prisma.ingestionRun.updateMany({ where: { sourceRef: connectionA.id }, data: { status: IngestionRunStatus.PROCESSING } });
+    for (const row of rows) await runs.finalizeFailure(row.id, 'Xero getContacts failed with HTTP 403: AuthenticationUnsuccessful');
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/accounting/sync/status`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.runs.every((r: { status: string }) => r.status === 'FAILED')).toBe(true);
+    expect(new Date(res.body.lastSucceededAt).getTime()).toBe(lastSuccess);
   });
 
   it('a distributor cannot see or trigger another distributor\'s sync', async () => {

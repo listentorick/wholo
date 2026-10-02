@@ -225,6 +225,8 @@ export class IngestionRunService {
       data: {
         status: IngestionRunStatus.COMPLETED,
         finishedAt,
+        // Kept across later attempts (RESET_COUNTERS never touches it).
+        lastSucceededAt: finishedAt,
         ...this.countData(counts),
         ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
         ...(options.full ? { lastFullRunAt: finishedAt } : {}),

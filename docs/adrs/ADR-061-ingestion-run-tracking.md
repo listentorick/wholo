@@ -46,10 +46,18 @@ each run. Rationale:
   needs none.
 - The unique constraint makes the trigger-time upsert and the scheduled-vs-manual
   dedupe race-safe.
-- "Has ever ingested" is derived from `EXISTS(run WHERE status = COMPLETED)`,
-  *not* from a column on the connection — `AccountingConnection.lastSyncedAt`
-  stays overloaded ("last successful provider round-trip", ADR-051) and is only
-  a fallback for the "last synced" caption.
+- "Has ever ingested" and "last succeeded" come from the run row's
+  `lastSucceededAt`, *not* from a column on the connection —
+  `AccountingConnection.lastSyncedAt` stays overloaded ("last successful
+  provider round-trip", ADR-051) and is only a fallback for the "last synced"
+  caption.
+
+  *Amended 2026-10-03.* This first read `EXISTS(run WHERE status = COMPLETED)`.
+  Because the row is reused, `status` only describes the latest attempt: once
+  every resource type had failed once (an expired Xero organisation, 2026-10-02),
+  the admin page reported that nothing had ever been synced and hid the cached
+  data. `lastSucceededAt` is set by every successful finalize and never cleared
+  by a later attempt; rows from before it fall back to `lastFullRunAt`.
 
 If a durations / failure-rate trail is ever needed: emit an `AuditLog` entry on
 finalize (ADR-054), or add a child `IngestionRunAttempt` table without touching

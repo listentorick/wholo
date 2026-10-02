@@ -129,5 +129,47 @@ describe('AccountingSyncService', () => {
 
       expect(status.runs.map((r) => r.resourceType)).toEqual(['contact']);
     });
+
+    // The run row is reused, so its status only describes the latest attempt.
+    describe('last succeeded (ADR-061)', () => {
+      const failedRun = (resourceType: string, fields: Record<string, unknown>) => ({
+        id: resourceType,
+        resourceType,
+        status: 'FAILED',
+        queuedAt: new Date(),
+        finishedAt: new Date('2026-10-02T22:16:00Z'),
+        startedAt: null,
+        lastSucceededAt: null,
+        lastFullRunAt: null,
+        ...fields,
+      });
+      const statusFor = async (rows: unknown[]) => {
+        (service as unknown as { ingestionRuns: { listRuns: jest.Mock } }).ingestionRuns.listRuns.mockResolvedValue(rows);
+        return service.getStatus('dist-1');
+      };
+
+      it('still reports the last success when every latest attempt has failed', async () => {
+        const status = await statusFor([
+          failedRun('contact', { lastSucceededAt: new Date('2026-10-02T09:46:09Z') }),
+          failedRun('product', { lastSucceededAt: new Date('2026-10-02T09:46:10Z') }),
+          failedRun('tax_type', { lastSucceededAt: new Date('2026-10-02T06:31:18Z') }),
+        ]);
+
+        expect(status.lastSucceededAt).toBe('2026-10-02T09:46:10.000Z');
+        expect(status.runs.every((r) => r.status === 'FAILED')).toBe(true);
+      });
+
+      it('falls back to the last full sync for runs recorded before lastSucceededAt existed', async () => {
+        const status = await statusFor([failedRun('contact', { lastFullRunAt: new Date('2026-10-01T22:56:13Z') })]);
+
+        expect(status.lastSucceededAt).toBe('2026-10-01T22:56:13.000Z');
+      });
+
+      it('reports no success when nothing has ever synced', async () => {
+        const status = await statusFor([failedRun('contact', {})]);
+
+        expect(status.lastSucceededAt).toBeNull();
+      });
+    });
   });
 });
