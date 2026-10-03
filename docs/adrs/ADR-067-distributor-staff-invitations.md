@@ -37,7 +37,7 @@ In one transaction: an `AuditLog` row snapshots who the person was (email, name,
 
 Keycloak login is blocked by an outbox event (`StaffKeycloakDisableRequested`) consumed by the worker, which disables the Keycloak user and ends its sessions via the Admin API. It goes through the outbox, like every other trigger, so a Keycloak outage delays the disable (retried ~30 minutes with backoff) instead of failing the Owner's click. The processor re-reads the user and only disables one who is still removed, and uses the Keycloak id on record rather than the event's.
 
-The worker authenticates as a dedicated service-account client, `wholo-api-admin`, holding only `realm-management: manage-users` — never the master admin. Realm import runs only on first boot, so existing realms get it from `scripts/setup-keycloak-api-admin-client.sh` (see `docs/deployment/live-k3s.md`).
+The worker authenticates as a dedicated service-account client, `wholo-api-admin`, holding only `realm-management: manage-users` — never the master admin. Realm import runs only on first boot, so existing realms get it from `scripts/setup-keycloak-api-admin-client.sh` (see `docs/runbook/setup/keycloak.md`).
 
 The Owner and the caller cannot be edited or removed through Team (this doubles as the last-owner guard).
 

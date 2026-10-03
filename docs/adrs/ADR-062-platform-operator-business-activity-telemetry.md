@@ -81,7 +81,7 @@ remains the exact record.
 `helm/wholo/dashboards/stocdup-order-activity.json` is the single source of
 truth. Locally it is auto-provisioned into the in-cluster Grafana (datasource +
 file provider via ConfigMaps). In live the operator imports the same file into
-the external Grafana by hand (documented in `docs/deployment/live-k3s.md`) —
+the external Grafana by hand (documented in `docs/runbook/setup/telemetry.md`) —
 there is no automation for the external instance. It uses a datasource
 **variable**, not a hard-coded uid, so it provisions locally and imports cleanly
 against a differently-named external datasource.

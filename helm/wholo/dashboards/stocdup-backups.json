@@ -23,7 +23,7 @@
   "schemaVersion": 39,
   "timezone": "",
   "weekStart": "",
-  "description": "Off-cluster encrypted Postgres backups (ADR-069): when the last backup ran, whether it succeeded, and how old the newest successful backup is. Gauges sent by the pg-backup CronJob over StatsD. Restore procedure: docs/deployment/postgres-backup-restore.md.",
+  "description": "Off-cluster encrypted Postgres backups (ADR-069): when the last backup ran, whether it succeeded, and how old the newest successful backup is. Gauges sent by the pg-backup CronJob over StatsD. Restore procedure: docs/runbook/postgres-restore.md.",
   "panels": [
     {
       "collapsed": false,

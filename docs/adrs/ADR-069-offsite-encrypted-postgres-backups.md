@@ -81,9 +81,9 @@ Telemetry is best-effort. A lost UDP datagram can at worst delay the failure ale
 
 ## Consequences
 
-- **Survives node or disk loss.** Backups are in R2, and restoring needs only rclone, the R2 credentials and the key from the password manager. The procedure is in `docs/deployment/postgres-backup-restore.md` and has been tested against an isolated database.
+- **Survives node or disk loss.** Backups are in R2, and restoring needs only rclone, the R2 credentials and the key from the password manager. The procedure is in `docs/runbook/postgres-restore.md` and has been tested against an isolated database.
 - **The recovery point gets shorter.** It was 24h and is now 6h.
 - **The key is now critical.** If the encryption key is lost, every backup is unrecoverable. It's kept in the password manager alongside `values.live.yaml`.
 - **Rotating the key** makes backups taken before the rotation need the old key. With 3-day retention, keep the old key for 3 days after rotating.
-- **The old PVC is kept, not deleted.** The upgrade leaves `wholo-pg-backups` and its last dumps in place as a fallback; an operator deletes it once an R2 backup has been restored successfully (see live-k3s.md).
+- **The old PVC is kept, not deleted.** The upgrade leaves `wholo-pg-backups` and its last dumps in place as a fallback; an operator deletes it once an R2 backup has been restored successfully (see `docs/runbook/maintenance.md` → Backups).
 - **Full dumps have a size ceiling.** At some size a full dump every 6 hours stops being cheap. Revisit this ADR, towards WAL-based PITR, when a backup takes minutes rather than seconds or the recovery point needs to be under 6h.

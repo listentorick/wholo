@@ -31,7 +31,7 @@
 # without the Traefik pod.
 #
 # Fix: run Traefik as a DaemonSet on every node labelled
-# svccontroller.k3s.cattle.io/enablelb=true (see docs/deployment/live-k3s.md,
+# svccontroller.k3s.cattle.io/enablelb=true (see docs/runbook/setup/cluster.md,
 # "One-time cluster setup" — this label also restricts which nodes k3s's
 # ServiceLB exposes at all, so the same label controls both), and set
 # externalTrafficPolicy: Local so kube-proxy only ever routes to the local

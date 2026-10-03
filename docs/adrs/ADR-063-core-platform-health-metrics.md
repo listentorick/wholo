@@ -129,7 +129,7 @@ rollout churn (standard k8s-monitoring cardinality, bounded by retention).
 locally via the existing Grafana ConfigMaps — `configmap-dashboards.yaml` now
 globs `dashboards/*.json` so future dashboards are zero-config. In live the ops
 team imports the same file into the external Grafana by hand
-(`docs/deployment/live-k3s.md`), exactly as for the order-activity dashboard.
+(`docs/runbook/setup/telemetry.md`), exactly as for the order-activity dashboard.
 
 ## Consequences
 - One new Helm flag (`telegraf.platformHealth.enabled`), off by default.

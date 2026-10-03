@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-07-08
 **Deciders**: Rick Walsh
-**Related**: ADR-006 (Xero as accounting system of record), ADR-046 (admin-api JWT relay and distributor scoping), ADR-047 (event distribution), `docs/deployment/url-map.md`
+**Related**: ADR-006 (Xero as accounting system of record), ADR-046 (admin-api JWT relay and distributor scoping), ADR-047 (event distribution), `docs/runbook/url-map.md`
 
 ---
 
@@ -27,7 +27,7 @@ The only thing that knows `xero-node` exists is `XeroAccountingAdapter`, impleme
 
 ### 2. OAuth callback lands on `apps/admin-api`, not `apps/api`
 
-`docs/deployment/url-map.md` (pre-existing) states the project's own rule of thumb: *"browsers only ever see the four public hostnames; pods only ever talk to each other via internal service DNS"* — and explicitly lists `api.<domain>` as unused by browser flows, reserved for future webhooks. An early version of this feature routed Xero's redirect straight to a public `apps/api` endpoint, reusing that reserved-but-dormant ingress rule. This was corrected: **`apps/api` must never be given a public ingress route**, on principle, even though the route existed and technically wasn't in use for anything else.
+`docs/runbook/url-map.md` (pre-existing) states the project's own rule of thumb: *"browsers only ever see the four public hostnames; pods only ever talk to each other via internal service DNS"* — and explicitly lists `api.<domain>` as unused by browser flows, reserved for future webhooks. An early version of this feature routed Xero's redirect straight to a public `apps/api` endpoint, reusing that reserved-but-dormant ingress rule. This was corrected: **`apps/api` must never be given a public ingress route**, on principle, even though the route existed and technically wasn't in use for anything else.
 
 The callback instead lands on `apps/admin-api`, which is already one of the legitimately-public hostnames (it serves the admin frontend itself on the same origin/port — `main.ts` runs a combined Express server routing `/api/*` to NestJS and everything else to the embedded Next.js app). Concretely:
 - `apps/admin-api`'s `GET /accounting/xero/callback` is the actual, unauthenticated public landing point (Xero's redirect carries only `code`/`state`, never a Wholo JWT, so it structurally cannot sit behind `JwtAuthGuard`).

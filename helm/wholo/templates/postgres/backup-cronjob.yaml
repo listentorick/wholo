@@ -3,7 +3,7 @@
 # Off-cluster encrypted Postgres backups (ADR-069): every 6h a full pg_dumpall
 # is streamed through gzip and an rclone crypt remote into Cloudflare R2. No
 # PVC — nothing touches node disk, and Postgres itself is not modified.
-# Restore: docs/deployment/postgres-backup-restore.md
+# Restore: docs/runbook/postgres-restore.md
 apiVersion: batch/v1
 kind: CronJob
 metadata:

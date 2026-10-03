@@ -7,7 +7,7 @@ backups there are.
 While the PVC exists this re-renders it with its OWN current spec (lookup — so
 nothing about it changes) plus `helm.sh/resource-policy: keep`, which tells Helm
 never to delete it, including after it drops out of a later release. Remove it
-by hand once R2 backups are verified (docs/deployment/live-k3s.md → Backups).
+by hand once R2 backups are verified (docs/runbook/maintenance.md → Backups).
 On a fresh install, or once deleted, lookup finds nothing and this renders
 nothing. `helm template` / client dry-runs can't lookup, so they render nothing.
 */ -}}

@@ -46,7 +46,7 @@ postgresql:
   # pg_dumpall (every database: wholo, keycloak, plausible) through gzip and an
   # rclone `crypt` remote into a Cloudflare R2 bucket — only ciphertext leaves
   # the cluster, nothing is written to node disk. Retention is an R2 lifecycle
-  # rule on the bucket, not this chart. Restore: docs/deployment/postgres-backup-restore.md
+  # rule on the bucket, not this chart. Restore: docs/runbook/postgres-restore.md
   backup:
     enabled: false
     schedule: "0 */6 * * *"

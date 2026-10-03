@@ -114,5 +114,5 @@ the earlier custom-cursor idea was dropped). Everything is gated behind
   framing) per the approved copy direction — a product/marketing decision,
   recorded here only so a later reader does not "fix" it back.
 - Deployment specifics (DNS, Cloudflare redirect rule, GitHub build vars,
-  Plausible dashboard access) live in `docs/deployment/live-k3s.md`;
-  routing in `docs/deployment/url-map.md`.
+  Plausible dashboard access) live in `docs/runbook/setup/marketing-site.md`;
+  routing in `docs/runbook/url-map.md`.

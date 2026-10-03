@@ -3,7 +3,7 @@
 # Local: provisioned automatically into the in-cluster Grafana
 # (templates/grafana/configmap-alerting.yaml).
 # Live: create these two rules on the ops Grafana by hand — see
-# docs/deployment/live-k3s.md#backups. `datasourceUid: stocdup-influx` is the
+# docs/runbook/setup/backups.md. `datasourceUid: stocdup-influx` is the
 # local datasource uid; on the ops Grafana use that instance's InfluxDB (Flux)
 # datasource uid instead.
 #
@@ -64,7 +64,7 @@ groups:
             Backups run every 6h. The newest successful backup is older than 13h,
             so at least two runs have been missed or failed. Check
             `kubectl -n wholo get cronjob,jobs,pods -l app=wholo-pg-backup` and the
-            latest job's logs. Runbook: docs/deployment/postgres-backup-restore.md
+            latest job's logs. Runbook: docs/runbook/postgres-restore.md
 
       # The most recent attempt failed (dump, upload, or read-back verification).
       # Stays firing until the next successful run.
@@ -112,4 +112,4 @@ groups:
           description: >-
             The most recent backup attempt exited non-zero. Read its logs:
             `kubectl -n wholo logs job/<latest wholo-pg-backup job>`. Runbook:
-            docs/deployment/postgres-backup-restore.md
+            docs/runbook/postgres-restore.md

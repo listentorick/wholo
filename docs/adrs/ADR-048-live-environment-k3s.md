@@ -64,7 +64,7 @@ working unchanged.
 
 - Deploying live is `helm upgrade --install wholo helm/wholo -n wholo -f
   helm/wholo/values.live.yaml` with a pinned `sha-` tag — no build steps on the
-  cluster. Runbook: `docs/deployment/live-k3s.md`.
+  cluster. Runbook: `docs/runbook/` (start at `docs/runbook/README.md`).
 - Local rendering is unchanged by default; every live behaviour is an opt-in
   value.
 - Keycloak realm import happens only on first boot; later redirect-URI changes

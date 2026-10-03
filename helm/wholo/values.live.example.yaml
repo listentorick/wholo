@@ -1,4 +1,4 @@
-# Live environment (self-hosted k3s) — see docs/deployment/live-k3s.md
+# Live environment (self-hosted k3s) — see docs/runbook/README.md
 #
 # Copy to values.live.yaml (gitignored), replace every <domain>, <sha> and
 # CHANGE_ME, then deploy with:
@@ -18,7 +18,7 @@ postgresql:
   password: "CHANGE_ME_strong_password"
   storageSize: 5Gi
   # Encrypted off-cluster backups to R2 every 6h (ADR-069). One-time setup
-  # (bucket, 3-day lifecycle rule, scoped token) is in docs/deployment/live-k3s.md.
+  # (bucket, 3-day lifecycle rule, scoped token) is in docs/runbook/setup/backups.md.
   backup:
     enabled: true
     r2:
@@ -137,7 +137,7 @@ mailhog:
 # Order-activity telemetry (ADR-062). InfluxDB 2 + Grafana run on the ops
 # monitoring host, NOT in the cluster — only Telegraf runs here, writing out to
 # the external InfluxDB. One-time infra-owner setup (bucket, retention, write
-# token, Grafana datasource + dashboard import) is in docs/deployment/live-k3s.md.
+# token, Grafana datasource + dashboard import) is in docs/runbook/setup/telemetry.md.
 appEnv: "live"
 telegraf:
   enabled: true
@@ -145,7 +145,7 @@ telegraf:
   # + a telegraf-node DaemonSet (read-only hostPath, NOT privileged, no
   # kubelet :10250 dependency). Import helm/wholo/dashboards/
   # stocdup-platform-health.json into the ops Grafana by hand, same as the
-  # order-activity dashboard. See docs/deployment/live-k3s.md.
+  # order-activity dashboard. See docs/runbook/setup/telemetry.md.
   platformHealth:
     enabled: true
   influx:
@@ -161,7 +161,7 @@ grafana:
 # Log aggregation (ADR-064). Only the fluent-bit DaemonSet runs in-cluster; it
 # pushes to the ops-host Loki. loki.enabled stays false (external). One-time
 # infra-owner setup (run/point Loki, retention, node egress to :3100, Grafana
-# Loki datasource + dashboard import) is in docs/deployment/live-k3s.md.
+# Loki datasource + dashboard import) is in docs/runbook/setup/logging.md.
 loki:
   enabled: false                       # external in live
 fluentBit:
@@ -201,7 +201,7 @@ ingress:
   className: traefik
   annotations: {}
   # TLS terminates upstream (Cloudflare -> WAF appliance); Traefik receives
-  # plain HTTP — see docs/deployment/live-k3s.md and
+  # plain HTTP — see docs/runbook/setup/cluster.md and
   # deploy/live/traefik-config.yaml.
   tls: false
   hosts:
