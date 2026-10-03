@@ -63,6 +63,13 @@ spec:
             - name: hostfs
               mountPath: /hostfs
               readOnly: true
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 60
           livenessProbe:
             httpGet:
               path: /
