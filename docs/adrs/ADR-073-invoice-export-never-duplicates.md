@@ -143,9 +143,9 @@ Removing the lookup must fail the build.
 - `retryCount` is now only a counter of attempts.
 - Duplicates that may already exist in a provider from before this change are not
   found or fixed by it.
-- Not verified against a real Xero organisation at the time of writing: that the
-  `Reference` + "created by this app" filter returns the invoice the app created.
-  Until that is confirmed the lookup's correctness rests on Xero's documentation.
+- Verified against a real Xero organisation on 2026-10-03: with the export forced
+  to FAILED after Xero had created `INV-0051`, the retry found it through the
+  `Reference` + "created by this app" filter, adopted it and created nothing.
 
 ## References
 - Xero developer documentation, "Idempotent requests".
