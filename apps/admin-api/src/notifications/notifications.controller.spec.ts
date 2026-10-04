@@ -26,8 +26,8 @@ describe('NotificationsController (BFF)', () => {
   });
 
   it('list resolves the JWT sub into the explicit userId, never a client-supplied id', async () => {
-    await controller.list('5', mockRequest());
-    expect(mockService.list).toHaveBeenCalledWith('user-1', '5', 'token-1');
+    await controller.list('5', 'true', mockRequest());
+    expect(mockService.list).toHaveBeenCalledWith('user-1', '5', 'true', 'token-1');
   });
 
   it('unreadCount resolves the JWT sub into the explicit userId', async () => {

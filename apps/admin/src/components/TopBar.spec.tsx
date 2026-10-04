@@ -71,7 +71,7 @@ describe('TopBar', () => {
     await user.click(screen.getByLabelText('Notifications'));
 
     expect(notificationState.fetchRecent).toHaveBeenCalled();
-    expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+    expect(screen.getByText("You're all caught up")).toBeInTheDocument();
   });
 
   it('lists recent notifications with title and body', async () => {
@@ -111,10 +111,10 @@ describe('TopBar', () => {
     );
 
     await user.click(screen.getByLabelText('Notifications'));
-    expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+    expect(screen.getByText("You're all caught up")).toBeInTheDocument();
 
     await user.click(screen.getByText('outside'));
-    await waitFor(() => expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument());
   });
 
   it('closes the dropdown on Escape', async () => {
@@ -122,10 +122,10 @@ describe('TopBar', () => {
     render(<TopBar onMenuClick={() => {}} />);
 
     await user.click(screen.getByLabelText('Notifications'));
-    expect(screen.getByText('No notifications yet')).toBeInTheDocument();
+    expect(screen.getByText("You're all caught up")).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument());
   });
 
   it('toggles aria-expanded on the bell button and always exposes aria-haspopup', async () => {
@@ -148,7 +148,7 @@ describe('TopBar', () => {
     await user.click(screen.getByLabelText('Notifications'));
 
     expect(screen.getByText('Loading…')).toBeInTheDocument();
-    expect(screen.queryByText('No notifications yet')).not.toBeInTheDocument();
+    expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument();
   });
 
   it('shows an error state when the fetch failed', async () => {

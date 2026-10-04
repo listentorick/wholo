@@ -32,6 +32,7 @@ const DIST_OTHER = 'test-notif-dist-other';
 const CUST = 'test-notif-cust';
 const USER = 'test-notif-user';
 const ADMIN_USER = 'test-notif-admin';
+const ADMIN_USER_2 = 'test-notif-admin-2';
 const ORDER = 'test-notif-order';
 
 describe('Order-placed notifications (integration)', () => {
@@ -168,9 +169,9 @@ describe('Order-placed notifications (integration)', () => {
     await prisma.notification.deleteMany({ where: { distributorId: DIST } });
     await prisma.adminNotification.deleteMany({ where: { organisationId: { in: [DIST, DIST_OTHER] } } });
     await prisma.order.deleteMany({ where: { id: ORDER } });
-    await prisma.membershipRole.deleteMany({ where: { membership: { userId: ADMIN_USER } } });
-    await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
-    await prisma.user.deleteMany({ where: { id: { in: [USER, ADMIN_USER] } } });
+    await prisma.membershipRole.deleteMany({ where: { membership: { userId: { in: [ADMIN_USER, ADMIN_USER_2] } } } });
+    await prisma.membership.deleteMany({ where: { userId: { in: [ADMIN_USER, ADMIN_USER_2] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [USER, ADMIN_USER, ADMIN_USER_2] } } });
     await prisma.distributorSettings.deleteMany({ where: { distributorId: DIST } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST, DIST_OTHER, CUST] } } });
     await prisma.$disconnect();
@@ -267,6 +268,43 @@ describe('Order-placed notifications (integration)', () => {
 
       const stillUnread = await prisma.adminNotification.findUnique({ where: { id: row.id } });
       expect(stillUnread!.readAt).toBeNull();
+    });
+
+    // Read state belongs to the user: the fan-out gives each admin their own
+    // row, so one admin reading it must not clear it from a colleague's inbox.
+    it("one admin marking a notification read hides it from their unread list only, not a colleague's", async () => {
+      await prisma.user.upsert({
+        where: { id: ADMIN_USER_2 },
+        create: {
+          id: ADMIN_USER_2,
+          email: 'admin2@notif-dist.test',
+          keycloakId: 'kc-test-notif-admin-2',
+          firstName: 'Notif',
+          lastName: 'Admin2',
+        },
+        update: {},
+      });
+      const membership = await prisma.membership.upsert({
+        where: { userId_organisationId: { userId: ADMIN_USER_2, organisationId: DIST } },
+        create: { userId: ADMIN_USER_2, organisationId: DIST, role: Role.DISTRIBUTOR_ADMIN },
+        update: {},
+      });
+      await prisma.membershipRole.deleteMany({ where: { membershipId: membership.id } });
+      await prisma.membershipRole.create({ data: { membershipId: membership.id, role: Role.DISTRIBUTOR_ADMIN } });
+      try {
+        await service.handleOrderSubmitted(event);
+        const [mine] = await adminNotifications.list(ADMIN_USER, DIST, 20, true);
+
+        await adminNotifications.markRead(ADMIN_USER, DIST, mine.id);
+
+        expect(await adminNotifications.list(ADMIN_USER, DIST, 20, true)).toHaveLength(0);
+        expect(await adminNotifications.list(ADMIN_USER, DIST)).toHaveLength(1);
+        expect(await adminNotifications.list(ADMIN_USER_2, DIST, 20, true)).toHaveLength(1);
+        expect(await adminNotifications.unreadCount(ADMIN_USER_2, DIST)).toBe(1);
+      } finally {
+        await prisma.membershipRole.deleteMany({ where: { membershipId: membership.id } });
+        await prisma.membership.delete({ where: { id: membership.id } });
+      }
     });
   });
 });

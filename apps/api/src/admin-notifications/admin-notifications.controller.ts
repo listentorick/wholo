@@ -1,5 +1,5 @@
 import { Controller, ForbiddenException, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserAccessGuard } from '../auth/guards/user-access.guard';
 import { AdminNotificationsService } from './admin-notifications.service';
@@ -21,8 +21,14 @@ export class AdminNotificationsController {
 
   @Get()
   @ApiOperation({ summary: "List a user's recent in-app notifications, newest first" })
-  list(@Param('userId') userId: string, @Query('limit') limit: string | undefined, @Req() req: AuthenticatedRequest) {
-    return this.service.list(userId, this.organisationId(req), limit ? Number(limit) : undefined);
+  @ApiQuery({ name: 'unread', required: false, description: 'true = only notifications not yet marked read' })
+  list(
+    @Param('userId') userId: string,
+    @Query('limit') limit: string | undefined,
+    @Query('unread') unread: string | undefined,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.list(userId, this.organisationId(req), limit ? Number(limit) : undefined, unread === 'true');
   }
 
   @Get('unread-count')

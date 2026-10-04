@@ -50,9 +50,11 @@ export class AdminNotificationsService {
     });
   }
 
-  list(userId: string, organisationId: string, limit = 20): Promise<AdminNotification[]> {
+  // unreadOnly filters server-side so the `limit` page is spent on unread
+  // rows — filtering a mixed page client-side could hide older unread ones.
+  list(userId: string, organisationId: string, limit = 20, unreadOnly = false): Promise<AdminNotification[]> {
     return this.prisma.adminNotification.findMany({
-      where: { userId, organisationId },
+      where: { userId, organisationId, ...(unreadOnly ? { readAt: null } : {}) },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });

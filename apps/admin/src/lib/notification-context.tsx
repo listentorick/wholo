@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { adminNotificationsApi } from '@wholo/admin-api-client';
 import type { AdminNotification } from '@wholo/types';
 import { useAuth } from './auth-context';
@@ -29,6 +29,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState<AdminNotification[]>([]);
+  // Mirror of `recent` for markRead's synchronous "was it listed?" check — a
+  // flag set inside a setRecent updater isn't reliable, as React may run the
+  // updater after the check.
+  const recentRef = useRef(recent);
+  recentRef.current = recent;
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [recentError, setRecentError] = useState(false);
 
@@ -52,7 +57,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setIsLoadingRecent(true);
     setRecentError(false);
     try {
-      const list = await adminNotificationsApi.list();
+      // Unread only: the dropdown is an inbox, not a history — reading an
+      // item removes it.
+      const list = await adminNotificationsApi.list({ unread: true });
       setRecent(list);
     } catch {
       setRecentError(true);
@@ -62,17 +69,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markRead = useCallback(async (id: string) => {
-    let wasUnread = false;
-    setRecent((prev) =>
-      prev.map((n) => {
-        if (n.id === id && !n.readAt) {
-          wasUnread = true;
-          return { ...n, readAt: new Date().toISOString() };
-        }
-        return n;
-      }),
-    );
-    if (wasUnread) setUnreadCount((prev) => Math.max(0, prev - 1));
+    // Everything listed is unread (fetchRecent asks for unread only), so
+    // removing a listed item is exactly one fewer unread.
+    if (recentRef.current.some((n) => n.id === id)) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+    setRecent((prev) => prev.filter((n) => n.id !== id));
     try {
       await adminNotificationsApi.markRead(id);
     } catch {
@@ -82,7 +84,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markAllRead = useCallback(async () => {
-    setRecent((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
+    setRecent([]);
     setUnreadCount(0);
     try {
       await adminNotificationsApi.markAllRead();

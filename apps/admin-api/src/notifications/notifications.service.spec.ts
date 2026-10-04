@@ -23,13 +23,18 @@ describe('NotificationsService (BFF)', () => {
 
   describe('list', () => {
     it('gets the explicit users/:userId/notifications route, with no query string when limit is omitted', async () => {
-      await service.list('user-1', undefined, 'token-1');
+      await service.list('user-1', undefined, undefined, 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith('/users/user-1/notifications', 'token-1');
     });
 
     it('appends the limit query param when provided', async () => {
-      await service.list('user-1', '5', 'token-1');
+      await service.list('user-1', '5', undefined, 'token-1');
       expect(mockApi.get).toHaveBeenCalledWith('/users/user-1/notifications?limit=5', 'token-1');
+    });
+
+    it('forwards the unread filter alongside the limit', async () => {
+      await service.list('user-1', '5', 'true', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/users/user-1/notifications?limit=5&unread=true', 'token-1');
     });
   });
 

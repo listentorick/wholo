@@ -2,8 +2,12 @@ import type { AdminNotification, UnreadCountResponse } from '@wholo/types';
 import { apiFetch } from './base';
 
 export const adminNotificationsApi = {
-  list(limit?: number): Promise<AdminNotification[]> {
-    const qs = limit != null ? `?limit=${limit}` : '';
+  list(options: { limit?: number; unread?: boolean } = {}): Promise<AdminNotification[]> {
+    const params = new URLSearchParams();
+    if (options.limit != null) params.set('limit', String(options.limit));
+    if (options.unread) params.set('unread', 'true');
+    const query = params.toString();
+    const qs = query ? `?${query}` : '';
     return apiFetch<AdminNotification[]>(`/api/v1/notifications${qs}`);
   },
 

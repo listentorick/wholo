@@ -104,6 +104,18 @@ describe('AdminNotificationsService', () => {
       });
       expect(result).toEqual([{ id: 'n1' }]);
     });
+
+    it('restricts to unread notifications when unreadOnly is set', async () => {
+      prisma.adminNotification.findMany.mockResolvedValue([]);
+
+      await service.list('user-1', 'org-1', 20, true);
+
+      expect(prisma.adminNotification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user-1', organisationId: 'org-1', readAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+    });
   });
 
   describe('unreadCount', () => {

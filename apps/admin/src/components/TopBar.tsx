@@ -125,7 +125,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
               ) : recentError ? (
                 <p className="p-4 text-sm text-muted">Couldn&apos;t load notifications</p>
               ) : recent.length === 0 ? (
-                <p className="p-4 text-sm text-muted">No notifications yet</p>
+                <p className="p-4 text-sm text-muted">You&apos;re all caught up</p>
               ) : (
                 <ul className="max-h-96 overflow-y-auto">
                   {recent.map((n) => (
@@ -135,7 +135,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
                         onClick={() => handleNotificationClick(n.id, n.linkPath)}
                         className="block w-full px-4 py-3 text-left outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                       >
-                        <p className={n.readAt ? 'text-sm text-muted' : 'text-sm font-medium text-text'}>{n.title}</p>
+                        <p className="text-sm font-medium text-text">{n.title}</p>
                         <p className="mt-0.5 text-xs text-muted">{n.body}</p>
                         <p className="mt-1 text-[11px] text-muted">{relativeTime(n.createdAt)}</p>
                       </button>

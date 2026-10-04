@@ -5,8 +5,12 @@ import { ApiClientService } from '../api-client/api-client.service';
 export class NotificationsService {
   constructor(private readonly api: ApiClientService) {}
 
-  list(userId: string, limit: string | undefined, token: string) {
-    const qs = limit ? `?limit=${encodeURIComponent(limit)}` : '';
+  list(userId: string, limit: string | undefined, unread: string | undefined, token: string) {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', limit);
+    if (unread) params.set('unread', unread);
+    const query = params.toString();
+    const qs = query ? `?${query}` : '';
     return this.api.get(`/users/${userId}/notifications${qs}`, token);
   }
 

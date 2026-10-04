@@ -32,9 +32,17 @@ describe('AdminNotificationsController', () => {
   it('list resolves organisationId from the authenticated principal, never a client param', async () => {
     mockService.list.mockResolvedValue([{ id: 'n1' }]);
 
-    await controller.list('user-1', '10', { user: { organisationId: 'org-1' } } as any);
+    await controller.list('user-1', '10', undefined, { user: { organisationId: 'org-1' } } as any);
 
-    expect(mockService.list).toHaveBeenCalledWith('user-1', 'org-1', 10);
+    expect(mockService.list).toHaveBeenCalledWith('user-1', 'org-1', 10, false);
+  });
+
+  it('list passes ?unread=true through as an unread-only filter', async () => {
+    mockService.list.mockResolvedValue([]);
+
+    await controller.list('user-1', undefined, 'true', { user: { organisationId: 'org-1' } } as any);
+
+    expect(mockService.list).toHaveBeenCalledWith('user-1', 'org-1', undefined, true);
   });
 
   it('unreadCount passes userId and organisationId through', async () => {

@@ -13,9 +13,9 @@ export class NotificationsController {
   constructor(private readonly service: NotificationsService) {}
 
   @Get()
-  list(@Query('limit') limit: string | undefined, @Req() req: Request) {
+  list(@Query('limit') limit: string | undefined, @Query('unread') unread: string | undefined, @Req() req: Request) {
     const { sub: userId, token } = req.user as { sub: string; token: string };
-    return this.service.list(userId, limit, token);
+    return this.service.list(userId, limit, unread, token);
   }
 
   @Get('unread-count')
