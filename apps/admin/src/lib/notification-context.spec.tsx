@@ -68,12 +68,24 @@ describe('NotificationProvider', () => {
 
   it('removes a notification from the list and decrements the badge once it is marked read', async () => {
     const user = await renderFetched();
+    unreadCount.mockResolvedValue({ count: 1 });
 
     await user.click(screen.getByText('read n1'));
 
     expect(screen.getByTestId('ids').textContent).toBe('n2');
     expect(screen.getByTestId('count').textContent).toBe('1');
     expect(markRead).toHaveBeenCalledWith('n1');
+  });
+
+  it('reconciles the badge with the server count once the read lands', async () => {
+    const user = await renderFetched();
+    // Server says 0 left (e.g. the other unread was read in another tab).
+    unreadCount.mockResolvedValue({ count: 0 });
+
+    await user.click(screen.getByText('read n1'));
+    await flush();
+
+    expect(screen.getByTestId('count').textContent).toBe('0');
   });
 
   it('empties the list and zeroes the badge on mark all read', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminNotificationsApi } from '@wholo/admin-api-client';
 import type { AdminNotification } from '@wholo/types';
 import { useAuth } from './auth-context';
@@ -29,11 +29,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [recent, setRecent] = useState<AdminNotification[]>([]);
-  // Mirror of `recent` for markRead's synchronous "was it listed?" check — a
-  // flag set inside a setRecent updater isn't reliable, as React may run the
-  // updater after the check.
-  const recentRef = useRef(recent);
-  recentRef.current = recent;
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [recentError, setRecentError] = useState(false);
 
@@ -69,19 +64,18 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const markRead = useCallback(async (id: string) => {
-    // Everything listed is unread (fetchRecent asks for unread only), so
-    // removing a listed item is exactly one fewer unread.
-    if (recentRef.current.some((n) => n.id === id)) {
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-    }
+    // Only listed (so unread — fetchRecent asks for unread only) items are
+    // clickable, so this is optimistically one fewer unread. The server count
+    // is re-fetched once the read lands, correcting any drift.
     setRecent((prev) => prev.filter((n) => n.id !== id));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
     try {
       await adminNotificationsApi.markRead(id);
     } catch {
-      // Optimistic update, no rollback on failure for v1 — accept rare
-      // staleness; the next poll/dropdown-open reconciles it.
+      // No rollback for v1 — the re-fetch below / next poll reconciles it.
     }
-  }, []);
+    await refreshUnreadCount();
+  }, [refreshUnreadCount]);
 
   const markAllRead = useCallback(async () => {
     setRecent([]);
