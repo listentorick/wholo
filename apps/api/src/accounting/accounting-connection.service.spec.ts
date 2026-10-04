@@ -21,6 +21,11 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
   },
+  accountingOrganisation: {
+    findUnique: jest.fn(),
+    upsert: jest.fn(),
+    update: jest.fn(),
+  },
   accountingOAuthState: {
     create: jest.fn(),
     findUnique: jest.fn(),
@@ -99,10 +104,9 @@ describe('AccountingConnectionService', () => {
       mockPrisma.accountingConnection.findFirst.mockResolvedValue({
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
-        externalOrganisationName: 'Acme Wines',
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
-        invoiceExportTargetStatus: 'DRAFT',
+        organisation: { name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
       });
       const result = await service.getConnectionStatus('dist-1');
       expect(result).toEqual({
@@ -123,6 +127,7 @@ describe('AccountingConnectionService', () => {
           distributorId: 'dist-1',
           status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
         },
+        include: { organisation: true },
         orderBy: { connectedAt: 'desc' },
       });
     });
@@ -135,10 +140,9 @@ describe('AccountingConnectionService', () => {
       mockPrisma.accountingConnection.findFirst.mockResolvedValue({
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
-        externalOrganisationName: 'Acme Wines',
         connectedAt: new Date('2026-02-01'),
         lastSyncedAt: null,
-        invoiceExportTargetStatus: 'DRAFT',
+        organisation: { name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
       });
 
       const result = await service.getConnectionStatus('dist-1');
@@ -155,17 +159,22 @@ describe('AccountingConnectionService', () => {
       await expect(
         service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' }),
       ).rejects.toThrow(NotFoundException);
-      expect(mockPrisma.accountingConnection.update).not.toHaveBeenCalled();
+      expect(mockPrisma.accountingOrganisation.update).not.toHaveBeenCalled();
     });
 
-    it('updates the target status on the current connection and returns the refreshed status shape', async () => {
-      mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
-      mockPrisma.accountingConnection.update.mockResolvedValue({
+    it("stores the target status on the connection's organisation, so it survives a reconnect to it", async () => {
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue({
+        id: 'conn-1',
+        accountingOrganisationId: 'acc-org-1',
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
-        externalOrganisationName: 'Acme Wines',
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
+        organisation: { id: 'acc-org-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
+      });
+      mockPrisma.accountingOrganisation.update.mockResolvedValue({
+        id: 'acc-org-1',
+        name: 'Acme Wines',
         invoiceExportTargetStatus: 'AUTHORISED',
       });
 
@@ -173,11 +182,18 @@ describe('AccountingConnectionService', () => {
         invoiceExportTargetStatus: 'AUTHORISED',
       });
 
-      expect(mockPrisma.accountingConnection.update).toHaveBeenCalledWith({
-        where: { id: 'conn-1' },
+      expect(mockPrisma.accountingOrganisation.update).toHaveBeenCalledWith({
+        where: { id: 'acc-org-1' },
         data: { invoiceExportTargetStatus: 'AUTHORISED' },
       });
-      expect(result).toEqual(expect.objectContaining({ invoiceExportTargetStatus: 'AUTHORISED' }));
+      expect(result).toEqual({
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        externalOrganisationName: 'Acme Wines',
+        connectedAt: new Date('2026-01-01'),
+        lastSyncedAt: null,
+        invoiceExportTargetStatus: 'AUTHORISED',
+      });
     });
   });
 
@@ -205,6 +221,76 @@ describe('AccountingConnectionService', () => {
       // Real Prisma shapes: updateMany reports a count, create returns the row.
       mockPrisma.accountingConnection.updateMany.mockResolvedValue({ count: 0 });
       mockPrisma.accountingConnection.create.mockImplementation(({ data }) => Promise.resolve({ id: 'conn-new', ...data }));
+      // A company never connected before, unless a test says otherwise.
+      mockPrisma.accountingOrganisation.findUnique.mockResolvedValue(null);
+      mockPrisma.accountingOrganisation.upsert.mockImplementation(({ create }) =>
+        Promise.resolve({ id: 'acc-org-new', ...create }),
+      );
+    });
+
+    const validState = () => ({
+      id: 'state-1',
+      state: 'xyz',
+      provider: AccountingProvider.XERO,
+      distributorId: 'dist-1',
+      connectedByUserId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    it('points a reconnect to a company seen before at its existing organisation, keeping its data', async () => {
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      mockPrisma.accountingOAuthState.findUnique.mockResolvedValue(validState());
+      mockAdapter.exchangeCodeForToken.mockResolvedValue(makeTokenSet());
+      mockAdapter.listAvailableOrganisations.mockResolvedValue([{ externalId: 'tenant-1', name: 'Acme Wines (renamed)' }]);
+      mockTokenEncryption.encrypt.mockReturnValue('encrypted-blob');
+      mockPrisma.accountingConnection.updateMany.mockResolvedValue({ count: 1 });
+      const existing = { id: 'acc-org-1', distributorId: 'dist-1', provider: AccountingProvider.XERO, externalOrganisationId: 'tenant-1', name: 'Acme Wines' };
+      mockPrisma.accountingOrganisation.findUnique.mockResolvedValue(existing);
+      mockPrisma.accountingOrganisation.upsert.mockImplementation(({ update }) => Promise.resolve({ ...existing, ...update }));
+
+      await service.handleCallback(callbackUrl, 'abc', 'xyz');
+
+      expect(mockPrisma.accountingOrganisation.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            distributorId_provider_externalOrganisationId: {
+              distributorId: 'dist-1',
+              provider: AccountingProvider.XERO,
+              externalOrganisationId: 'tenant-1',
+            },
+          },
+          update: { name: 'Acme Wines (renamed)' },
+        }),
+      );
+      expect(mockPrisma.accountingConnection.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ accountingOrganisationId: 'acc-org-1' }),
+      });
+      const [fields] = log.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.connection.connected')!;
+      expect(fields).toMatchObject({ reconnect: true, knownOrganisation: true, accountingOrganisationId: 'acc-org-1' });
+      log.mockRestore();
+    });
+
+    it('gives a company never connected before a new, empty organisation', async () => {
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      mockPrisma.accountingOAuthState.findUnique.mockResolvedValue(validState());
+      mockAdapter.exchangeCodeForToken.mockResolvedValue(makeTokenSet());
+      mockAdapter.listAvailableOrganisations.mockResolvedValue([{ externalId: 'tenant-2', name: 'Other Co' }]);
+      mockTokenEncryption.encrypt.mockReturnValue('encrypted-blob');
+      mockPrisma.accountingConnection.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.handleCallback(callbackUrl, 'abc', 'xyz');
+
+      expect(mockPrisma.accountingOrganisation.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: { distributorId: 'dist-1', provider: AccountingProvider.XERO, externalOrganisationId: 'tenant-2', name: 'Other Co' },
+        }),
+      );
+      expect(mockPrisma.accountingConnection.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ accountingOrganisationId: 'acc-org-new' }),
+      });
+      const [fields] = log.mock.calls.find(([f]) => (f as { event?: string }).event === 'accounting.connection.connected')!;
+      expect(fields).toMatchObject({ reconnect: true, knownOrganisation: false });
+      log.mockRestore();
     });
 
     it('logs the new connection with its ids, and whether it replaced an older one', async () => {
@@ -308,8 +394,7 @@ describe('AccountingConnectionService', () => {
           distributorId: 'dist-1',
           provider: AccountingProvider.XERO,
           status: AccountingConnectionStatus.CONNECTED,
-          externalOrganisationId: 'tenant-1',
-          externalOrganisationName: 'Acme Wines',
+          accountingOrganisationId: 'acc-org-new',
           scopes: tokenSet.scope,
           encryptedCredentialData: 'encrypted-blob',
           connectedByUserId: 'user-1',
@@ -355,9 +440,11 @@ describe('AccountingConnectionService', () => {
 
       await service.handleCallback(callbackUrl, 'abc', 'xyz');
 
-      expect(mockPrisma.accountingConnection.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ externalOrganisationId: 'tenant-1' }),
-      });
+      expect(mockPrisma.accountingOrganisation.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ externalOrganisationId: 'tenant-1', name: 'First Org' }),
+        }),
+      );
     });
 
     it('rejects when no organisation is returned', async () => {
@@ -403,6 +490,8 @@ describe('AccountingConnectionService', () => {
       status: AccountingConnectionStatus.CONNECTED,
       encryptedCredentialData: 'encrypted-blob',
       lastErrorMessage: null as string | null,
+      accountingOrganisationId: 'acc-org-1',
+      organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines' },
     };
 
     it('throws NotFoundException when there is no active connection', async () => {

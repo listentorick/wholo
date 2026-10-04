@@ -27,6 +27,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-custpay-dist-a';
 const DIST_B = 'test-custpay-dist-b';
@@ -75,6 +76,7 @@ describe('Customer payments (integration)', () => {
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   };
 
@@ -99,8 +101,7 @@ describe('Customer payments (integration)', () => {
   async function unpaidInvoice(distributorId: string, amountDue: string, dueDate: string) {
     const connection =
       (await prisma.accountingConnection.findFirst({ where: { distributorId } })) ??
-      (await prisma.accountingConnection.create({
-        data: {
+      (await createAccountingConnection(prisma, {
           distributorId,
           provider: AccountingProvider.XERO,
           status: AccountingConnectionStatus.CONNECTED,
@@ -110,8 +111,7 @@ describe('Customer payments (integration)', () => {
           encryptedCredentialData: 'irrelevant',
           connectedByUserId: ADMIN_USER,
           connectedAt: new Date(),
-        },
-      }));
+        }));
     const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
     const order = await prisma.order.create({
       data: {
@@ -132,7 +132,7 @@ describe('Customer payments (integration)', () => {
     await prisma.accountingInvoiceExport.create({
       data: {
         distributorId,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         provider: AccountingProvider.XERO,
         orderId: order.id,
         status: AccountingInvoiceExportStatus.COMPLETED,

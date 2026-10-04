@@ -55,14 +55,14 @@ is before the distributor's local today. Overdue is never stored — it depends 
 date.
 
 ### Applying a snapshot
-`AccountingInvoiceSyncProcessor` matches fetched invoices to export rows made under any
-of the distributor's connections to the syncing connection's provider organisation
-(same `distributorId`, `provider`, `externalOrganisationId`) — not just the syncing
-connection row. A reconnect creates a new connection row (ADR-051 keeps the old ones),
-but invoices exported before it still live in the same organisation and must keep
-syncing; the scheduler's "anything unsettled?" check matches the same way
-(`accounting-organisation.ts`). Invoices from an organisation the distributor is no
-longer connected to can't be read and keep their last known state.
+`AccountingInvoiceSyncProcessor` matches fetched invoices to the export rows of the
+syncing connection's organisation. Since ADR-074, export rows belong to the
+`AccountingOrganisation`, not the connection row, so invoices exported before a
+reconnect to the same company keep syncing without special matching. The scheduler's
+"anything unsettled?" check also matches on the organisation. (This replaced an earlier
+workaround that matched rows across connection rows by `distributorId`, `provider` and
+`externalOrganisationId`.) Invoices from an organisation the distributor is no longer
+connected to can't be read and keep their last known state.
 
 It skips unchanged rows and never lets an older `providerUpdatedAt` overwrite a newer
 one. The write goes through `InvoicePaymentStateService`, the only writer of payment

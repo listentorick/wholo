@@ -63,16 +63,16 @@ const makeConnection = (overrides: Record<string, unknown> = {}) => ({
   distributorId: 'dist-1',
   provider: 'XERO',
   status: AccountingConnectionStatus.CONNECTED,
-  externalOrganisationId: 'tenant-1',
+  accountingOrganisationId: 'acc-org-1',
   scopes: 'openid accounting.contacts accounting.settings accounting.transactions offline_access',
-  invoiceExportTargetStatus: 'DRAFT',
+  organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
   ...overrides,
 });
 
 const makeExportRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'export-1',
   distributorId: 'dist-1',
-  accountingConnectionId: 'conn-1',
+  accountingOrganisationId: 'acc-org-1',
   provider: 'XERO',
   orderId: 'order-1',
   status: AccountingInvoiceExportStatus.PROCESSING,
@@ -208,9 +208,9 @@ describe('AccountingInvoiceExportProcessor', () => {
       expect(adapter.createInvoice).not.toHaveBeenCalled();
     });
 
-    it('when the order already has a COMPLETED export on any connection (disconnect/reconnect guard)', async () => {
+    it('when the order already has a COMPLETED export in any organisation (switching company guard)', async () => {
       prisma.accountingInvoiceExport.findFirst.mockResolvedValue(
-        makeExportRow({ accountingConnectionId: 'old-conn', status: AccountingInvoiceExportStatus.COMPLETED }),
+        makeExportRow({ accountingOrganisationId: 'other-acc-org', status: AccountingInvoiceExportStatus.COMPLETED }),
       );
       await processor.process(makeJob());
       expect(prisma.accountingInvoiceExport.create).not.toHaveBeenCalled();
@@ -282,9 +282,11 @@ describe('AccountingInvoiceExportProcessor', () => {
       );
     });
 
-    it('creates the invoice with the connection-configured target status', async () => {
+    it("creates the invoice with the organisation's configured target status", async () => {
       prisma.accountingConnection.findFirst.mockResolvedValue(
-        makeConnection({ invoiceExportTargetStatus: 'AUTHORISED' }),
+        makeConnection({
+          organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'AUTHORISED' },
+        }),
       );
       await processor.process(makeJob());
       expect(adapter.createInvoice.mock.calls[0][2].targetStatus).toBe('AUTHORISED');
@@ -320,8 +322,8 @@ describe('AccountingInvoiceExportProcessor', () => {
     it('resolves the tax code from the order line taxTypeId, not the product cached tax code', async () => {
       await processor.process(makeJob());
 
-      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('conn-1', 'tt-1');
-      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('conn-1', 'tt-2');
+      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('acc-org-1', 'tt-1');
+      expect(accountingTaxTypes.resolveExternalCodeForTaxType).toHaveBeenCalledWith('acc-org-1', 'tt-2');
       expect(adapter.createInvoice.mock.calls[0][2].lines[0].taxCode).toBe('OUTPUT2');
     });
 

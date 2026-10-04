@@ -209,6 +209,24 @@ describe('XeroConnectionCard', () => {
     await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith());
     await waitFor(() => expect(screen.getByText('Connect Xero')).toBeInTheDocument());
   });
+
+  it('tells the user their links survive reconnecting to the same organisation before disconnecting', async () => {
+    mockGetConnection.mockResolvedValue({
+      provider: 'XERO',
+      status: 'CONNECTED',
+      externalOrganisationName: 'Acme Wines',
+      connectedAt: '2026-01-01T00:00:00.000Z',
+      lastSyncedAt: null,
+    });
+    (window.confirm as ReturnType<typeof vi.fn>).mockReturnValue(false);
+    const user = userEvent.setup();
+
+    render(<XeroConnectionCard />);
+    await user.click(await screen.findByText('Disconnect'));
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('kept if you reconnect to the same Xero organisation'));
+    expect(mockDisconnect).not.toHaveBeenCalled();
+  });
 });
 
 describe('XeroConnectionCard — who can change the connection', () => {

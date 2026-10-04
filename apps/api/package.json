@@ -20,6 +20,7 @@
     "db:analytics:rebuild": "tsx scripts/rebuild-analytics-state.ts",
     "db:tax-types:backfill": "tsx scripts/backfill-default-tax-types.ts",
     "db:membership-roles:backfill": "tsx scripts/backfill-membership-roles.ts",
+    "db:accounting:clear": "node scripts/clear-accounting-data.js",
     "keycloak:emails": "tsx scripts/generate-keycloak-emails.ts",
     "db:studio": "prisma studio"
   },

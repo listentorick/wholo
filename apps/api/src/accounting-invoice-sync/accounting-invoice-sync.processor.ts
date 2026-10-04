@@ -1,6 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { AccountingConnection, AccountingInvoiceExportStatus, AccountingInvoiceState, ActorType } from '@prisma/client';
+import { AccountingInvoiceExportStatus, AccountingInvoiceState, ActorType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
@@ -12,7 +12,7 @@ import {
 import { AccountingProviderError } from '../accounting/adapters/accounting-provider.error';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
 import { ExportWithOrder, InvoicePaymentStateService, SyncedState, syncedStateChanged } from '../accounting/invoice-payment-state.service';
-import { exportsForOrganisation } from '../accounting/accounting-organisation';
+import { AccountingConnectionWithOrganisation, organisationScope } from '../accounting/accounting-organisation';
 import {
   AccountingPullProcessorBase,
   PullContext,
@@ -72,7 +72,7 @@ export class AccountingInvoiceSyncProcessor extends AccountingPullProcessorBase 
     super(prisma, accountingConnectionService, adapters, ingestionRuns);
   }
 
-  protected async preflight(connection: AccountingConnection, adapter: AccountingConnectionAdapter): Promise<void> {
+  protected async preflight(connection: AccountingConnectionWithOrganisation, adapter: AccountingConnectionAdapter): Promise<void> {
     if (!adapter.hasInvoiceReadScope(connection.scopes)) {
       throw new AccountingProviderError(
         'Reconnect the accounting integration to grant Stocdup permission to read invoices.',
@@ -84,7 +84,7 @@ export class AccountingInvoiceSyncProcessor extends AccountingPullProcessorBase 
   }
 
   protected async pull({ connection, adapter, tokenSet, cursor, progress }: PullContext): Promise<PullResult> {
-    const fetched = await adapter.listInvoiceStatuses(tokenSet, connection.externalOrganisationId, cursor);
+    const fetched = await adapter.listInvoiceStatuses(tokenSet, connection.organisation.externalOrganisationId, cursor);
     await progress.setTotal(fetched.records.length);
     const { matched, updated, statusChanges } = await this.applyStatuses(connection, fetched.records, progress);
     return {
@@ -97,13 +97,13 @@ export class AccountingInvoiceSyncProcessor extends AccountingPullProcessorBase 
     };
   }
 
-  // Writes provider facts onto our export rows — those made under any of the
-  // distributor's connections to this organisation. Invoices Stocdup didn't
+  // Writes provider facts onto our export rows — every one this organisation
+  // owns, whichever connection was live when it was exported. Invoices Stocdup didn't
   // create (or whose export row is gone) are ignored. Returns how many
   // fetched invoices were ours, how many rows changed, and how many derived
   // payment-status transitions were emitted.
   async applyStatuses(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     records: AccountingExternalInvoiceStatus[],
     progress?: RunProgress,
   ): Promise<{ matched: number; updated: number; statusChanges: number }> {
@@ -115,9 +115,7 @@ export class AccountingInvoiceSyncProcessor extends AccountingPullProcessorBase 
       const chunk = records.slice(i, i + LOOKUP_CHUNK);
       const exports = (await this.prisma.accountingInvoiceExport.findMany({
         where: {
-          // Any connection row for this organisation — invoices exported
-          // before a reconnect still belong to it.
-          ...exportsForOrganisation(connection),
+          ...organisationScope(connection),
           status: AccountingInvoiceExportStatus.COMPLETED,
           externalInvoiceId: { in: chunk.map((r) => r.externalInvoiceId) },
         },

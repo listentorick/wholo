@@ -26,6 +26,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-acct-contacts-dist-a';
 const DIST_B = 'test-acct-contacts-dist-b';
@@ -38,8 +39,8 @@ describe('Accounting contact sync routes (integration)', () => {
   let prisma: PrismaService;
   let jwtServer: JwtTestServer;
   let token: string;
-  let connectionA: { id: string };
-  let connectionB: { id: string };
+  let connectionA: { id: string; accountingOrganisationId: string };
+  let connectionB: { id: string; accountingOrganisationId: string };
   let tradeRelationshipA: { id: string };
 
   beforeAll(async () => {
@@ -99,12 +100,8 @@ describe('Accounting contact sync routes (integration)', () => {
       connectedByUserId: ADMIN_USER,
       connectedAt: new Date(),
     };
-    connectionA = await prisma.accountingConnection.create({
-      data: { ...baseConnection, distributorId: DIST_A, externalOrganisationId: 'tenant-a' },
-    });
-    connectionB = await prisma.accountingConnection.create({
-      data: { ...baseConnection, distributorId: DIST_B, externalOrganisationId: 'tenant-b' },
-    });
+    connectionA = await createAccountingConnection(prisma, { ...baseConnection, distributorId: DIST_A, externalOrganisationId: 'tenant-a' });
+    connectionB = await createAccountingConnection(prisma, { ...baseConnection, distributorId: DIST_B, externalOrganisationId: 'tenant-b' });
     tradeRelationshipA = await prisma.tradeRelationship.create({
       data: { distributorId: DIST_A, customerId: CUSTOMER_A, accountNumber: 'WC-1' },
     });
@@ -117,6 +114,7 @@ describe('Accounting contact sync routes (integration)', () => {
     await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'AccountingConnection' } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   afterAll(async () => {
@@ -127,11 +125,11 @@ describe('Accounting contact sync routes (integration)', () => {
     await jwtServer.close();
   });
 
-  async function createContact(connectionId: string, distributorId: string, externalContactId: string) {
+  async function createContact(accountingOrganisationId: string, distributorId: string, externalContactId: string) {
     return prisma.externalAccountingContact.create({
       data: {
         distributorId,
-        accountingConnectionId: connectionId,
+        accountingOrganisationId,
         provider: AccountingProvider.XERO,
         externalContactId,
         displayName: `Contact ${externalContactId}`,
@@ -144,8 +142,8 @@ describe('Accounting contact sync routes (integration)', () => {
 
   describe('distributor-scoped list endpoint', () => {
     it('only returns contacts belonging to the requesting distributor, even when another distributor has its own', async () => {
-      const contactA = await createContact(connectionA.id, DIST_A, 'xero-a-1');
-      await createContact(connectionB.id, DIST_B, 'xero-b-1');
+      const contactA = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-1');
+      await createContact(connectionB.accountingOrganisationId, DIST_B, 'xero-b-1');
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A}/accounting/contacts`)
@@ -169,7 +167,7 @@ describe('Accounting contact sync routes (integration)', () => {
 
   describe('import as new customer', () => {
     it('creates an Organisation + TradeRelationship + mapping, and never a CustomerInvitation', async () => {
-      const contact = await createContact(connectionA.id, DIST_A, 'xero-a-import');
+      const contact = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-import');
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/distributors/${DIST_A}/accounting/contacts/${contact.id}/import`)
@@ -194,7 +192,7 @@ describe('Accounting contact sync routes (integration)', () => {
     });
 
     it("a linked contact's mapping carries the customer id that opens the customer record (the View customer link)", async () => {
-      const contact = await createContact(connectionA.id, DIST_A, 'xero-a-link');
+      const contact = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-link');
       await request(app.getHttpServer())
         .post(`/api/v1/distributors/${DIST_A}/accounting/contacts/${contact.id}/import`)
         .set('Authorization', `Bearer ${token}`)
@@ -223,13 +221,13 @@ describe('Accounting contact sync routes (integration)', () => {
 
   describe('CustomerAccountingMapping partial unique constraints', () => {
     it('rejects a second active mapping for the same trade relationship on the same connection', async () => {
-      const contact1 = await createContact(connectionA.id, DIST_A, 'xero-a-2');
-      const contact2 = await createContact(connectionA.id, DIST_A, 'xero-a-3');
+      const contact1 = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-2');
+      const contact2 = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-3');
 
       await prisma.customerAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           tradeRelationshipId: tradeRelationshipA.id,
           externalContactId: contact1.id,
           matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -241,7 +239,7 @@ describe('Accounting contact sync routes (integration)', () => {
         prisma.customerAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             tradeRelationshipId: tradeRelationshipA.id,
             externalContactId: contact2.id,
             matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -252,7 +250,7 @@ describe('Accounting contact sync routes (integration)', () => {
     });
 
     it('rejects a second active mapping for the same external contact on the same connection', async () => {
-      const contact = await createContact(connectionA.id, DIST_A, 'xero-a-4');
+      const contact = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-4');
       const customer2 = await prisma.organisation.create({
         data: { name: 'Second Customer', type: OrganisationType.TRADE_CUSTOMER },
       });
@@ -263,7 +261,7 @@ describe('Accounting contact sync routes (integration)', () => {
       await prisma.customerAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           tradeRelationshipId: tradeRelationshipA.id,
           externalContactId: contact.id,
           matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -275,7 +273,7 @@ describe('Accounting contact sync routes (integration)', () => {
         prisma.customerAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             tradeRelationshipId: relationship2.id,
             externalContactId: contact.id,
             matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -289,12 +287,12 @@ describe('Accounting contact sync routes (integration)', () => {
     });
 
     it('allows relinking the same pair after the original mapping has been unlinked', async () => {
-      const contact = await createContact(connectionA.id, DIST_A, 'xero-a-5');
+      const contact = await createContact(connectionA.accountingOrganisationId, DIST_A, 'xero-a-5');
 
       const first = await prisma.customerAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           tradeRelationshipId: tradeRelationshipA.id,
           externalContactId: contact.id,
           matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -310,7 +308,7 @@ describe('Accounting contact sync routes (integration)', () => {
         prisma.customerAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             tradeRelationshipId: tradeRelationshipA.id,
             externalContactId: contact.id,
             matchMethod: AccountingContactMatchMethod.MANUAL,

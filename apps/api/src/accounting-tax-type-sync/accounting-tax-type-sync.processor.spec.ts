@@ -38,7 +38,8 @@ describe('AccountingTaxTypeSyncProcessor', () => {
     distributorId: 'dist-1',
     provider: 'XERO',
     status: 'CONNECTED',
-    externalOrganisationId: 'tenant-1',
+    accountingOrganisationId: 'acc-org-1',
+    organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
     lastSyncedAt: null,
   };
 
@@ -130,10 +131,10 @@ describe('AccountingTaxTypeSyncProcessor', () => {
 
     expect(prisma.externalAccountingTaxType.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { accountingConnectionId_taxType: { accountingConnectionId: 'conn-1', taxType: 'OUTPUT2' } },
+        where: { accountingOrganisationId_taxType: { accountingOrganisationId: 'acc-org-1', taxType: 'OUTPUT2' } },
         create: expect.objectContaining({
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           taxType: 'OUTPUT2',
           displayName: 'Standard rate',
         }),
@@ -171,7 +172,8 @@ describe('AccountingTaxTypeSyncProcessor', () => {
 
     expect(prisma.externalAccountingTaxType.updateMany).toHaveBeenCalledWith({
       where: {
-        accountingConnectionId: 'conn-1',
+        distributorId: 'dist-1',
+        accountingOrganisationId: 'acc-org-1',
         id: { notIn: ['cached-present'] },
         isActive: true,
       },
@@ -219,7 +221,7 @@ describe('AccountingTaxTypeSyncProcessor', () => {
       where: {
         distributorId: 'dist-1',
         active: true,
-        accountingMappings: { none: { accountingConnectionId: 'conn-1', unlinkedAt: null } },
+        accountingMappings: { none: { distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', unlinkedAt: null } },
       },
       select: { id: true, name: true },
     });
@@ -263,7 +265,7 @@ describe('AccountingTaxTypeSyncProcessor', () => {
       expect(prisma.accountingTaxTypeMatchSuggestion.create).toHaveBeenCalledWith({
         data: {
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           externalTaxTypeId: 'cached-1',
           suggestedTaxTypeId: 'tt-1',
           confidence: 90,

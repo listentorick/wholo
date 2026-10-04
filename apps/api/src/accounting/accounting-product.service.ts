@@ -14,6 +14,7 @@ import { AccountingTaxTypeService } from './accounting-tax-type.service';
 import { ProductQueryDto, AccountingProductStatusFilter, AccountingProductTypeFilter } from './dto/product-query.dto';
 import { ImportProductDto } from './dto/import-product.dto';
 import { BulkImportProductSelectionDto } from './dto/bulk-import-product-selection.dto';
+import { organisationScope } from './accounting-organisation';
 
 interface CursorPayload {
   createdAt: string;
@@ -78,7 +79,7 @@ export class AccountingProductService {
     }
 
     const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
-      accountingConnectionId: connection.id,
+      ...organisationScope(connection),
       ...(conditions.length && { AND: conditions }),
     };
 
@@ -96,7 +97,7 @@ export class AccountingProductService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           include: productInclude,
         }),
-        this.findConflictedProductIds(connection.id),
+        this.findConflictedProductIds(connection.accountingOrganisationId),
       ]);
 
       const matches = rows
@@ -130,7 +131,7 @@ export class AccountingProductService {
         take,
         include: productInclude,
       }),
-      this.findConflictedProductIds(connection.id),
+      this.findConflictedProductIds(connection.accountingOrganisationId),
       this.prisma.externalAccountingProduct.count({ where: baseWhere }),
     ]);
 
@@ -188,21 +189,21 @@ export class AccountingProductService {
   async countNeedsAttention(distributorId: string): Promise<number> {
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
-      select: { id: true },
+      select: { distributorId: true, accountingOrganisationId: true },
     });
     if (!connection) return 0;
 
     const [suggested, readyToImport] = await Promise.all([
       this.prisma.externalAccountingProduct.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           mappings: { none: { unlinkedAt: null } },
           suggestions: { some: { status: AccountingProductMatchStatus.SUGGESTED } },
         },
       }),
       this.prisma.externalAccountingProduct.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           isSold: true,
           isActive: true,
           ignoredAt: null,
@@ -242,13 +243,13 @@ export class AccountingProductService {
       conditions.push({ OR: typeConditions });
     }
     const baseWhere: Prisma.ExternalAccountingProductWhereInput = {
-      accountingConnectionId: connection.id,
+      ...organisationScope(connection),
       ...(conditions.length && { AND: conditions }),
     };
 
     const [rows, conflictedProductIds] = await Promise.all([
       this.prisma.externalAccountingProduct.findMany({ where: baseWhere, include: productInclude }),
-      this.findConflictedProductIds(connection.id),
+      this.findConflictedProductIds(connection.accountingOrganisationId),
     ]);
 
     return rows
@@ -269,8 +270,7 @@ export class AccountingProductService {
 
     const job = await this.prisma.accountingBulkImportJob.create({
       data: {
-        distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         recordType: AccountingBulkImportRecordType.PRODUCT,
         requestedByUserId: userId,
         honourSuggestions: dto.honourSuggestions ?? false,
@@ -297,7 +297,7 @@ export class AccountingProductService {
 
   async importAsNewProduct(distributorId: string, userId: string, externalProductId: string, dto: ImportProductDto) {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getProductOrThrow(connection.id, externalProductId);
+    const external = await this.getProductOrThrow(connection.accountingOrganisationId, externalProductId);
     await this.assertExternalProductNotMapped(external.id);
 
     // Pre-check the SKU rather than letting the DB unique constraint surface
@@ -326,7 +326,7 @@ export class AccountingProductService {
     // mapping (Phase 3), resolve it now so the product isn't needlessly left
     // without a tax type — otherwise it's left unset, same as before, and
     // surfaces via the Products page's existing "No tax type" flag.
-    const resolvedTaxType = await this.taxTypes.resolveTaxTypeForCode(connection.id, external.taxCode);
+    const resolvedTaxType = await this.taxTypes.resolveTaxTypeForCode(connection.accountingOrganisationId, external.taxCode);
 
     // Not wrapped in a transaction with the mapping write below:
     // AdminProductsService.create manages its own transaction internally
@@ -348,7 +348,7 @@ export class AccountingProductService {
 
     await this.createMapping(
       distributorId,
-      connection.id,
+      connection.accountingOrganisationId,
       product.id,
       external.id,
       AccountingProductMatchMethod.MANUAL,
@@ -367,13 +367,13 @@ export class AccountingProductService {
   ) {
     const connection = await this.getActiveConnection(distributorId);
     const suggestion = await this.prisma.accountingProductMatchSuggestion.findFirst({
-      where: { id: suggestionId, accountingConnectionId: connection.id, status: AccountingProductMatchStatus.SUGGESTED },
+      where: { id: suggestionId, ...organisationScope(connection), status: AccountingProductMatchStatus.SUGGESTED },
     });
     if (!suggestion) {
       throw new NotFoundException('Suggestion not found or already resolved');
     }
 
-    const external = await this.getProductOrThrow(connection.id, suggestion.externalProductId);
+    const external = await this.getProductOrThrow(connection.accountingOrganisationId, suggestion.externalProductId);
     const product = await this.prisma.product.findFirst({
       where: { id: suggestion.suggestedProductId, distributorId, deletedAt: null },
       include: { taxType: { select: { id: true, name: true } } },
@@ -381,7 +381,7 @@ export class AccountingProductService {
     // Resolved (and, if conflicting, thrown) before any write — a rejected
     // suggestion must leave nothing half-applied.
     const taxTypeIdToApply = await this.resolveTaxTypeForMatch(
-      connection.id,
+      connection.accountingOrganisationId,
       external.taxCode,
       product?.taxType ?? null,
       confirmTaxTypeOverride,
@@ -390,7 +390,7 @@ export class AccountingProductService {
     await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         suggestion.suggestedProductId,
         suggestion.externalProductId,
         suggestion.matchMethod,
@@ -417,7 +417,7 @@ export class AccountingProductService {
     confirmTaxTypeOverride = false,
   ) {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getProductOrThrow(connection.id, externalProductId);
+    const external = await this.getProductOrThrow(connection.accountingOrganisationId, externalProductId);
     await this.assertExternalProductNotMapped(external.id);
 
     const product = await this.prisma.product.findFirst({
@@ -427,12 +427,12 @@ export class AccountingProductService {
     if (!product) {
       throw new NotFoundException('Product not found');
     }
-    await this.assertProductNotMapped(connection.id, productId);
+    await this.assertProductNotMapped(connection.accountingOrganisationId, productId);
 
     // Resolved (and, if conflicting, thrown) before any write — same
     // rationale as confirmSuggestion above.
     const taxTypeIdToApply = await this.resolveTaxTypeForMatch(
-      connection.id,
+      connection.accountingOrganisationId,
       external.taxCode,
       product.taxType,
       confirmTaxTypeOverride,
@@ -441,7 +441,7 @@ export class AccountingProductService {
     await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         productId,
         external.id,
         AccountingProductMatchMethod.MANUAL,
@@ -470,12 +470,12 @@ export class AccountingProductService {
   // frontend show a confirm-and-resubmit step, when the resolved tax type
   // would silently overwrite a different one already set on the product.
   private async resolveTaxTypeForMatch(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     externalTaxCode: string | null,
     currentTaxType: { id: string; name: string } | null,
     confirmTaxTypeOverride: boolean,
   ): Promise<string | undefined> {
-    const resolved = await this.taxTypes.resolveTaxTypeForCode(accountingConnectionId, externalTaxCode);
+    const resolved = await this.taxTypes.resolveTaxTypeForCode(accountingOrganisationId, externalTaxCode);
     if (!resolved) return undefined;
     if (!currentTaxType) return resolved.taxTypeId;
     if (currentTaxType.id === resolved.taxTypeId) return undefined;
@@ -491,7 +491,7 @@ export class AccountingProductService {
 
   async ignore(distributorId: string, userId: string, externalProductId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getProductOrThrow(connection.id, externalProductId);
+    const external = await this.getProductOrThrow(connection.accountingOrganisationId, externalProductId);
 
     await this.prisma.$transaction([
       this.prisma.externalAccountingProduct.update({
@@ -509,7 +509,7 @@ export class AccountingProductService {
   async unlink(distributorId: string, mappingId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
     const mapping = await this.prisma.productAccountingMapping.findFirst({
-      where: { id: mappingId, accountingConnectionId: connection.id, unlinkedAt: null },
+      where: { id: mappingId, ...organisationScope(connection), unlinkedAt: null },
     });
     if (!mapping) {
       throw new NotFoundException('Mapping not found or already unlinked');
@@ -526,7 +526,7 @@ export class AccountingProductService {
   // AccountingChangeDetectionService).
   async acknowledgeChange(distributorId: string, externalProductId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getProductOrThrow(connection.id, externalProductId);
+    const external = await this.getProductOrThrow(connection.accountingOrganisationId, externalProductId);
     await this.prisma.externalAccountingProduct.update({
       where: { id: external.id },
       data: { changeAcknowledgedAt: new Date() },
@@ -535,16 +535,16 @@ export class AccountingProductService {
 
   private async createMapping(
     distributorId: string,
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     productId: string,
     externalProductId: string,
     matchMethod: AccountingProductMatchMethod,
     linkedByUserId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    await this.assertProductNotMapped(accountingConnectionId, productId, tx);
+    await this.assertProductNotMapped(accountingOrganisationId, productId, tx);
     return tx.productAccountingMapping.create({
-      data: { distributorId, accountingConnectionId, productId, externalProductId, matchMethod, linkedByUserId },
+      data: { distributorId, accountingOrganisationId, productId, externalProductId, matchMethod, linkedByUserId },
     });
   }
 
@@ -558,9 +558,9 @@ export class AccountingProductService {
     return connection;
   }
 
-  private async getProductOrThrow(accountingConnectionId: string, externalProductId: string) {
+  private async getProductOrThrow(accountingOrganisationId: string, externalProductId: string) {
     const external = await this.prisma.externalAccountingProduct.findFirst({
-      where: { id: externalProductId, accountingConnectionId },
+      where: { id: externalProductId, accountingOrganisationId },
     });
     if (!external) {
       throw new NotFoundException('Accounting product not found');
@@ -578,12 +578,12 @@ export class AccountingProductService {
   }
 
   private async assertProductNotMapped(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     productId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
     const existing = await tx.productAccountingMapping.findFirst({
-      where: { accountingConnectionId, productId, unlinkedAt: null },
+      where: { accountingOrganisationId, productId, unlinkedAt: null },
     });
     if (existing) {
       throw new ConflictException('This product is already linked to a different accounting product');
@@ -591,11 +591,11 @@ export class AccountingProductService {
   }
 
   // Public: reused by AccountingBulkImportProcessor, which needs the same
-  // connection-wide conflict set to compute per-item status during a batch.
-  async findConflictedProductIds(accountingConnectionId: string): Promise<Set<string>> {
+  // organisation-wide conflict set to compute per-item status during a batch.
+  async findConflictedProductIds(accountingOrganisationId: string): Promise<Set<string>> {
     const grouped = await this.prisma.accountingProductMatchSuggestion.groupBy({
       by: ['suggestedProductId'],
-      where: { accountingConnectionId, status: AccountingProductMatchStatus.SUGGESTED },
+      where: { accountingOrganisationId, status: AccountingProductMatchStatus.SUGGESTED },
       _count: { _all: true },
     });
     return new Set(grouped.filter((g) => g._count._all > 1).map((g) => g.suggestedProductId));

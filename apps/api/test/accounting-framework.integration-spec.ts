@@ -45,6 +45,7 @@ import { AccountingContactSyncProcessor } from '../src/accounting-contact-sync/a
 import { AccountingInvoiceExportProcessor } from '../src/accounting-invoice-export/accounting-invoice-export.processor';
 import { AccountingInvoiceSyncProcessor } from '../src/accounting-invoice-sync/accounting-invoice-sync.processor';
 import { FakeAccountingAdapter } from './support/fake-accounting.adapter';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST = 'test-framework-dist';
 const CUSTOMER = 'test-framework-customer';
@@ -80,6 +81,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     await prisma.product.deleteMany({ where: { distributorId: DIST } });
     await prisma.tradeRelationship.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST } });
   };
 
   beforeAll(async () => {
@@ -128,8 +130,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
 
   it('syncs contacts, exports an invoice, and follows its payment through to a completed order', async () => {
     const tradeRelationship = await prisma.tradeRelationship.create({ data: { distributorId: DIST, customerId: CUSTOMER } });
-    const connection = await prisma.accountingConnection.create({
-      data: {
+    const connection = await createAccountingConnection(prisma, {
         distributorId: DIST,
         provider: AccountingProvider.XERO, // the only enum value today — see the header
         status: AccountingConnectionStatus.CONNECTED,
@@ -139,8 +140,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
         encryptedCredentialData: module.get(TokenEncryptionService, { strict: false }).encrypt(JSON.stringify(FakeAccountingAdapter.tokenSet())),
         connectedByUserId: USER,
         connectedAt: new Date(),
-      },
-    });
+      });
 
     // 1. Contact sync pulls the provider's contacts into the cache.
     fake.contacts = [
@@ -148,7 +148,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     ];
     await contactSync.process(job({ aggregateId: connection.id, payload: {} }));
 
-    const cached = await prisma.externalAccountingContact.findFirstOrThrow({ where: { accountingConnectionId: connection.id } });
+    const cached = await prisma.externalAccountingContact.findFirstOrThrow({ where: { accountingOrganisationId: connection.accountingOrganisationId } });
     expect(cached).toMatchObject({ externalContactId: 'fake-contact-1', displayName: 'The Old Hall' });
     expect(await prisma.ingestionRun.findFirstOrThrow({ where: { sourceRef: connection.id, resourceType: 'contact' } })).toMatchObject({
       status: IngestionRunStatus.COMPLETED,
@@ -159,7 +159,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     await prisma.customerAccountingMapping.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         tradeRelationshipId: tradeRelationship.id,
         externalContactId: cached.id,
         matchMethod: AccountingContactMatchMethod.MANUAL,

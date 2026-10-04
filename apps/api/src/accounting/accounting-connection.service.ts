@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { loggableError } from '@wholo/nest-telemetry';
 import {
-  AccountingConnection,
   AccountingConnectionStatus,
   AccountingInvoiceTargetStatus,
   AccountingProvider,
@@ -18,6 +17,7 @@ import { AccountingOAuthError } from './accounting-oauth.error';
 import { AccountingTokenSet } from './adapters/accounting-connection-adapter.interface';
 import { AccountingProviderError } from './adapters/accounting-provider.error';
 import { AccountingRefreshLock, AccountingRefreshLockService } from './accounting-refresh-lock.service';
+import { AccountingConnectionWithOrganisation, CONNECTION_WITH_ORGANISATION } from './accounting-organisation';
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 // Refresh if the access token has less than this much life left. Xero access
@@ -52,9 +52,9 @@ export class AccountingConnectionService {
     return this.toConnectionStatus(connection);
   }
 
-  // Per-connection (not per-distributor) settings: the invoice target status
-  // is about how this provider's invoices are raised, so it lives and dies
-  // with the connection.
+  // Per-organisation (not per-distributor, not per-connection) settings: the
+  // invoice target status is about how invoices are raised in this company,
+  // so it survives a reconnect to it (ADR-074).
   async updateConnectionSettings(
     distributorId: string,
     settings: { invoiceExportTargetStatus: AccountingInvoiceTargetStatus },
@@ -63,11 +63,11 @@ export class AccountingConnectionService {
     if (!connection) {
       throw new NotFoundException('No accounting connection exists for this distributor');
     }
-    const updated = await this.prisma.accountingConnection.update({
-      where: { id: connection.id },
+    const organisation = await this.prisma.accountingOrganisation.update({
+      where: { id: connection.accountingOrganisationId },
       data: { invoiceExportTargetStatus: settings.invoiceExportTargetStatus },
     });
-    return this.toConnectionStatus(updated);
+    return this.toConnectionStatus({ ...connection, organisation });
   }
 
   // The distributor's current connection (CONNECTED or ERROR), or null.
@@ -79,9 +79,10 @@ export class AccountingConnectionService {
 
   // The distributor's live connection — a sync can only be requested against a
   // CONNECTED one. Throws if there isn't one.
-  async getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnection> {
+  async getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnectionWithOrganisation> {
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+      include: CONNECTION_WITH_ORGANISATION,
     });
     if (!connection) {
       throw new NotFoundException('No active accounting connection for this distributor');
@@ -92,12 +93,13 @@ export class AccountingConnectionService {
   // Include ERROR so a broken connection (e.g. refresh failed, revoked
   // access) is surfaced distinctly rather than looking indistinguishable
   // from "never connected".
-  private findCurrentConnection(distributorId: string) {
+  private findCurrentConnection(distributorId: string): Promise<AccountingConnectionWithOrganisation | null> {
     return this.prisma.accountingConnection.findFirst({
       where: {
         distributorId,
         status: { in: [AccountingConnectionStatus.CONNECTED, AccountingConnectionStatus.ERROR] },
       },
+      include: CONNECTION_WITH_ORGANISATION,
       // Without this, a stale ERROR row and a freshly-reconnected CONNECTED
       // row can both match and findFirst's pick is otherwise unordered —
       // always surface the most recent one.
@@ -105,14 +107,14 @@ export class AccountingConnectionService {
     });
   }
 
-  private toConnectionStatus(connection: AccountingConnection) {
+  private toConnectionStatus(connection: AccountingConnectionWithOrganisation) {
     return {
       provider: connection.provider,
       status: connection.status,
-      externalOrganisationName: connection.externalOrganisationName,
+      externalOrganisationName: connection.organisation.name,
       connectedAt: connection.connectedAt,
       lastSyncedAt: connection.lastSyncedAt,
-      invoiceExportTargetStatus: connection.invoiceExportTargetStatus,
+      invoiceExportTargetStatus: connection.organisation.invoiceExportTargetStatus,
     };
   }
 
@@ -205,6 +207,27 @@ export class AccountingConnectionService {
     const now = new Date();
 
     const created = await this.prisma.$transaction(async (tx) => {
+      // The company, not the connection, owns the distributor's mappings and
+      // history (ADR-074): reconnecting to a company seen before — after an
+      // error, a disconnect, or as a different user of it — picks all of that
+      // back up; only a company never connected before starts empty.
+      const organisationKey = {
+        distributorId: stateRow.distributorId,
+        provider: stateRow.provider,
+        externalOrganisationId: organisation.externalId,
+      };
+      const existingOrganisation = await tx.accountingOrganisation.findUnique({
+        where: { distributorId_provider_externalOrganisationId: organisationKey },
+      });
+      // upsert rather than create-if-missing, so two racing callbacks for a
+      // new company converge on one row. The name is refreshed every time —
+      // companies get renamed.
+      const accountingOrganisation = await tx.accountingOrganisation.upsert({
+        where: { distributorId_provider_externalOrganisationId: organisationKey },
+        create: { ...organisationKey, name: organisation.name },
+        update: { name: organisation.name },
+      });
+
       const retired = await tx.accountingConnection.updateMany({
         // ERROR included, not just CONNECTED — a broken connection must be
         // retired by a successful reconnect too, or it lingers as an
@@ -220,15 +243,14 @@ export class AccountingConnectionService {
           distributorId: stateRow.distributorId,
           provider: stateRow.provider,
           status: AccountingConnectionStatus.CONNECTED,
-          externalOrganisationId: organisation.externalId,
-          externalOrganisationName: organisation.name,
+          accountingOrganisationId: accountingOrganisation.id,
           scopes: tokenSet.scope,
           encryptedCredentialData,
           connectedByUserId: stateRow.connectedByUserId,
           connectedAt: now,
         },
       });
-      return { connection, reconnect: retired.count > 0 };
+      return { connection, reconnect: retired.count > 0, knownOrganisation: existingOrganisation !== null };
     });
     this.logger.log(
       {
@@ -236,9 +258,11 @@ export class AccountingConnectionService {
         provider: created.connection.provider,
         distributorId: created.connection.distributorId,
         connectionId: created.connection.id,
-        externalOrgId: created.connection.externalOrganisationId,
+        accountingOrganisationId: created.connection.accountingOrganisationId,
+        externalOrgId: organisation.externalId,
         userId: stateRow.connectedByUserId,
         reconnect: created.reconnect,
+        knownOrganisation: created.knownOrganisation,
       },
       `Accounting connection ${created.connection.id} established for distributor ${created.connection.distributorId}`,
     );
@@ -322,7 +346,10 @@ export class AccountingConnectionService {
     let permanentError: AccountingProviderError | null = null;
     let provider: AccountingProvider | null = null;
     try {
-      const locked = await this.prisma.accountingConnection.findUniqueOrThrow({ where: { id: connectionId } });
+      const locked = await this.prisma.accountingConnection.findUniqueOrThrow({
+        where: { id: connectionId },
+        include: CONNECTION_WITH_ORGANISATION,
+      });
       provider = locked.provider;
       if (locked.status !== AccountingConnectionStatus.CONNECTED) {
         // Raced with a disconnect/reconnect/another failure while we were
@@ -364,7 +391,7 @@ export class AccountingConnectionService {
   }
 
   private async performRefresh(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     currentTokenSet: AccountingTokenSet,
     distributorId: string,
   ): Promise<AccountingTokenSet> {
@@ -386,7 +413,7 @@ export class AccountingConnectionService {
         provider: connection.provider,
         distributorId,
         connectionId: connection.id,
-        externalOrgId: connection.externalOrganisationId,
+        externalOrgId: connection.organisation.externalOrganisationId,
         code: providerError.code,
         transient: providerError.transient,
       };

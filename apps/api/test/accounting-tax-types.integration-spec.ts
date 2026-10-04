@@ -40,6 +40,7 @@ import { ACCOUNTING_SOURCE_TYPE } from '../src/accounting/sync/accounting-sync.c
 import { AccountingExternalTaxRate } from '../src/accounting/adapters/accounting-connection-adapter.interface';
 import { AccountingTaxTypeSyncProcessor } from '../src/accounting-tax-type-sync/accounting-tax-type-sync.processor';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST = 'test-acct-tax-types-dist';
 const ADMIN_USER = 'test-acct-tax-types-admin';
@@ -52,7 +53,7 @@ describe('Accounting tax type sync (integration)', () => {
   let token: string;
   let processor: AccountingTaxTypeSyncProcessor;
   let listTaxRates: jest.Mock;
-  let connection: { id: string };
+  let connection: { id: string; accountingOrganisationId: string };
 
   beforeAll(async () => {
     jwtServer = await startJwtTestServer();
@@ -123,8 +124,7 @@ describe('Accounting tax type sync (integration)', () => {
 
   beforeEach(async () => {
     listTaxRates.mockReset();
-    connection = await prisma.accountingConnection.create({
-      data: {
+    connection = await createAccountingConnection(prisma, {
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
         externalOrganisationName: 'Acme Wines',
@@ -134,8 +134,7 @@ describe('Accounting tax type sync (integration)', () => {
         connectedByUserId: ADMIN_USER,
         connectedAt: new Date(),
         distributorId: DIST,
-      },
-    });
+      });
   });
 
   afterEach(async () => {
@@ -148,6 +147,7 @@ describe('Accounting tax type sync (integration)', () => {
     await prisma.outboxEvent.deleteMany({ where: { aggregateType: 'AccountingConnection' } });
     await prisma.taxType.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST } });
   });
 
   afterAll(async () => {
@@ -199,7 +199,7 @@ describe('Accounting tax type sync (integration)', () => {
     await runSync();
 
     const cached = await prisma.externalAccountingTaxType.findFirst({
-      where: { accountingConnectionId: connection.id, taxType: 'OUTPUT2' },
+      where: { accountingOrganisationId: connection.accountingOrganisationId, taxType: 'OUTPUT2' },
     });
     expect(cached).not.toBeNull();
     expect(cached?.displayName).toBe('Standard rate');
@@ -220,7 +220,7 @@ describe('Accounting tax type sync (integration)', () => {
     await runSync();
 
     const cached = await prisma.externalAccountingTaxType.findFirst({
-      where: { accountingConnectionId: connection.id, taxType: 'OUTPUT2' },
+      where: { accountingOrganisationId: connection.accountingOrganisationId, taxType: 'OUTPUT2' },
     });
     const suggestion = await prisma.accountingTaxTypeMatchSuggestion.findFirst({
       where: { externalTaxTypeId: cached!.id },
@@ -248,12 +248,12 @@ describe('Accounting tax type sync (integration)', () => {
     await runSync();
 
     const cachedBefore = await prisma.externalAccountingTaxType.findFirst({
-      where: { accountingConnectionId: connection.id, taxType: 'OUTPUT2' },
+      where: { accountingOrganisationId: connection.accountingOrganisationId, taxType: 'OUTPUT2' },
     });
     await prisma.taxTypeAccountingMapping.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         taxTypeId: taxType.id,
         externalTaxTypeId: cachedBefore!.id,
         matchMethod: AccountingTaxTypeMatchMethod.MANUAL,
@@ -289,12 +289,12 @@ describe('Accounting tax type sync (integration)', () => {
     listTaxRates.mockResolvedValue([taxRate()]);
     await runSync();
     const cached = await prisma.externalAccountingTaxType.findFirst({
-      where: { accountingConnectionId: connection.id, taxType: 'OUTPUT2' },
+      where: { accountingOrganisationId: connection.accountingOrganisationId, taxType: 'OUTPUT2' },
     });
     await prisma.taxTypeAccountingMapping.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         taxTypeId: taxType.id,
         externalTaxTypeId: cached!.id,
         matchMethod: AccountingTaxTypeMatchMethod.MANUAL,

@@ -10,6 +10,7 @@ import { AccountingContactService, contactInclude } from '../accounting/accounti
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { ACCOUNTING_BULK_IMPORT_QUEUE } from '../queues/queue.constants';
 import { HEARTBEAT_ITEM_INTERVAL, HEARTBEAT_TIME_INTERVAL_MS } from '../ingestion/ingestion-run.service';
+import { organisationScope } from '../accounting/accounting-organisation';
 
 interface BulkImportJobData {
   eventId: string;
@@ -70,8 +71,8 @@ export class AccountingBulkImportProcessor extends LoggedWorkerHost {
       const externalIds = await this.resolveIds(bulkJob);
       const conflictedIds =
         bulkJob.recordType === AccountingBulkImportRecordType.PRODUCT
-          ? await this.productService.findConflictedProductIds(bulkJob.accountingConnectionId)
-          : await this.contactService.findConflictedTradeRelationshipIds(bulkJob.accountingConnectionId);
+          ? await this.productService.findConflictedProductIds(bulkJob.accountingOrganisationId)
+          : await this.contactService.findConflictedTradeRelationshipIds(bulkJob.accountingOrganisationId);
 
       const results: ItemResult[] = [];
       let lastHeartbeat = Date.now();
@@ -167,7 +168,7 @@ export class AccountingBulkImportProcessor extends LoggedWorkerHost {
     conflictedProductIds: Set<string>,
   ): Promise<ItemResult> {
     const row = await this.prisma.externalAccountingProduct.findFirst({
-      where: { id: externalId, accountingConnectionId: bulkJob.accountingConnectionId },
+      where: { id: externalId, ...organisationScope(bulkJob) },
       include: productInclude,
     });
     if (!row) {
@@ -206,7 +207,7 @@ export class AccountingBulkImportProcessor extends LoggedWorkerHost {
     conflictedTradeRelationshipIds: Set<string>,
   ): Promise<ItemResult> {
     const row = await this.prisma.externalAccountingContact.findFirst({
-      where: { id: externalId, accountingConnectionId: bulkJob.accountingConnectionId },
+      where: { id: externalId, ...organisationScope(bulkJob) },
       include: contactInclude,
     });
     if (!row) {

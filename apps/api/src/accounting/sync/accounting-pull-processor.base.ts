@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { AccountingConnection, AccountingConnectionStatus, IngestionRun, IngestionRunTrigger } from '@prisma/client';
+import { AccountingConnectionStatus, IngestionRun, IngestionRunTrigger } from '@prisma/client';
 import { Job, UnrecoverableError } from 'bullmq';
 import { loggableError } from '@wholo/nest-telemetry';
 import { LoggedWorkerHost } from '../../queues/logged-worker-host';
@@ -14,6 +14,7 @@ import { AccountingConnectionService } from '../accounting-connection.service';
 import { AccountingAdapterRegistry } from '../adapters/accounting-adapter.registry';
 import { AccountingConnectionAdapter, AccountingTokenSet } from '../adapters/accounting-connection-adapter.interface';
 import { classifyJobFailure } from '../accounting-job-failure';
+import { AccountingConnectionWithOrganisation, CONNECTION_WITH_ORGANISATION } from '../accounting-organisation';
 import { ACCOUNTING_FULL_SYNC_INTERVAL_MS, ACCOUNTING_SOURCE_TYPE } from './accounting-sync.constants';
 
 // ─── Pulling data from an accounting provider ───────────────────────────────
@@ -129,7 +130,9 @@ export class RunProgress {
 }
 
 export interface PullContext {
-  connection: AccountingConnection;
+  // Carries its organisation: whatever a pull writes belongs to the
+  // organisation (organisationScope), never to this connection row (ADR-074).
+  connection: AccountingConnectionWithOrganisation;
   adapter: AccountingConnectionAdapter;
   tokenSet: AccountingTokenSet;
   // null for a full pull; otherwise the adapter's opaque incremental position.
@@ -164,7 +167,7 @@ export abstract class AccountingPullProcessorBase extends LoggedWorkerHost {
 
   // Cheap checks before any provider call. Throw a permanent
   // AccountingProviderError to fail the run without retrying. Default: none.
-  protected async preflight(_connection: AccountingConnection, _adapter: AccountingConnectionAdapter): Promise<void> {}
+  protected async preflight(_connection: AccountingConnectionWithOrganisation, _adapter: AccountingConnectionAdapter): Promise<void> {}
 
   // The pull itself: provider call(s) through ctx.adapter, then writing the
   // results. Throw to fail (the base applies the failure policy).
@@ -175,7 +178,10 @@ export abstract class AccountingPullProcessorBase extends LoggedWorkerHost {
     const runIdFromPayload = (job.data.payload as { runId?: string } | undefined)?.runId ?? null;
     const skipFields = { event: 'accounting.sync.skipped', connectionId, resourceType: this.resourceType };
 
-    const connection = await this.prisma.accountingConnection.findUnique({ where: { id: connectionId } });
+    const connection = await this.prisma.accountingConnection.findUnique({
+      where: { id: connectionId },
+      include: CONNECTION_WITH_ORGANISATION,
+    });
     if (!connection) {
       this.logger.warn({ ...skipFields, reason: 'connection_missing' }, `AccountingConnection ${connectionId} no longer exists — skipping sync`);
       if (runIdFromPayload) {
@@ -214,7 +220,8 @@ export abstract class AccountingPullProcessorBase extends LoggedWorkerHost {
       provider: connection.provider,
       distributorId: connection.distributorId,
       connectionId: connection.id,
-      externalOrgId: connection.externalOrganisationId,
+      accountingOrganisationId: connection.accountingOrganisationId,
+      externalOrgId: connection.organisation.externalOrganisationId,
       runId,
       resourceType: this.resourceType,
       trigger: run.trigger,

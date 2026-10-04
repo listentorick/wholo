@@ -25,6 +25,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-invexport-dist-a';
 const DIST_B = 'test-invexport-dist-b';
@@ -92,6 +93,7 @@ describe('Accounting invoice exports (integration)', () => {
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   afterAll(async () => {
@@ -100,6 +102,7 @@ describe('Accounting invoice exports (integration)', () => {
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
     await prisma.user.deleteMany({ where: { id: ADMIN_USER } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -107,20 +110,18 @@ describe('Accounting invoice exports (integration)', () => {
     await jwtServer.close();
   });
 
-  const createConnection = (distributorId: string) =>
-    prisma.accountingConnection.create({
-      data: {
+  const createConnection = (distributorId: string, externalOrganisationId = 'tenant-1') =>
+    createAccountingConnection(prisma, {
         distributorId,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
-        externalOrganisationId: 'tenant-1',
+        externalOrganisationId,
         externalOrganisationName: 'Acme Wines',
         scopes: 'openid accounting.invoices',
         encryptedCredentialData: 'irrelevant-for-this-test',
         connectedByUserId: ADMIN_USER,
         connectedAt: new Date(),
-      },
-    });
+      });
 
   const createOrder = async (distributorId: string) => {
     const seqResult = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
@@ -144,14 +145,14 @@ describe('Accounting invoice exports (integration)', () => {
 
   const createExport = (
     distributorId: string,
-    connectionId: string,
+    accountingOrganisationId: string,
     orderId: string,
     status: AccountingInvoiceExportStatus,
   ) =>
     prisma.accountingInvoiceExport.create({
       data: {
         distributorId,
-        accountingConnectionId: connectionId,
+        accountingOrganisationId,
         provider: AccountingProvider.XERO,
         orderId,
         status,
@@ -161,29 +162,45 @@ describe('Accounting invoice exports (integration)', () => {
       },
     });
 
-  describe('unique (accountingConnectionId, orderId) — duplicate-invoice prevention', () => {
-    it('rejects a second export row for the same connection and order', async () => {
+  describe('unique (accountingOrganisationId, orderId) — duplicate-invoice prevention', () => {
+    it('rejects a second export row for the same organisation and order', async () => {
       const connection = await createConnection(DIST_A);
       const order = await createOrder(DIST_A);
-      await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.COMPLETED);
+      await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.COMPLETED);
 
       await expect(
-        createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.PENDING),
+        createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.PENDING),
       ).rejects.toMatchObject({ code: 'P2002' });
     });
 
-    it('allows exports for the same order on different connections (reconnect history)', async () => {
+    it('still rejects a second export for the order after a reconnect to the same organisation', async () => {
       const connection = await createConnection(DIST_A);
       await prisma.accountingConnection.update({
         where: { id: connection.id },
         data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
       });
       const newConnection = await createConnection(DIST_A);
+      expect(newConnection.accountingOrganisationId).toBe(connection.accountingOrganisationId);
       const order = await createOrder(DIST_A);
-      await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.FAILED);
+      await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.FAILED);
 
       await expect(
-        createExport(DIST_A, newConnection.id, order.id, AccountingInvoiceExportStatus.PENDING),
+        createExport(DIST_A, newConnection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.PENDING),
+      ).rejects.toMatchObject({ code: 'P2002' });
+    });
+
+    it('allows an export row for the same order in a different organisation', async () => {
+      const connection = await createConnection(DIST_A, 'tenant-1');
+      await prisma.accountingConnection.update({
+        where: { id: connection.id },
+        data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
+      });
+      const otherCompany = await createConnection(DIST_A, 'tenant-2');
+      const order = await createOrder(DIST_A);
+      await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.FAILED);
+
+      await expect(
+        createExport(DIST_A, otherCompany.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.PENDING),
       ).resolves.toBeDefined();
     });
   });
@@ -192,7 +209,7 @@ describe('Accounting invoice exports (integration)', () => {
     it('queues a retry for a FAILED export by writing an outbox event', async () => {
       const connection = await createConnection(DIST_A);
       const order = await createOrder(DIST_A);
-      const exportRow = await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.FAILED);
+      const exportRow = await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.FAILED);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/distributors/${DIST_A}/accounting/invoice-exports/${exportRow.id}/retry`)
@@ -211,7 +228,7 @@ describe('Accounting invoice exports (integration)', () => {
     it('rejects retrying an export that is not FAILED', async () => {
       const connection = await createConnection(DIST_A);
       const order = await createOrder(DIST_A);
-      const exportRow = await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.COMPLETED);
+      const exportRow = await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.COMPLETED);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/distributors/${DIST_A}/accounting/invoice-exports/${exportRow.id}/retry`)
@@ -223,7 +240,7 @@ describe('Accounting invoice exports (integration)', () => {
     it("404s another distributor's export addressed through the caller's own path (cross-tenant probe)", async () => {
       const connectionB = await createConnection(DIST_B);
       const orderB = await createOrder(DIST_B);
-      const exportB = await createExport(DIST_B, connectionB.id, orderB.id, AccountingInvoiceExportStatus.FAILED);
+      const exportB = await createExport(DIST_B, connectionB.accountingOrganisationId, orderB.id, AccountingInvoiceExportStatus.FAILED);
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/distributors/${DIST_A}/accounting/invoice-exports/${exportB.id}/retry`)
@@ -246,7 +263,7 @@ describe('Accounting invoice exports (integration)', () => {
   });
 
   describe('PATCH /distributors/:distributorId/accounting/connection', () => {
-    it('updates the invoice target status on the caller-owned connection', async () => {
+    it("updates the invoice target status on the caller-owned connection's organisation", async () => {
       await createConnection(DIST_A);
 
       const res = await request(app.getHttpServer())
@@ -257,7 +274,7 @@ describe('Accounting invoice exports (integration)', () => {
       expect(res.status).toBe(200);
       expect(res.body.invoiceExportTargetStatus).toBe('AUTHORISED');
 
-      const stored = await prisma.accountingConnection.findFirst({ where: { distributorId: DIST_A } });
+      const stored = await prisma.accountingOrganisation.findFirst({ where: { distributorId: DIST_A } });
       expect(stored!.invoiceExportTargetStatus).toBe('AUTHORISED');
     });
 
@@ -270,7 +287,7 @@ describe('Accounting invoice exports (integration)', () => {
         .send({ invoiceExportTargetStatus: 'AUTHORISED' });
 
       expect(res.status).toBe(403);
-      const stored = await prisma.accountingConnection.findFirst({ where: { distributorId: DIST_B } });
+      const stored = await prisma.accountingOrganisation.findFirst({ where: { distributorId: DIST_B } });
       expect(stored!.invoiceExportTargetStatus).toBe('DRAFT');
     });
 
@@ -290,7 +307,7 @@ describe('Accounting invoice exports (integration)', () => {
     it('includes the latest invoice export on the order detail', async () => {
       const connection = await createConnection(DIST_A);
       const order = await createOrder(DIST_A);
-      await createExport(DIST_A, connection.id, order.id, AccountingInvoiceExportStatus.FAILED);
+      await createExport(DIST_A, connection.accountingOrganisationId, order.id, AccountingInvoiceExportStatus.FAILED);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A}/orders/${order.id}`)
@@ -307,7 +324,7 @@ describe('Accounting invoice exports (integration)', () => {
     it("does not serve another distributor's order (and therefore its export)", async () => {
       const connectionB = await createConnection(DIST_B);
       const orderB = await createOrder(DIST_B);
-      await createExport(DIST_B, connectionB.id, orderB.id, AccountingInvoiceExportStatus.COMPLETED);
+      await createExport(DIST_B, connectionB.accountingOrganisationId, orderB.id, AccountingInvoiceExportStatus.COMPLETED);
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_B}/orders/${orderB.id}`)

@@ -27,6 +27,7 @@ import { AccountingSyncService } from '../src/accounting/sync/accounting-sync.se
 import { IngestionRunService } from '../src/ingestion/ingestion-run.service';
 // Manual Sync queues every resource type; derive the count so a new one doesn't make this stale.
 import { ACCOUNTING_MAPPING_RESOURCE_TYPES, ACCOUNTING_SYNC_RESOURCE_TYPES } from '../src/accounting/sync/accounting-sync.constants';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-ingest-dist-a';
 const DIST_B = 'test-ingest-dist-b';
@@ -83,9 +84,8 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
   beforeEach(async () => {
     await prisma.ingestionRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
-    connectionA = await prisma.accountingConnection.create({
-      data: { ...baseConn, distributorId: DIST_A, status: AccountingConnectionStatus.CONNECTED },
-    });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    connectionA = await createAccountingConnection(prisma, { ...baseConn, distributorId: DIST_A, status: AccountingConnectionStatus.CONNECTED });
     await prisma.outboxEvent.deleteMany({ where: { aggregateId: connectionA.id } });
   });
 
@@ -93,6 +93,7 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
     await prisma.ingestionRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.outboxEvent.deleteMany({ where: { aggregateId: connectionA.id } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
     await prisma.user.deleteMany({ where: { id: ADMIN_USER } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -161,9 +162,7 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
 
     beforeEach(async () => {
       scheduler = new AccountingSyncScheduler(prisma, app.get(IngestionRunService), app.get(AccountingSyncService));
-      connectionB = await prisma.accountingConnection.create({
-        data: { ...baseConn, distributorId: DIST_B, status: AccountingConnectionStatus.DISCONNECTED },
-      });
+      connectionB = await createAccountingConnection(prisma, { ...baseConn, distributorId: DIST_B, status: AccountingConnectionStatus.DISCONNECTED });
       await prisma.outboxEvent.deleteMany({ where: { aggregateId: connectionB.id } });
     });
 
@@ -285,6 +284,7 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
 
   it('GET status with no connection returns an empty result', async () => {
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST_A } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST_A } });
     const res = await request(app.getHttpServer())
       .get(`/api/v1/distributors/${DIST_A}/accounting/sync/status`)
       .set('Authorization', `Bearer ${token}`);

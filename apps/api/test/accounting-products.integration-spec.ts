@@ -27,6 +27,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-acct-products-dist-a';
 const DIST_B = 'test-acct-products-dist-b';
@@ -38,8 +39,8 @@ describe('Accounting product sync routes (integration)', () => {
   let prisma: PrismaService;
   let jwtServer: JwtTestServer;
   let token: string;
-  let connectionA: { id: string };
-  let connectionB: { id: string };
+  let connectionA: { id: string; accountingOrganisationId: string };
+  let connectionB: { id: string; accountingOrganisationId: string };
   let productA: { id: string };
 
   beforeAll(async () => {
@@ -94,12 +95,8 @@ describe('Accounting product sync routes (integration)', () => {
       connectedByUserId: ADMIN_USER,
       connectedAt: new Date(),
     };
-    connectionA = await prisma.accountingConnection.create({
-      data: { ...baseConnection, distributorId: DIST_A, externalOrganisationId: 'tenant-a' },
-    });
-    connectionB = await prisma.accountingConnection.create({
-      data: { ...baseConnection, distributorId: DIST_B, externalOrganisationId: 'tenant-b' },
-    });
+    connectionA = await createAccountingConnection(prisma, { ...baseConnection, distributorId: DIST_A, externalOrganisationId: 'tenant-a' });
+    connectionB = await createAccountingConnection(prisma, { ...baseConnection, distributorId: DIST_B, externalOrganisationId: 'tenant-b' });
     productA = await prisma.product.create({
       data: { distributorId: DIST_A, name: 'Existing Cab Sauv', sku: 'CAB-SAUV-001' },
     });
@@ -115,6 +112,7 @@ describe('Accounting product sync routes (integration)', () => {
     await prisma.productSearchDocument.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   afterAll(async () => {
@@ -126,7 +124,7 @@ describe('Accounting product sync routes (integration)', () => {
   });
 
   async function createExternalProduct(
-    connectionId: string,
+    accountingOrganisationId: string,
     distributorId: string,
     externalProductId: string,
     overrides: Record<string, unknown> = {},
@@ -134,7 +132,7 @@ describe('Accounting product sync routes (integration)', () => {
     return prisma.externalAccountingProduct.create({
       data: {
         distributorId,
-        accountingConnectionId: connectionId,
+        accountingOrganisationId,
         provider: AccountingProvider.XERO,
         externalProductId,
         externalProductCode: `CODE-${externalProductId}`,
@@ -149,8 +147,8 @@ describe('Accounting product sync routes (integration)', () => {
 
   describe('distributor-scoped list endpoint', () => {
     it('only returns products belonging to the requesting distributor, even when another distributor has its own', async () => {
-      const externalA = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-1');
-      await createExternalProduct(connectionB.id, DIST_B, 'xero-b-1');
+      const externalA = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-1');
+      await createExternalProduct(connectionB.accountingOrganisationId, DIST_B, 'xero-b-1');
 
       const res = await request(app.getHttpServer())
         .get(`/api/v1/distributors/${DIST_A}/accounting/products`)
@@ -173,7 +171,7 @@ describe('Accounting product sync routes (integration)', () => {
 
   describe('import as new product', () => {
     it('creates a DRAFT product seeded from the cache row (price rounded to 2 dp) plus a MANUAL mapping', async () => {
-      const external = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-import', {
+      const external = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-import', {
         externalProductCode: 'NEW-PROD-001',
         displayName: 'Newly Imported Product',
       });
@@ -199,7 +197,7 @@ describe('Accounting product sync routes (integration)', () => {
     });
 
     it('409s when the item code collides with an existing product SKU', async () => {
-      const external = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-collide', {
+      const external = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-collide', {
         externalProductCode: 'CAB-SAUV-001', // same as productA's sku
       });
 
@@ -220,13 +218,13 @@ describe('Accounting product sync routes (integration)', () => {
 
   describe('ProductAccountingMapping partial unique constraints', () => {
     it('rejects a second active mapping for the same product on the same connection', async () => {
-      const external1 = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-2');
-      const external2 = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-3');
+      const external1 = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-2');
+      const external2 = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-3');
 
       await prisma.productAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           productId: productA.id,
           externalProductId: external1.id,
           matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -238,7 +236,7 @@ describe('Accounting product sync routes (integration)', () => {
         prisma.productAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             productId: productA.id,
             externalProductId: external2.id,
             matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -249,7 +247,7 @@ describe('Accounting product sync routes (integration)', () => {
     });
 
     it('rejects a second active mapping for the same external product on the same connection', async () => {
-      const external = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-4');
+      const external = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-4');
       const product2 = await prisma.product.create({
         data: { distributorId: DIST_A, name: 'Second Product', sku: 'SECOND-001' },
       });
@@ -257,7 +255,7 @@ describe('Accounting product sync routes (integration)', () => {
       await prisma.productAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           productId: productA.id,
           externalProductId: external.id,
           matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -269,7 +267,7 @@ describe('Accounting product sync routes (integration)', () => {
         prisma.productAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             productId: product2.id,
             externalProductId: external.id,
             matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -280,12 +278,12 @@ describe('Accounting product sync routes (integration)', () => {
     });
 
     it('allows relinking the same pair after the original mapping has been unlinked', async () => {
-      const external = await createExternalProduct(connectionA.id, DIST_A, 'xero-a-5');
+      const external = await createExternalProduct(connectionA.accountingOrganisationId, DIST_A, 'xero-a-5');
 
       const first = await prisma.productAccountingMapping.create({
         data: {
           distributorId: DIST_A,
-          accountingConnectionId: connectionA.id,
+          accountingOrganisationId: connectionA.accountingOrganisationId,
           productId: productA.id,
           externalProductId: external.id,
           matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -301,7 +299,7 @@ describe('Accounting product sync routes (integration)', () => {
         prisma.productAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connectionA.id,
+            accountingOrganisationId: connectionA.accountingOrganisationId,
             productId: productA.id,
             externalProductId: external.id,
             matchMethod: AccountingProductMatchMethod.MANUAL,

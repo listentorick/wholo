@@ -25,6 +25,7 @@ import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
+import { organisationScope } from '../accounting/accounting-organisation';
 
 // Delivery proof photos live in a private bucket; hand admins short-lived
 // presigned URLs so the browser loads bytes straight from R2 (nothing streams
@@ -535,7 +536,7 @@ export class AdminOrdersService {
     if (taxTypeIds.length === 0) return;
 
     const mapped = await this.prisma.taxTypeAccountingMapping.findMany({
-      where: { accountingConnectionId: connection.id, taxTypeId: { in: taxTypeIds }, unlinkedAt: null },
+      where: { ...organisationScope(connection), taxTypeId: { in: taxTypeIds }, unlinkedAt: null },
       select: { taxTypeId: true },
     });
     const mappedIds = new Set(mapped.map((m) => m.taxTypeId));

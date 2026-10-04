@@ -29,6 +29,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { R2StorageService } from '../src/asset-images/r2-storage.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const mockR2 = {
   deliveryBucket: 'test-delivery-bucket',
@@ -109,6 +110,7 @@ describe('Admin Orders (integration)', () => {
     await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: USER_A } });
     await prisma.user.deleteMany({ where: { id: USER_A } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -138,6 +140,7 @@ describe('Admin Orders (integration)', () => {
     await prisma.taxType.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.product.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   });
 
   const createOrder = async (
@@ -168,8 +171,7 @@ describe('Admin Orders (integration)', () => {
   };
 
   const createConnection = (distributorId: string) =>
-    prisma.accountingConnection.create({
-      data: {
+    createAccountingConnection(prisma, {
         distributorId,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
@@ -179,8 +181,7 @@ describe('Admin Orders (integration)', () => {
         encryptedCredentialData: 'irrelevant-for-this-test',
         connectedByUserId: USER_A,
         connectedAt: new Date(),
-      },
-    });
+      });
 
   const createOrderWithTaxLine = async (distributorId: string, taxTypeId: string | null) => {
     const order = await createOrder(distributorId, OrderStatus.SUBMITTED);
@@ -499,7 +500,7 @@ describe('Admin Orders (integration)', () => {
         const external = await prisma.externalAccountingTaxType.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connection.id,
+            accountingOrganisationId: connection.accountingOrganisationId,
             provider: AccountingProvider.XERO,
             taxType: 'OUTPUT2',
             displayName: 'Standard rate',
@@ -511,7 +512,7 @@ describe('Admin Orders (integration)', () => {
         await prisma.taxTypeAccountingMapping.create({
           data: {
             distributorId: DIST_A,
-            accountingConnectionId: connection.id,
+            accountingOrganisationId: connection.accountingOrganisationId,
             taxTypeId: taxType.id,
             externalTaxTypeId: external.id,
             matchMethod: AccountingTaxTypeMatchMethod.MANUAL,

@@ -35,9 +35,15 @@
 //  6. Failures — classified once: adapters decide transient vs permanent
 //     (AccountingProviderError); classifyJobFailure (accounting-job-failure.ts)
 //     turns that into what the job does next.
-//  7. Identity — provider data that belongs to an organisation is matched by
-//     organisation (accounting-organisation.ts), not by connection row, so a
-//     reconnect to the same organisation keeps working.
+//  7. Identity (ADR-074) — everything the distributor builds up against a
+//     provider (cached records, links, suggestions, bulk imports, invoices
+//     sent, settings) belongs to the AccountingOrganisation, i.e. the company
+//     in that provider (distributor + provider + the id that
+//     listAvailableOrganisations returns). A connection is only the login.
+//     Every query over that data scopes itself with organisationScope
+//     (accounting-organisation.ts), so a reconnect to the same company keeps
+//     it all and only a different company starts empty. New tables of
+//     provider data reference AccountingOrganisation, never the connection.
 //  8. Derived state has one writer — invoice payment columns only through
 //     InvoicePaymentStateService, order COMPLETED only through
 //     OrderCompletionService (both enforced by ESLint).

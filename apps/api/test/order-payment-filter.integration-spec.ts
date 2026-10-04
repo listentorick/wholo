@@ -23,6 +23,7 @@ import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { paymentFilterWhere } from '../src/accounting/order-invoice-payment';
 import { derivePaymentStatus, isOverdue } from '../src/accounting/invoice-payment-status';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST = 'test-payfilter-dist';
 const USER = 'test-payfilter-user';
@@ -52,6 +53,7 @@ describe('Order payment filter (integration)', () => {
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: DIST } });
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST } });
   };
 
   beforeAll(async () => {
@@ -70,8 +72,7 @@ describe('Order payment filter (integration)', () => {
     });
     await cleanup();
 
-    const connection = await prisma.accountingConnection.create({
-      data: {
+    const connection = await createAccountingConnection(prisma, {
         distributorId: DIST,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
@@ -81,8 +82,7 @@ describe('Order payment filter (integration)', () => {
         encryptedCredentialData: 'irrelevant',
         connectedByUserId: USER,
         connectedAt: new Date(),
-      },
-    });
+      });
     for (const c of CASES) {
       const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
       const order = await prisma.order.create({
@@ -103,7 +103,7 @@ describe('Order payment filter (integration)', () => {
       await prisma.accountingInvoiceExport.create({
         data: {
           distributorId: DIST,
-          accountingConnectionId: connection.id,
+          accountingOrganisationId: connection.accountingOrganisationId,
           provider: AccountingProvider.XERO,
           orderId: order.id,
           status: AccountingInvoiceExportStatus.COMPLETED,

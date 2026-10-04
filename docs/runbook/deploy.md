@@ -30,6 +30,13 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
      - Additive changes (new tables, nullable columns) are safe.
      - Renames and drops are not safe unless they were split into separate releases.
    - Take a manual backup first ([maintenance.md → Backups](maintenance.md#backups)) and wait for `backup OK`.
+   - **`accounting_data_per_organisation` (ADR-074) needs the accounting tables empty first.** Run the clear-down before deploying. It deletes all accounting connections, synced data, links and invoice-export records; every distributor reconnects and re-maps afterwards. It runs inside the **currently live** api pod (which has `@prisma/client` and `DATABASE_URL`); the script is piped in from your checkout, so nothing needs installing. Without `--yes` it only prints counts:
+     ```bash
+     kubectl -n wholo exec -i deploy/wholo-api -c api -- node - < apps/api/scripts/clear-accounting-data.js
+     kubectl -n wholo exec -i deploy/wholo-api -c api -- node - --yes < apps/api/scripts/clear-accounting-data.js
+     ```
+     PowerShell has no `<` redirect; pipe instead: `Get-Content apps/api/scripts/clear-accounting-data.js -Raw | kubectl -n wholo exec -i deploy/wholo-api -c api -- node -` (add `--yes` after `node -`).
+     If the deploy runs first, the migration fails against the non-empty tables and the new api pod won't start. Don't improvise a fix on the half-migrated schema: restore the backup taken above ([postgres-restore.md](postgres-restore.md)), run the clear-down, then deploy again.
 6. **Check whether a value the images bake in has changed.** If `LIVE_KEYCLOAK_URL`, `LIVE_KEYCLOAK_REALM` or the `WWW_*` repository variables changed after this commit was built, the images carry the old values. Re-run the workflow first ([setup/github.md](setup/github.md)).
 
 ## 2. Deploy

@@ -1,20 +1,16 @@
-import { exportsForOrganisation, organisationKey } from './accounting-organisation';
+import { organisationScope } from './accounting-organisation';
 
-const ref = { distributorId: 'dist-1', provider: 'XERO' as const, externalOrganisationId: 'org-x' };
+describe('organisationScope', () => {
+  it("scopes to the connection's organisation and distributor, not to the connection row", () => {
+    const connection = { id: 'conn-2', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1' };
 
-describe('organisationKey', () => {
-  it('is the same for any connection row to the same organisation, and differs by distributor, provider or organisation', () => {
-    expect(organisationKey({ ...ref })).toBe(organisationKey({ ...ref }));
-    expect(organisationKey({ ...ref, distributorId: 'dist-2' })).not.toBe(organisationKey(ref));
-    expect(organisationKey({ ...ref, externalOrganisationId: 'org-y' })).not.toBe(organisationKey(ref));
+    expect(organisationScope(connection)).toEqual({ distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1' });
   });
-});
 
-describe('exportsForOrganisation', () => {
-  it("matches the distributor's exports by the connection's organisation, not by connection row", () => {
-    expect(exportsForOrganisation(ref)).toEqual({
-      distributorId: 'dist-1',
-      connection: { distributorId: 'dist-1', provider: 'XERO', externalOrganisationId: 'org-x' },
-    });
+  it('gives the same scope for every connection to the same organisation', () => {
+    const first = { id: 'conn-1', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1' };
+    const reconnect = { id: 'conn-2', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1' };
+
+    expect(organisationScope(reconnect)).toEqual(organisationScope(first));
   });
 });

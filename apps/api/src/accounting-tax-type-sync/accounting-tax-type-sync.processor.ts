@@ -1,7 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import {
-  AccountingConnection,
   AccountingTaxTypeMatchMethod,
   AccountingTaxTypeMatchStatus,
   ExternalAccountingTaxType,
@@ -30,6 +29,7 @@ import {
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
+import { AccountingConnectionWithOrganisation, organisationScope } from '../accounting/accounting-organisation';
 
 // Part of the provider-neutral accounting integration framework — overview and
 // provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
@@ -84,7 +84,7 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   private static readonly CHANGE_FIELDS = ['displayName', 'ratePercentage'];
 
   protected async upsertCacheRecord(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     taxRate: AccountingExternalTaxRate,
   ): Promise<CacheUpsertResult<ExternalAccountingTaxType>> {
     const shared = {
@@ -98,8 +98,8 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
     };
 
     const where = {
-      accountingConnectionId_taxType: {
-        accountingConnectionId: connection.id,
+      accountingOrganisationId_taxType: {
+        accountingOrganisationId: connection.accountingOrganisationId,
         taxType: taxRate.taxType,
       },
     };
@@ -111,8 +111,7 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
       // ignoredAt is intentionally left untouched on update — a re-sync must
       // not silently un-ignore a tax rate the distributor deliberately dismissed.
       create: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         provider: connection.provider,
         taxType: taxRate.taxType,
         ...shared,
@@ -153,12 +152,12 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   // handle, so this stays as a safety net regardless of what Xero actually
   // omits vs. returns with a non-ACTIVE status.
   protected async handleStaleRecords(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     fetched: ExternalAccountingTaxType[],
   ): Promise<number> {
     const { count } = await this.prisma.externalAccountingTaxType.updateMany({
       where: {
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         id: { notIn: fetched.map((taxType) => taxType.id) },
         isActive: true,
       },
@@ -167,12 +166,12 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
     return count;
   }
 
-  protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingTaxTypeMatchCandidate[]> {
+  protected async loadMatchCandidates(connection: AccountingConnectionWithOrganisation): Promise<AccountingTaxTypeMatchCandidate[]> {
     const taxTypes = await this.prisma.taxType.findMany({
       where: {
         distributorId: connection.distributorId,
         active: true,
-        accountingMappings: { none: { accountingConnectionId: connection.id, unlinkedAt: null } },
+        accountingMappings: { none: { ...organisationScope(connection), unlinkedAt: null } },
       },
       select: { id: true, name: true },
     });
@@ -221,14 +220,13 @@ export class AccountingTaxTypeSyncProcessor extends AccountingSyncProcessorBase<
   }
 
   protected async createSuggestion(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     cached: ExternalAccountingTaxType,
     match: AccountingMatchResult<AccountingTaxTypeMatchMethod>,
   ): Promise<void> {
     await this.prisma.accountingTaxTypeMatchSuggestion.create({
       data: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         externalTaxTypeId: cached.id,
         suggestedTaxTypeId: match.candidateId,
         confidence: match.confidence,

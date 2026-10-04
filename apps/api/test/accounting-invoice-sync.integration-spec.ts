@@ -31,6 +31,7 @@ import { INVOICE_PAYMENT_STATUS_CHANGED } from '../src/accounting/invoice-paymen
 import { InvoicePaymentStateService } from '../src/accounting/invoice-payment-state.service';
 import { AuditService } from '../src/audit/audit.service';
 import { OrderCompletionService } from '../src/orders/order-completion.service';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST_A = 'test-invsync-dist-a';
 const DIST_B = 'test-invsync-dist-b';
@@ -83,6 +84,7 @@ describe('Invoice status sync (integration)', () => {
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   };
 
   beforeEach(cleanup);
@@ -95,8 +97,7 @@ describe('Invoice status sync (integration)', () => {
   });
 
   async function exportedInvoice(distributorId: string, externalInvoiceId: string, status: OrderStatus = OrderStatus.ACCEPTED) {
-    const connection = await prisma.accountingConnection.create({
-      data: {
+    const connection = await createAccountingConnection(prisma, {
         distributorId,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
@@ -106,8 +107,7 @@ describe('Invoice status sync (integration)', () => {
         encryptedCredentialData: 'irrelevant',
         connectedByUserId: USER,
         connectedAt: new Date(),
-      },
-    });
+      });
     const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
     const order = await prisma.order.create({
       data: {
@@ -128,7 +128,7 @@ describe('Invoice status sync (integration)', () => {
     const exp = await prisma.accountingInvoiceExport.create({
       data: {
         distributorId,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         provider: AccountingProvider.XERO,
         orderId: order.id,
         status: AccountingInvoiceExportStatus.COMPLETED,
@@ -273,8 +273,7 @@ describe('Invoice status sync (integration)', () => {
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
       data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
     });
-    return prisma.accountingConnection.create({
-      data: {
+    return createAccountingConnection(prisma, {
         distributorId,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
@@ -284,20 +283,19 @@ describe('Invoice status sync (integration)', () => {
         encryptedCredentialData: 'irrelevant',
         connectedByUserId: USER,
         connectedAt: new Date(),
-      },
-    });
+      });
   }
 
-  it('after a reconnect to the same organisation, still updates invoices exported under the old connection', async () => {
+  it('after a reconnect to the same organisation, still updates invoices exported before it', async () => {
     const a = await exportedInvoice(DIST_A, 'inv-before-reconnect');
-    const newConnection = await reconnect(DIST_A, a.connection.externalOrganisationId);
+    const newConnection = await reconnect(DIST_A, a.connection.organisation.externalOrganisationId);
 
     const result = await processor.applyStatuses(newConnection, [paid('inv-before-reconnect')]);
 
     expect(result).toEqual({ matched: 1, updated: 1, statusChanges: 1 });
     const after = await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: a.exp.id } });
     expect(after.invoiceState).toBe('PAID');
-    expect(after.accountingConnectionId).toBe(a.connection.id); // history untouched
+    expect(newConnection.accountingOrganisationId).toBe(a.connection.accountingOrganisationId);
   });
 
   it('after a reconnect to a different organisation, leaves the old organisation\'s invoices alone', async () => {

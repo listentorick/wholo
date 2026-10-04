@@ -38,7 +38,8 @@ describe('AccountingProductSyncProcessor', () => {
     distributorId: 'dist-1',
     provider: 'XERO',
     status: 'CONNECTED',
-    externalOrganisationId: 'tenant-1',
+    accountingOrganisationId: 'acc-org-1',
+    organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
     lastSyncedAt: null,
   };
 
@@ -165,11 +166,11 @@ describe('AccountingProductSyncProcessor', () => {
     expect(prisma.externalAccountingProduct.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
-          accountingConnectionId_externalProductId: { accountingConnectionId: 'conn-1', externalProductId: 'x-1' },
+          accountingOrganisationId_externalProductId: { accountingOrganisationId: 'acc-org-1', externalProductId: 'x-1' },
         },
         create: expect.objectContaining({
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           externalProductId: 'x-1',
           salesUnitPrice: '12.3456',
         }),
@@ -187,7 +188,8 @@ describe('AccountingProductSyncProcessor', () => {
 
     expect(prisma.externalAccountingProduct.updateMany).toHaveBeenCalledWith({
       where: {
-        accountingConnectionId: 'conn-1',
+        distributorId: 'dist-1',
+        accountingOrganisationId: 'acc-org-1',
         id: { notIn: ['cached-present'] },
         isActive: true,
       },
@@ -297,7 +299,7 @@ describe('AccountingProductSyncProcessor', () => {
       expect(prisma.accountingProductMatchSuggestion.create).toHaveBeenCalledWith({
         data: {
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           externalProductId: 'cached-1',
           suggestedProductId: 'prod-1',
           confidence: 95,

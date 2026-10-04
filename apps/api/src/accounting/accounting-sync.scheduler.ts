@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { AccountingSyncService } from './sync/accounting-sync.service';
 import { SETTLED_INVOICE_STATES } from './invoice-payment-status';
-import { AccountingOrganisationRef, organisationKey } from './accounting-organisation';
 import {
   ACCOUNTING_SOURCE_TYPE,
   ACCOUNTING_SYNC_INTERVAL_MS,
@@ -28,8 +27,9 @@ export function firstSlot(now: Date, connectedAt: Date, intervalMs: number, rand
   return new Date(now.getTime() + Math.floor(random() * intervalMs));
 }
 
-interface SchedulerConnection extends AccountingOrganisationRef {
+interface SchedulerConnection {
   id: string;
+  accountingOrganisationId: string;
 }
 
 interface DueSync {
@@ -96,15 +96,15 @@ export class AccountingSyncScheduler implements OnModuleInit {
     }
   }
 
-  // Connections whose provider organisation has at least one exported invoice
-  // not yet known to be settled (never synced, or not PAID / VOIDED /
-  // DELETED). Matched by organisation, not connection row: after a reconnect
-  // the unpaid invoices may all have been exported under the old row.
+  // Connections whose organisation has at least one exported invoice not yet
+  // known to be settled (never synced, or not PAID / VOIDED / DELETED).
+  // Invoices belong to the organisation, so ones exported before a reconnect
+  // count too (ADR-074).
   private async connectionsWithUnsettledInvoices(connections: SchedulerConnection[]): Promise<Set<string>> {
     if (connections.length === 0) return new Set();
-    const withUnsettled = await this.prisma.accountingConnection.findMany({
+    const withUnsettled = await this.prisma.accountingOrganisation.findMany({
       where: {
-        distributorId: { in: [...new Set(connections.map((c) => c.distributorId))] },
+        id: { in: [...new Set(connections.map((c) => c.accountingOrganisationId))] },
         invoiceExports: {
           some: {
             status: AccountingInvoiceExportStatus.COMPLETED,
@@ -113,17 +113,17 @@ export class AccountingSyncScheduler implements OnModuleInit {
           },
         },
       },
-      select: { distributorId: true, provider: true, externalOrganisationId: true },
+      select: { id: true },
     });
-    const keys = new Set(withUnsettled.map(organisationKey));
-    return new Set(connections.filter((c) => keys.has(organisationKey(c))).map((c) => c.id));
+    const organisationIds = new Set(withUnsettled.map((organisation) => organisation.id));
+    return new Set(connections.filter((c) => organisationIds.has(c.accountingOrganisationId)).map((c) => c.id));
   }
 
   async runOnce(now: Date): Promise<TickSummary> {
     const started = Date.now();
     const connections = await this.prisma.accountingConnection.findMany({
       where: { status: AccountingConnectionStatus.CONNECTED },
-      select: { id: true, distributorId: true, provider: true, externalOrganisationId: true, connectedAt: true },
+      select: { id: true, distributorId: true, accountingOrganisationId: true, connectedAt: true },
     });
     const scheduled = await this.ingestionRuns.listScheduled(
       ACCOUNTING_SOURCE_TYPE,

@@ -1,7 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import {
-  AccountingConnection,
   AccountingContactMatchMethod,
   AccountingContactMatchStatus,
   ExternalAccountingContact,
@@ -30,6 +29,7 @@ import {
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
+import { AccountingConnectionWithOrganisation, organisationScope } from '../accounting/accounting-organisation';
 
 // Part of the provider-neutral accounting integration framework — overview and
 // provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
@@ -101,7 +101,7 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
   ];
 
   protected async upsertCacheRecord(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     contact: AccountingExternalContact,
   ): Promise<CacheUpsertResult<ExternalAccountingContact>> {
     const shared = {
@@ -130,8 +130,8 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
     };
 
     const where = {
-      accountingConnectionId_externalContactId: {
-        accountingConnectionId: connection.id,
+      accountingOrganisationId_externalContactId: {
+        accountingOrganisationId: connection.accountingOrganisationId,
         externalContactId: contact.externalId,
       },
     };
@@ -143,8 +143,7 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
       // ignoredAt is intentionally left untouched on update — a re-sync must
       // not silently un-ignore a contact the distributor deliberately dismissed.
       create: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         provider: connection.provider,
         externalContactId: contact.externalId,
         ...shared,
@@ -183,12 +182,12 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
     return { record: updated, change };
   }
 
-  protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingMatchCandidate[]> {
+  protected async loadMatchCandidates(connection: AccountingConnectionWithOrganisation): Promise<AccountingMatchCandidate[]> {
     const tradeRelationships = await this.prisma.tradeRelationship.findMany({
       where: {
         distributorId: connection.distributorId,
         deletedAt: null,
-        accountingMappings: { none: { accountingConnectionId: connection.id, unlinkedAt: null } },
+        accountingMappings: { none: { ...organisationScope(connection), unlinkedAt: null } },
       },
       select: {
         id: true,
@@ -252,14 +251,13 @@ export class AccountingContactSyncProcessor extends AccountingSyncProcessorBase<
   }
 
   protected async createSuggestion(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     cached: ExternalAccountingContact,
     match: AccountingMatchResult<AccountingContactMatchMethod>,
   ): Promise<void> {
     await this.prisma.accountingContactMatchSuggestion.create({
       data: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         externalContactId: cached.id,
         suggestedTradeRelationshipId: match.candidateId,
         confidence: match.confidence,

@@ -58,8 +58,12 @@ export class FakeAccountingAdapter implements AccountingConnectionAdapter {
     return FakeAccountingAdapter.tokenSet();
   }
 
+  // Which company the next connect lands in — tests switch it to model
+  // connecting a different organisation.
+  organisations: AccountingExternalOrganisation[] = [{ externalId: 'fake-org-1', name: 'Fake Books Organisation' }];
+
   async listAvailableOrganisations(_tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]> {
-    return [{ externalId: 'fake-org-1', name: 'Fake Books Organisation' }];
+    return this.organisations;
   }
 
   async refreshAccessToken(_tokenSet: AccountingTokenSet): Promise<AccountingTokenSet> {

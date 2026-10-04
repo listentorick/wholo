@@ -33,7 +33,7 @@ function makePrismaMock() {
   return prisma;
 }
 
-const activeConnection = { id: 'conn-1', distributorId: 'dist-1', status: 'CONNECTED' };
+const activeConnection = { id: 'conn-1', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', status: 'CONNECTED' };
 
 describe('AccountingContactService', () => {
   let service: AccountingContactService;
@@ -373,7 +373,7 @@ describe('AccountingContactService', () => {
       expect(prisma.customerAccountingMapping.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           tradeRelationshipId: 'tr-1',
           externalContactId: 'contact-1',
           matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -420,7 +420,7 @@ describe('AccountingContactService', () => {
       expect(adminCustomers.create).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when the contact does not exist on this connection', async () => {
+    it('throws NotFoundException when the contact does not exist in this organisation', async () => {
       prisma.externalAccountingContact.findFirst.mockResolvedValue(null);
       await expect(service.importAsNewCustomer('dist-1', 'user-1', 'contact-1', {})).rejects.toThrow(NotFoundException);
     });

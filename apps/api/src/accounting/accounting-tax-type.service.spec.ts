@@ -33,7 +33,7 @@ function makePrismaMock() {
   return prisma;
 }
 
-const activeConnection = { id: 'conn-1', distributorId: 'dist-1', status: 'CONNECTED' };
+const activeConnection = { id: 'conn-1', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', status: 'CONNECTED' };
 
 describe('AccountingTaxTypeService', () => {
   let service: AccountingTaxTypeService;
@@ -175,7 +175,7 @@ describe('AccountingTaxTypeService', () => {
   });
 
   describe('importAsNewTaxType', () => {
-    it('throws NotFoundException when the external tax type does not exist on this connection', async () => {
+    it('throws NotFoundException when the external tax type does not exist in this organisation', async () => {
       prisma.externalAccountingTaxType.findFirst.mockResolvedValue(null);
       await expect(
         service.importAsNewTaxType('dist-1', 'user-1', 'ext-missing', { classification: 'STANDARD' as any }),
@@ -203,7 +203,7 @@ describe('AccountingTaxTypeService', () => {
       expect(prisma.taxTypeAccountingMapping.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           taxTypeId: 'tt-new',
           externalTaxTypeId: 'ext-1',
           matchMethod: AccountingTaxTypeMatchMethod.MANUAL,
@@ -327,7 +327,7 @@ describe('AccountingTaxTypeService', () => {
       });
     });
 
-    it('throws NotFoundException when the external tax type does not exist on this connection', async () => {
+    it('throws NotFoundException when the external tax type does not exist in this organisation', async () => {
       prisma.externalAccountingTaxType.findFirst.mockResolvedValue(null);
       await expect(service.acknowledgeChange('dist-1', 'ext-missing')).rejects.toThrow(NotFoundException);
     });
@@ -335,24 +335,24 @@ describe('AccountingTaxTypeService', () => {
 
   describe('resolveTaxTypeForCode', () => {
     it('returns null without querying when the code is null', async () => {
-      const result = await service.resolveTaxTypeForCode('conn-1', null);
+      const result = await service.resolveTaxTypeForCode('acc-org-1', null);
       expect(result).toBeNull();
       expect(prisma.externalAccountingTaxType.findUnique).not.toHaveBeenCalled();
     });
 
-    it('returns null when the code has not been synced as a tax rate on this connection', async () => {
+    it('returns null when the code has not been synced as a tax rate in this organisation', async () => {
       prisma.externalAccountingTaxType.findUnique.mockResolvedValue(null);
-      const result = await service.resolveTaxTypeForCode('conn-1', 'OUTPUT2');
+      const result = await service.resolveTaxTypeForCode('acc-org-1', 'OUTPUT2');
       expect(result).toBeNull();
       expect(prisma.externalAccountingTaxType.findUnique).toHaveBeenCalledWith({
-        where: { accountingConnectionId_taxType: { accountingConnectionId: 'conn-1', taxType: 'OUTPUT2' } },
+        where: { accountingOrganisationId_taxType: { accountingOrganisationId: 'acc-org-1', taxType: 'OUTPUT2' } },
         include: expect.objectContaining({ mappings: expect.anything() }),
       });
     });
 
     it('returns null when the tax rate is synced but has no confirmed mapping', async () => {
       prisma.externalAccountingTaxType.findUnique.mockResolvedValue({ id: 'ext-1', mappings: [] });
-      const result = await service.resolveTaxTypeForCode('conn-1', 'OUTPUT2');
+      const result = await service.resolveTaxTypeForCode('acc-org-1', 'OUTPUT2');
       expect(result).toBeNull();
     });
 
@@ -361,24 +361,24 @@ describe('AccountingTaxTypeService', () => {
         id: 'ext-1',
         mappings: [{ taxType: { id: 'tt-1', name: 'VAT' } }],
       });
-      const result = await service.resolveTaxTypeForCode('conn-1', 'OUTPUT2');
+      const result = await service.resolveTaxTypeForCode('acc-org-1', 'OUTPUT2');
       expect(result).toEqual({ taxTypeId: 'tt-1', taxTypeName: 'VAT' });
     });
   });
 
   describe('resolveExternalCodeForTaxType', () => {
     it('returns null without querying when taxTypeId is null', async () => {
-      const result = await service.resolveExternalCodeForTaxType('conn-1', null);
+      const result = await service.resolveExternalCodeForTaxType('acc-org-1', null);
       expect(result).toBeNull();
       expect(prisma.taxTypeAccountingMapping.findFirst).not.toHaveBeenCalled();
     });
 
-    it('returns null when the tax type has no confirmed mapping on this connection', async () => {
+    it('returns null when the tax type has no confirmed mapping in this organisation', async () => {
       prisma.taxTypeAccountingMapping.findFirst.mockResolvedValue(null);
-      const result = await service.resolveExternalCodeForTaxType('conn-1', 'tt-1');
+      const result = await service.resolveExternalCodeForTaxType('acc-org-1', 'tt-1');
       expect(result).toBeNull();
       expect(prisma.taxTypeAccountingMapping.findFirst).toHaveBeenCalledWith({
-        where: { accountingConnectionId: 'conn-1', taxTypeId: 'tt-1', unlinkedAt: null },
+        where: { accountingOrganisationId: 'acc-org-1', taxTypeId: 'tt-1', unlinkedAt: null },
         include: { externalTaxType: { select: { taxType: true } } },
       });
     });
@@ -387,7 +387,7 @@ describe('AccountingTaxTypeService', () => {
       prisma.taxTypeAccountingMapping.findFirst.mockResolvedValue({
         externalTaxType: { taxType: 'OUTPUT2' },
       });
-      const result = await service.resolveExternalCodeForTaxType('conn-1', 'tt-1');
+      const result = await service.resolveExternalCodeForTaxType('acc-org-1', 'tt-1');
       expect(result).toBe('OUTPUT2');
     });
   });

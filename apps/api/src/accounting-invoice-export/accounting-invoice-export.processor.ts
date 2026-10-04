@@ -2,7 +2,6 @@ import { Processor } from '@nestjs/bullmq';
 import { LoggedWorkerHost } from '../queues/logged-worker-host';
 import { HttpException, Logger } from '@nestjs/common';
 import {
-  AccountingConnection,
   AccountingConnectionStatus,
   AccountingInvoiceExport,
   AccountingInvoiceExportStatus,
@@ -19,6 +18,11 @@ import { loggableError } from '@wholo/nest-telemetry';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AccountingConnectionService } from '../accounting/accounting-connection.service';
 import { AccountingTaxTypeService } from '../accounting/accounting-tax-type.service';
+import {
+  AccountingConnectionWithOrganisation,
+  CONNECTION_WITH_ORGANISATION,
+  organisationScope,
+} from '../accounting/accounting-organisation';
 import { AccountingAdapterRegistry } from '../accounting/adapters/accounting-adapter.registry';
 import {
   AccountingInvoiceLineRequest,
@@ -137,6 +141,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     // no connection, no export record — the distributor hasn't opted in.
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId: order.distributorId, status: AccountingConnectionStatus.CONNECTED },
+      include: CONNECTION_WITH_ORGANISATION,
     });
     if (!connection) {
       this.logger.log(
@@ -146,8 +151,9 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       return;
     }
 
-    // Cross-connection guard: the per-connection unique alone would let a
-    // disconnect/reconnect cycle invoice the same order twice.
+    // Cross-organisation guard: the per-organisation unique already stops a
+    // reconnect to the same company invoicing an order twice; this also stops
+    // a switch to a different company re-invoicing an order already raised.
     const completedElsewhere = await this.prisma.accountingInvoiceExport.findFirst({
       where: { orderId, status: AccountingInvoiceExportStatus.COMPLETED },
     });
@@ -165,19 +171,18 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     await this.runExport(exportRow, connection, order, job);
   }
 
-  // Acquire the (connection, order) export row and move it to PROCESSING, or
+  // Acquire the (organisation, order) export row and move it to PROCESSING, or
   // return null when there is nothing to do. Claiming happens before any
   // provider call so concurrent jobs for the same order settle on the unique
   // constraint, not on the provider.
   private async claimExport(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     order: Order,
   ): Promise<AccountingInvoiceExport | null> {
     try {
       return await this.prisma.accountingInvoiceExport.create({
         data: {
-          distributorId: order.distributorId,
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           provider: connection.provider,
           orderId: order.id,
           status: AccountingInvoiceExportStatus.PROCESSING,
@@ -189,7 +194,9 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     }
 
     const existing = await this.prisma.accountingInvoiceExport.findUnique({
-      where: { accountingConnectionId_orderId: { accountingConnectionId: connection.id, orderId: order.id } },
+      where: {
+        accountingOrganisationId_orderId: { accountingOrganisationId: connection.accountingOrganisationId, orderId: order.id },
+      },
     });
     if (!existing) return null; // raced a delete; nothing sensible to do
 
@@ -230,7 +237,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
 
   private async runExport(
     exportRow: AccountingInvoiceExport,
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     order: Order & { lines: OrderLine[] },
     job: Job<InvoiceExportJobData>,
   ): Promise<void> {
@@ -268,7 +275,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     const customerMapping = tradeRelationship
       ? await this.prisma.customerAccountingMapping.findFirst({
           where: {
-            accountingConnectionId: connection.id,
+            ...organisationScope(connection),
             tradeRelationshipId: tradeRelationship.id,
             unlinkedAt: null,
           },
@@ -297,7 +304,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
     // there was never an accounting connection to map against.
     const productMappings = await this.prisma.productAccountingMapping.findMany({
       where: {
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         productId: { in: invoiceableLines.map((line) => line.productId) },
         unlinkedAt: null,
       },
@@ -317,7 +324,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       if (!taxTypeId) return Promise.resolve(null);
       let pending = taxCodeCache.get(taxTypeId);
       if (!pending) {
-        pending = this.accountingTaxTypes.resolveExternalCodeForTaxType(connection.id, taxTypeId);
+        pending = this.accountingTaxTypes.resolveExternalCodeForTaxType(connection.accountingOrganisationId, taxTypeId);
         taxCodeCache.set(taxTypeId, pending);
       }
       return pending;
@@ -347,7 +354,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       reference: order.orderNumber,
       currency: order.currency,
       issueDate: (order.acceptedAt ?? new Date()).toISOString().slice(0, 10),
-      targetStatus: connection.invoiceExportTargetStatus,
+      targetStatus: connection.organisation.invoiceExportTargetStatus,
       lines,
     };
 
@@ -365,7 +372,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       // invoice; if the provider has it, adopt it.
       const existing = await adapter.findInvoiceByReference(
         tokenSet,
-        connection.externalOrganisationId,
+        connection.organisation.externalOrganisationId,
         request.reference,
       );
       adopted = existing !== null;
@@ -373,7 +380,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
         existing ??
         (await adapter.createInvoice(
           tokenSet,
-          connection.externalOrganisationId,
+          connection.organisation.externalOrganisationId,
           request,
           invoiceIdempotencyKey(exportRow.id, request),
         ));
@@ -442,7 +449,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
   // and completes.
   private async recordCompleted(
     exportRow: AccountingInvoiceExport,
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     order: Order & { lines: OrderLine[] },
     result: AccountingInvoiceResult,
     adopted: boolean,
@@ -544,12 +551,13 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       });
   }
 
-  private logFields(connection: AccountingConnection, exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>) {
+  private logFields(connection: AccountingConnectionWithOrganisation, exportRow: Pick<AccountingInvoiceExport, 'id' | 'distributorId' | 'orderId'>) {
     return {
       provider: connection.provider,
       distributorId: exportRow.distributorId,
       connectionId: connection.id,
-      externalOrgId: connection.externalOrganisationId,
+      accountingOrganisationId: connection.accountingOrganisationId,
+      externalOrgId: connection.organisation.externalOrganisationId,
       exportId: exportRow.id,
       orderId: exportRow.orderId,
     };

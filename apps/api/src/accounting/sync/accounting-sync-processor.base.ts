@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { AccountingConnection } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IngestionRunService } from '../../ingestion/ingestion-run.service';
 import { AccountingConnectionService } from '../accounting-connection.service';
@@ -14,6 +13,7 @@ import {
   AccountingRecordMatcher,
 } from '../matching/accounting-record-matcher.interface';
 import { AccountingChangeDetectionService } from '../accounting-change-detection.service';
+import { AccountingConnectionWithOrganisation } from '../accounting-organisation';
 import { AccountingPullProcessorBase, PullContext, PullResult } from './accounting-pull-processor.base';
 
 // Re-exported for the processors and specs that import them from here.
@@ -96,7 +96,7 @@ export abstract class AccountingSyncProcessorBase<
   protected async pull({ connection, adapter, tokenSet, cursor, full, progress }: PullContext): Promise<PullResult> {
     // Incremental pulls pass the stored cursor (opaque, adapter-produced); a
     // full pull passes null.
-    const fetched = await this.fetchExternalRecords(adapter, tokenSet, connection.externalOrganisationId, cursor);
+    const fetched = await this.fetchExternalRecords(adapter, tokenSet, connection.organisation.externalOrganisationId, cursor);
     const externalRecords = fetched.records;
     await progress.setTotal(externalRecords.length);
 
@@ -166,7 +166,7 @@ export abstract class AccountingSyncProcessorBase<
   }
 
   private async runMatcherFor(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     cached: TCached,
     candidates: TCandidate[],
   ): Promise<MatcherOutcome> {
@@ -211,13 +211,14 @@ export abstract class AccountingSyncProcessorBase<
     cursor: string | null,
   ): Promise<AccountingFetchResult<TExternal>>;
 
-  // Upsert one fetched record into the domain cache table. Must leave
+  // Upsert one fetched record into the domain cache table, keyed by the
+  // connection's organisation (organisationScope), not the connection. Must leave
   // ignoredAt untouched on update — a re-sync must not silently un-ignore a
   // record the distributor deliberately dismissed. Returns whether the row was
   // created, had a stored field change, or was seen again unchanged (drives the
   // "sync complete" panel breakdown).
   protected abstract upsertCacheRecord(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     record: TExternal,
   ): Promise<CacheUpsertResult<TCached>>;
 
@@ -225,12 +226,12 @@ export abstract class AccountingSyncProcessorBase<
   // deleted upstream, so absence is the only deletion signal). Returns the
   // number of rows newly marked removed this run. Default: no-op (0) for
   // providers/record types with an explicit archived flag on the record itself.
-  protected async handleStaleRecords(_connection: AccountingConnection, _fetched: TCached[]): Promise<number> {
+  protected async handleStaleRecords(_connection: AccountingConnectionWithOrganisation, _fetched: TCached[]): Promise<number> {
     return 0;
   }
 
   // The pool of unmapped Wholo candidates the matcher ranks against.
-  protected abstract loadMatchCandidates(connection: AccountingConnection): Promise<TCandidate[]>;
+  protected abstract loadMatchCandidates(connection: AccountingConnectionWithOrganisation): Promise<TCandidate[]>;
 
   // Whether this cache row should be considered for matching at all
   // (e.g. skip archived/ignored rows).
@@ -243,7 +244,7 @@ export abstract class AccountingSyncProcessorBase<
   protected abstract updateSuggestion(suggestionId: string, match: AccountingMatchResult<TMethod>): Promise<void>;
   protected abstract supersedeSuggestion(suggestionId: string): Promise<void>;
   protected abstract createSuggestion(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     cached: TCached,
     match: AccountingMatchResult<TMethod>,
   ): Promise<void>;
@@ -251,14 +252,14 @@ export abstract class AccountingSyncProcessorBase<
   // Auto-link decision point. Deliberately false for every record type today:
   // all mappings require explicit user confirmation (mirrors the contacts
   // MVP). Enabling it (e.g. for unique SKU_EXACT matches) is a product
-  // decision, likely a per-connection setting — a subclass that flips this on
+  // decision, likely a per-organisation setting — a subclass that flips this on
   // must also implement createMappingFromMatch.
   protected shouldAutoLink(_match: AccountingMatchResult<TMethod>): boolean {
     return false;
   }
 
   protected createMappingFromMatch(
-    _connection: AccountingConnection,
+    _connection: AccountingConnectionWithOrganisation,
     _cached: TCached,
     _match: AccountingMatchResult<TMethod>,
   ): Promise<void> {

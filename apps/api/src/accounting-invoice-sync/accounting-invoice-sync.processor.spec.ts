@@ -18,7 +18,8 @@ const connection = {
   distributorId: 'dist-1',
   provider: 'XERO',
   status: 'CONNECTED',
-  externalOrganisationId: 'tenant-1',
+  accountingOrganisationId: 'acc-org-1',
+  organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
   scopes: 'openid accounting.invoices',
 };
 
@@ -26,7 +27,7 @@ function exportRow(over: Record<string, unknown> = {}) {
   return {
     id: 'exp-1',
     distributorId: 'dist-1',
-    accountingConnectionId: 'conn-1',
+    accountingOrganisationId: 'acc-org-1',
     provider: 'XERO',
     orderId: 'order-1',
     status: 'COMPLETED',

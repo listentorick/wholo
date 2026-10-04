@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-07-08
 **Deciders**: Rick Walsh
-**Related**: ADR-006 (Xero as accounting system of record), ADR-046 (admin-api JWT relay and distributor scoping), ADR-047 (event distribution), `docs/runbook/url-map.md`
+**Related**: ADR-006 (Xero as accounting system of record), ADR-046 (admin-api JWT relay and distributor scoping), ADR-047 (event distribution), ADR-074 (accounting data belongs to the organisation — amends §1), `docs/runbook/url-map.md`
 
 ---
 
@@ -22,6 +22,8 @@ Three design questions came up during implementation that weren't settled by pre
 ### 1. Provider-neutral abstraction
 
 No Xero-specific field lives on any core domain table. All Xero-specific state lives in new tables named generically: `AccountingConnection` (one row per connection attempt; historical rows are kept, never deleted, when a distributor disconnects/reconnects — enforced to one *active* (`CONNECTED`) row per distributor via a partial unique index, `WHERE status = 'CONNECTED'`) and `AccountingOAuthState` (short-lived, single-use CSRF/correlation row for the connect handshake).
+
+> **Amended by ADR-074 (2026-10-04):** a connection row is only the login (tokens, status, errors). The company it logged into is an `AccountingOrganisation` (distributor + provider + external organisation id), and every connection to the same company points at the same organisation row. All synced data, links, invoices sent and settings belong to the organisation, so a reconnect to the same company keeps them. Connection rows are still one per connect attempt and kept as history.
 
 The only thing that knows `xero-node` exists is `XeroAccountingAdapter`, implementing a generic `AccountingConnectionAdapter` interface (`buildAuthorizationUrl`, `exchangeCodeForToken`, `listAvailableOrganisations`, `refreshAccessToken`). `AccountingAdapterRegistry` is a `Map<AccountingProvider, AccountingConnectionAdapter>` keyed lookup — `AccountingConnectionService` and its controllers depend only on the interface and the registry, never on the adapter directly. Adding a second provider is one adapter class plus one registry entry; nothing else in the service, controllers, or frontend changes. The frontend's Integrations page already renders other providers as disabled "Coming soon" cards to reflect this in the UI, not just the backend.
 

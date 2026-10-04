@@ -34,7 +34,7 @@ function makePrismaMock() {
   return prisma;
 }
 
-const activeConnection = { id: 'conn-1', distributorId: 'dist-1', status: 'CONNECTED' };
+const activeConnection = { id: 'conn-1', distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', status: 'CONNECTED' };
 
 describe('AccountingProductService', () => {
   let service: AccountingProductService;
@@ -294,7 +294,7 @@ describe('AccountingProductService', () => {
       expect(prisma.productAccountingMapping.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           productId: 'prod-new',
           externalProductId: 'ext-1',
           matchMethod: AccountingProductMatchMethod.MANUAL,
@@ -357,7 +357,7 @@ describe('AccountingProductService', () => {
 
       await service.importAsNewProduct('dist-1', 'user-1', 'ext-1', {});
 
-      expect(taxTypes.resolveTaxTypeForCode).toHaveBeenCalledWith('conn-1', 'OUTPUT2');
+      expect(taxTypes.resolveTaxTypeForCode).toHaveBeenCalledWith('acc-org-1', 'OUTPUT2');
       expect(adminProducts.create).toHaveBeenCalledWith('dist-1', expect.objectContaining({ taxTypeId: 'tt-1' }));
     });
 

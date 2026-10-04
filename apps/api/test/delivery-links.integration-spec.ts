@@ -30,6 +30,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
 import { DeliveryTokenSigner } from '../src/delivery-links/delivery-token.signer';
 import { R2StorageService } from '../src/asset-images/r2-storage.service';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST = 'test-dlink-dist';
 const CUSTOMER = 'test-dlink-customer';
@@ -109,6 +110,7 @@ describe('Delivery links (integration)', () => {
     await prisma.orderLine.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST } });
     await prisma.order.deleteMany({ where: { distributorId: DIST } });
   });
 
@@ -299,8 +301,7 @@ describe('Delivery links (integration)', () => {
 
   it('completes an order whose invoice was already paid, in the same transaction as the delivery', async () => {
     const order = await createOrder();
-    const connection = await prisma.accountingConnection.create({
-      data: {
+    const connection = await createAccountingConnection(prisma, {
         distributorId: DIST,
         provider: AccountingProvider.XERO,
         status: AccountingConnectionStatus.CONNECTED,
@@ -310,12 +311,11 @@ describe('Delivery links (integration)', () => {
         encryptedCredentialData: 'irrelevant',
         connectedByUserId: ADMIN_USER,
         connectedAt: new Date(),
-      },
-    });
+      });
     await prisma.accountingInvoiceExport.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         provider: AccountingProvider.XERO,
         orderId: order.id,
         status: AccountingInvoiceExportStatus.COMPLETED,

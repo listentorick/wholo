@@ -34,11 +34,15 @@ describe('AccountingSyncService', () => {
     requestRun = jest.fn();
     writeEvent = jest.fn().mockResolvedValue(undefined);
     advanceSchedule = jest.fn().mockResolvedValue(undefined);
-    const prisma = { $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn({})) };
+    const prisma = {
+      $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn({})),
+      // The organisation's connections: the current one, plus one retired by a reconnect.
+      accountingConnection: { findMany: jest.fn().mockResolvedValue([{ id: 'conn-old' }, { id: 'conn-1' }]) },
+    };
     const ingestionRuns = { requestRun, advanceSchedule, listRuns: jest.fn().mockResolvedValue([]) };
     const connections = {
       getActiveConnectionOrThrow: jest.fn().mockResolvedValue({ id: 'conn-1', provider: 'XERO' }),
-      getCurrentConnection: jest.fn().mockResolvedValue({ id: 'conn-1' }),
+      getCurrentConnection: jest.fn().mockResolvedValue({ id: 'conn-1', accountingOrganisationId: 'acc-org-1' }),
     };
     service = new AccountingSyncService(
       prisma as unknown as PrismaService,
@@ -114,6 +118,7 @@ describe('AccountingSyncService', () => {
     it('shows the mapping pulls only — the invoice status sync has nothing to review', async () => {
       const run = (resourceType: string) => ({
         id: resourceType,
+        sourceRef: 'conn-1',
         resourceType,
         status: 'COMPLETED',
         queuedAt: new Date(),
@@ -134,6 +139,7 @@ describe('AccountingSyncService', () => {
     describe('last succeeded (ADR-061)', () => {
       const failedRun = (resourceType: string, fields: Record<string, unknown>) => ({
         id: resourceType,
+        sourceRef: 'conn-1',
         resourceType,
         status: 'FAILED',
         queuedAt: new Date(),
@@ -169,6 +175,25 @@ describe('AccountingSyncService', () => {
         const status = await statusFor([failedRun('contact', {})]);
 
         expect(status.lastSucceededAt).toBeNull();
+      });
+
+      // ADR-074: the synced data belongs to the organisation, so a reconnect
+      // must not make it look as if nothing was ever synced.
+      it('after a reconnect, reports the success of an earlier connection to the same organisation', async () => {
+        const status = await statusFor([
+          failedRun('contact', { sourceRef: 'conn-old', status: 'COMPLETED', lastSucceededAt: new Date('2026-10-02T09:46:09Z') }),
+        ]);
+
+        expect(status.lastSucceededAt).toBe('2026-10-02T09:46:09.000Z');
+        // … while the run list is the current connection's only.
+        expect(status.runs).toEqual([]);
+      });
+
+      it("asks for the runs of every connection to the current connection's organisation", async () => {
+        const listRuns = (service as unknown as { ingestionRuns: { listRuns: jest.Mock } }).ingestionRuns.listRuns;
+        await statusFor([]);
+
+        expect(listRuns).toHaveBeenCalledWith(expect.objectContaining({ sourceRefs: ['conn-old', 'conn-1'] }));
       });
     });
   });

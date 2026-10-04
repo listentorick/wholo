@@ -82,7 +82,12 @@ export function XeroConnectionCard() {
   }
 
   async function handleDisconnect() {
-    if (!window.confirm('Disconnect Xero? You can reconnect at any time.')) return;
+    if (
+      !window.confirm(
+        'Disconnect Xero? Your linked contacts, products and tax types are kept if you reconnect to the same Xero organisation.',
+      )
+    )
+      return;
     setActionError(null);
     setDisconnecting(true);
     try {

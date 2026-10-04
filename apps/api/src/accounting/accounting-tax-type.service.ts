@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TaxTypesService } from '../tax-types/tax-types.service';
 import { TaxTypeQueryDto } from './dto/tax-type-query.dto';
 import { ImportTaxTypeDto } from './dto/import-tax-type.dto';
+import { organisationScope } from './accounting-organisation';
 
 interface CursorPayload {
   createdAt: string;
@@ -47,7 +48,7 @@ export class AccountingTaxTypeService {
     const limit = query.limit ?? 20;
     const take = limit + 1;
 
-    const baseWhere: Prisma.ExternalAccountingTaxTypeWhereInput = { accountingConnectionId: connection.id };
+    const baseWhere: Prisma.ExternalAccountingTaxTypeWhereInput = organisationScope(connection);
 
     let cursorWhere: Prisma.ExternalAccountingTaxTypeWhereInput = {};
     if (query.cursor) {
@@ -72,7 +73,7 @@ export class AccountingTaxTypeService {
         take,
         include: taxTypeInclude,
       }),
-      this.findConflictedTaxTypeIds(connection.id),
+      this.findConflictedTaxTypeIds(connection.accountingOrganisationId),
       this.prisma.externalAccountingTaxType.count({ where: baseWhere }),
     ]);
 
@@ -94,21 +95,21 @@ export class AccountingTaxTypeService {
   async countNeedsAttention(distributorId: string): Promise<number> {
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
-      select: { id: true },
+      select: { distributorId: true, accountingOrganisationId: true },
     });
     if (!connection) return 0;
 
     const [suggested, readyToImport] = await Promise.all([
       this.prisma.externalAccountingTaxType.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           mappings: { none: { unlinkedAt: null } },
           suggestions: { some: { status: AccountingTaxTypeMatchStatus.SUGGESTED } },
         },
       }),
       this.prisma.externalAccountingTaxType.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           isActive: true,
           ignoredAt: null,
           mappings: { none: { unlinkedAt: null } },
@@ -125,7 +126,7 @@ export class AccountingTaxTypeService {
   // (ImportTaxTypeDto), never defaulted or guessed.
   async importAsNewTaxType(distributorId: string, userId: string, externalTaxTypeId: string, dto: ImportTaxTypeDto) {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getTaxTypeOrThrow(connection.id, externalTaxTypeId);
+    const external = await this.getTaxTypeOrThrow(connection.accountingOrganisationId, externalTaxTypeId);
     await this.assertExternalTaxTypeNotMapped(external.id);
 
     // Not wrapped in a transaction with the mapping write below — same
@@ -140,7 +141,7 @@ export class AccountingTaxTypeService {
 
     await this.createMapping(
       distributorId,
-      connection.id,
+      connection.accountingOrganisationId,
       taxType.id,
       external.id,
       AccountingTaxTypeMatchMethod.MANUAL,
@@ -154,7 +155,7 @@ export class AccountingTaxTypeService {
   async confirmSuggestion(distributorId: string, userId: string, suggestionId: string) {
     const connection = await this.getActiveConnection(distributorId);
     const suggestion = await this.prisma.accountingTaxTypeMatchSuggestion.findFirst({
-      where: { id: suggestionId, accountingConnectionId: connection.id, status: AccountingTaxTypeMatchStatus.SUGGESTED },
+      where: { id: suggestionId, ...organisationScope(connection), status: AccountingTaxTypeMatchStatus.SUGGESTED },
     });
     if (!suggestion) {
       throw new NotFoundException('Suggestion not found or already resolved');
@@ -163,7 +164,7 @@ export class AccountingTaxTypeService {
     const result = await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         suggestion.suggestedTaxTypeId,
         suggestion.externalTaxTypeId,
         suggestion.matchMethod,
@@ -186,19 +187,19 @@ export class AccountingTaxTypeService {
     taxTypeId: string,
   ) {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getTaxTypeOrThrow(connection.id, externalTaxTypeId);
+    const external = await this.getTaxTypeOrThrow(connection.accountingOrganisationId, externalTaxTypeId);
     await this.assertExternalTaxTypeNotMapped(external.id);
 
     const taxType = await this.prisma.taxType.findFirst({ where: { id: taxTypeId, distributorId } });
     if (!taxType) {
       throw new NotFoundException('Tax type not found');
     }
-    await this.assertTaxTypeNotMapped(connection.id, taxTypeId);
+    await this.assertTaxTypeNotMapped(connection.accountingOrganisationId, taxTypeId);
 
     await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         taxTypeId,
         external.id,
         AccountingTaxTypeMatchMethod.MANUAL,
@@ -217,7 +218,7 @@ export class AccountingTaxTypeService {
 
   async ignore(distributorId: string, userId: string, externalTaxTypeId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getTaxTypeOrThrow(connection.id, externalTaxTypeId);
+    const external = await this.getTaxTypeOrThrow(connection.accountingOrganisationId, externalTaxTypeId);
 
     await this.prisma.$transaction([
       this.prisma.externalAccountingTaxType.update({
@@ -235,7 +236,7 @@ export class AccountingTaxTypeService {
   async unlink(distributorId: string, mappingId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
     const mapping = await this.prisma.taxTypeAccountingMapping.findFirst({
-      where: { id: mappingId, accountingConnectionId: connection.id, unlinkedAt: null },
+      where: { id: mappingId, ...organisationScope(connection), unlinkedAt: null },
     });
     if (!mapping) {
       throw new NotFoundException('Mapping not found or already unlinked');
@@ -252,7 +253,7 @@ export class AccountingTaxTypeService {
   // AccountingChangeDetectionService).
   async acknowledgeChange(distributorId: string, externalTaxTypeId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const external = await this.getTaxTypeOrThrow(connection.id, externalTaxTypeId);
+    const external = await this.getTaxTypeOrThrow(connection.accountingOrganisationId, externalTaxTypeId);
     await this.prisma.externalAccountingTaxType.update({
       where: { id: external.id },
       data: { changeAcknowledgedAt: new Date() },
@@ -266,13 +267,13 @@ export class AccountingTaxTypeService {
   // nothing confirmed to resolve to: no code, the code hasn't been synced as
   // a tax rate yet, or it has but isn't linked to a Stocdup TaxType.
   async resolveTaxTypeForCode(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     code: string | null,
   ): Promise<{ taxTypeId: string; taxTypeName: string } | null> {
     if (!code) return null;
 
     const externalTaxType = await this.prisma.externalAccountingTaxType.findUnique({
-      where: { accountingConnectionId_taxType: { accountingConnectionId, taxType: code } },
+      where: { accountingOrganisationId_taxType: { accountingOrganisationId, taxType: code } },
       include: {
         mappings: {
           where: { unlinkedAt: null },
@@ -296,13 +297,13 @@ export class AccountingTaxTypeService {
   // nothing confirmed to resolve to: no taxTypeId, or it hasn't been linked
   // to an external tax rate on this connection.
   async resolveExternalCodeForTaxType(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     taxTypeId: string | null,
   ): Promise<string | null> {
     if (!taxTypeId) return null;
 
     const mapping = await this.prisma.taxTypeAccountingMapping.findFirst({
-      where: { accountingConnectionId, taxTypeId, unlinkedAt: null },
+      where: { accountingOrganisationId, taxTypeId, unlinkedAt: null },
       include: { externalTaxType: { select: { taxType: true } } },
     });
 
@@ -311,16 +312,16 @@ export class AccountingTaxTypeService {
 
   private async createMapping(
     distributorId: string,
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     taxTypeId: string,
     externalTaxTypeId: string,
     matchMethod: AccountingTaxTypeMatchMethod,
     linkedByUserId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    await this.assertTaxTypeNotMapped(accountingConnectionId, taxTypeId, tx);
+    await this.assertTaxTypeNotMapped(accountingOrganisationId, taxTypeId, tx);
     return tx.taxTypeAccountingMapping.create({
-      data: { distributorId, accountingConnectionId, taxTypeId, externalTaxTypeId, matchMethod, linkedByUserId },
+      data: { distributorId, accountingOrganisationId, taxTypeId, externalTaxTypeId, matchMethod, linkedByUserId },
     });
   }
 
@@ -334,9 +335,9 @@ export class AccountingTaxTypeService {
     return connection;
   }
 
-  private async getTaxTypeOrThrow(accountingConnectionId: string, externalTaxTypeId: string) {
+  private async getTaxTypeOrThrow(accountingOrganisationId: string, externalTaxTypeId: string) {
     const external = await this.prisma.externalAccountingTaxType.findFirst({
-      where: { id: externalTaxTypeId, accountingConnectionId },
+      where: { id: externalTaxTypeId, accountingOrganisationId },
     });
     if (!external) {
       throw new NotFoundException('Accounting tax type not found');
@@ -354,22 +355,22 @@ export class AccountingTaxTypeService {
   }
 
   private async assertTaxTypeNotMapped(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     taxTypeId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
     const existing = await tx.taxTypeAccountingMapping.findFirst({
-      where: { accountingConnectionId, taxTypeId, unlinkedAt: null },
+      where: { accountingOrganisationId, taxTypeId, unlinkedAt: null },
     });
     if (existing) {
       throw new ConflictException('This tax type is already linked to a different accounting tax type');
     }
   }
 
-  private async findConflictedTaxTypeIds(accountingConnectionId: string): Promise<Set<string>> {
+  private async findConflictedTaxTypeIds(accountingOrganisationId: string): Promise<Set<string>> {
     const grouped = await this.prisma.accountingTaxTypeMatchSuggestion.groupBy({
       by: ['suggestedTaxTypeId'],
-      where: { accountingConnectionId, status: AccountingTaxTypeMatchStatus.SUGGESTED },
+      where: { accountingOrganisationId, status: AccountingTaxTypeMatchStatus.SUGGESTED },
       _count: { _all: true },
     });
     return new Set(grouped.filter((g) => g._count._all > 1).map((g) => g.suggestedTaxTypeId));

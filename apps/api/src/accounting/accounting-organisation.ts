@@ -1,29 +1,25 @@
-import { AccountingProvider, Prisma } from '@prisma/client';
+import { AccountingConnection, Prisma } from '@prisma/client';
 
-// A distributor's link to one organisation in an accounting system. A
-// reconnect creates a new AccountingConnection row (ADR-051 keeps the old
-// ones), but invoices exported under the old row still live in the same
-// provider organisation — so anything that follows those invoices must match
-// on the organisation, not the connection row (ADR-072).
-export interface AccountingOrganisationRef {
+// Everything a distributor builds up against an accounting system — cached
+// contacts/products/tax rates, links, suggestions, bulk imports, invoices
+// sent — belongs to the AccountingOrganisation (the distributor's company in
+// that provider), never to the connection row that happened to be live when
+// it was written. A reconnect to the same company creates a new connection
+// row (ADR-051 keeps them as history) but points at the same organisation,
+// so none of it is lost; only a different company starts empty (ADR-074).
+
+export const CONNECTION_WITH_ORGANISATION = { organisation: true } satisfies Prisma.AccountingConnectionInclude;
+
+export type AccountingConnectionWithOrganisation = Prisma.AccountingConnectionGetPayload<{
+  include: typeof CONNECTION_WITH_ORGANISATION;
+}>;
+
+// The one place the "which company's data" rule lives: every query over
+// organisation-owned accounting data scopes itself with this. distributorId
+// rides along as a second, independent tenancy guard.
+export function organisationScope(connection: Pick<AccountingConnection, 'distributorId' | 'accountingOrganisationId'>): {
   distributorId: string;
-  provider: AccountingProvider;
-  externalOrganisationId: string;
-}
-
-export function organisationKey(ref: AccountingOrganisationRef): string {
-  return `${ref.distributorId}|${ref.provider}|${ref.externalOrganisationId}`;
-}
-
-// Invoice exports made under any of this distributor's connections to the
-// same provider organisation, whichever connection row created them.
-export function exportsForOrganisation(ref: AccountingOrganisationRef): Prisma.AccountingInvoiceExportWhereInput {
-  return {
-    distributorId: ref.distributorId,
-    connection: {
-      distributorId: ref.distributorId,
-      provider: ref.provider,
-      externalOrganisationId: ref.externalOrganisationId,
-    },
-  };
+  accountingOrganisationId: string;
+} {
+  return { distributorId: connection.distributorId, accountingOrganisationId: connection.accountingOrganisationId };
 }

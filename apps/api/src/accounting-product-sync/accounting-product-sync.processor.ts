@@ -1,7 +1,6 @@
 import { Processor } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import {
-  AccountingConnection,
   AccountingProductMatchMethod,
   AccountingProductMatchStatus,
   ExternalAccountingProduct,
@@ -30,6 +29,7 @@ import {
 import { AccountingChangeDetectionService } from '../accounting/accounting-change-detection.service';
 import { IngestionRunService } from '../ingestion/ingestion-run.service';
 import { ACCOUNTING_WORKER_SETTINGS } from '../accounting/accounting-backoff';
+import { AccountingConnectionWithOrganisation, organisationScope } from '../accounting/accounting-organisation';
 
 // Part of the provider-neutral accounting integration framework — overview and
 // provider contract in accounting/adapters/accounting-connection-adapter.interface.ts.
@@ -100,7 +100,7 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
   ];
 
   protected async upsertCacheRecord(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     product: AccountingExternalProduct,
   ): Promise<CacheUpsertResult<ExternalAccountingProduct>> {
     const shared = {
@@ -126,8 +126,8 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     };
 
     const where = {
-      accountingConnectionId_externalProductId: {
-        accountingConnectionId: connection.id,
+      accountingOrganisationId_externalProductId: {
+        accountingOrganisationId: connection.accountingOrganisationId,
         externalProductId: product.externalId,
       },
     };
@@ -139,8 +139,7 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
       // ignoredAt is intentionally left untouched on update — a re-sync must
       // not silently un-ignore a product the distributor deliberately dismissed.
       create: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         provider: connection.provider,
         externalProductId: product.externalId,
         ...shared,
@@ -180,12 +179,12 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
   // signal: any cache row not in this sync's fetched set is marked inactive.
   // Returns how many rows were newly deactivated for the sync-complete panel.
   protected async handleStaleRecords(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     fetched: ExternalAccountingProduct[],
   ): Promise<number> {
     const { count } = await this.prisma.externalAccountingProduct.updateMany({
       where: {
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         id: { notIn: fetched.map((product) => product.id) },
         isActive: true,
       },
@@ -194,12 +193,12 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
     return count;
   }
 
-  protected async loadMatchCandidates(connection: AccountingConnection): Promise<AccountingProductMatchCandidate[]> {
+  protected async loadMatchCandidates(connection: AccountingConnectionWithOrganisation): Promise<AccountingProductMatchCandidate[]> {
     const products = await this.prisma.product.findMany({
       where: {
         distributorId: connection.distributorId,
         deletedAt: null,
-        accountingMappings: { none: { accountingConnectionId: connection.id, unlinkedAt: null } },
+        accountingMappings: { none: { ...organisationScope(connection), unlinkedAt: null } },
       },
       select: { id: true, sku: true, name: true },
     });
@@ -253,14 +252,13 @@ export class AccountingProductSyncProcessor extends AccountingSyncProcessorBase<
   }
 
   protected async createSuggestion(
-    connection: AccountingConnection,
+    connection: AccountingConnectionWithOrganisation,
     cached: ExternalAccountingProduct,
     match: AccountingMatchResult<AccountingProductMatchMethod>,
   ): Promise<void> {
     await this.prisma.accountingProductMatchSuggestion.create({
       data: {
-        distributorId: connection.distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         externalProductId: cached.id,
         suggestedProductId: match.candidateId,
         confidence: match.confidence,

@@ -48,7 +48,8 @@ describe('AccountingPullProcessorBase', () => {
     distributorId: 'dist-1',
     provider: 'XERO',
     status: 'CONNECTED',
-    externalOrganisationId: 'org-1',
+    accountingOrganisationId: 'acc-org-1',
+    organisation: { id: 'acc-org-1', externalOrganisationId: 'org-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
     scopes: 'openid',
   };
   let pull: TestPull;

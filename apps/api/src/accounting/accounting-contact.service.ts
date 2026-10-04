@@ -12,6 +12,7 @@ import { AdminCustomersService } from '../admin-customers/admin-customers.servic
 import { ContactQueryDto, AccountingContactStatusFilter, AccountingContactTypeFilter } from './dto/contact-query.dto';
 import { ImportContactDto } from './dto/import-contact.dto';
 import { BulkImportContactSelectionDto } from './dto/bulk-import-contact-selection.dto';
+import { organisationScope } from './accounting-organisation';
 
 interface CursorPayload {
   createdAt: string;
@@ -75,7 +76,7 @@ export class AccountingContactService {
     }
 
     const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
-      accountingConnectionId: connection.id,
+      ...organisationScope(connection),
       ...(conditions.length && { AND: conditions }),
     };
 
@@ -93,7 +94,7 @@ export class AccountingContactService {
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           include: contactInclude,
         }),
-        this.findConflictedTradeRelationshipIds(connection.id),
+        this.findConflictedTradeRelationshipIds(connection.accountingOrganisationId),
       ]);
 
       const matches = rows
@@ -127,7 +128,7 @@ export class AccountingContactService {
         take,
         include: contactInclude,
       }),
-      this.findConflictedTradeRelationshipIds(connection.id),
+      this.findConflictedTradeRelationshipIds(connection.accountingOrganisationId),
       this.prisma.externalAccountingContact.count({ where: baseWhere }),
     ]);
 
@@ -185,21 +186,21 @@ export class AccountingContactService {
   async countNeedsAttention(distributorId: string): Promise<number> {
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
-      select: { id: true },
+      select: { distributorId: true, accountingOrganisationId: true },
     });
     if (!connection) return 0;
 
     const [suggested, readyToImport] = await Promise.all([
       this.prisma.externalAccountingContact.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           mappings: { none: { unlinkedAt: null } },
           suggestions: { some: { status: AccountingContactMatchStatus.SUGGESTED } },
         },
       }),
       this.prisma.externalAccountingContact.count({
         where: {
-          accountingConnectionId: connection.id,
+          ...organisationScope(connection),
           isCustomer: true,
           isArchived: false,
           ignoredAt: null,
@@ -239,13 +240,13 @@ export class AccountingContactService {
       conditions.push({ OR: typeConditions });
     }
     const baseWhere: Prisma.ExternalAccountingContactWhereInput = {
-      accountingConnectionId: connection.id,
+      ...organisationScope(connection),
       ...(conditions.length && { AND: conditions }),
     };
 
     const [rows, conflictedTradeRelationshipIds] = await Promise.all([
       this.prisma.externalAccountingContact.findMany({ where: baseWhere, include: contactInclude }),
-      this.findConflictedTradeRelationshipIds(connection.id),
+      this.findConflictedTradeRelationshipIds(connection.accountingOrganisationId),
     ]);
 
     return rows
@@ -266,8 +267,7 @@ export class AccountingContactService {
 
     const job = await this.prisma.accountingBulkImportJob.create({
       data: {
-        distributorId,
-        accountingConnectionId: connection.id,
+        ...organisationScope(connection),
         recordType: AccountingBulkImportRecordType.CONTACT,
         requestedByUserId: userId,
         honourSuggestions: dto.honourSuggestions ?? false,
@@ -294,7 +294,7 @@ export class AccountingContactService {
 
   async importAsNewCustomer(distributorId: string, userId: string, externalContactId: string, dto: ImportContactDto) {
     const connection = await this.getActiveConnection(distributorId);
-    const contact = await this.getContactOrThrow(connection.id, externalContactId);
+    const contact = await this.getContactOrThrow(connection.accountingOrganisationId, externalContactId);
     await this.assertContactNotMapped(contact.id);
 
     // Not wrapped in a transaction with the mapping write below:
@@ -326,7 +326,7 @@ export class AccountingContactService {
 
     await this.createMapping(
       distributorId,
-      connection.id,
+      connection.accountingOrganisationId,
       relationship.id,
       contact.id,
       AccountingContactMatchMethod.MANUAL,
@@ -340,7 +340,7 @@ export class AccountingContactService {
   async confirmSuggestion(distributorId: string, userId: string, suggestionId: string) {
     const connection = await this.getActiveConnection(distributorId);
     const suggestion = await this.prisma.accountingContactMatchSuggestion.findFirst({
-      where: { id: suggestionId, accountingConnectionId: connection.id, status: AccountingContactMatchStatus.SUGGESTED },
+      where: { id: suggestionId, ...organisationScope(connection), status: AccountingContactMatchStatus.SUGGESTED },
     });
     if (!suggestion) {
       throw new NotFoundException('Suggestion not found or already resolved');
@@ -349,7 +349,7 @@ export class AccountingContactService {
     const result = await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         suggestion.suggestedTradeRelationshipId,
         suggestion.externalContactId,
         suggestion.matchMethod,
@@ -372,7 +372,7 @@ export class AccountingContactService {
     tradeRelationshipId: string,
   ) {
     const connection = await this.getActiveConnection(distributorId);
-    const contact = await this.getContactOrThrow(connection.id, externalContactId);
+    const contact = await this.getContactOrThrow(connection.accountingOrganisationId, externalContactId);
     await this.assertContactNotMapped(contact.id);
 
     const relationship = await this.prisma.tradeRelationship.findFirst({
@@ -381,12 +381,12 @@ export class AccountingContactService {
     if (!relationship) {
       throw new NotFoundException('Customer not found');
     }
-    await this.assertTradeRelationshipNotMapped(connection.id, tradeRelationshipId);
+    await this.assertTradeRelationshipNotMapped(connection.accountingOrganisationId, tradeRelationshipId);
 
     await this.prisma.$transaction(async (tx) => {
       await this.createMapping(
         distributorId,
-        connection.id,
+        connection.accountingOrganisationId,
         tradeRelationshipId,
         contact.id,
         AccountingContactMatchMethod.MANUAL,
@@ -405,7 +405,7 @@ export class AccountingContactService {
 
   async ignore(distributorId: string, userId: string, externalContactId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const contact = await this.getContactOrThrow(connection.id, externalContactId);
+    const contact = await this.getContactOrThrow(connection.accountingOrganisationId, externalContactId);
 
     await this.prisma.$transaction([
       this.prisma.externalAccountingContact.update({
@@ -423,7 +423,7 @@ export class AccountingContactService {
   async unlink(distributorId: string, mappingId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
     const mapping = await this.prisma.customerAccountingMapping.findFirst({
-      where: { id: mappingId, accountingConnectionId: connection.id, unlinkedAt: null },
+      where: { id: mappingId, ...organisationScope(connection), unlinkedAt: null },
     });
     if (!mapping) {
       throw new NotFoundException('Mapping not found or already unlinked');
@@ -440,7 +440,7 @@ export class AccountingContactService {
   // AccountingChangeDetectionService).
   async acknowledgeChange(distributorId: string, externalContactId: string): Promise<void> {
     const connection = await this.getActiveConnection(distributorId);
-    const contact = await this.getContactOrThrow(connection.id, externalContactId);
+    const contact = await this.getContactOrThrow(connection.accountingOrganisationId, externalContactId);
     await this.prisma.externalAccountingContact.update({
       where: { id: contact.id },
       data: { changeAcknowledgedAt: new Date() },
@@ -449,16 +449,16 @@ export class AccountingContactService {
 
   private async createMapping(
     distributorId: string,
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     tradeRelationshipId: string,
     externalContactId: string,
     matchMethod: AccountingContactMatchMethod,
     linkedByUserId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
-    await this.assertTradeRelationshipNotMapped(accountingConnectionId, tradeRelationshipId, tx);
+    await this.assertTradeRelationshipNotMapped(accountingOrganisationId, tradeRelationshipId, tx);
     return tx.customerAccountingMapping.create({
-      data: { distributorId, accountingConnectionId, tradeRelationshipId, externalContactId, matchMethod, linkedByUserId },
+      data: { distributorId, accountingOrganisationId, tradeRelationshipId, externalContactId, matchMethod, linkedByUserId },
     });
   }
 
@@ -472,9 +472,9 @@ export class AccountingContactService {
     return connection;
   }
 
-  private async getContactOrThrow(accountingConnectionId: string, externalContactId: string) {
+  private async getContactOrThrow(accountingOrganisationId: string, externalContactId: string) {
     const contact = await this.prisma.externalAccountingContact.findFirst({
-      where: { id: externalContactId, accountingConnectionId },
+      where: { id: externalContactId, accountingOrganisationId },
     });
     if (!contact) {
       throw new NotFoundException('Accounting contact not found');
@@ -492,12 +492,12 @@ export class AccountingContactService {
   }
 
   private async assertTradeRelationshipNotMapped(
-    accountingConnectionId: string,
+    accountingOrganisationId: string,
     tradeRelationshipId: string,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<void> {
     const existing = await tx.customerAccountingMapping.findFirst({
-      where: { accountingConnectionId, tradeRelationshipId, unlinkedAt: null },
+      where: { accountingOrganisationId, tradeRelationshipId, unlinkedAt: null },
     });
     if (existing) {
       throw new ConflictException('This customer is already linked to a different accounting contact');
@@ -505,11 +505,11 @@ export class AccountingContactService {
   }
 
   // Public: reused by AccountingBulkImportProcessor, which needs the same
-  // connection-wide conflict set to compute per-item status during a batch.
-  async findConflictedTradeRelationshipIds(accountingConnectionId: string): Promise<Set<string>> {
+  // organisation-wide conflict set to compute per-item status during a batch.
+  async findConflictedTradeRelationshipIds(accountingOrganisationId: string): Promise<Set<string>> {
     const grouped = await this.prisma.accountingContactMatchSuggestion.groupBy({
       by: ['suggestedTradeRelationshipId'],
-      where: { accountingConnectionId, status: AccountingContactMatchStatus.SUGGESTED },
+      where: { accountingOrganisationId, status: AccountingContactMatchStatus.SUGGESTED },
       _count: { _all: true },
     });
     return new Set(grouped.filter((g) => g._count._all > 1).map((g) => g.suggestedTradeRelationshipId));

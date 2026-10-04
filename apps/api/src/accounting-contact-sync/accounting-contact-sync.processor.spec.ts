@@ -36,7 +36,8 @@ describe('AccountingContactSyncProcessor', () => {
     distributorId: 'dist-1',
     provider: 'XERO',
     status: 'CONNECTED',
-    externalOrganisationId: 'tenant-1',
+    accountingOrganisationId: 'acc-org-1',
+    organisation: { id: 'acc-org-1', externalOrganisationId: 'tenant-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT' },
     lastSyncedAt: null,
   };
 
@@ -139,8 +140,8 @@ describe('AccountingContactSyncProcessor', () => {
 
     expect(prisma.externalAccountingContact.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { accountingConnectionId_externalContactId: { accountingConnectionId: 'conn-1', externalContactId: 'x-1' } },
-        create: expect.objectContaining({ distributorId: 'dist-1', accountingConnectionId: 'conn-1', externalContactId: 'x-1' }),
+        where: { accountingOrganisationId_externalContactId: { accountingOrganisationId: 'acc-org-1', externalContactId: 'x-1' } },
+        create: expect.objectContaining({ distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', externalContactId: 'x-1' }),
       }),
     );
   });
@@ -238,7 +239,7 @@ describe('AccountingContactSyncProcessor', () => {
       expect(prisma.accountingContactMatchSuggestion.create).toHaveBeenCalledWith({
         data: {
           distributorId: 'dist-1',
-          accountingConnectionId: 'conn-1',
+          accountingOrganisationId: 'acc-org-1',
           externalContactId: 'cached-1',
           suggestedTradeRelationshipId: 'tr-1',
           confidence: 95,

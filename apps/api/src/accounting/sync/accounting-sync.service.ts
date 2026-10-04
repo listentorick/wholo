@@ -117,19 +117,29 @@ export class AccountingSyncService {
     if (!connection) {
       return { runs: [], lastSucceededAt: null };
     }
+    // Runs are per connection (ADR-061), but the synced data belongs to the
+    // organisation (ADR-074) — so "has this ever synced" looks at every
+    // connection to the same organisation, or a reconnect would hide the
+    // records and links it kept behind a "never synced" state until the new
+    // connection's first pull succeeds.
+    const organisationConnections = await this.prisma.accountingConnection.findMany({
+      where: { distributorId, accountingOrganisationId: connection.accountingOrganisationId },
+      select: { id: true },
+    });
     const rows = await this.ingestionRuns.listRuns({
       distributorId,
       sourceType: ACCOUNTING_SOURCE_TYPE,
-      sourceRef: connection.id,
+      sourceRefs: organisationConnections.map((c) => c.id),
     });
     // The status panel is about the mapping pulls; the invoice status sync has
     // nothing to review and is not shown.
     const mappingRows = rows.filter((r) =>
       (ACCOUNTING_MAPPING_RESOURCE_TYPES as readonly string[]).includes(r.resourceType),
     );
-    const runs = mappingRows.map(toSummary);
+    // What's running or ran last is the current connection's business.
+    const runs = mappingRows.filter((r) => r.sourceRef === connection.id).map(toSummary);
     // Not the current status: the run row is reused, so a failed latest
-    // attempt must not erase that this connection has synced (ADR-061).
+    // attempt must not erase that this organisation has synced (ADR-061).
     // lastFullRunAt covers rows that last succeeded before lastSucceededAt
     // existed (every first sync is a full one).
     const lastSucceededAt = mappingRows

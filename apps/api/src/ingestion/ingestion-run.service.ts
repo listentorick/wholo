@@ -272,12 +272,12 @@ export class IngestionRunService {
     }
   }
 
-  listRuns(query: { distributorId: string; sourceType: string; sourceRef: string }): Promise<IngestionRun[]> {
+  listRuns(query: { distributorId: string; sourceType: string; sourceRefs: string[] }): Promise<IngestionRun[]> {
     return this.prisma.ingestionRun.findMany({
       where: {
         distributorId: query.distributorId,
         sourceType: query.sourceType,
-        sourceRef: query.sourceRef,
+        sourceRef: { in: query.sourceRefs },
       },
       orderBy: { resourceType: 'asc' },
     });

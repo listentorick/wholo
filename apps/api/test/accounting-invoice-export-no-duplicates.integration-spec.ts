@@ -39,6 +39,7 @@ import { AuditService } from '../src/audit/audit.service';
 import { AdminNotificationsService } from '../src/admin-notifications/admin-notifications.service';
 import { AccountingInvoiceExportProcessor } from '../src/accounting-invoice-export/accounting-invoice-export.processor';
 import { FakeAccountingAdapter } from './support/fake-accounting.adapter';
+import { createAccountingConnection } from './support/accounting-fixtures';
 
 const DIST = 'test-nodup-dist';
 const CUSTOMER = 'test-nodup-customer';
@@ -89,11 +90,11 @@ describe('Invoice export never raises a second invoice for an order (ADR-073, in
     });
 
   // A connected accounting organisation with the customer linked to a contact —
-  // everything an export needs.
+  // everything an export needs. A reconnect to the same organisation keeps
+  // the link it already has (ADR-074), so the link is made only once.
   const connect = async () => {
     connectionSequence += 1;
-    const connection = await prisma.accountingConnection.create({
-      data: {
+    const connection = await createAccountingConnection(prisma, {
         distributorId: DIST,
         provider: AccountingProvider.XERO, // the only enum value today; every call goes to the fake
         status: AccountingConnectionStatus.CONNECTED,
@@ -105,12 +106,15 @@ describe('Invoice export never raises a second invoice for an order (ADR-073, in
           .encrypt(JSON.stringify(FakeAccountingAdapter.tokenSet())),
         connectedByUserId: USER,
         connectedAt: new Date(),
-      },
+      });
+    const linked = await prisma.customerAccountingMapping.findFirst({
+      where: { accountingOrganisationId: connection.accountingOrganisationId, unlinkedAt: null },
     });
+    if (linked) return;
     const contact = await prisma.externalAccountingContact.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         provider: AccountingProvider.XERO,
         externalContactId: `fake-contact-${connectionSequence}`,
         displayName: 'The Old Hall',
@@ -121,7 +125,7 @@ describe('Invoice export never raises a second invoice for an order (ADR-073, in
     await prisma.customerAccountingMapping.create({
       data: {
         distributorId: DIST,
-        accountingConnectionId: connection.id,
+        accountingOrganisationId: connection.accountingOrganisationId,
         tradeRelationshipId: tradeRelationship.id,
         externalContactId: contact.id,
         matchMethod: AccountingContactMatchMethod.MANUAL,
@@ -145,6 +149,7 @@ describe('Invoice export never raises a second invoice for an order (ADR-073, in
     await prisma.customerAccountingMapping.deleteMany({ where: { distributorId: DIST } });
     await prisma.externalAccountingContact.deleteMany({ where: { distributorId: DIST } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: DIST } });
+    await prisma.accountingOrganisation.deleteMany({ where: { distributorId: DIST } });
   };
 
   const cleanup = async () => {
@@ -205,8 +210,8 @@ describe('Invoice export never raises a second invoice for an order (ADR-073, in
           updatedAt: new Date(Date.now() - 60 * 60 * 1000),
         };
         await prisma.accountingInvoiceExport.upsert({
-          where: { accountingConnectionId_orderId: { accountingConnectionId: connection.id, orderId: order.id } },
-          create: { distributorId: DIST, accountingConnectionId: connection.id, provider: connection.provider, orderId: order.id, retryCount: 1, ...stuck },
+          where: { accountingOrganisationId_orderId: { accountingOrganisationId: connection.accountingOrganisationId, orderId: order.id } },
+          create: { distributorId: DIST, accountingOrganisationId: connection.accountingOrganisationId, provider: connection.provider, orderId: order.id, retryCount: 1, ...stuck },
           update: stuck,
         });
         if (fake.liveInvoices(order.orderNumber).length === 0) {
