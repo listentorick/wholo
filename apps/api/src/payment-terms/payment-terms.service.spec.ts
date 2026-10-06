@@ -29,7 +29,9 @@ const systemTerm = term({
 
 const mockPrisma = {
   paymentTerm: {
-    upsert: jest.fn(),
+    findUnique: jest.fn(),
+    findUniqueOrThrow: jest.fn(),
+    createMany: jest.fn(),
     findMany: jest.fn(),
     findFirst: jest.fn(),
     create: jest.fn(),
@@ -46,7 +48,7 @@ describe('PaymentTermsService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    mockPrisma.paymentTerm.upsert.mockResolvedValue(systemTerm);
+    mockPrisma.paymentTerm.findUnique.mockResolvedValue(systemTerm);
     mockPrisma.$transaction.mockImplementation(async (arg: any) =>
       typeof arg === 'function' ? arg(mockPrisma) : Promise.all(arg),
     );
@@ -54,6 +56,23 @@ describe('PaymentTermsService', () => {
       providers: [PaymentTermsService, { provide: PrismaService, useValue: mockPrisma }],
     }).compile();
     service = module.get(PaymentTermsService);
+  });
+
+  describe('ensureSystemTerm', () => {
+    it('returns the existing built-in term without writing', async () => {
+      await expect(service.ensureSystemTerm('dist-1')).resolves.toBe(systemTerm);
+      expect(mockPrisma.paymentTerm.createMany).not.toHaveBeenCalled();
+    });
+
+    it('creates it on first use, tolerating another request creating it at the same moment', async () => {
+      mockPrisma.paymentTerm.findUnique.mockResolvedValue(null);
+      // Lost the race: the insert is skipped as a duplicate, the row is still there to read.
+      mockPrisma.paymentTerm.createMany.mockResolvedValue({ count: 0 });
+      mockPrisma.paymentTerm.findUniqueOrThrow.mockResolvedValue(systemTerm);
+
+      await expect(service.ensureSystemTerm('dist-1')).resolves.toBe(systemTerm);
+      expect(mockPrisma.paymentTerm.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true }));
+    });
   });
 
   describe('findAll', () => {

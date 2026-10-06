@@ -39,20 +39,28 @@ export class PaymentTermsService {
 
   /**
    * The distributor's built-in "let the accounting software decide" term,
-   * created the first time anything asks for it. The (distributorId,
-   * systemKey) unique key makes concurrent first calls safe.
+   * created the first time anything asks for it.
+   *
+   * Insert-ignoring-duplicates then read, not `upsert`: Prisma's upsert can
+   * lose a concurrent first-use race and throw on the (distributorId,
+   * systemKey) unique key. ON CONFLICT DO NOTHING cannot.
    */
   async ensureSystemTerm(distributorId: string, db: Db = this.prisma): Promise<PaymentTerm> {
-    return db.paymentTerm.upsert({
-      where: { distributorId_systemKey: { distributorId, systemKey: ACCOUNTING_SYSTEM_TERM_KEY } },
-      create: {
-        distributorId,
-        systemKey: ACCOUNTING_SYSTEM_TERM_KEY,
-        name: ACCOUNTING_SYSTEM_TERM_NAME,
-        type: PaymentTermType.ACCOUNTING_SYSTEM_DEFAULT,
-      },
-      update: {},
+    const where = { distributorId_systemKey: { distributorId, systemKey: ACCOUNTING_SYSTEM_TERM_KEY } };
+    const existing = await db.paymentTerm.findUnique({ where });
+    if (existing) return existing;
+    await db.paymentTerm.createMany({
+      data: [
+        {
+          distributorId,
+          systemKey: ACCOUNTING_SYSTEM_TERM_KEY,
+          name: ACCOUNTING_SYSTEM_TERM_NAME,
+          type: PaymentTermType.ACCOUNTING_SYSTEM_DEFAULT,
+        },
+      ],
+      skipDuplicates: true,
     });
+    return db.paymentTerm.findUniqueOrThrow({ where });
   }
 
   async findAll(distributorId: string) {
