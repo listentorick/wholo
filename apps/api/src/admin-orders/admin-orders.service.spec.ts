@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
+import { PaymentTermResolutionService } from '../payment-terms/payment-term-resolution.service';
 
 const mockPrisma = {
   // Distributor local date for 'overdue' (ADR-072); UTC when unset.
@@ -27,6 +28,15 @@ const mockPrisma = {
 };
 
 const mockOutbox = { writeEvent: jest.fn() };
+const NET_30 = { id: 'pt-1', name: 'Net 30', type: 'DAYS_AFTER_INVOICE', days: 30, dayOfWeek: null, dayOfMonth: null };
+const PAYMENT_TERM_SNAPSHOT = {
+  invoiceDate: new Date('2026-10-04T00:00:00Z'),
+  dueDate: new Date('2026-11-03T00:00:00Z'),
+  paymentTermIdSnapshot: 'pt-1',
+  paymentTermSnapshot: { name: 'Net 30', type: 'DAYS_AFTER_INVOICE', days: 30, dayOfWeek: null, dayOfMonth: null },
+  paymentTermSourceSnapshot: 'TRADER_CUSTOMER_OVERRIDE',
+};
+const mockPaymentTermResolution = { snapshotForAcceptance: jest.fn(), resolve: jest.fn() };
 const mockAudit = { record: jest.fn() };
 const mockR2 = {
   deliveryBucket: 'wholo-deliveries',
@@ -64,6 +74,11 @@ const makeOrder = (overrides = {}) => ({
   customer: { id: 'customer-1', name: 'Test Customer' },
   lines: [],
   invoiceExports: [],
+  invoiceDate: null,
+  dueDate: null,
+  paymentTermIdSnapshot: null,
+  paymentTermSnapshot: null,
+  paymentTermSourceSnapshot: null,
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
   ...overrides,
@@ -74,6 +89,8 @@ describe('AdminOrdersService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockPaymentTermResolution.snapshotForAcceptance.mockResolvedValue(PAYMENT_TERM_SNAPSHOT);
+    mockPaymentTermResolution.resolve.mockResolvedValue({ term: NET_30, source: 'DISTRIBUTOR_DEFAULT' });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AdminOrdersService,
@@ -81,6 +98,7 @@ describe('AdminOrdersService', () => {
         { provide: OutboxService, useValue: mockOutbox },
         { provide: AuditService, useValue: mockAudit },
         { provide: R2StorageService, useValue: mockR2 },
+        { provide: PaymentTermResolutionService, useValue: mockPaymentTermResolution },
       ],
     }).compile();
     service = module.get(AdminOrdersService);
@@ -211,6 +229,73 @@ describe('AdminOrdersService', () => {
     it('throws NotFoundException when order belongs to different distributor', async () => {
       mockPrisma.order.findFirst.mockResolvedValue(null);
       await expect(service.getOrder('order-1', 'dist-2')).rejects.toThrow(NotFoundException);
+    });
+
+    it('shows the payment terms frozen at acceptance', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(
+        makeOrder({ status: OrderStatus.ACCEPTED, ...PAYMENT_TERM_SNAPSHOT }),
+      );
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.paymentTerms).toEqual({
+        calculated: true,
+        invoiceDate: '2026-10-04',
+        dueDate: '2026-11-03',
+        term: { id: 'pt-1', name: 'Net 30', type: 'DAYS_AFTER_INVOICE', summary: '30 days after the invoice date' },
+        source: 'TRADER_CUSTOMER_OVERRIDE',
+        accountingProvider: null,
+      });
+      expect(mockPaymentTermResolution.resolve).not.toHaveBeenCalled();
+    });
+
+    it('shows the term acceptance would apply to a submitted order, without dates', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder({ status: OrderStatus.SUBMITTED }));
+
+      const result = await service.getOrder('order-1', 'dist-1');
+
+      expect(result.paymentTerms).toEqual({
+        calculated: false,
+        invoiceDate: null,
+        dueDate: null,
+        term: { id: 'pt-1', name: 'Net 30', type: 'DAYS_AFTER_INVOICE', summary: '30 days after the invoice date' },
+        source: 'DISTRIBUTOR_DEFAULT',
+        accountingProvider: null,
+      });
+    });
+
+    it('shows an order accepted before any default was chosen as left to the accounting system', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(
+        makeOrder({
+          status: OrderStatus.ACCEPTED,
+          invoiceDate: new Date('2026-10-04T00:00:00Z'),
+          paymentTermSnapshot: { name: 'Set by accounting software', type: 'ACCOUNTING_SYSTEM_DEFAULT', days: null, dayOfWeek: null, dayOfMonth: null },
+          paymentTermSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
+        }),
+      );
+
+      expect((await service.getOrder('order-1', 'dist-1')).paymentTerms).toEqual({
+        calculated: true,
+        invoiceDate: '2026-10-04',
+        dueDate: null,
+        term: { id: null, name: 'Set by accounting software', type: 'ACCOUNTING_SYSTEM_DEFAULT', summary: 'Due date set by the accounting software' },
+        source: 'DISTRIBUTOR_DEFAULT',
+        accountingProvider: null,
+      });
+    });
+
+    it('names the integration handling the invoice: the connected one before export, the export\'s after', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder({ status: OrderStatus.SUBMITTED }));
+      mockPrisma.accountingConnection.findFirst.mockResolvedValueOnce({ provider: 'XERO' });
+      expect((await service.getOrder('order-1', 'dist-1')).paymentTerms?.accountingProvider).toBe('XERO');
+
+      mockPrisma.accountingConnection.findFirst.mockResolvedValueOnce(null);
+      expect((await service.getOrder('order-1', 'dist-1')).paymentTerms?.accountingProvider).toBeNull();
+    });
+
+    it('has no payment terms for an order rejected before acceptance', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue(makeOrder({ status: OrderStatus.REJECTED }));
+      expect((await service.getOrder('order-1', 'dist-1')).paymentTerms).toBeNull();
     });
 
     it('formats requestedDeliveryDate as a date-only string', async () => {
@@ -549,11 +634,14 @@ describe('AdminOrdersService', () => {
             status: OrderStatus.ACCEPTED,
             acceptedByActorType: AcceptedByActorType.USER,
             acceptedByUserId: 'user-1',
+            // Payment terms frozen at acceptance (ADR-075).
+            ...PAYMENT_TERM_SNAPSHOT,
           }),
         }),
       );
       expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
-        expect.anything(), 'Order', 'order-1', 'OrderAccepted', expect.any(Object),
+        expect.anything(), 'Order', 'order-1', 'OrderAccepted',
+        expect.objectContaining({ invoiceDate: '2026-10-04', dueDate: '2026-11-03' }),
       );
       expect(mockAudit.record).toHaveBeenCalledWith(
         mockPrisma,

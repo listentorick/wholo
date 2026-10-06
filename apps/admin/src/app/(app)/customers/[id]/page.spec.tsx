@@ -66,7 +66,7 @@ function makeCustomer(status: TradeRelationshipStatus, overrides: Partial<Custom
       addressLine1: null, addressLine2: null, addressCity: null, addressState: null, addressPostcode: null, addressCountry: null,
       billingLine1: null, billingLine2: null, billingCity: null, billingState: null, billingPostcode: null, billingCountry: null,
     },
-    accountNumber: null, creditLimit: null, minimumOrderSpend: null, paymentTerms: null, notes: null,
+    accountNumber: null, creditLimit: null, minimumOrderSpend: null, paymentTermId: null, paymentTerm: null, notes: null,
     deliveryLine1: null, deliveryLine2: null, deliveryCity: null, deliveryState: null, deliveryPostcode: null, deliveryCountry: null,
     billingLine1: null, billingLine2: null, billingCity: null, billingState: null, billingPostcode: null, billingCountry: null,
     priceListId: null, priceList: null, deliveryProfileId: null, deliveryProfile: null,

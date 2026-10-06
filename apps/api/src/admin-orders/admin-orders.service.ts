@@ -21,6 +21,8 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { distributorTodays, invoicePaymentSelect, paymentFilterWhere, toOrderInvoicePayment } from '../accounting/order-invoice-payment';
 import { OutboxService } from '../outbox/outbox.service';
+import { acceptedPaymentFields, PaymentTermResolutionService } from '../payment-terms/payment-term-resolution.service';
+import { pendingOrderPaymentTerms, snapshottedOrderPaymentTerms } from '../payment-terms/order-payment-terms';
 import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { OrderQueryDto } from './dto/order-query.dto';
@@ -84,6 +86,11 @@ const orderSelect = {
   notes: true,
   acceptanceModeSnapshot: true,
   acceptanceModeSourceSnapshot: true,
+  invoiceDate: true,
+  dueDate: true,
+  paymentTermIdSnapshot: true,
+  paymentTermSnapshot: true,
+  paymentTermSourceSnapshot: true,
   submittedAt: true,
   acceptedAt: true,
   acceptedByActorType: true,
@@ -126,6 +133,7 @@ export class AdminOrdersService {
     private outbox: OutboxService,
     private audit: AuditService,
     private r2: R2StorageService,
+    private paymentTermResolution: PaymentTermResolutionService,
   ) {}
 
   async listOrders(distributorId: string, query: OrderQueryDto) {
@@ -286,7 +294,25 @@ export class AdminOrdersService {
       select: orderSelect,
     });
     if (!order) throw new NotFoundException('Order not found');
-    return this.formatOrder(order, await this.todayFor(order.distributorId));
+    const formatted = this.formatOrder(order, await this.todayFor(order.distributorId));
+    // Not frozen yet — show the term acceptance would apply now (ADR-075).
+    if (order.status === OrderStatus.SUBMITTED) {
+      const { term, source } = await this.paymentTermResolution.resolve(distributorId, order.traderCustomerId);
+      formatted.paymentTerms = pendingOrderPaymentTerms(term, source);
+    }
+    if (formatted.paymentTerms) {
+      // The integration that has (or will get) this order's invoice.
+      formatted.paymentTerms.accountingProvider =
+        order.invoiceExports[0]?.provider ??
+        (
+          await this.prisma.accountingConnection.findFirst({
+            where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+            select: { provider: true },
+          })
+        )?.provider ??
+        null;
+    }
+    return formatted;
   }
 
   async getOrderAuditLog(orderId: string, distributorId: string, query: AuditLogQueryDto) {
@@ -465,6 +491,13 @@ export class AdminOrdersService {
 
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx) => {
+      // Payment terms are frozen at acceptance (ADR-075).
+      const paymentTerms = await this.paymentTermResolution.snapshotForAcceptance(
+        distributorId,
+        order.traderCustomerId,
+        now,
+        tx,
+      );
       const u = await tx.order.update({
         where: { id: orderId },
         data: {
@@ -472,6 +505,7 @@ export class AdminOrdersService {
           acceptedAt: now,
           acceptedByActorType: AcceptedByActorType.USER,
           acceptedByUserId,
+          ...paymentTerms,
         },
         select: orderSelect,
       });
@@ -487,6 +521,7 @@ export class AdminOrdersService {
         status: OrderStatus.ACCEPTED,
         acceptedByActorType: AcceptedByActorType.USER,
         acceptedByUserId,
+        ...acceptedPaymentFields(paymentTerms),
         occurredAt: now.toISOString(),
       });
       const actor = await tx.user.findUnique({
@@ -716,6 +751,7 @@ export class AdminOrdersService {
       cancelledAt: order.cancelledAt?.toISOString() ?? null,
       cancelledByUserId: order.cancelledByUserId,
       cancellationReason: order.cancellationReason,
+      paymentTerms: snapshottedOrderPaymentTerms(order),
       traderCustomer: order.customer ? { id: order.customer.id, name: order.customer.name } : null,
       invoiceExport: order.invoiceExports[0]
         ? {

@@ -15,6 +15,8 @@ import {
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PaymentTermsService } from '../payment-terms/payment-terms.service';
+import { customerPaymentTermFields, customerPaymentTermSelect } from '../payment-terms/customer-payment-term';
 import { RELATIONSHIP_EVENTS, RelationshipCreatedOrigin, relationshipEventFields } from '../common/relationship-events';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -45,6 +47,7 @@ const relationshipInclude = {
       priceList: { select: { id: true, name: true } },
       deliveryProfileId: true,
       deliveryProfile: { select: { id: true, name: true } },
+      ...customerPaymentTermSelect,
     },
   },
   catalogues: {
@@ -61,6 +64,7 @@ export class AdminCustomersService {
     private prisma: PrismaService,
     private config: ConfigService,
     private outbox: OutboxService,
+    private paymentTerms: PaymentTermsService,
   ) {}
 
   async findAll(distributorId: string, query: CustomerQueryDto) {
@@ -172,6 +176,7 @@ export class AdminCustomersService {
       where: { id: distributorId },
       select: { name: true },
     });
+    await this.assertAssignablePaymentTerm(distributorId, dto.paymentTermId);
 
     const rel = await this.prisma.$transaction(async (tx) => {
       let orgId: string;
@@ -233,7 +238,6 @@ export class AdminCustomersService {
           accountNumber: dto.accountNumber,
           creditLimit: dto.creditLimit != null ? new Prisma.Decimal(dto.creditLimit) : null,
           minimumOrderSpend: dto.minimumOrderSpend != null ? new Prisma.Decimal(dto.minimumOrderSpend) : null,
-          paymentTerms: dto.paymentTerms,
           notes: dto.notes,
           deliveryLine1: dto.deliveryLine1,
           deliveryLine2: dto.deliveryLine2,
@@ -243,6 +247,12 @@ export class AdminCustomersService {
           deliveryCountry: dto.deliveryCountry,
         },
       });
+
+      if (dto.paymentTermId) {
+        await tx.traderCustomerSettings.create({
+          data: { tradeRelationshipId: relationship.id, paymentTermId: dto.paymentTermId },
+        });
+      }
 
       await this.outbox.writeEvent(tx, 'TradeRelationship', relationship.id, RELATIONSHIP_EVENTS.created, {
         ...relationshipEventFields(relationship, null, relationship.status, relationship.createdAt),
@@ -268,6 +278,7 @@ export class AdminCustomersService {
       select: { id: true },
     });
     if (!rel) throw new NotFoundException('Customer not found');
+    await this.assertAssignablePaymentTerm(distributorId, dto.paymentTermId);
 
     if (dto.accountNumber) {
       const conflict = await this.prisma.tradeRelationship.findFirst({
@@ -306,7 +317,6 @@ export class AdminCustomersService {
             minimumOrderSpend:
               dto.minimumOrderSpend != null ? new Prisma.Decimal(dto.minimumOrderSpend) : null,
           }),
-          ...(dto.paymentTerms !== undefined && { paymentTerms: dto.paymentTerms }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
           ...(dto.deliveryLine1 !== undefined && { deliveryLine1: dto.deliveryLine1 }),
           ...(dto.deliveryLine2 !== undefined && { deliveryLine2: dto.deliveryLine2 }),
@@ -316,9 +326,28 @@ export class AdminCustomersService {
           ...(dto.deliveryCountry !== undefined && { deliveryCountry: dto.deliveryCountry }),
         },
       }),
+      ...(dto.paymentTermId !== undefined
+        ? [
+            this.prisma.traderCustomerSettings.upsert({
+              where: { tradeRelationshipId: rel.id },
+              create: { tradeRelationshipId: rel.id, paymentTermId: dto.paymentTermId },
+              update: { paymentTermId: dto.paymentTermId },
+            }),
+          ]
+        : []),
     ]);
 
     return this.findOne(customerId, distributorId);
+  }
+
+  // A customer may only be put on an active term of this same distributor.
+  // The built-in accounting-software term is allowed — "let Xero decide for
+  // this customer" is a legitimate override of a calculated default.
+  private async assertAssignablePaymentTerm(distributorId: string, paymentTermId: string | null | undefined) {
+    if (!paymentTermId) return;
+    const term = await this.paymentTerms.getOwned(paymentTermId, distributorId).catch(() => null);
+    if (!term) throw new BadRequestException('Payment term not found');
+    if (!term.active) throw new UnprocessableEntityException('That payment term is inactive');
   }
 
   async remove(customerId: string, distributorId: string) {
@@ -525,7 +554,6 @@ export class AdminCustomersService {
       accountNumber: rel.accountNumber,
       creditLimit: rel.creditLimit,
       minimumOrderSpend: rel.minimumOrderSpend,
-      paymentTerms: rel.paymentTerms,
       notes: rel.notes,
       recentContactSelfDeclared: rel.recentContactSelfDeclared,
       deliveryLine1: rel.deliveryLine1,
@@ -544,6 +572,7 @@ export class AdminCustomersService {
       priceList: rel.traderCustomerSettings?.priceList ?? null,
       deliveryProfileId: rel.traderCustomerSettings?.deliveryProfileId ?? null,
       deliveryProfile: rel.traderCustomerSettings?.deliveryProfile ?? null,
+      ...customerPaymentTermFields(rel.traderCustomerSettings),
       catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
       invitations: (rel.invitations ?? []).map((inv: any) => ({
         id: inv.id,

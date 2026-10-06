@@ -60,7 +60,7 @@ function makeCustomer(overrides: Partial<Customer> = {}): Customer {
     accountNumber: 'ACC-042',
     creditLimit: null,
     minimumOrderSpend: null,
-    paymentTerms: null,
+    paymentTermId: null, paymentTerm: null,
     notes: null,
     recentContactSelfDeclared: null,
     deliveryLine1: null,

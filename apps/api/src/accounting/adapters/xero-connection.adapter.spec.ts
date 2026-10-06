@@ -697,6 +697,14 @@ describe('XeroAccountingAdapter', () => {
       );
     });
 
+    it('sends the requested due date (ADR-075)', async () => {
+      mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [createdInvoice] } });
+
+      await adapter.createInvoice(tokenSet, 'tenant-1', { ...request, dueDate: '2026-08-08' }, 'export-1:1');
+
+      expect(mockCreateInvoices.mock.calls[0][1].invoices[0]).toMatchObject({ date: '2026-07-09', dueDate: '2026-08-08' });
+    });
+
     it('maps each target status onto the matching Xero status', async () => {
       for (const targetStatus of ['SUBMITTED', 'AUTHORISED'] as const) {
         mockCreateInvoices.mockResolvedValueOnce({ body: { invoices: [createdInvoice] } });

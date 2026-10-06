@@ -10,6 +10,7 @@ import { DetailPageLayout } from '@/components/detail/DetailPageLayout';
 import { DetailActionsPanel, type ActionItem } from '@/components/detail/DetailActionsPanel';
 import { OrderInvoiceExportBadge } from '@/components/orders/OrderInvoiceExportBadge';
 import { InvoicePaymentCard } from '@/components/orders/InvoicePaymentCard';
+import { OrderPaymentTermsCard } from '@/components/orders/OrderPaymentTermsCard';
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { Order, OrderLine, AuditLogEntry, AuditLogQueryParams } from '@wholo/types';
@@ -400,6 +401,16 @@ export default function OrderDetailPage() {
                       .join(', ')}
                   </p>
                 )}
+              </div>
+            )}
+
+            {order.paymentTerms && (
+              // Same order slot as Delivery, so it sits straight after it.
+              <div className="order-1 lg:order-2">
+                <OrderPaymentTermsCard
+                  paymentTerms={order.paymentTerms}
+                  syncedDueDate={order.invoiceExport?.payment?.dueDate}
+                />
               </div>
             )}
 

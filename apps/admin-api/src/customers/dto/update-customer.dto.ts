@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsDecimal, MinLength, ValidateIf } from 'class-validator';
 
 // Status is intentionally not editable here — see apps/api's UpdateCustomerDto
 // for why (moves only through the dedicated transition endpoints).
@@ -28,9 +28,11 @@ export class UpdateCustomerDto {
   @IsDecimal({ decimal_digits: '0,2' })
   minimumOrderSpend?: string;
 
+  // null = back to the distributor default payment term.
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  paymentTerms?: string;
+  paymentTermId?: string | null;
 
   @IsOptional()
   @IsString()

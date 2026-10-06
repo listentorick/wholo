@@ -128,7 +128,6 @@ describe('Customers (integration)', () => {
         customerId: CUSTOMER_A,
         status: TradeRelationshipStatus.ACTIVE,
         accountNumber: 'ACC-A',
-        paymentTerms: 'NET 30',
         notes: 'internal note about A',
         creditLimit: 5000,
         deliveryLine1: '1 Wine Lane',
@@ -159,7 +158,6 @@ describe('Customers (integration)', () => {
       expect(res.body.organisationId).toBe(CUSTOMER_A);
       expect(res.body.distributorId).toBe(DIST_X);
       expect(res.body.accountNumber).toBe('ACC-A');
-      expect(res.body.paymentTerms).toBe('NET 30');
       expect(res.body.deliveryLine1).toBe('1 Wine Lane');
       expect(res.body.deliveryCity).toBe('Melbourne');
       expect(res.body.organisation.name).toBe('Integration Customer A');

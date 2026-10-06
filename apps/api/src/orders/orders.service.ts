@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { distributorTodays, invoicePaymentSelect, toOrderInvoicePayment } from '../accounting/order-invoice-payment';
 import { OutboxService } from '../outbox/outbox.service';
+import { acceptedPaymentFields, PaymentTermResolutionService } from '../payment-terms/payment-term-resolution.service';
 import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
@@ -115,6 +116,7 @@ export class OrdersService {
     private deliveryAvailability: DeliveryAvailabilityService,
     private r2Storage: R2StorageService,
     private metrics: MetricsService,
+    private paymentTermResolution: PaymentTermResolutionService,
   ) {}
 
   async submitOrder(
@@ -278,6 +280,12 @@ export class OrdersService {
     const now = new Date();
 
     const order = await this.prisma.$transaction(async (tx) => {
+      // Auto-accepted orders get their payment terms frozen now, exactly as a
+      // manual accept would (ADR-075).
+      const paymentTerms = isAutoAccept
+        ? await this.paymentTermResolution.snapshotForAcceptance(distributor.id, traderCustomerId, now, tx)
+        : null;
+
       // Create commercial order
       const newOrder = await tx.order.create({
         data: {
@@ -307,6 +315,7 @@ export class OrdersService {
             acceptedByActorType: AcceptedByActorType.SYSTEM,
             acceptedByUserId: null,
           }),
+          ...paymentTerms,
         },
         select: orderSelect,
       });
@@ -379,6 +388,7 @@ export class OrdersService {
           status: OrderStatus.ACCEPTED,
           acceptedByActorType: AcceptedByActorType.SYSTEM,
           acceptedByUserId: null,
+          ...acceptedPaymentFields(paymentTerms),
         });
       }
 

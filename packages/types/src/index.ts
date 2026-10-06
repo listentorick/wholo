@@ -307,8 +307,92 @@ export interface Order {
   // admin and portal order resources (unlike invoiceExport above). Omits
   // internal diagnostics (ids, error detail) that are admin-only.
   invoiceSummary?: OrderInvoiceSummary | null;
+  // Admin order resource only. Frozen at acceptance; for a submitted order,
+  // what would apply if it were accepted now (calculated: false). null for
+  // orders that will never be invoiced, or accepted before ADR-075.
+  paymentTerms?: OrderPaymentTerms | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Payment terms (ADR-075) ─────────────────────────────────────────────────
+
+export type PaymentTermType =
+  | 'ACCOUNTING_SYSTEM_DEFAULT'
+  | 'DUE_IMMEDIATELY'
+  | 'DAYS_AFTER_INVOICE'
+  | 'DAYS_AFTER_MONTH_END'
+  | 'DAY_OF_WEEK'
+  | 'DAY_OF_MONTH';
+
+export type PaymentTermSource = 'DISTRIBUTOR_DEFAULT' | 'TRADER_CUSTOMER_OVERRIDE';
+
+export interface PaymentTermRule {
+  type: PaymentTermType;
+  days?: number | null;
+  /** ISO weekday, 1 = Monday … 7 = Sunday. */
+  dayOfWeek?: number | null;
+  /** 1–31; clamped to the last day of shorter months. */
+  dayOfMonth?: number | null;
+}
+
+export interface PaymentTerm {
+  id: string;
+  distributorId: string;
+  name: string;
+  type: PaymentTermType;
+  days: number | null;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  /** Plain-English description of the rule. */
+  summary: string;
+  /** The built-in "Set by accounting software" term — can only be made the default. */
+  isSystem: boolean;
+  isDefault: boolean;
+  active: boolean;
+  customerCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentTermListResponse {
+  /** The distributor's own terms, then the built-in accounting-integration term. */
+  data: PaymentTerm[];
+  defaultPaymentTermId: string;
+  /** The connected accounting integration the built-in term defers to; null = none, so that term isn't offered. */
+  accountingProvider: AccountingProvider | null;
+}
+
+export interface CreatePaymentTermRequest extends PaymentTermRule {
+  name: string;
+  makeDefault?: boolean;
+}
+
+export interface UpdatePaymentTermRequest extends Partial<PaymentTermRule> {
+  name?: string;
+  active?: boolean;
+  /** Only true — the default moves by making another term the default. */
+  isDefault?: true;
+}
+
+export interface PaymentTermPreview {
+  summary: string;
+  /** YYYY-MM-DD; dueDate null when the accounting system decides. */
+  examples: { invoiceDate: string; dueDate: string | null }[];
+}
+
+export interface OrderPaymentTerms {
+  /** true = frozen at acceptance; false = what applies if accepted now. */
+  calculated: boolean;
+  /** YYYY-MM-DD — the acceptance day in the distributor's timezone. */
+  invoiceDate: string | null;
+  /** YYYY-MM-DD Stocdup's calculated date; null when the accounting system decides. */
+  dueDate: string | null;
+  /** id null = the built-in accounting-software rule, before the distributor chose any default. */
+  term: { id: string | null; name: string; type: PaymentTermType; summary: string };
+  source: PaymentTermSource;
+  /** The accounting integration handling this order's invoice (its export's, else the one connected now); null = none. */
+  accountingProvider: AccountingProvider | null;
 }
 
 export interface OrderInvoiceExportSummary {
@@ -779,7 +863,9 @@ export interface Customer {
   accountNumber: string | null;
   creditLimit: string | null;
   minimumOrderSpend: string | null;
-  paymentTerms: string | null;
+  /** The customer's payment-term override; null = on the distributor default (ADR-075). */
+  paymentTermId: string | null;
+  paymentTerm: { id: string; name: string; summary: string } | null;
   notes: string | null;
   recentContactSelfDeclared: boolean | null;
   deliveryLine1: string | null;
@@ -847,7 +933,8 @@ export interface CreateCustomerRequest {
   accountNumber?: string;
   creditLimit?: string;
   minimumOrderSpend?: string;
-  paymentTerms?: string;
+  /** null (update only) = back to the distributor default. */
+  paymentTermId?: string | null;
   notes?: string;
   deliveryLine1?: string;
   deliveryLine2?: string;

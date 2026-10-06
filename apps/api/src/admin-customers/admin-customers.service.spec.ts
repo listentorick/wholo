@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AdminCustomersService } from './admin-customers.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { PaymentTermsService } from '../payment-terms/payment-terms.service';
 
 const mockPrisma = {
   tradeRelationship: {
@@ -28,6 +29,10 @@ const mockPrisma = {
     create: jest.fn(),
     updateMany: jest.fn(),
   },
+  traderCustomerSettings: {
+    create: jest.fn(),
+    upsert: jest.fn(),
+  },
   $transaction: jest.fn(),
 };
 
@@ -36,6 +41,7 @@ const mockConfig = {
   getOrThrow: jest.fn().mockReturnValue('http://portal.test'),
 };
 const mockOutbox = { writeEvent: jest.fn().mockResolvedValue({}) };
+const mockPaymentTerms = { getOwned: jest.fn() };
 
 const makeOrg = (overrides = {}) => ({
   id: 'org-1',
@@ -61,7 +67,6 @@ const makeRel = (overrides = {}) => ({
   accountNumber: null,
   creditLimit: null,
   minimumOrderSpend: null,
-  paymentTerms: null,
   notes: null,
   deliveryLine1: null, deliveryLine2: null, deliveryCity: null,
   deliveryState: null, deliveryPostcode: null, deliveryCountry: null,
@@ -89,6 +94,7 @@ describe('AdminCustomersService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: ConfigService, useValue: mockConfig },
         { provide: OutboxService, useValue: mockOutbox },
+        { provide: PaymentTermsService, useValue: mockPaymentTerms },
       ],
     }).compile();
     service = module.get(AdminCustomersService);
@@ -510,6 +516,60 @@ describe('AdminCustomersService', () => {
           where: { customerId: 'org-1', distributorId: 'dist-1', deletedAt: null },
         }),
       );
+    });
+  });
+
+  describe('payment term assignment', () => {
+    const term = { id: 'pt-1', name: 'Net 30', type: 'DAYS_AFTER_INVOICE', days: 30, dayOfWeek: null, dayOfMonth: null };
+
+    it('returns the assigned term with a plain-English summary, and null when on the default', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValueOnce(
+        makeRel({ traderCustomerSettings: { paymentTermId: 'pt-1', paymentTerm: term } }),
+      );
+      const assigned = await service.findOne('org-1', 'dist-1');
+      expect(assigned.paymentTermId).toBe('pt-1');
+      expect(assigned.paymentTerm).toEqual({ id: 'pt-1', name: 'Net 30', summary: '30 days after the invoice date' });
+
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValueOnce(makeRel());
+      const onDefault = await service.findOne('org-1', 'dist-1');
+      expect(onDefault.paymentTermId).toBeNull();
+      expect(onDefault.paymentTerm).toBeNull();
+    });
+
+    it('rejects a term that is not this distributor\'s', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' });
+      mockPaymentTerms.getOwned.mockRejectedValue(new NotFoundException());
+
+      await expect(service.update('org-1', 'dist-1', { paymentTermId: 'pt-other' })).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects an inactive term', async () => {
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' });
+      mockPaymentTerms.getOwned.mockResolvedValue({ id: 'pt-1', active: false });
+
+      await expect(service.update('org-1', 'dist-1', { paymentTermId: 'pt-1' })).rejects.toThrow(
+        UnprocessableEntityException,
+      );
+    });
+
+    it('accepts null (back to the default) without looking up a term', async () => {
+      mockPrisma.tradeRelationship.findFirst
+        .mockResolvedValueOnce({ id: 'rel-1', customerId: 'org-1' })
+        .mockResolvedValueOnce(makeRel());
+      mockPrisma.$transaction.mockResolvedValue([{}, {}, {}]);
+
+      const result = await service.update('org-1', 'dist-1', { paymentTermId: null });
+      expect(result.paymentTermId).toBeNull();
+      expect(mockPaymentTerms.getOwned).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown term on create before anything is written', async () => {
+      mockPaymentTerms.getOwned.mockRejectedValue(new NotFoundException());
+      await expect(
+        service.create('dist-1', { name: 'New Co', paymentTermId: 'pt-other' } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

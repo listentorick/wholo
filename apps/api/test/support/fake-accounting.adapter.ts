@@ -149,7 +149,8 @@ export class FakeAccountingAdapter implements AccountingConnectionAdapter {
       amountCredited: money(0),
       amountDue: money(total),
       issueDate: request.issueDate,
-      dueDate: request.issueDate,
+      // Like a real provider: the requested due date, else its own default terms.
+      dueDate: request.dueDate ?? request.issueDate,
       fullyPaidOn: null,
       providerUpdatedAt: new Date(),
     });

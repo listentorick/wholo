@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer } from '@wholo/types';
 import { adminCustomersApi, ApiError } from '@wholo/admin-api-client';
 import { FormCard, FieldLabel, FieldError, TextInput, Textarea, AddressGrid, WizardSectionHeading } from './form-helpers';
 import type { OnTabSaveStateChange } from './tab-save-state';
+import { PaymentTermSelect } from '@/components/payment-terms/PaymentTermSelect';
 
 const schema = z.object({
   accountNumber: z.string().optional(),
@@ -25,7 +26,8 @@ const schema = z.object({
       (v) => !v || (/^\d+(\.\d{0,2})?$/.test(v) && parseFloat(v) >= 0),
       'Enter a valid amount (e.g. 50.00)',
     ),
-  paymentTerms: z.string().optional(),
+  // '' = the distributor default payment term.
+  paymentTermId: z.string(),
   notes: z.string().optional(),
   billingLine1: z.string().optional(),
   billingLine2: z.string().optional(),
@@ -54,6 +56,7 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<FormValues>({
@@ -62,7 +65,7 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
       accountNumber: customer.accountNumber ?? '',
       creditLimit: customer.creditLimit ?? '',
       minimumOrderSpend: customer.minimumOrderSpend ?? '',
-      paymentTerms: customer.paymentTerms ?? '',
+      paymentTermId: customer.paymentTermId ?? '',
       notes: customer.notes ?? '',
       billingLine1: customer.billingLine1 ?? '',
       billingLine2: customer.billingLine2 ?? '',
@@ -83,7 +86,7 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
         accountNumber: data.accountNumber || undefined,
         creditLimit: data.creditLimit || undefined,
         minimumOrderSpend: data.minimumOrderSpend || undefined,
-        paymentTerms: data.paymentTerms || undefined,
+        paymentTermId: data.paymentTermId || null,
         notes: data.notes || undefined,
         billingLine1: data.billingLine1 || undefined,
         billingLine2: data.billingLine2 || undefined,
@@ -154,10 +157,13 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
               </div>
               <FieldError message={errors.minimumOrderSpend?.message} />
             </div>
-            <div>
-              <FieldLabel htmlFor="paymentTerms">Payment terms</FieldLabel>
-              <TextInput id="paymentTerms" placeholder="30 days net" disabled={disabled} {...register('paymentTerms')} />
-            </div>
+            <Controller
+              control={control}
+              name="paymentTermId"
+              render={({ field }) => (
+                <PaymentTermSelect value={field.value} onChange={field.onChange} disabled={disabled} />
+              )}
+            />
             <div>
               <FieldLabel htmlFor="notes">Notes</FieldLabel>
               <Textarea id="notes" placeholder="Internal notes about this customer…" disabled={disabled} {...register('notes')} />
@@ -214,10 +220,13 @@ export function AccountTab({ customer, mode, onSaved, onNext, onBack, onSaveStat
             </div>
             <FieldError message={errors.minimumOrderSpend?.message} />
           </div>
-          <div>
-            <FieldLabel htmlFor="paymentTerms">Payment terms</FieldLabel>
-            <TextInput id="paymentTerms" placeholder="30 days net" disabled={disabled} {...register('paymentTerms')} />
-          </div>
+          <Controller
+            control={control}
+            name="paymentTermId"
+            render={({ field }) => (
+              <PaymentTermSelect value={field.value} onChange={field.onChange} disabled={disabled} />
+            )}
+          />
           <div>
             <FieldLabel htmlFor="notes">Notes</FieldLabel>
             <Textarea id="notes" placeholder="Internal notes about this customer…" disabled={disabled} {...register('notes')} />

@@ -3,6 +3,7 @@ import { OrganisationType, Prisma, TradeRelationshipStatus } from '@prisma/clien
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { RELATIONSHIP_EVENTS, relationshipEventFields } from '../common/relationship-events';
+import { customerPaymentTermFields, customerPaymentTermSelect } from '../payment-terms/customer-payment-term';
 
 const relationshipInclude = {
   customer: {
@@ -24,6 +25,7 @@ const relationshipInclude = {
       priceList: { select: { id: true, name: true } },
       deliveryProfileId: true,
       deliveryProfile: { select: { id: true, name: true } },
+      ...customerPaymentTermSelect,
     },
   },
   catalogues: {
@@ -139,7 +141,6 @@ export class CustomersService {
       accountNumber: rel.accountNumber,
       creditLimit: rel.creditLimit,
       minimumOrderSpend: rel.minimumOrderSpend,
-      paymentTerms: rel.paymentTerms,
       notes: rel.notes,
       recentContactSelfDeclared: rel.recentContactSelfDeclared,
       deliveryLine1: rel.deliveryLine1,
@@ -158,6 +159,7 @@ export class CustomersService {
       priceList: rel.traderCustomerSettings?.priceList ?? null,
       deliveryProfileId: rel.traderCustomerSettings?.deliveryProfileId ?? null,
       deliveryProfile: rel.traderCustomerSettings?.deliveryProfile ?? null,
+      ...customerPaymentTermFields(rel.traderCustomerSettings),
       catalogues: (rel.catalogues ?? []).map((cc: any) => cc.catalogue),
       invitations: (rel.invitations ?? []).map((inv: any) => ({
         id: inv.id,

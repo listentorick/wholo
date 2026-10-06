@@ -8,6 +8,7 @@ export { adminCataloguesApi } from './catalogues';
 export { adminOrdersApi } from './orders';
 export { adminPriceListsApi } from './price-lists';
 export { adminTaxTypesApi } from './tax-types';
+export { adminPaymentTermsApi } from './payment-terms';
 export { adminDeliveryProfilesApi } from './delivery-profiles';
 export { adminDeliveryRoutesApi } from './delivery-routes';
 export { adminDeliveryRunsApi } from './delivery-runs';

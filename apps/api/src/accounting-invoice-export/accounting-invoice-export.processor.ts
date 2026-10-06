@@ -353,7 +353,10 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       externalContactId: customerMapping.externalContact.externalContactId,
       reference: order.orderNumber,
       currency: order.currency,
-      issueDate: (order.acceptedAt ?? new Date()).toISOString().slice(0, 10),
+      // Frozen at acceptance in the distributor's timezone (ADR-075); orders
+      // accepted before that fall back to the acceptance instant's UTC date.
+      issueDate: (order.invoiceDate ?? order.acceptedAt ?? new Date()).toISOString().slice(0, 10),
+      ...(order.dueDate && { dueDate: order.dueDate.toISOString().slice(0, 10) }),
       targetStatus: connection.organisation.invoiceExportTargetStatus,
       lines,
     };
@@ -465,6 +468,7 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
             externalInvoiceId: result.externalInvoiceId,
             externalInvoiceNumber: result.externalInvoiceNumber ?? null,
             externalInvoiceStatus: result.externalInvoiceStatus ?? null,
+            requestedDueDate: order.dueDate,
             exportedAt: new Date(),
             failedAt: null,
             errorCode: null,

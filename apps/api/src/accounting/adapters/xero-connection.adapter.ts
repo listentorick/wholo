@@ -523,6 +523,8 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       type: Invoice.TypeEnum.ACCREC,
       contact: { contactID: request.externalContactId },
       date: request.issueDate,
+      // Absent = Xero applies the contact's (else the organisation's) terms.
+      ...(request.dueDate ? { dueDate: request.dueDate } : {}),
       reference: request.reference,
       currencyCode: CurrencyCode[request.currency as keyof typeof CurrencyCode],
       // Wholo order prices are tax-exclusive (tax is carried separately on

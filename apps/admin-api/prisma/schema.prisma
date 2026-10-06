@@ -85,6 +85,25 @@ enum AcceptanceModeSource {
   TRADER_CUSTOMER_OVERRIDE
 }
 
+// How an order's invoice due date is worked out (ADR-075). Calendar maths
+// runs from the invoice date (= acceptance date in the distributor's
+// timezone). ACCOUNTING_SYSTEM_DEFAULT deliberately computes nothing: no due
+// date is sent and the accounting system's own contact/organisation terms
+// decide it.
+enum PaymentTermType {
+  ACCOUNTING_SYSTEM_DEFAULT
+  DUE_IMMEDIATELY
+  DAYS_AFTER_INVOICE
+  DAYS_AFTER_MONTH_END
+  DAY_OF_WEEK
+  DAY_OF_MONTH
+}
+
+enum PaymentTermSource {
+  DISTRIBUTOR_DEFAULT
+  TRADER_CUSTOMER_OVERRIDE
+}
+
 enum AcceptedByActorType {
   USER
   SYSTEM
@@ -295,6 +314,7 @@ model Organisation {
   distributorSettings               DistributorSettings?
   priceLists                        PriceList[]                        @relation("DistributorPriceLists")
   taxTypes                          TaxType[]                          @relation("DistributorTaxTypes")
+  paymentTerms                      PaymentTerm[]                      @relation("DistributorPaymentTerms")
   deliveryProfiles                  DeliveryProfile[]                  @relation("DistributorDeliveryProfiles")
   deliveryRoutes                    DeliveryRoute[]                    @relation("DistributorDeliveryRoutes")
   deliveryRuns                      DeliveryRun[]                      @relation("DistributorDeliveryRuns")
@@ -496,7 +516,6 @@ model TradeRelationship {
   activeAccountNumber        String?
   creditLimit                Decimal?                           @db.Decimal(10, 2)
   minimumOrderSpend          Decimal?                           @db.Decimal(10, 2)
-  paymentTerms               String?
   notes                      String?
   recentContactSelfDeclared  Boolean?
   deliveryLine1              String?
@@ -633,6 +652,16 @@ model Order {
 
   acceptanceModeSnapshot       OrderAcceptanceMode
   acceptanceModeSourceSnapshot AcceptanceModeSource
+
+  // Payment terms resolved and frozen at acceptance (ADR-075) — null until
+  // the order is accepted. dueDate stays null when the term defers to the
+  // accounting system. paymentTermSnapshot is the term's rule as it stood
+  // (name/type/days/dayOfWeek/dayOfMonth), so later edits never rewrite it.
+  invoiceDate               DateTime?          @db.Date
+  dueDate                   DateTime?          @db.Date
+  paymentTermIdSnapshot     String?
+  paymentTermSnapshot       Json?
+  paymentTermSourceSnapshot PaymentTermSource?
 
   currency       String  @default("GBP")
   subtotalAmount Decimal @db.Decimal(10, 2)
@@ -974,7 +1003,11 @@ model DistributorSettings {
   // suggestion only — orders are never auto-moved/merged. No settings UI
   // in the initial native delivery-planning PBI; fixed default of 3.
   nearbyDeliveryWindowDays   Int                 @default(3)
+  // The payment term customers without an override get (ADR-075). null =
+  // the accounting system decides due dates.
+  defaultPaymentTermId       String?
   distributor                Organisation        @relation(fields: [distributorId], references: [id])
+  defaultPaymentTerm         PaymentTerm?        @relation("DistributorDefaultPaymentTerm", fields: [defaultPaymentTermId], references: [id])
 
   @@map("distributor_settings")
 }
@@ -1433,6 +1466,10 @@ model AccountingInvoiceExport {
   issueDate                DateTime?                     @db.Date
   dueDate                  DateTime?                     @db.Date
   fullyPaidOn              DateTime?                     @db.Date
+  // The due date Stocdup asked for when it created the invoice (the order's
+  // calculated dueDate, ADR-075). dueDate above is what the accounting system
+  // says now — it wins for display, since that system can change it.
+  requestedDueDate         DateTime?                     @db.Date
   providerUpdatedAt        DateTime?
   stateSyncedAt            DateTime?
   exportedAt               DateTime?
@@ -1559,9 +1596,11 @@ model TraderCustomerSettings {
   orderAcceptanceModeOverride OrderAcceptanceMode?
   priceListId                 String?
   deliveryProfileId           String?
+  paymentTermId               String?
   tradeRelationship           TradeRelationship    @relation(fields: [tradeRelationshipId], references: [id])
   priceList                   PriceList?           @relation(fields: [priceListId], references: [id])
   deliveryProfile             DeliveryProfile?     @relation(fields: [deliveryProfileId], references: [id])
+  paymentTerm                 PaymentTerm?         @relation(fields: [paymentTermId], references: [id])
 
   @@map("trader_customer_settings")
 }
@@ -1765,6 +1804,39 @@ model PriceListRule {
   @@index([priceListId, selectorType, productId])
   @@index([distributorId])
   @@map("price_list_rules")
+}
+
+// ─── Payment Terms ────────────────────────────────────────────────────────────
+// Named, reusable due-date rules (ADR-075). The distributor default lives on
+// DistributorSettings.defaultPaymentTermId; a customer override on
+// TraderCustomerSettings.paymentTermId. Never hard-deleted — orders snapshot
+// the rule, and the id is kept for audit.
+//
+// systemKey identifies a built-in term ("ACCOUNTING_SYSTEM_DEFAULT") — one per
+// distributor, created on demand and never editable. null for distributor-made
+// terms; Postgres treats nulls as distinct, so those never collide.
+
+model PaymentTerm {
+  id                     String                   @id @default(cuid())
+  distributorId          String
+  name                   String
+  type                   PaymentTermType
+  days                   Int?
+  // ISO weekday, 1 = Monday … 7 = Sunday.
+  dayOfWeek              Int?
+  // 1–31; clamped to the last day of shorter months.
+  dayOfMonth             Int?
+  systemKey              String?
+  active                 Boolean                  @default(true)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  distributor            Organisation             @relation("DistributorPaymentTerms", fields: [distributorId], references: [id])
+  customerSettings       TraderCustomerSettings[]
+  defaultForDistributors DistributorSettings[]    @relation("DistributorDefaultPaymentTerm")
+
+  @@unique([distributorId, systemKey])
+  @@index([distributorId, active])
+  @@map("payment_terms")
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────

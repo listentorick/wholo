@@ -11,6 +11,7 @@ import { CataloguesModule } from './catalogues/catalogues.module';
 import { OrdersModule } from './orders/orders.module';
 import { PriceListsModule } from './price-lists/price-lists.module';
 import { TaxTypesModule } from './tax-types/tax-types.module';
+import { PaymentTermsModule } from './payment-terms/payment-terms.module';
 import { AssetImagesModule } from './asset-images/asset-images.module';
 import { SettingsModule } from './settings/settings.module';
 import { DeliveryProfilesModule } from './delivery-profiles/delivery-profiles.module';
@@ -42,6 +43,7 @@ import { HealthController } from './health.controller';
     OrdersModule,
     PriceListsModule,
     TaxTypesModule,
+    PaymentTermsModule,
     AssetImagesModule,
     SettingsModule,
     DeliveryProfilesModule,

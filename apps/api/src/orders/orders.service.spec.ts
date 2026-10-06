@@ -8,6 +8,20 @@ import { AuditService } from '../audit/audit.service';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { MetricsService } from '@wholo/nest-telemetry';
+import { PaymentTermResolutionService } from '../payment-terms/payment-term-resolution.service';
+
+// What acceptance freezes onto an order (ADR-075) — Net 30 from 4 Oct.
+const PAYMENT_TERM_SNAPSHOT = {
+  invoiceDate: new Date('2026-10-04T00:00:00Z'),
+  dueDate: new Date('2026-11-03T00:00:00Z'),
+  paymentTermIdSnapshot: 'pt-1',
+  paymentTermSnapshot: { name: 'Net 30', type: 'DAYS_AFTER_INVOICE', days: 30, dayOfWeek: null, dayOfMonth: null },
+  paymentTermSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
+};
+const paymentTermResolutionProvider = () => ({
+  provide: PaymentTermResolutionService,
+  useValue: { snapshotForAcceptance: jest.fn().mockResolvedValue(PAYMENT_TERM_SNAPSHOT) },
+});
 
 const DISTRIBUTOR_ID = 'dist-1';
 const CUSTOMER_ID = 'cust-1';
@@ -99,6 +113,7 @@ describe('OrdersService — delivery date revalidation', () => {
         { provide: AuditService, useValue: mockAudit },
         { provide: DeliveryAvailabilityService, useValue: mockDelivery },
         { provide: R2StorageService, useValue: mockR2Storage },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 
@@ -223,6 +238,60 @@ describe('OrdersService — delivery date revalidation', () => {
     expect(orderCreate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ currency: 'USD' }) }),
     );
+  });
+
+  describe('payment terms (ADR-075)', () => {
+    function captureCreate() {
+      const captured: { data?: Record<string, unknown> } = {};
+      (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          order: {
+            create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => {
+              captured.data = data;
+              return Promise.resolve({
+                id: 'order-1', orderNumber: 'ORD-2024-00001', status: data.status, currency: 'GBP',
+                customer: null, invoiceExports: [], lines: [],
+                subtotalAmount: { toFixed: () => '20.00' }, taxAmount: { toFixed: () => '0.00' }, totalAmount: { toFixed: () => '20.00' },
+                requestedDeliveryDate: null, submittedAt: new Date(), acceptedAt: null, rejectedAt: null, cancelledAt: null,
+                createdAt: new Date(), updatedAt: new Date(),
+              });
+            }),
+          },
+          orderLine: { createMany: jest.fn().mockResolvedValue({}) },
+          cartOrderLine: { deleteMany: jest.fn().mockResolvedValue({}) },
+          cartOrder: { delete: jest.fn().mockResolvedValue({}) },
+          user: { findUnique: jest.fn().mockResolvedValue({ firstName: 'Jane', lastName: 'Doe' }) },
+        }),
+      );
+      return captured;
+    }
+
+    it('freezes payment terms onto an auto-accepted order and announces the due date', async () => {
+      setupHappyPath();
+      (prisma.distributorSettings.findUnique as jest.Mock).mockResolvedValue({
+        defaultOrderAcceptanceMode: OrderAcceptanceMode.AUTO_ON_SUBMISSION,
+      });
+      const captured = captureCreate();
+
+      await service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
+
+      expect(captured.data).toMatchObject({ status: OrderStatus.ACCEPTED, ...PAYMENT_TERM_SNAPSHOT });
+      expect(outbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'Order', 'order-1', 'OrderAccepted',
+        expect.objectContaining({ invoiceDate: '2026-10-04', dueDate: '2026-11-03' }),
+      );
+    });
+
+    it('leaves payment terms unset on an order awaiting manual acceptance', async () => {
+      setupHappyPath();
+      const captured = captureCreate();
+
+      await service.submitOrder(DISTRIBUTOR_ID, { requestedDeliveryDate: AVAILABLE_DATE }, USER_ID, CUSTOMER_ID);
+
+      expect(captured.data).toMatchObject({ status: OrderStatus.SUBMITTED });
+      expect(captured.data).not.toHaveProperty('dueDate');
+      expect(captured.data).not.toHaveProperty('paymentTermIdSnapshot');
+    });
   });
 
   it('falls back to GBP when the distributor has no settings row', async () => {
@@ -445,6 +514,7 @@ describe('OrdersService — minimum order spend enforcement', () => {
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 
@@ -564,6 +634,7 @@ describe('OrdersService — tax calculation', () => {
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 
@@ -714,6 +785,7 @@ describe('OrdersService — listCustomerOrders', () => {
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 
@@ -842,6 +914,7 @@ describe('OrdersService — getCustomerOrder', () => {
         { provide: AuditService, useValue: { record: jest.fn() } },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 
@@ -1008,6 +1081,7 @@ describe('OrdersService — cancelCustomerOrder', () => {
         { provide: AuditService, useValue: audit },
         { provide: DeliveryAvailabilityService, useValue: { getAvailableDates: jest.fn().mockResolvedValue(makeAvailability()) } },
         { provide: R2StorageService, useValue: { getPublicUrl: jest.fn((k: string) => `https://cdn.test/${k}`) } },
+        paymentTermResolutionProvider(),
       ],
     }).compile();
 

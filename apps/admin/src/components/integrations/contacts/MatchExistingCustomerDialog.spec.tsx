@@ -39,7 +39,7 @@ function makeCustomer(id: string, name: string): Customer {
     accountNumber: null,
     creditLimit: null,
     minimumOrderSpend: null,
-    paymentTerms: null,
+    paymentTermId: null, paymentTerm: null,
     notes: null,
     deliveryLine1: null,
     deliveryLine2: null,

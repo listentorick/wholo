@@ -42,7 +42,7 @@ describe('Sidebar — hides what the user can never use', () => {
 
   it('shows the Owner everything, including Company Settings and Team', () => {
     render(<Sidebar onClose={vi.fn()} onLogout={vi.fn()} />);
-    expect(links()).toEqual(expect.arrayContaining(['Company Settings', 'Team', 'Tax types', 'Integrations']));
+    expect(links()).toEqual(expect.arrayContaining(['Company Settings', 'Team', 'Tax types', 'Payment terms', 'Integrations']));
   });
 
   it('gives a narrow role a narrow menu, and drops a group heading once nothing under it is visible', () => {

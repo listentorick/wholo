@@ -184,6 +184,9 @@ describe('Accounting integration framework, through a non-Xero provider (integra
         taxAmount: new Prisma.Decimal('0.00'),
         totalAmount: new Prisma.Decimal('60.00'),
         acceptedAt: new Date(),
+        // Frozen at acceptance from the customer's payment terms (ADR-075).
+        invoiceDate: new Date('2026-10-04T00:00:00Z'),
+        dueDate: new Date('2026-11-03T00:00:00Z'),
       },
     });
     await prisma.orderLine.create({
@@ -209,10 +212,17 @@ describe('Accounting integration framework, through a non-Xero provider (integra
       externalContactId: 'fake-contact-1',
       reference: order.orderNumber,
       currency: 'GBP',
+      issueDate: '2026-10-04',
+      dueDate: '2026-11-03',
       lines: [expect.objectContaining({ quantity: 6, unitPrice: '10.00' })],
     });
     const exported = await prisma.accountingInvoiceExport.findFirstOrThrow({ where: { orderId: order.id } });
-    expect(exported).toMatchObject({ status: AccountingInvoiceExportStatus.COMPLETED, externalInvoiceId: 'fake-inv-1', externalInvoiceNumber: 'FB-0001' });
+    expect(exported).toMatchObject({
+      status: AccountingInvoiceExportStatus.COMPLETED,
+      externalInvoiceId: 'fake-inv-1',
+      externalInvoiceNumber: 'FB-0001',
+      requestedDueDate: new Date('2026-11-03T00:00:00Z'),
+    });
 
     // 4. The order is delivered, then the customer pays in the provider; the
     //    invoice status sync follows the payment.
@@ -220,7 +230,11 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     fake.recordPayment('fake-inv-1', 60);
     await invoiceSync.process(job({ aggregateId: connection.id, payload: {} }));
 
-    expect(await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: exported.id } })).toMatchObject({ invoiceState: 'PAID' });
+    // The provider's own due date comes back (the provider honoured ours).
+    expect(await prisma.accountingInvoiceExport.findUniqueOrThrow({ where: { id: exported.id } })).toMatchObject({
+      invoiceState: 'PAID',
+      dueDate: new Date('2026-11-03T00:00:00Z'),
+    });
     expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(OrderStatus.COMPLETED);
 
     // The order timeline tells the story, naming the provider by its display name.

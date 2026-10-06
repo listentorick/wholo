@@ -32,7 +32,7 @@ export class CreateCustomerDto {
 
   @IsOptional()
   @IsString()
-  paymentTerms?: string;
+  paymentTermId?: string;
 
   @IsOptional()
   @IsString()

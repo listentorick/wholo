@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEmail, IsDecimal, MinLength } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsDecimal, MinLength, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 // Status is intentionally not editable here — it moves only through the
@@ -33,9 +33,11 @@ export class UpdateCustomerDto {
   @IsDecimal({ decimal_digits: '0,2' })
   minimumOrderSpend?: string;
 
+  // null = back to the distributor default payment term (ADR-075).
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
   @IsString()
-  paymentTerms?: string;
+  paymentTermId?: string | null;
 
   @IsOptional()
   @IsString()

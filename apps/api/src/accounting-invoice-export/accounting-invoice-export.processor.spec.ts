@@ -219,6 +219,26 @@ describe('AccountingInvoiceExportProcessor', () => {
   });
 
   describe('happy path', () => {
+    it('dates the invoice and asks for the due date frozen on the order at acceptance (ADR-075)', async () => {
+      prisma.order.findUnique.mockResolvedValue(
+        makeOrder({ invoiceDate: new Date('2026-07-10T00:00:00Z'), dueDate: new Date('2026-08-09T00:00:00Z') }),
+      );
+
+      await processor.process(makeJob());
+
+      expect(adapter.createInvoice.mock.calls[0][2]).toMatchObject({ issueDate: '2026-07-10', dueDate: '2026-08-09' });
+      expect(completedUpdate()![0].data.requestedDueDate).toEqual(new Date('2026-08-09T00:00:00Z'));
+    });
+
+    it('sends no due date when the order leaves it to the accounting system', async () => {
+      prisma.order.findUnique.mockResolvedValue(makeOrder({ invoiceDate: new Date('2026-07-10T00:00:00Z'), dueDate: null }));
+
+      await processor.process(makeJob());
+
+      expect(adapter.createInvoice.mock.calls[0][2]).not.toHaveProperty('dueDate');
+      expect(completedUpdate()![0].data.requestedDueDate).toBeNull();
+    });
+
     it('creates the invoice via the adapter and completes the export with the external identifiers', async () => {
       await processor.process(makeJob());
 

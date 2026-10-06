@@ -210,6 +210,11 @@ export interface AccountingInvoiceRequest {
   currency: string;
   // ISO date (YYYY-MM-DD) the invoice is issued.
   issueDate: string;
+  // ISO date (YYYY-MM-DD) payment is due, calculated by Stocdup from the
+  // customer's payment terms (ADR-075). Omitted when the terms leave it to
+  // the accounting system — the adapter must then send no due date at all,
+  // so the provider's own contact/organisation terms apply.
+  dueDate?: string;
   targetStatus: AccountingInvoiceTargetStatusValue;
   lines: AccountingInvoiceLineRequest[];
 }

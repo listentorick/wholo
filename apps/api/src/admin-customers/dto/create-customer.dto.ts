@@ -60,9 +60,10 @@ export class CreateCustomerDto {
   @IsDecimal({ decimal_digits: '0,2' })
   minimumOrderSpend?: string;
 
+  // Omitted = the distributor default payment term (ADR-075).
   @IsOptional()
   @IsString()
-  paymentTerms?: string;
+  paymentTermId?: string;
 
   @IsOptional()
   @IsString()

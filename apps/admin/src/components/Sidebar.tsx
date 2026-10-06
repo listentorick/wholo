@@ -84,6 +84,20 @@ const navGroups: NavGroup[] = [
           </svg>
         ),
       },
+      {
+        label: 'Payment terms',
+        href: '/payment-terms',
+        requiredPermission: Permission.CUSTOMERS_READ,
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4">
+            <rect x="3" y="4" width="18" height="18" rx="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <path d="M12 14v3l2 1" />
+          </svg>
+        ),
+      },
     ],
   },
   {
