@@ -15,15 +15,17 @@ export function ProblemSection() {
         className="max-w-[680px]"
       />
       <Reveal className="mt-12" y={16}>
-        <ul className="grid gap-4 sm:grid-cols-2 sm:gap-x-12">
+        <ul className="grid gap-6 sm:grid-cols-2 sm:gap-x-12">
           {PROBLEM.points.map((point) => (
-            <li key={point} className="flex gap-3.5">
+            <li key={point.title} className="flex gap-3.5">
               <Icon
-                name="check"
+                name="close"
                 strokeWidth={2.2}
-                className="mt-0.5 h-5 w-5 shrink-0 text-primary"
+                className="mt-0.5 h-5 w-5 shrink-0 text-amber"
               />
-              <p className="min-w-0 text-[16px] text-muted">{point}</p>
+              <p className="min-w-0 text-[16px] text-muted">
+                <span className="font-bold text-navy">{point.title}</span> {point.body}
+              </p>
             </li>
           ))}
         </ul>

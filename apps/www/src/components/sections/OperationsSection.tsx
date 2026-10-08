@@ -7,7 +7,7 @@ import { Reveal } from '../motion/Reveal';
 
 export function OperationsSection() {
   return (
-    <Section band="white" id="run-smoother">
+    <Section band="stone" id="run-smoother">
       <SectionHeader
         eyebrow={OPERATIONS.eyebrow}
         heading={OPERATIONS.heading}
@@ -22,9 +22,9 @@ export function OperationsSection() {
               i === OPERATIONS.rows.length - 1 ? 'border-b' : ''
             }`}
           >
-            <div className="flex flex-col gap-3">
-              <Icon name={row.icon as IconName} className="text-primary" />
-              <p className="text-[19px] font-bold leading-tight tracking-[-0.02em] text-navy">
+            <div className="flex items-start gap-3">
+              <Icon name={row.icon as IconName} className="shrink-0 text-primary" />
+              <p className="min-w-0 text-[19px] font-bold leading-tight tracking-[-0.02em] text-navy">
                 {row.title}
               </p>
             </div>
@@ -37,9 +37,6 @@ export function OperationsSection() {
                   </p>
                 ))}
               </div>
-              {'note' in row && row.note && (
-                <p className="mt-1.5 text-[14px] text-muted">{row.note}</p>
-              )}
             </div>
           </div>
         ))}

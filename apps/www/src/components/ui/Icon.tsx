@@ -46,7 +46,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   scale: (
     <>
       <path d="M12 3v18M5 7l7-4 7 4" />
-      <path d="M5 7l-2 6a4 4 0 0 0 8 0L5 7Zm14 0-2 6a4 4 0 0 0 8 0l-2-6" />
+      <path d="M5 7l-3 6a3 3 0 0 0 6 0L5 7Zm14 0-3 6a3 3 0 0 0 6 0l-3-6Z" />
     </>
   ),
   camera: (

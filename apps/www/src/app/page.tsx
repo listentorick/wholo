@@ -3,11 +3,12 @@ import { Nav } from '@/components/layout/Nav';
 import { Footer } from '@/components/layout/Footer';
 import { Hero } from '@/components/sections/Hero';
 import { ProblemSection } from '@/components/sections/ProblemSection';
+import { PressureSection } from '@/components/sections/PressureSection';
 import { GrowthSection } from '@/components/sections/GrowthSection';
+import { ProtectSection } from '@/components/sections/ProtectSection';
 import { OperationsSection } from '@/components/sections/OperationsSection';
 import { AnyScaleSection } from '@/components/sections/AnyScaleSection';
 import { ConnectedFlowSection } from '@/components/sections/ConnectedFlowSection';
-import { EvidenceSection } from '@/components/sections/EvidenceSection';
 import { UkNativeSection } from '@/components/sections/UkNativeSection';
 import { PricingSection } from '@/components/sections/PricingSection';
 import { FounderSection } from '@/components/sections/FounderSection';
@@ -40,12 +41,13 @@ export default async function HomePage() {
       <main id="main">
         <Hero variant={variant} />
         <ProblemSection />
-        <GrowthSection />
         <OperationsSection />
-        <AnyScaleSection />
+        <PressureSection />
+        <ProtectSection />
+        <GrowthSection />
         <ConnectedFlowSection />
-        <EvidenceSection />
         <UkNativeSection />
+        <AnyScaleSection />
         <PricingSection />
         <FounderSection />
         <FaqSection />

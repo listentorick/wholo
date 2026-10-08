@@ -11,9 +11,7 @@ import { useMotionOK } from './MotionProvider';
  *
  * Targets, set as data-attributes on the hero markup:
  *   [data-hero-stagger]  elements that rise in sequence
- *   [data-hero-shot]     the screenshot frame (parallax + assemble)
- *   [data-shot-sidebar]  the frame's dark sidebar (slides in)
- *   [data-shot-row]      the frame's content rows (cascade)
+ *   [data-hero-shot]     the product screenshot (parallax + assemble)
  */
 export function HeroScene({ children }: { children: React.ReactNode }) {
   const motionOK = useMotionOK();
@@ -52,12 +50,6 @@ export function HeroScene({ children }: { children: React.ReactNode }) {
             '[data-hero-shot]',
             { y: 34, opacity: 0, scale: 0.965, duration: 0.9 },
             '-=0.7',
-          )
-          .from('[data-shot-sidebar]', { xPercent: -110, duration: 0.6 }, '-=0.55')
-          .from(
-            '[data-shot-row]',
-            { x: 22, opacity: 0, duration: 0.45, stagger: 0.06 },
-            '-=0.4',
           );
 
         gsap.to('[data-hero-stagger]', {

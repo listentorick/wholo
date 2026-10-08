@@ -14,7 +14,7 @@ const inter = localFont({
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.stocdup.com';
 const TITLE = 'Stocdup: Sell more. Run smoother.';
 const DESCRIPTION =
-  'Stocdup is the UK-native wholesale platform for independent food and drink distributors: win new customers, grow existing accounts and connect ordering, accounting and delivery.';
+  'Stocdup is the UK-native marketplace and wholesale platform for independent food and drink distributors: win new customers, protect existing accounts and connect ordering, invoicing and delivery.';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -24,6 +24,8 @@ export const metadata: Metadata = {
   keywords: [
     'UK wholesale software',
     'wholesale platform',
+    'wholesale marketplace',
+    'hospitality suppliers',
     'drinks distributor software',
     'food and drink wholesaler',
     'trade ordering',

@@ -9,8 +9,9 @@
 
 export const NAV_LINKS = [
   { label: 'Product', href: '#product' },
-  { label: 'Sell more', href: '#sell-more' },
   { label: 'Run smoother', href: '#run-smoother' },
+  { label: 'Protect', href: '#protect' },
+  { label: 'Sell more', href: '#sell-more' },
   { label: 'Why Stocdup?', href: '#why' },
 ] as const;
 
@@ -24,13 +25,13 @@ export const HERO: Record<
     kicker: 'Built for UK wholesale',
     headline: ['Sell more.', 'Run smoother.'],
     markLine: 'Run smoother.',
-    lead: 'Stocdup helps independent food and drink wholesalers win new customers, grow existing accounts and connect ordering, accounting and delivery, without enterprise-scale complexity.',
+    lead: 'Stocdup helps independent food and drink wholesalers win new customers, grow existing accounts and connect ordering, invoicing, accounting and delivery, without enterprise-scale complexity.',
   },
   growth: {
     kicker: 'Sell more. Run smoother.',
     headline: ['Help new customers find you, and existing customers buy more.'],
     markLine: 'find you',
-    lead: 'Stocdup gives suitable trade customers a way to discover your business and your range, and helps the customers you already have order more of it, while you keep control of prices and terms.',
+    lead: 'The Stocdup marketplace puts your business and your range in front of hospitality businesses looking for new suppliers, and helps the customers you already have order more of it, while you keep control of prices and terms.',
   },
   operations: {
     kicker: 'Sell more. Run smoother.',
@@ -41,43 +42,72 @@ export const HERO: Record<
 };
 
 export const HERO_CREDIBILITY =
-  'Ordering, customer pricing, accounting and proof of delivery, in one place.';
+  'Ordering, customer pricing, automatic invoicing and proof of delivery, in one place.';
+
+export const HERO_SHOT_ALT =
+  'Stocdup on screen: the sales dashboard, a distributor catalogue in the customer portal, and the delivery runs board.';
 
 export const PROBLEM = {
   eyebrow: 'The day-to-day',
   heading: 'Wholesale is complicated enough.',
   lead: 'When orders, accounts and deliveries are handled across disconnected systems, small mistakes quickly become credits, redeliveries, payment disputes and damaged customer relationships.',
   points: [
-    'An order arrives by message and is entered incorrectly.',
-    'The wrong product, quantity, price or delivery date is recorded.',
-    'Warehouse and delivery teams work from outdated information.',
-    'A customer reports missing items, but the delivery evidence is hard to find.',
-    'Partial and failed deliveries turn into credits and invoice disputes.',
-    'Another order is accepted before anyone sees the earlier invoices are overdue.',
-    'Customers reorder the same few lines because the wider range is hard to explore.',
-    "Account managers notice a customer's activity has dropped off too late.",
+    {
+      title: 'Reaching new customers is hard.',
+      body: 'Buyers need a way to discover your business and see what you sell.',
+    },
+    {
+      title: 'Taking orders takes too much time.',
+      body: 'Phone calls, emails and WhatsApp messages leave your team chasing details and entering orders by hand.',
+    },
+    {
+      title: 'Every customer has different arrangements.',
+      body: 'Agreed prices, product ranges and delivery days become harder to manage as you grow.',
+    },
+    {
+      title: 'Outdated information and miscommunication cause mistakes.',
+      body: "Order changes don't always reach the warehouse or drivers, leaving teams working from different instructions.",
+    },
+    {
+      title: 'Delivery problems create more work.',
+      body: 'Partial and failed deliveries lead to credits and invoice disputes, especially when records of what was delivered are hard to find.',
+    },
+    {
+      title: 'Getting paid takes too much chasing.',
+      body: "Checking overdue invoices and following up with customers eats into your team's time.",
+    },
+    {
+      title: "Customers don't always know what else you sell.",
+      body: 'They reorder familiar lines, leaving opportunities to grow each account unexplored.',
+    },
+    {
+      title: 'Customer business can slip away quietly.',
+      body: 'Smaller orders, fewer purchases and a shrinking product range are easy to miss until a valuable account has moved elsewhere.',
+    },
   ],
+} as const;
+
+export const PRESSURE = {
+  eyebrow: 'Your customers',
+  heading: 'Hospitality is under pressure.',
+  lead: 'The pubs, bars, restaurants, cafés and delis you supply are being squeezed. When your customers are under pressure, winning new ones and protecting the business you already have matters more than ever.',
+  closer: 'Stocdup helps you do both.',
 } as const;
 
 export const GROWTH = {
   eyebrow: 'Sell more',
-  heading: 'Help more customers find you, and existing customers buy more.',
-  lead: 'Growth comes from concrete mechanisms, not a slogan. You stay in control of who you accept, what they see and the prices they pay.',
+  heading: 'Win new customers on the Stocdup marketplace, and help existing customers buy more.',
+  lead: 'Hospitality businesses use the Stocdup marketplace to discover new suppliers, putting your products in front of potential new customers. And the customers you already have can explore more of your range, so they order more of it.',
   cards: [
     {
       icon: 'search',
-      title: 'Business discovery',
-      body: 'Give suitable trade customers a way to find your business, understand your range and request a relationship. You choose whether to accept it.',
+      title: 'The Stocdup marketplace',
+      body: 'Trade customers find your business, browse your range and request to trade with you. You choose who to accept.',
     },
     {
       icon: 'grid',
       title: 'Product discovery',
       body: 'Help existing customers explore beyond their usual reorder list: new, seasonal, complementary and featured lines, and stock you want to move.',
-    },
-    {
-      icon: 'trend',
-      title: 'Account growth',
-      body: 'See when a regular customer stops ordering, when frequency drops, or when a category falls away, in time for an account manager to step in.',
     },
   ],
   controlTitle: 'You keep control of the relationship',
@@ -87,49 +117,87 @@ export const GROWTH = {
     'What gets promoted, featured or recommended',
   ],
   controlNote:
-    'Stocdup is not an open marketplace. Trade relationships and pricing stay yours.',
-  screenshotLabel: 'Add product screenshot: customer activity',
+    'The marketplace makes the introduction. The relationship is yours.',
+  screenshotAlt:
+    'A wholesaler\'s page on the Stocdup marketplace: their banner and logo, the order cut-off and delivery day, and a row of wines from their catalogue with trade prices.',
+} as const;
+
+export const PROTECT = {
+  eyebrow: 'Keep your customers',
+  heading: 'Protect the business you have. See which customers are slipping away.',
+  lead: 'Stocdup shows you your most valuable customers and products, and highlights the customers ordering less, spending less or narrowing their range. Those changes can signal financial stress or business slipping away, so you can spot problems early and focus your effort where it matters.',
+  cards: [
+    {
+      icon: 'trend',
+      title: 'Know your heavy hitters',
+      body: 'See which customers and which products bring in the most, so you know what you cannot afford to lose.',
+    },
+    {
+      icon: 'search',
+      title: 'See who is at risk',
+      body: 'Customers ordering less often, spending less or buying a narrower range are flagged for you, before the account goes quiet.',
+    },
+    {
+      icon: 'scale',
+      title: 'Act before it becomes a debt',
+      body: 'A customer in trouble often shows it in their orders first. Seeing the change alongside their overdue invoices lets you have the conversation before more credit is extended.',
+    },
+  ],
+  note: 'Early warning for your team, not credit scoring or automated decisions.',
+  customerScreenshotLabel: 'Add product screenshot: single customer dashboard',
+  screenshotAlt:
+    'The Stocdup customer health dashboard: healthy, watch and at-risk customer counts, and a list of customers needing attention with the reason each was flagged.',
 } as const;
 
 export const OPERATIONS = {
   eyebrow: 'Run smoother',
   heading: 'Fewer mistakes. Clearer accounts. More reliable deliveries.',
-  lead: 'One flow for orders, account context where the decisions get made, and delivery evidence that stays with the order.',
+  lead: 'Keep orders, invoices, payment status and delivery records connected, so your team has the information it needs from order to payment.',
   rows: [
     {
       icon: 'clipboard',
       title: 'Get the order right',
-      body: 'Bring customer orders into one manageable flow, keeping the products, quantities, prices, terms and delivery details agreed with each customer.',
+      body: 'Let customers order from their agreed product range, at their agreed prices and terms, on available delivery dates. Your team can place orders on their behalf using the same arrangements.',
       points: [
-        'Less manual re-entry',
-        'The correct customer catalogue',
-        'Agreed prices and minimums applied',
-        'Valid delivery dates shown',
+        'Less manual order entry',
+        'Customer-specific product ranges, prices and terms',
+        'Minimum order requirements applied',
+        'Available delivery dates shown',
         "Staff can order on a customer's behalf",
         'An audit trail of changes and actions',
       ],
     },
     {
-      icon: 'scale',
-      title: 'Know where the account stands',
-      body: 'Keep order and invoice information connected, so your team can spot overdue accounts and make a better-informed call before accepting the next order.',
+      icon: 'bolt',
+      title: 'Raise invoices automatically',
+      body: 'When an order is accepted, Stocdup creates the invoice in your accountancy software, such as Xero, using the agreed order prices. That means less admin and fewer missed invoices.',
       points: [
-        'Relevant invoice and payment status',
+        'No need to type invoices by hand',
+        'Order details and agreed prices carried through',
+        'Accepted orders trigger invoicing automatically',
+        'Invoice and payment status linked to the order',
+      ],
+    },
+    {
+      icon: 'scale',
+      title: 'See overdue invoices before the next order',
+      body: "Give your operations team a clear view of the customer's outstanding invoices and payment status, so they can follow up and make an informed decision before accepting another order.",
+      points: [
         'Customers with overdue invoices flagged',
-        'Appropriate account visibility for ops staff',
+        'Order, invoice and payment information together',
         'Fewer separate systems to check',
       ],
-      note: 'Improved visibility and earlier intervention, not debt collection or automated credit decisions.',
     },
     {
       icon: 'camera',
-      title: 'Know what was delivered',
-      body: 'Keep the delivery outcome, photos, signature and notes attached to the original order, so a dispute is settled by opening the order, not searching through messages.',
+      title: 'Track deliveries and keep the evidence',
+      body: 'Generate delivery manifests with scannable QR codes. Drivers scan each code to open the delivery in the app, record the drop location and capture signatures, photos and notes. Everything stays linked to the original order, making delivery queries and invoice disputes easier to resolve.',
       points: [
-        'Delivered to a person or a safe location',
-        'Photos and a signature where appropriate',
-        'Partial deliveries and notes recorded',
-        'Proof reachable from the order',
+        'Delivery manifests with scannable QR codes',
+        'Drop locations and recipient or safe-drop details recorded',
+        'Signatures and photo evidence captured',
+        'Full, partial and failed deliveries recorded, with notes explaining any issues',
+        'Delivery evidence accessible from the order',
       ],
     },
   ],
@@ -160,26 +228,16 @@ export const ANY_SCALE = {
 
 export const CONNECTED_FLOW = {
   eyebrow: 'One connected flow',
-  heading: 'One connected flow, from order to delivery.',
+  heading: 'One connected flow, from order to paid invoice.',
   steps: [
-    'A customer discovers a product',
+    'A customer finds you on the marketplace',
     'They order at agreed prices and terms',
     'You review and accept the order',
-    'Accounting information stays connected',
-    'It is assigned to a delivery run',
-    'The driver records proof against the order',
+    'The invoice is raised automatically in your accounting software',
+    'It goes out on a delivery run, with proof recorded against the order',
+    'Payment status comes back, so you can see what has been paid',
   ],
   closer: 'Continuity, not a re-key at every step.',
-} as const;
-
-export const EVIDENCE = {
-  eyebrow: 'The product',
-  heading: 'Built for how UK wholesale actually runs.',
-  lead: 'Every screen maps to a real job in a distribution business: take the order, apply the right price, get it delivered, keep the books straight.',
-  shots: [
-    { tab: 'Stocdup · Orders', caption: 'Orders.', line: 'Bring orders into one manageable workflow.', label: 'Add product screenshot: orders' },
-    { tab: 'Stocdup · Delivery runs', caption: 'Delivery runs.', line: 'Organise deliveries and keep the evidence.', label: 'Add product screenshot: delivery runs' },
-  ],
 } as const;
 
 export const UK_NATIVE = {
@@ -191,10 +249,45 @@ export const UK_NATIVE = {
     'Trade accounts and credit terms',
     'Customer-specific catalogues',
     'Agreed prices and payment terms',
-    'UK accounting integrations',
+    'Automatic invoicing in Xero',
     'Postcode-based delivery areas',
     'Delivery days and order cut-offs',
     'Minimum-order rules',
+  ],
+  shots: [
+    {
+      tab: 'Stocdup · Orders',
+      caption: 'Orders.',
+      line: 'Bring orders into one manageable workflow.',
+      image: {
+        src: '/screenshot5.png',
+        width: 1917,
+        height: 917,
+        alt: 'A completed order in Stocdup: the customer, its invoice paid in full, the products ordered, the delivery address and a timeline from submitted to delivered and paid.',
+      },
+    },
+    {
+      tab: 'Stocdup · Delivery runs',
+      caption: 'Delivery runs.',
+      line: 'Organise deliveries and keep the evidence.',
+      image: {
+        src: '/screenshot3.png',
+        width: 1920,
+        height: 920,
+        alt: 'The Stocdup delivery runs board: a week of delivery days, with each route listing its stops in order.',
+      },
+    },
+    {
+      tab: 'Stocdup · Proof of delivery',
+      caption: 'Proof of delivery.',
+      line: 'See who signed for every drop, backed by a photo, the delivery time and the location.',
+      image: {
+        src: '/screenshot6.png',
+        width: 1920,
+        height: 920,
+        alt: 'Proof of delivery for an order in Stocdup: delivered and handed to a named person, with the driver, the run, the time, a photo of the wine delivered and the recipient\'s signature.',
+      },
+    },
   ],
   closer:
     'Practical workflows for smaller operational teams, and support for regional distributors.',
@@ -222,7 +315,7 @@ export const FOUNDER = {
     "Growth and operational control aren't separate projects. A customer who can't explore your range easily also can't order it accurately; an account you can't see clearly is one you keep selling to on credit. Stocdup connects the two: discovery and ordering through to accounting, delivery and proof.",
     'We built it with an active UK distributor, one workflow at a time, so it fits the way a wholesale business actually runs.',
   ],
-  signoff: '[Founder name], founder, Stocdup',
+  signoff: 'Rick Walsh, founder, Stocdup',
 } as const;
 
 export const FAQ = {
@@ -230,7 +323,7 @@ export const FAQ = {
   items: [
     {
       q: 'What is Stocdup?',
-      a: 'A wholesale commerce and operations platform that connects product discovery, customer ordering, accounting and delivery, including proof of delivery.',
+      a: 'A marketplace and operations platform for wholesalers. It helps hospitality businesses discover you, and connects customer ordering, automatic invoicing and delivery, including proof of delivery.',
     },
     {
       q: 'Who is it for?',
@@ -242,7 +335,7 @@ export const FAQ = {
     },
     {
       q: 'Does it replace my accounting software?',
-      a: "No. Stocdup connects wholesale ordering and operations with your accounting platform; it doesn't replace the accounting system.",
+      a: 'No. Stocdup raises an invoice in your accounting software, such as Xero, for every accepted order. It does not replace the accounting system.',
     },
     {
       q: 'Can customers order at their agreed prices?',
@@ -254,7 +347,7 @@ export const FAQ = {
     },
     {
       q: 'Does Stocdup support deliveries?',
-      a: "Delivery planning and proof of delivery (photos, signature, notes, partial deliveries) work today. We'll walk you through exactly what's available when we talk.",
+      a: 'Yes. Plan delivery runs by day and route, and capture proof of delivery for every drop: signature, photos, notes, the delivery time and the location.',
     },
     {
       q: 'How much will it cost?',
@@ -287,6 +380,7 @@ export const REGISTER = {
   ],
   interests: [
     'Winning new customers',
+    'Keeping existing customers',
     'Order accuracy',
     'Account & invoice visibility',
     'Delivery disputes',

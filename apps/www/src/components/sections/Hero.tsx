@@ -1,12 +1,12 @@
 import { Fragment } from 'react';
-import { HERO, HERO_CREDIBILITY, type HeroVariant } from '@/content';
+import Image from 'next/image';
+import { HERO, HERO_CREDIBILITY, HERO_SHOT_ALT, type HeroVariant } from '@/content';
 import { Section } from '../layout/Section';
 import { Eyebrow } from '../ui/Eyebrow';
 import { DisplayHeading } from '../ui/DisplayHeading';
 import { Mark } from '../ui/Mark';
 import { Cta } from '../ui/Cta';
 import { GhostButton } from '../ui/GhostButton';
-import { ScreenshotFrame } from '../ui/ScreenshotFrame';
 import { HeroScene } from '../motion/HeroScene';
 
 function renderHeadline(lines: readonly string[], markLine?: string) {
@@ -31,27 +31,8 @@ function renderHeadline(lines: readonly string[], markLine?: string) {
   });
 }
 
-const SHOT: Record<HeroVariant, { tab: string; label: string; variant: 'hero' | 'catalogue' }> = {
-  default: {
-    tab: 'Stocdup · Orders',
-    label: 'Add product screenshot: orders + proof of delivery',
-    variant: 'hero',
-  },
-  growth: {
-    tab: 'Stocdup · Catalogue',
-    label: 'Add product screenshot: catalogue / product discovery',
-    variant: 'catalogue',
-  },
-  operations: {
-    tab: 'Stocdup · Order',
-    label: 'Add product screenshot: order + invoice status + proof',
-    variant: 'hero',
-  },
-};
-
 export function Hero({ variant = 'default' }: { variant?: HeroVariant }) {
   const hero = HERO[variant];
-  const shot = SHOT[variant];
 
   return (
     <Section band="navy" id="top" innerClassName="py-20 lg:py-[104px]">
@@ -94,7 +75,15 @@ export function Hero({ variant = 'default' }: { variant?: HeroVariant }) {
           </div>
 
           <div data-hero-shot>
-            <ScreenshotFrame tab={shot.tab} label={shot.label} variant={shot.variant} elevated />
+            <Image
+              src="/screenshot1.png"
+              alt={HERO_SHOT_ALT}
+              width={1402}
+              height={1122}
+              priority
+              sizes="(min-width: 1024px) 44vw, 100vw"
+              className="h-auto w-full"
+            />
           </div>
         </div>
       </HeroScene>
