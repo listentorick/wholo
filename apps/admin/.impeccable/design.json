@@ -1,0 +1,195 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-21T00:00:00Z",
+  "title": "Design System: Stocdup Admin",
+  "extensions": {
+    "colorMeta": {
+      "deep-navy": {
+        "role": "neutral",
+        "displayName": "Deep Navy",
+        "canonical": "hsl(217, 68%, 14%)",
+        "tonalRamp": [
+          "hsl(217, 68%, 10%)",
+          "hsl(217, 68%, 18%)",
+          "hsl(217, 68%, 26%)",
+          "hsl(217, 68%, 35%)",
+          "hsl(217, 68%, 45%)",
+          "hsl(217, 68%, 58%)",
+          "hsl(217, 68%, 72%)",
+          "hsl(217, 68%, 88%)"
+        ]
+      },
+      "cobalt-signal": {
+        "role": "primary",
+        "displayName": "Cobalt Signal",
+        "canonical": "hsl(220, 100%, 54%)",
+        "tonalRamp": [
+          "hsl(220, 100%, 12%)",
+          "hsl(220, 100%, 22%)",
+          "hsl(220, 100%, 32%)",
+          "hsl(220, 100%, 42%)",
+          "hsl(220, 100%, 54%)",
+          "hsl(220, 100%, 66%)",
+          "hsl(220, 100%, 80%)",
+          "hsl(220, 100%, 92%)"
+        ]
+      },
+      "amber-flag": {
+        "role": "secondary",
+        "displayName": "Amber Flag",
+        "canonical": "hsl(21, 86%, 63%)",
+        "tonalRamp": [
+          "hsl(21, 86%, 15%)",
+          "hsl(21, 86%, 25%)",
+          "hsl(21, 86%, 35%)",
+          "hsl(21, 86%, 45%)",
+          "hsl(21, 86%, 63%)",
+          "hsl(21, 86%, 73%)",
+          "hsl(21, 86%, 84%)",
+          "hsl(21, 86%, 94%)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Slate Blue",
+        "canonical": "hsl(213, 17%, 43%)"
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Light Blue-Grey",
+        "canonical": "hsl(210, 32%, 93%)"
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Pale Stone",
+        "canonical": "hsl(216, 24%, 96%)"
+      },
+      "topbar-bg": {
+        "role": "neutral",
+        "displayName": "Warm Off White",
+        "canonical": "hsl(210, 25%, 98%)"
+      }
+    },
+    "typographyMeta": {
+      "heading": { "displayName": "Heading", "purpose": "Page titles, paired with the amber underline bar." },
+      "body": { "displayName": "Body", "purpose": "Table cells, form values, general copy." },
+      "label": { "displayName": "Label", "purpose": "Field labels, stat-tile labels, badge text." }
+    },
+    "shadows": [
+      { "name": "drag-card", "value": "0 1px 2px 0 rgba(0,0,0,0.05)", "purpose": "The one at-rest exception — delivery board cards, to read as discrete liftable objects." },
+      { "name": "floating-panel", "value": "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)", "purpose": "Notification dropdown, filter popovers, context menus." },
+      { "name": "modal-drawer", "value": "0 25px 50px -12px rgba(0,0,0,0.25)", "purpose": "Modal and Drawer overlays — the highest elevation tier." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "150ms ease (Tailwind transition-colors default)", "purpose": "Hover/focus color and opacity transitions across buttons, nav items, links." },
+      { "name": "sidebar-slide", "value": "200ms ease-in-out transform", "purpose": "Mobile sidebar drawer slide-in/out (translate-x)." },
+      { "name": "onboarding-enter", "value": "0.5s ease-out, translateY(8px)->0 + opacity 0->1, wrapped in motion-safe:", "purpose": "Onboarding step transitions; respects prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "lg", "value": "1024px (Tailwind default)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid cobalt CTA — form submits, primary actions.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { background: #1565FF; color: #fff; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 500; font-family: Inter, system-ui, sans-serif; border: none; transition: opacity 150ms ease; cursor: pointer; } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; } .ds-btn-primary:focus-visible { outline: 2px solid #1565FF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Cobalt-outline tier for a gateway/elevated action that isn't the screen's single primary CTA (e.g. \"Mark ready\") — distinct from the plain neutral Cancel/dismiss treatment.",
+      "html": "<button class=\"ds-btn-secondary\">Mark ready</button>",
+      "css": ".ds-btn-secondary { background: rgba(21,101,255,0.05); color: #1565FF; border: 1px solid rgba(21,101,255,0.3); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 500; font-family: Inter, system-ui, sans-serif; transition: background-color 150ms ease; cursor: pointer; } .ds-btn-secondary:hover { background: rgba(21,101,255,0.1); } .ds-btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; } .ds-btn-secondary:focus-visible { outline: 2px solid #1565FF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard form field — white surface, cobalt focus ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Enter a value\" />",
+      "css": ".ds-input { width: 100%; background: #fff; border: 1px solid #E6ECF2; border-radius: 6px; padding: 8px 12px; font-size: 14px; color: #0B1D3A; font-family: Inter, system-ui, sans-serif; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: rgba(91,107,127,0.6); } .ds-input:focus { border-color: #1565FF; box-shadow: 0 0 0 1px #1565FF; } .ds-input:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status",
+      "description": "Pill with pale fill, saturated text, and a redundant solid dot — never color alone.",
+      "html": "<span class=\"ds-badge\" style=\"background:#DCFCE7;color:#15803D\"><span class=\"ds-badge-dot\" style=\"background:#15803D\"></span>Delivered</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; font-family: Inter, system-ui, sans-serif; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 9999px; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The base container — white, bordered, flat, no shadow at rest.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><h2 class=\"ds-card-title\">Business details</h2><p class=\"ds-card-desc\">Shown to your customers on the portal.</p></div><div class=\"ds-card-body\">Card content</div></div>",
+      "css": ".ds-card { background: #fff; border: 1px solid #E6ECF2; border-radius: 8px; font-family: Inter, system-ui, sans-serif; } .ds-card-header { padding: 14px 20px; border-bottom: 1px solid #E6ECF2; } .ds-card-title { font-size: 14px; font-weight: 600; color: #0B1D3A; margin: 0; } .ds-card-desc { font-size: 12px; color: #5B6B7F; margin: 2px 0 0; } .ds-card-body { padding: 20px; }"
+    },
+    {
+      "name": "Page Heading",
+      "kind": "custom",
+      "description": "Cobalt title over a full-width amber underline bar — the fixed \"you are here\" marker atop every screen.",
+      "html": "<div class=\"ds-page-heading\"><h1>Delivery Runs</h1><span class=\"ds-page-heading-bar\"></span></div>",
+      "css": ".ds-page-heading { display: inline-block; font-family: Inter, system-ui, sans-serif; } .ds-page-heading h1 { font-size: 20px; font-weight: 600; color: #1565FF; margin: 0; } .ds-page-heading-bar { display: block; margin-top: 6px; height: 4px; width: 100%; border-radius: 9999px; background: #F2864D; }"
+    },
+    {
+      "name": "Stat Tile",
+      "kind": "card",
+      "description": "Dashboard KPI card — label, compact number, signed delta vs. a named period.",
+      "html": "<div class=\"ds-stat-tile\"><p class=\"ds-stat-label\">Revenue</p><p class=\"ds-stat-value\">£12.4K</p><p class=\"ds-stat-delta\">▲ 8.2% vs. previous period</p></div>",
+      "css": ".ds-stat-tile { background: #fff; border: 1px solid #E6ECF2; border-radius: 8px; padding: 16px; font-family: Inter, system-ui, sans-serif; } .ds-stat-label { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.02em; color: #5B6B7F; margin: 0; } .ds-stat-value { font-size: 24px; font-weight: 600; color: #0B1D3A; margin: 8px 0 0; } .ds-stat-delta { font-size: 12px; font-weight: 500; color: #15803D; margin: 6px 0 0; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "sidebar-nav-item-active",
+      "description": "Active state is a filled cobalt-tinted pill with full-opacity icon/label, not a border or underline.",
+      "html": "<a class=\"ds-nav-item ds-nav-item-active\" href=\"#\">Dashboard</a>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 12px; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; font-family: Inter, system-ui, sans-serif; color: rgba(242,244,247,0.7); transition: background-color 150ms ease, color 150ms ease; } .ds-nav-item:hover { background: rgba(255,255,255,0.06); color: #F2F4F7; } .ds-nav-item-active { background: rgba(21,101,255,0.2); color: #1565FF; }"
+    },
+    {
+      "name": "Delivery Board Card",
+      "kind": "custom",
+      "description": "Signature dense component: compact drag card with a cobalt stop-number badge and a hairline-divided action strip.",
+      "html": "<div class=\"ds-delivery-card\"><div class=\"ds-delivery-card-top\"><span class=\"ds-stop-badge\">3</span><div><p class=\"ds-delivery-customer\">The Anchor Bar</p><p class=\"ds-delivery-order\">ORD-1042</p></div></div><p class=\"ds-delivery-lines\">6 lines, 24 items</p></div>",
+      "css": ".ds-delivery-card { background: #fff; border: 1px solid #E6ECF2; border-radius: 6px; padding: 10px; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); font-family: Inter, system-ui, sans-serif; } .ds-delivery-card-top { display: flex; align-items: flex-start; gap: 6px; } .ds-stop-badge { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 9999px; background: rgba(21,101,255,0.1); color: #1565FF; font-size: 12px; font-weight: 600; flex-shrink: 0; } .ds-delivery-customer { font-size: 14px; font-weight: 500; color: #0B1D3A; margin: 0; } .ds-delivery-order { font-size: 12px; color: #5B6B7F; margin: 2px 0 0; } .ds-delivery-lines { font-size: 12px; color: #5B6B7F; margin: 6px 0 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Dispatch Desk",
+    "overview": "Stocdup Admin is the screen a distributor keeps open while running the business: a deep-navy command surface that stays calm and out of the way, cobalt signalling everything the eye should act on (primary actions, active nav, focus states), and amber reserved for things that genuinely need a human's attention (badges, flags, notification counts). The system is built for two overlapping jobs on one desk — an owner/manager working pricing, catalogue, and settings in longer desktop sessions, and operational staff working orders and delivery runs in short glanceable bursts, sometimes on a tablet in the warehouse. Nothing about the visual language should read as \"office software vs. floor tool\"; it is one system used both ways.\n\nThe interface is table-and-card dense by necessity — orders, products, customers, delivery runs are all lists of many similar things — so structure is carried by thin borders and a tight, consistent radius rather than by shadows or heavy chrome. Depth is used sparingly and functionally: flat at rest, shadow only when something is genuinely floating above the page (a modal, a drawer, a popover). The app shell itself doesn't scroll; only the content pane does, keeping the sidebar and top bar fixed reference points, closer to a native app than a scrolling website.",
+    "keyCharacteristics": [
+      "Fixed app shell (non-scrolling sidebar + top bar) with a single scrolling content pane — reads as an operational tool, not a marketing-adjacent web page.",
+      "One workhorse radius (6px) used almost everywhere; only cards/panels step up to 8px, and pills/avatars/dots go full-round.",
+      "Flat-by-default surfaces; shadow is exclusively an \"I am floating above the page\" signal (modals, drawers, popovers, dropdown menus).",
+      "Cobalt is the only color used for interactive/active signaling; amber never competes with it for that role — amber means \"notice this,\" cobalt means \"act on this.\"",
+      "Status/attention language (badges, missed-delivery flags, sync-needed counts) is a distinct semantic palette, deliberately separate from the three brand colors."
+    ],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "Cobalt Signal is the only color that ever means \"interactive.\" Amber, status tones, and every other color in the system are informational only — if it's clickable, it's cobalt (or becomes cobalt on hover/focus); if it's just informative, it is never cobalt.", "section": "colors" },
+      { "name": "The No-Second-Typeface Rule", "body": "Every weight of hierarchy is Inter. A second typeface would read as decoration in a tool built for fast scanning, not as an upgrade.", "section": "typography" },
+      { "name": "The Floating-Only Rule", "body": "If it doesn't leave the document's normal stacking context (nothing moved it above other content), it doesn't get a shadow. Borders carry structure; shadows carry \"this is temporarily on top.\"", "section": "elevation" },
+      { "name": "The Two-Radius Rule", "body": "Controls and small elements use 6px; containers use 8px. Nothing in between, and nothing sharper — nowhere in this app should a rectangle have a 0px or 2px corner.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do keep Cobalt Signal exclusive to interactive/active meaning (The One Signal Rule) — a cobalt-colored element that isn't clickable or currently active/selected is a bug in the system, not a style choice.",
+      "Do use the Secondary/Important cobalt-outline tier (border-primary/30 bg-primary/5 text-primary) for a gateway or elevated action that isn't the screen's single primary CTA — not the plain neutral treatment, which reads as equal-weight with Cancel.",
+      "Do use rounded-md (6px) for controls and rounded-lg (8px) for containers, and nothing else outside rounded-full for pills/avatars/dots (The Two-Radius Rule).",
+      "Do reach for a border before a shadow; reserve shadow strictly for content that has left the normal document flow (The Floating-Only Rule).",
+      "Do pair every status badge's color with the redundant solid-dot marker, not color alone.",
+      "Do build hierarchy from Inter's weight/size/color rather than introducing a second typeface (The No-Second-Typeface Rule)."
+    ],
+    "donts": [
+      "Don't use Amber Flag for anything clickable — it means \"notice,\" never \"act.\"",
+      "Don't add a resting shadow to a card, table, or panel; if it needs to stand out, that's a border or background job, not a shadow job.",
+      "Don't introduce a new corner radius value; every rectangle in this system is 6px, 8px, or fully round.",
+      "Don't make the page body scroll — the app shell is fixed by design; scope any new scroll region to its own container.",
+      "Don't borrow a status-palette color (green/yellow/red/blue/orange/gray) for a brand/interactive purpose, or vice versa — the two palettes are semantically separate even where hues are visually close (Amber Flag vs. status Orange)."
+    ]
+  }
+}

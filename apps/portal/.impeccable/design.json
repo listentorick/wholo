@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-07T13:02:54Z",
+  "title": "Design System: Stocdup Portal",
+  "extensions": {
+    "colorMeta": {
+      "deep-navy": {
+        "role": "neutral",
+        "displayName": "Deep Navy",
+        "canonical": "hsl(217 68% 14%)",
+        "tonalRamp": ["hsl(217 68% 15%)", "hsl(217 68% 25%)", "hsl(217 68% 35%)", "hsl(217 68% 45%)", "hsl(217 68% 55%)", "hsl(217 68% 65%)", "hsl(217 68% 80%)", "hsl(217 68% 95%)"]
+      },
+      "cobalt-blue": {
+        "role": "primary",
+        "displayName": "Cobalt Blue",
+        "canonical": "hsl(220 100% 54%)",
+        "tonalRamp": ["hsl(220 100% 15%)", "hsl(220 100% 25%)", "hsl(220 100% 35%)", "hsl(220 100% 46%)", "hsl(220 100% 54%)", "hsl(220 100% 65%)", "hsl(220 100% 80%)", "hsl(220 100% 95%)"]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "Amber",
+        "canonical": "hsl(21 86% 63%)",
+        "tonalRamp": ["hsl(21 86% 20%)", "hsl(21 86% 30%)", "hsl(21 86% 40%)", "hsl(21 86% 50%)", "hsl(21 86% 63%)", "hsl(21 86% 75%)", "hsl(21 86% 85%)", "hsl(21 90% 95%)"]
+      },
+      "sky-blue": {
+        "role": "tertiary",
+        "displayName": "Sky Blue",
+        "canonical": "hsl(215 90% 70%)",
+        "tonalRamp": ["hsl(215 90% 20%)", "hsl(215 90% 30%)", "hsl(215 90% 40%)", "hsl(215 90% 50%)", "hsl(215 90% 60%)", "hsl(215 90% 70%)", "hsl(215 90% 85%)", "hsl(215 90% 96%)"]
+      },
+      "pale-stone": {
+        "role": "neutral",
+        "displayName": "Pale Stone",
+        "canonical": "hsl(216 24% 96%)",
+        "tonalRamp": ["hsl(216 24% 15%)", "hsl(216 24% 30%)", "hsl(216 24% 45%)", "hsl(216 24% 60%)", "hsl(216 24% 75%)", "hsl(216 24% 85%)", "hsl(216 24% 90%)", "hsl(216 24% 96%)"]
+      },
+      "light-blue-grey": {
+        "role": "neutral",
+        "displayName": "Light Blue Grey",
+        "canonical": "hsl(210 32% 93%)",
+        "tonalRamp": ["hsl(210 32% 15%)", "hsl(210 32% 30%)", "hsl(210 32% 45%)", "hsl(210 32% 60%)", "hsl(210 32% 75%)", "hsl(210 32% 85%)", "hsl(210 32% 90%)", "hsl(210 32% 93%)"]
+      },
+      "slate-blue": {
+        "role": "neutral",
+        "displayName": "Slate Blue",
+        "canonical": "hsl(213 17% 43%)",
+        "tonalRamp": ["hsl(213 17% 15%)", "hsl(213 17% 25%)", "hsl(213 17% 35%)", "hsl(213 17% 43%)", "hsl(213 17% 55%)", "hsl(213 17% 65%)", "hsl(213 17% 80%)", "hsl(213 17% 95%)"]
+      },
+      "success-green": {
+        "role": "semantic-success",
+        "displayName": "Success Green",
+        "canonical": "hsl(142 76% 36%)",
+        "tonalRamp": ["hsl(142 76% 15%)", "hsl(142 76% 25%)", "hsl(142 76% 30%)", "hsl(142 76% 36%)", "hsl(142 76% 45%)", "hsl(142 76% 60%)", "hsl(142 76% 80%)", "hsl(142 76% 95%)"]
+      },
+      "error-red": {
+        "role": "semantic-error",
+        "displayName": "Error Red",
+        "canonical": "hsl(0 74% 51%)",
+        "tonalRamp": ["hsl(0 74% 15%)", "hsl(0 74% 25%)", "hsl(0 74% 35%)", "hsl(0 74% 45%)", "hsl(0 74% 51%)", "hsl(0 74% 65%)", "hsl(0 74% 80%)", "hsl(0 74% 95%)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The wordmark lockup only — e.g. the login screen's \"stocdup\" mark." },
+      "headline": { "displayName": "Headline", "purpose": "Page-level greetings and top-level headers." },
+      "title": { "displayName": "Title", "purpose": "Section headers, distributor name in the header bar, modal titles." },
+      "body": { "displayName": "Body", "purpose": "Primary UI copy — nav labels, buttons, list rows, form values." },
+      "label": { "displayName": "Label", "purpose": "Meta text, SKUs, tab labels, and uppercase micro-labels." }
+    },
+    "shadows": [
+      { "name": "resting-card", "value": "0 1px 2px rgba(0,0,0,0.05)", "purpose": "Barely-there ambient shadow on a card at rest, paired with a hairline border." },
+      { "name": "hovered-card", "value": "0 4px 6px -1px rgba(0,0,0,0.1)", "purpose": "The real 'this is interactive, lift toward it' signal on card hover." },
+      { "name": "modal", "value": "0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)", "purpose": "Floating modal panels above the page." },
+      { "name": "dropdown", "value": "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", "purpose": "Popover menus (e.g. the user menu) floating fully above the page." },
+      { "name": "identity-accent", "value": "0 2px 8px rgba(0,0,0,0.15)", "purpose": "The home banner's logo circle." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "150ms ease", "purpose": "Default hover/focus/active transitions on buttons, cards, links." },
+      { "name": "ease-panel", "value": "300ms ease-in-out", "purpose": "Sidebar collapse/expand width transition and the mobile drawer slide-in." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single primary call-to-action color and shape.",
+      "html": "<button class=\"ds-btn-primary\">Add this supplier</button>",
+      "css": ".ds-btn-primary { background: hsl(var(--color-primary)); color: #fff; padding: 10px 16px; font-size: 14px; font-weight: 500; font-family: Inter, system-ui, sans-serif; border: none; border-radius: 0; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: hsl(var(--color-primary-hover)); } .ds-btn-primary:focus-visible { outline: 2px solid hsl(var(--color-primary)); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Outline button for the non-default action in a choice pair.",
+      "html": "<button class=\"ds-btn-secondary\">No, this is a first introduction</button>",
+      "css": ".ds-btn-secondary { background: hsl(var(--color-surface)); color: hsl(var(--color-text)); padding: 10px 16px; font-size: 14px; font-weight: 500; font-family: Inter, system-ui, sans-serif; border: 1px solid hsl(var(--color-border)); border-radius: 0; cursor: pointer; transition: background 0.15s; } .ds-btn-secondary:hover { background: hsl(var(--color-highlight-light)); } .ds-btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Icon Stepper Button",
+      "kind": "button",
+      "refersTo": "button-icon-stepper",
+      "description": "The one intentionally circular button — catalogue quantity +/- control.",
+      "html": "<button class=\"ds-btn-stepper\" aria-label=\"Increase quantity\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" width=\"14\" height=\"14\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"/><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/></svg></button>",
+      "css": ".ds-btn-stepper { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #D5D9E0; background: transparent; color: #6B7280; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; transition: border-color 0.15s, color 0.15s; } .ds-btn-stepper:hover { border-color: hsl(var(--color-primary)); color: hsl(var(--color-primary)); } .ds-btn-stepper:active { background: hsl(var(--color-primary-subtle)); } .ds-btn-stepper:disabled { opacity: 0.4; cursor: not-allowed; }"
+    },
+    {
+      "name": "Distributor Card",
+      "kind": "card",
+      "refersTo": "card-distributor",
+      "description": "The home screen's clickable supplier summary row.",
+      "html": "<div class=\"ds-card-distributor\"><div class=\"ds-card-avatar\">WI</div><div class=\"ds-card-body\"><p class=\"ds-card-name\">Winos</p><p class=\"ds-card-meta\">orders@winos.example</p></div><div class=\"ds-card-count\"><p class=\"ds-card-count-num\">12</p><p class=\"ds-card-count-label\">orders</p></div></div>",
+      "css": ".ds-card-distributor { display: flex; align-items: flex-start; gap: 16px; width: 100%; text-align: left; background: #fff; border: 1px solid #E5E7EB; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; font-family: Inter, system-ui, sans-serif; } .ds-card-distributor:hover { border-color: hsl(var(--color-primary)); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); } .ds-card-avatar { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: center; background: hsl(var(--color-accent-light)); color: hsl(var(--color-accent)); font-size: 12px; font-weight: 600; } .ds-card-body { flex: 1; min-width: 0; } .ds-card-name { font-size: 14px; font-weight: 600; color: #1A1A1A; margin: 0; } .ds-card-meta { font-size: 12px; color: #9CA3AF; margin: 2px 0 0; } .ds-card-count { flex-shrink: 0; text-align: right; } .ds-card-count-num { font-size: 24px; font-weight: 600; color: #1A1A1A; line-height: 1; margin: 0; } .ds-card-count-label { font-size: 12px; color: #9CA3AF; margin: 2px 0 0; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge-status-pending",
+      "description": "Connection-status pill — pending/suspended only; no badge renders for an active relationship.",
+      "html": "<span class=\"ds-badge-status\"><span class=\"ds-badge-dot\"></span>Pending</span>",
+      "css": ".ds-badge-status { display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; padding: 2px 10px; font-size: 12px; font-weight: 500; font-family: Inter, system-ui, sans-serif; background: #fef9c3; color: #a16207; } .ds-badge-dot { width: 6px; height: 6px; border-radius: 9999px; background: #a16207; }"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Standard portal search field: magnifier icon, square edges, Cobalt focus ring.",
+      "html": "<div class=\"ds-input-search-wrap\"><svg class=\"ds-input-search-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" width=\"16\" height=\"16\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/></svg><input class=\"ds-input-search\" type=\"search\" placeholder=\"Search suppliers…\" /></div>",
+      "css": ".ds-input-search-wrap { position: relative; } .ds-input-search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: hsl(var(--color-muted)); pointer-events: none; } .ds-input-search { width: 100%; border: 1px solid hsl(var(--color-border)); background: #fff; padding: 10px 16px 10px 40px; font-size: 14px; font-family: Inter, system-ui, sans-serif; color: hsl(var(--color-text)); border-radius: 0; } .ds-input-search::placeholder { color: hsl(var(--color-muted)); } .ds-input-search:focus { outline: none; box-shadow: 0 0 0 2px hsl(var(--color-primary)); border-color: hsl(var(--color-primary)); }"
+    },
+    {
+      "name": "Distributor Nav Tab",
+      "kind": "nav",
+      "refersTo": "nav-tab",
+      "description": "Underline tab used in the sticky distributor context bar (About / Shop / Orders).",
+      "html": "<a class=\"ds-nav-tab ds-nav-tab--active\" href=\"#\">Shop</a>",
+      "css": ".ds-nav-tab { display: inline-flex; align-items: center; padding: 12px 20px; font-size: 14px; font-weight: 500; font-family: Inter, system-ui, sans-serif; color: #9CA3AF; border-bottom: 3px solid transparent; text-decoration: none; transition: color 0.15s; } .ds-nav-tab:hover { color: #1A1A1A; } .ds-nav-tab--active { color: #1A1A1A; border-bottom-color: hsl(var(--color-primary)); }"
+    },
+    {
+      "name": "Confirmation Modal",
+      "kind": "custom",
+      "refersTo": "modal-confirm",
+      "description": "Centered confirmation dialog with stacked full-width actions, used for the connect-request flow.",
+      "html": "<div class=\"ds-modal-backdrop\"><div class=\"ds-modal\" role=\"dialog\" aria-modal=\"true\"><p class=\"ds-modal-title\">Have you spoken with or ordered from Winos in the last 90 days?</p><div class=\"ds-modal-actions\"><button class=\"ds-btn-primary\" style=\"width:100%\">Yes, we're already in touch</button><button class=\"ds-btn-secondary\" style=\"width:100%\">No, this is a first introduction</button></div></div></div>",
+      "css": ".ds-modal-backdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); padding: 16px; } .ds-modal { width: 100%; max-width: 384px; background: #fff; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); font-family: Inter, system-ui, sans-serif; } .ds-modal-title { font-size: 16px; font-weight: 600; color: hsl(var(--color-text)); margin: 0 0 20px; } .ds-modal-actions { display: flex; flex-direction: column; gap: 8px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Trade Counter",
+    "overview": "Stocdup Portal should feel like walking up to a supplier who already knows you — quick, personal, and confident, not a form to fill out. The venues who use it first (cafes, delis, pubs, hotels) are not warehouse operators; the system reads as fresh, warm, curated, and lively while staying unmistakably a serious trade tool, not a consumer storefront. Deep Navy grounds the interface with quiet authority, Cobalt Blue is the one color that says \"act here,\" and Amber supplies the warm, lively spark — status, attention, personality — without ever competing with Cobalt for the primary action.\n\nThe system is unapologetically flat and square: white canvas, hairline borders, generous 20px padding, and hard 0px corners on every rectangular surface. Circles are reserved entirely for identity — avatars, distributor logos, status dots, spinners — so a curve always means \"this is a person or a mark,\" never decoration. Depth is used sparingly and functionally: surfaces sit flat until something is genuinely floating toward the user (a hovered card, an open dropdown, a modal); it is never sprinkled on for atmosphere. Confirmed rejections: nothing industrial or dispatch-board-utilitarian, nothing softly rounded and retail-cute, no decorative illustration or whimsy, no ambient shadow scattered across resting surfaces.",
+    "keyCharacteristics": [
+      "Confident, warm, curated — a trade tool a venue owner would trust and enjoy using",
+      "One typeface (Inter), hierarchy from size/weight/letter-spacing only",
+      "Hard square corners everywhere except true identity circles",
+      "Flat by default; shadow only appears as a \"lifting toward you\" cue",
+      "Cobalt Blue is rationed to the single next action; Amber carries warmth and status"
+    ],
+    "rules": [
+      { "name": "The Confident Blue Rule", "body": "Cobalt Blue is reserved for the single next thing the user should do — primary CTA, active nav item, focus ring. If more than one element on screen is Cobalt, something is competing with the actual call to action.", "section": "colors" },
+      { "name": "The Warm Spark Rule", "body": "Amber marks status and attention (pending, progress, \"look here\") — it never doubles as a clickable primary action's color.", "section": "colors" },
+      { "name": "Read the token names, not the class names", "body": "tailwind.config.ts maps the Tailwind accent-* utility family to the --color-primary CSS variable (Cobalt Blue) and the amber-* utility family to --color-accent (the orange/Amber token). bg-accent in this codebase is Cobalt Blue, not Amber. Confirm the mapping before assuming a class's color from its name.", "section": "colors" },
+      { "name": "The One Typeface Rule", "body": "Inter is the only typeface. Hierarchy comes from size, weight, and letter-spacing — never a second family, never a serif accent.", "section": "typography" },
+      { "name": "The Reach Rule", "body": "Surfaces are flat at rest — separated by a hairline border, not a shadow. A shadow only appears when something is genuinely lifting toward the user (hover) or floating above the page (dropdown, modal). Shadow is never decorative.", "section": "elevation" },
+      { "name": "The Square Edge, Circular Identity Rule", "body": "A rounded rectangle is never the answer. If it needs a curve, it should be a full circle and it should mean something (a person, a mark, a status, motion) — never soft decoration.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do ration Cobalt Blue to the one next action on screen — CTA, active nav item, focus ring (The Confident Blue Rule).",
+      "Do use the amber-* Tailwind utilities for warmth/status accents (progress, pending, attention) — never for a primary action.",
+      "Do keep every rectangular surface at a hard 0px corner; reserve curves entirely for true circles that mean identity, status, or motion (The Square Edge, Circular Identity Rule).",
+      "Do keep resting surfaces flat (hairline border, at most a whisper of shadow); only add real shadow when something is hovering/lifting or floating above the page (The Reach Rule).",
+      "Do use the shared border, muted, foreground / foreground-secondary / foreground-tertiary Tailwind tokens for new UI, even where nearby existing code doesn't yet."
+    ],
+    "donts": [
+      "Don't assume a class's color from its name — the Tailwind accent-* family renders Cobalt Blue (from --color-primary) while amber-* renders the actual orange accent (from --color-accent); check tailwind.config.ts before using either.",
+      "Don't hardcode one-off hex values for borders/text/greys (#E5E7EB, #9CA3AF, #1A1A1A, #4B5563, #6B7280, #D5D9E0, #C4B5A8, etc.) — several existing screens do this instead of the semantic tokens; it's drift, not a second legitimate palette. New work should use the tokens even where nearby code doesn't yet.",
+      "Don't add rounded corners to cards, buttons, panels, or inputs. A handful of older screens (accept-invite, order list/detail) already drifted to small 2–4px radii — treat that as unconformed debt, not a second corner language to extend.",
+      "Don't introduce a second typeface or lean on shadow for decoration — both contradict, respectively, The One Typeface Rule and The Reach Rule."
+    ]
+  }
+}
