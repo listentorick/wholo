@@ -1,6 +1,8 @@
 name: build-images
 
 on:
+  pull_request:
+    branches: [master]
   push:
     branches: [master]
   workflow_dispatch:
@@ -160,6 +162,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
+        if: github.event_name != 'pull_request'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -188,8 +191,8 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           build-args: ${{ matrix.build-args }}
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/${{ matrix.name }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/${{ matrix.name }}:buildcache,mode=max
+          cache-to: ${{ github.event_name != 'pull_request' && format('type=registry,ref=ghcr.io/{0}/{1}:buildcache,mode=max', github.repository, matrix.name) || '' }}
