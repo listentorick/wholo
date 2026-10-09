@@ -18,6 +18,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:search:reindex": "tsx scripts/reindex-product-search.ts",
     "db:analytics:rebuild": "tsx scripts/rebuild-analytics-state.ts",
+    "db:demo:dashboards": "tsx --env-file-if-exists=.env scripts/seed-demo-dashboards.ts",
     "db:tax-types:backfill": "tsx scripts/backfill-default-tax-types.ts",
     "db:membership-roles:backfill": "tsx scripts/backfill-membership-roles.ts",
     "db:accounting:clear": "node scripts/clear-accounting-data.js",

@@ -16,7 +16,7 @@ const PHOTO_URL_TTL_SECONDS = 900;
 // Reuses the shared sharp pipeline (ImageProcessingService.process) for MIME /
 // size / dimension validation + webp variant generation. keyTemplate is unused
 // here — this service resolves R2 keys itself.
-const DELIVERY_PHOTO_CONFIG: AssetTypeConfig = {
+export const DELIVERY_PHOTO_CONFIG: AssetTypeConfig = {
   keyTemplate: '',
   acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
   maxSizeBytes: 12 * 1024 * 1024,
