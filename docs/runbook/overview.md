@@ -69,6 +69,31 @@ All resources are in namespace `wholo` and named `wholo-*`.
 | Accounting of record (invoices, payments) | Xero | Xero |
 | Metrics, logs | Ops-host InfluxDB / Loki | Ops host's concern |
 
+## Web analytics (Plausible)
+
+The cluster runs its own copy of [Plausible Community Edition](https://plausible.io/), a cookieless web-analytics tool. It records visits to the marketing site (`www.<domain>`) only. It holds no business data and is separate from the ops-host Grafana dashboards. The decision is in [ADR-060](../adrs/ADR-060-marketing-site.md).
+
+- **It is optional.** It runs only when `plausible.enabled` is true in `values.live.yaml`, and it records visits only if the `www` image was built with `WWW_PLAUSIBLE_ENABLED=1` ([setup/github.md](setup/github.md)).
+- **Two components:** `wholo-plausible` (the app and dashboard) and `wholo-clickhouse` (its event store).
+- **Two stores:**
+  - The `plausible` Postgres database holds Plausible's own logins, the registered site and its settings. It is backed up.
+  - ClickHouse holds the pageview history. It is **not** backed up; see [Where state lives](#where-state-lives).
+- **No public host.** `www` proxies `/js/script.js` and `/api/event` to it over cluster DNS ([url-map.md](url-map.md)). To see the dashboard, port-forward and browse `http://localhost:8000`:
+
+  ```bash
+  kubectl -n wholo port-forward svc/wholo-plausible 8000:8000
+  ```
+
+- **If it fails,** only analytics is affected; `www` keeps working. It is safe to scale down under memory pressure ([incidents/node-problems.md](incidents/node-problems.md)).
+
+Related pages:
+
+- Using the dashboard: [analytics.md](analytics.md)
+- First-time setup: [setup/marketing-site.md](setup/marketing-site.md)
+- Its two keys: [secrets.md](secrets.md)
+- Upgrades: [maintenance.md](maintenance.md)
+- What a restore brings back: [disaster-recovery.md](disaster-recovery.md)
+
 ## Health endpoints
 
 - **`GET /api/v1/health`:** liveness. It returns `{status:"ok"}` if the process is up.

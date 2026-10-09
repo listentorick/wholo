@@ -15,6 +15,7 @@ This is how the live Stocdup environment (self-hosted k3s) is set up, deployed, 
 | Reboot or upgrade a node, free disk, check certs, run a backup by hand | [maintenance.md](maintenance.md) |
 | Recover from a lost node or build the cluster again | [disaster-recovery.md](disaster-recovery.md) |
 | Restore Postgres from R2 | [postgres-restore.md](postgres-restore.md) |
+| See marketing-site traffic and sign-up conversions | [analytics.md](analytics.md) |
 | Set up an environment (one-time) | [setup/](#one-time-setup) below |
 
 ## Before you start: access
@@ -51,7 +52,7 @@ In order, for a new environment:
 5. [setup/email.md](setup/email.md): PurelyMail, SPF/DKIM/DMARC.
 6. [setup/backups.md](setup/backups.md): R2 bucket, token, encryption keys, alerts.
 7. [setup/telemetry.md](setup/telemetry.md) and [setup/logging.md](setup/logging.md): the ops-host InfluxDB, Grafana and Loki side.
-8. [setup/marketing-site.md](setup/marketing-site.md): `www` and Plausible.
+8. [setup/marketing-site.md](setup/marketing-site.md): the marketing site (`www`) and its web analytics (Plausible). What Plausible is: [overview.md](overview.md#web-analytics-plausible).
 
 ## Conventions in this runbook
 
