@@ -1,18 +1,14 @@
 {
-  "name": "@wholo/types",
+  "name": "@wholo/coverage-report",
   "version": "0.1.0",
   "private": true,
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
     "test": "vitest run",
     "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "3.2.6",
-    "typescript": "^5.7.3",
     "vitest": "^3.2.3"
   }
 }

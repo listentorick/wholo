@@ -39,3 +39,6 @@ private.txt
 
 # Machine-local Claude Code settings
 .claude/settings.local.json
+
+# Test coverage reports (pnpm test:coverage)
+coverage/

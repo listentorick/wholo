@@ -81,7 +81,7 @@ it is informational and does not gate image publishing (the tests do — see
 
 Unit tests are **required** for all new code. Every service method, controller, and utility must have a corresponding `.spec.ts` (backend) or `.spec.tsx` (frontend) file alongside it.
 
-**Tests gate the build.** In `.github/workflows/build-images.yml` the `build` job needs both `test` (all unit tests, `pnpm turbo test`) and `integration` (`apps/api` integration specs against a TimescaleDB service container, migrations applied from empty). A failing test means no images are published, so nothing can be promoted to live. Keep both green; when a change makes an existing test fail, check the history to see whether the test or the code is out of date before changing either.
+**Tests gate the build.** In `.github/workflows/build-images.yml` the `build` job needs both `test` (all unit tests with coverage, `pnpm test:coverage`) and `integration` (`apps/api` integration specs against a TimescaleDB service container, migrations applied from empty). A failing test means no images are published, so nothing can be promoted to live. Keep both green; when a change makes an existing test fail, check the history to see whether the test or the code is out of date before changing either.
 
 ### Frameworks
 
@@ -92,6 +92,10 @@ Unit tests are **required** for all new code. Every service method, controller, 
 | `apps/admin` | Vitest + Testing Library | `pnpm --filter @wholo/admin test` |
 | `apps/portal` | Vitest + Testing Library | `pnpm --filter @wholo/portal test` |
 | `apps/www` | Vitest + Testing Library | `pnpm --filter @wholo/www test` |
+
+### Coverage
+
+`pnpm test:coverage` (repo root) runs every package's unit tests once with coverage and prints a per-package table; CI runs the same command and shows the table in the run Summary. It is currently **reporting only** — no minimum percentages are set in `coverage.thresholds.json`, so a low figure never fails the build (a failed test still does). A new package needs a `test:cov` script and the standard coverage block in its Jest/Vitest config. Report locations, exclusions and thresholds: [`docs/testing/coverage.md`](docs/testing/coverage.md).
 
 ### Running all tests
 

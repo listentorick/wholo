@@ -17,6 +17,14 @@ jobs:
   # fail without failing the job) — see CLAUDE.md "Linting".
   test:
     runs-on: ubuntu-latest
+    # For later workflow conditions: `fail`, `pass`, or `report-only` (no
+    # minimums set), and the overall percentages (or `N/A`).
+    outputs:
+      coverage_result: ${{ steps.coverage.outputs.result }}
+      coverage_lines: ${{ steps.coverage.outputs.lines }}
+      coverage_branches: ${{ steps.coverage.outputs.branches }}
+      coverage_functions: ${{ steps.coverage.outputs.functions }}
+      coverage_statements: ${{ steps.coverage.outputs.statements }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,7 +41,29 @@ jobs:
       # typed transactions) — without this every suite fails with TS2305.
       - run: pnpm --filter @wholo/api exec prisma generate
       - run: pnpm --filter @wholo/admin-api exec prisma generate
-      - run: pnpm turbo test
+      # The unit tests, run once, with coverage — the same command as locally
+      # (docs/testing/coverage.md). Fails on a failed test, and on coverage only
+      # once a minimum is set: the COVERAGE_MIN_* repository variables override
+      # coverage.thresholds.json; with none set this is reporting only. Writes
+      # the per-package table to the run Summary either way.
+      - id: coverage
+        run: pnpm test:coverage
+        env:
+          COVERAGE_MIN_LINES: ${{ vars.COVERAGE_MIN_LINES }}
+          COVERAGE_MIN_BRANCHES: ${{ vars.COVERAGE_MIN_BRANCHES }}
+          COVERAGE_MIN_FUNCTIONS: ${{ vars.COVERAGE_MIN_FUNCTIONS }}
+          COVERAGE_MIN_STATEMENTS: ${{ vars.COVERAGE_MIN_STATEMENTS }}
+      # Whatever was produced is published, including after a test failure.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-reports
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            coverage/
+            apps/*/coverage/
+            packages/*/coverage/
 
   # apps/api integration specs (test/*.integration-spec.ts): each boots the
   # real NestJS app in-process and drives it over HTTP (supertest) against a
