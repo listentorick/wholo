@@ -21,3 +21,21 @@ helm/wholo/.local-certs/
 
 # Next.js
 next-env.d.ts
+
+# Secrets / captures — never commit
+*.har
+origin.txt
+private.txt
+
+# Collateral lives outside the repo (../wholo-collateral)
+/screenshots/
+*.docx
+
+# Generated tool output (kept on disk)
+.full-review/
+.full-review-archive/
+**/.impeccable/critique/
+**/.impeccable/live/
+
+# Machine-local Claude Code settings
+.claude/settings.local.json
