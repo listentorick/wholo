@@ -122,9 +122,8 @@ missing.
 
 - a failed unit or integration test blocks image builds, as before;
 - once a minimum is set, a failed coverage check blocks them too;
-- otherwise nothing changes: pull requests build images without publishing,
-  pushes to `master` and manual runs on `master` publish; manual runs on any
-  other branch build without publishing.
+- otherwise nothing changes: a push to any branch runs the tests and builds
+  the images; only `master` (a push or a manual run) publishes them.
 
 The `test` job exposes outputs for later workflow conditions:
 `coverage_result` (`pass`, `fail`, or `report-only` when no minimum is set) and

@@ -1,10 +1,12 @@
 name: build-images
 
+# Every push, to any branch, runs the tests and builds the images. Only master
+# publishes them (see PUBLISH on the build job). There is no pull_request
+# trigger: a pull request's branch is already covered by its pushes, and a
+# second trigger would run everything twice.
 on:
-  pull_request:
-    branches: [master]
   push:
-    branches: [master]
+    branches: ['**']
   workflow_dispatch:
 
 permissions:
@@ -143,9 +145,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Images are published only from master: a push to it, or a manual run
-      # on it. Pull requests and manual runs on any other branch still build
-      # every image, to prove the Dockerfiles work, but push nothing.
-      PUBLISH: ${{ github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+      # on it. Every other branch still builds every image, to prove the
+      # Dockerfiles work, but pushes nothing.
+      PUBLISH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     strategy:
       fail-fast: false
       matrix:
