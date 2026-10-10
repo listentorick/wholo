@@ -5,6 +5,9 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     passWithNoTests: true,
+    // Vitest 4 no longer skips build output by default; without this the
+    // compiled copies of the specs are collected too.
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**'],
     // Unit-test coverage (`pnpm test:coverage`, docs/testing/coverage.md). `include`
     // lists the source so files no test imports still count, at 0%.
     coverage: {

@@ -6,28 +6,33 @@ import { vi } from 'vitest';
 // Install inert baseline stubs here so any component that only *mounts* an
 // observer renders without throwing; specs that need to drive the callback still
 // override these with a richer `vi.stubGlobal` (see BrandingBanner.spec / the
-// storefront specs).
+// storefront specs). They are constructed with `new`, so the mock
+// implementations must be `function`s — an arrow function cannot be one.
 
 if (!('IntersectionObserver' in globalThis)) {
   vi.stubGlobal(
     'IntersectionObserver',
-    vi.fn(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn(),
-      takeRecords: vi.fn(() => []),
-    })),
+    vi.fn(function () {
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+        takeRecords: vi.fn(() => []),
+      };
+    }),
   );
 }
 
 if (!('ResizeObserver' in globalThis)) {
   vi.stubGlobal(
     'ResizeObserver',
-    vi.fn(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn(),
-    })),
+    vi.fn(function () {
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+      };
+    }),
   );
 }
 

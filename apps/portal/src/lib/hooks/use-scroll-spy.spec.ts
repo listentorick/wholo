@@ -28,7 +28,8 @@ beforeEach(() => {
   roInstances = [];
   vi.stubGlobal(
     'ResizeObserver',
-    vi.fn((callback: () => void) => {
+    // Constructed with `new`, so this must be a `function`, not an arrow.
+    vi.fn(function (callback: () => void) {
       const instance: FakeResizeObserver = { callback, observe: vi.fn(), disconnect: vi.fn() };
       roInstances.push(instance);
       return instance;

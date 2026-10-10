@@ -25,7 +25,8 @@ vi.mock('@wholo/admin-api-client', () => ({
 }));
 
 vi.mock('keycloak-js', () => ({
-  default: vi.fn().mockImplementation(() => {
+  // Constructed with `new Keycloak(...)`, so this must be a `function`, not an arrow.
+  default: vi.fn().mockImplementation(function () {
     const kc: any = {
       authenticated: true,
       token: 'test-token',

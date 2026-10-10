@@ -11,7 +11,10 @@ const { KeycloakCtor, kcInstance, initMock } = vi.hoisted(() => {
     register: vi.fn(),
     logout: vi.fn(),
   };
-  const KeycloakCtor = vi.fn(() => kcInstance);
+  // Constructed with `new Keycloak(...)`, so this must be a `function`, not an arrow.
+  const KeycloakCtor = vi.fn(function () {
+    return kcInstance;
+  });
   return { KeycloakCtor, kcInstance, initMock };
 });
 

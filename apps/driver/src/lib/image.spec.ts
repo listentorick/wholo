@@ -3,8 +3,19 @@ import { compressImage } from './image';
 
 // jsdom has no real canvas/decoder — compressImage must fall back to the
 // original file rather than throw.
+// An <img> that can never decode: jsdom's own Image fires neither load nor
+// error for a blob URL, which would leave the fallback path waiting forever.
+class UndecodableImage {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  set src(_value: string) {
+    queueMicrotask(() => this.onerror?.());
+  }
+}
+
 beforeEach(() => {
   vi.stubGlobal('createImageBitmap', undefined);
+  vi.stubGlobal('Image', UndecodableImage);
 });
 
 describe('compressImage', () => {
