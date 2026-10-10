@@ -257,7 +257,7 @@ To use it:
 
 Live-ops runbook (setup, deploy, rollback, incidents, secrets, maintenance, DR): [`docs/runbook/`](docs/runbook/README.md) (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:
 
-1. Push to `master` (or run the workflow manually) — this triggers `.github/workflows/build-images.yml`, which runs the unit and integration tests and, only if both pass, builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
+1. Push to `master` (or run the workflow manually on `master`; pull requests and manual runs on any other branch build the images but publish nothing) — this triggers `.github/workflows/build-images.yml`, which runs the unit and integration tests and, only if both pass, builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`).
 2. Bump the `sha-` tags in `helm/wholo/values.live.yaml` (gitignored, not committed) to the new sha.
 3. Deploy: `pnpm helm:install:live` (`helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml`).
 
