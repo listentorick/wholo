@@ -58,6 +58,38 @@ The current route layout of `apps/api` is acknowledged as messy and is being inc
 - **Industry-agnostic core**: no wine-specific assumptions in data models or workflows.
 - **Minimal training**: operational simplicity over ERP complexity.
 
+## Architecture documentation (C4)
+
+The system's architecture is documented as [C4 model](https://c4model.com) diagrams in `docs/architecture/`:
+
+| Document | Level | Shows |
+|---|---|---|
+| [`c4-context.md`](docs/architecture/c4-context.md) | 1 — System context | The people who use Stocdup and the outside systems it depends on |
+| [`c4-container.md`](docs/architecture/c4-container.md) | 2 — Containers | Every separately deployed pod, how they talk to each other, and which outside systems they touch |
+| `c4-component-<area>.md` | 3 — Components | The components inside the containers for one area of the platform, and the interfaces between them. So far: [`c4-component-accounting.md`](docs/architecture/c4-component-accounting.md) (the accounting framework and its Xero implementation) |
+| `code/c4-code-<directory>.md` | 4 — Code | The classes, functions, routes and queues in one source directory. Written only for areas that have a component document, as its input |
+
+Component and code levels exist only for the areas listed above; other areas are not documented below container level.
+
+**Keep them up to date in the same change that alters the architecture.** Update the affected document when a change:
+
+- adds, removes or changes a kind of user, or how one signs in (context);
+- adds, removes or changes an outside system or what crosses that boundary — accounting provider, email, object storage, identity, monitoring (context, and container if a specific pod talks to it);
+- adds, removes, renames or splits a deployed unit — anything under `helm/wholo/templates/`, a new app in `apps/`, a new Deployment/CronJob/DaemonSet (container);
+- changes which container talks to which, or how — a new queue, a new direct call, a different auth mechanism between containers (container);
+- in an area that has a component document: adds, removes or renames a service, controller, processor, queue, outbox event or route, or changes which of them calls which (that area's code documents, and the component document if a component or relationship changes).
+
+A change inside one container (a new module, endpoint, table or screen) in an area with no component document does not need a diagram update unless it changes one of the above.
+
+**Use the `c4-architecture` plugin to write them — do not hand-edit the structure.** Delegate to its agents: `c4-architecture:c4-context` for `c4-context.md`, `c4-architecture:c4-container` for `c4-container.md`, `c4-architecture:c4-component` for a `c4-component-<area>.md`, and `c4-architecture:c4-code` for the `code/` documents. Work bottom-up when more than one level is affected — code, then component, then container, then context — so each level is synthesised from the one below. Documenting a new area at component level means writing its code documents first. If those agents are not available in the session, say so and ask for the plugin to be loaded (`/reload-plugins`) rather than writing the documents without it.
+
+When briefing the agent or reviewing its work:
+
+- **Describe only what is built and deployed**, verified against the code and Helm templates — no planned or "not yet built" content.
+- **Follow each document's "Editing the diagrams" note.** Mermaid's C4 renderer has no edge routing: elements sit on a 3-column grid in declaration order, only neighbouring cells may be connected, and label positions are hand-set with `UpdateRelStyle`. A true relationship that cannot be drawn cleanly goes in that diagram's "Not drawn" list.
+- **Render every changed diagram and look at it** before calling it done — no crossing lines, no line through a box, no overlapping labels. A diagram that has not been rendered has not been checked.
+- **Sign-in and token checks stay visible.** Keycloak is drawn as its own box: staff and trade customers sign in to it directly, and the Central API and the admin and portal BFFs verify every token against its signing keys. Do not fold these back into prose or a "Not drawn" list.
+
 ## Frontend conventions
 
 - **Charts: always use [Apache ECharts](https://echarts.apache.org/) (`echarts`) — no exceptions, however simple the chart.** Do not hand-draw charts with raw SVG/canvas/CSS, and do not add another charting library (recharts, chart.js, d3, visx…). Any app that needs a chart uses ECharts (add the dependency there if it is missing). Follow the existing pattern in `apps/admin/src/components/dashboard/OrderTrendChart.tsx`: import from `echarts/core` and register only the chart types/components used (`echarts.use([...])`), keep chart colours as literal hex resolved from the design tokens, and never rely on colour alone (legend or text must carry the series meaning, plus an accessible summary for screen readers). Test by mocking `echarts/core` at the module boundary and asserting on the option passed to `setOption` (see `OrderTrendChart.spec.tsx`), not on rendered pixels. Keep the data shaping (what goes into the series) in plain, separately-tested functions.
@@ -233,4 +265,4 @@ Live-ops runbook (setup, deploy, rollback, incidents, secrets, maintenance, DR):
 
 ## Reference
 
-Full product requirements are in `prd.md`.
+Full product requirements are in `prd.md`. Architecture diagrams are in `docs/architecture/` (see "Architecture documentation (C4)").
