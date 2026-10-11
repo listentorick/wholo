@@ -21,6 +21,11 @@ Signing keys, certificates and anything that expires on a date are covered in [k
    CronJob pods (the backup job) read Secrets fresh on every run, so they need no restart.
 2. **Some values only apply on first boot.** For those, editing `values.live.yaml` changes nothing on its own; change the real thing first (database role, Keycloak console), then update the file to match. They are marked **first-boot** below.
 3. Update the password manager in the same sitting.
+4. **Removing a secret from the chart does not always remove it from the cluster.** A Secret template written with `stringData` only ever adds or overwrites keys; a key deleted from the template stays in the live Secret, and in the environment of every pod that reads it. `wholo-api` and `wholo-admin-api` use `data` for this reason, so a line removed there is removed on the next upgrade. For any other Secret, or for a key that was created while the template still used `stringData`, remove it by hand and restart the consumers:
+   ```bash
+   kubectl -n wholo get secret wholo-<name> -o jsonpath='{.data}' | tr ',' '\n'     # what is really in it
+   kubectl -n wholo patch secret wholo-<name> --type=json -p '[{"op":"remove","path":"/data/<KEY>"}]'
+   ```
 
 ## Inventory
 

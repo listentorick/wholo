@@ -42,6 +42,16 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
    grep -n -A4 '^deliveryToken:' helm/wholo/values.live.yaml
    ```
    If it is missing, follow [keys-and-certificates.md → First-time setup](keys-and-certificates.md#first-time-setup). Links on manifests printed before that first deploy stop working; reprint them.
+
+   **Once, straight after the first deploy of that release**, remove two keys the old chart left behind. Helm cannot remove them (see [secrets.md](secrets.md#rules-that-apply-to-every-rotation), rule 4), so until this is done the admin app still has the database password in its environment:
+   ```bash
+   kubectl -n wholo patch secret wholo-admin-api --type=json -p '[{"op":"remove","path":"/data/DATABASE_URL"}]'
+   kubectl -n wholo patch secret wholo-api --type=json -p '[{"op":"remove","path":"/data/DELIVERY_TOKEN_SIGNING_KEY"}]'
+   kubectl -n wholo rollout restart deploy/wholo-admin-api deploy/wholo-api deploy/wholo-worker
+   # confirm: prints nothing
+   kubectl -n wholo exec deploy/wholo-admin-api -- sh -c 'env | grep DATABASE_URL'
+   ```
+   A patch that says the path does not exist means the key is already gone.
 7. **Check whether a value the images bake in has changed.** If `LIVE_KEYCLOAK_URL`, `LIVE_KEYCLOAK_REALM` or the `WWW_*` repository variables changed after this commit was built, the images carry the old values. Re-run the workflow first ([setup/github.md](setup/github.md)).
 
 ## 2. Deploy
