@@ -122,7 +122,10 @@ jobs:
       XERO_REDIRECT_URI: https://admin.localhost:8443/api/v1/accounting/xero/callback
       # 32 zero bytes, base64 — the shape the app validates; protects nothing.
       ACCOUNTING_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-      DELIVERY_TOKEN_SIGNING_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      # A key pair generated for CI alone (scripts/generate-delivery-token-keys.sh).
+      # It signs nothing outside this job's throwaway database.
+      DELIVERY_TOKEN_PRIVATE_KEY: MC4CAQAwBQYDK2VwBCIEIG2OCfLzj78+A34d9v3RjTELlZwfz3eTBbJlvNurc1sX
+      DELIVERY_TOKEN_PUBLIC_KEYS: MCowBQYDK2VwAyEAX59hkgT0QlpOoj/53vt5KGQmmoq+sHsH/Utl1JxdCyU=
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

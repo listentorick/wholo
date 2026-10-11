@@ -115,25 +115,37 @@ describe('DeliveryLinksService', () => {
     ...over,
   });
 
+  // Called by DeliveryLinkGuard for every request, before any body is read.
+  describe('resolveOrder', () => {
+    it('returns the order a genuine token points at', async () => {
+      await expect(service.resolveOrder('order-1.sig')).resolves.toMatchObject({ id: 'order-1', orderNumber: '10428' });
+    });
+
+    it('throws NotFoundException for a malformed/forged token', async () => {
+      signer.verify.mockReturnValue(null);
+      await expect(service.resolveOrder('garbage')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws GoneException when the order no longer exists', async () => {
+      prisma.order.findUnique.mockResolvedValue(null);
+      await expect(service.resolveOrder('order-1.sig')).rejects.toThrow(GoneException);
+    });
+
+    it.each([OrderStatus.CANCELLED, OrderStatus.REJECTED])('throws GoneException for a %s order', async (status) => {
+      prisma.order.findUnique.mockResolvedValue({ ...order, status });
+      await expect(service.resolveOrder('order-1.sig')).rejects.toThrow(GoneException);
+    });
+  });
+
   describe('getOrder', () => {
     it('returns a pending view with order details but no pricing, for a valid unresolved token', async () => {
-      const result = await service.getOrder('order-1.sig');
+      const result = await service.getOrder(order as any);
 
       expect(result.state).toBe('PENDING');
       expect(result.orderNumber).toBe('10428');
       expect(result.customerPhone).toBe('07700 900123');
       expect(result.lines).toEqual([{ productName: 'Rioja Crianza', quantity: 3 }]);
       expect(result).not.toHaveProperty('price');
-    });
-
-    it('throws NotFoundException for a malformed/forged token', async () => {
-      signer.verify.mockReturnValue(null);
-      await expect(service.getOrder('garbage')).rejects.toThrow(NotFoundException);
-    });
-
-    it('throws GoneException for a cancelled order', async () => {
-      prisma.order.findUnique.mockResolvedValue({ ...order, status: OrderStatus.CANCELLED });
-      await expect(service.getOrder('order-1.sig')).rejects.toThrow(GoneException);
     });
 
     it('returns a minimal read-only confirmation when an outcome already exists — never the signature', async () => {
@@ -143,7 +155,7 @@ describe('DeliveryLinksService', () => {
         signature,
       });
 
-      const result = await service.getOrder('order-1.sig');
+      const result = await service.getOrder(order as any);
 
       expect(result.state).toBe('SUBMITTED');
       expect(result.outcome).toEqual(expect.objectContaining({ outcome: 'DELIVERED', driverName: 'Alex Turner' }));
@@ -160,7 +172,7 @@ describe('DeliveryLinksService', () => {
         recordedAt: new Date(),
       });
 
-      await service.submitOutcome('order-1.sig', deliveredDto as any);
+      await service.submitOutcome(order as any, deliveredDto as any);
 
       expect(prisma.$transaction).toHaveBeenCalled();
       expect((prisma as any).orderDeliveryOutcome.create).toHaveBeenCalledWith(
@@ -190,7 +202,7 @@ describe('DeliveryLinksService', () => {
         recordedAt: new Date('2026-08-26T09:00:00Z'),
       });
 
-      await service.submitOutcome('order-1.sig', deliveredDto as any);
+      await service.submitOutcome(order as any, deliveredDto as any);
 
       expect(prisma.order.update).toHaveBeenCalledWith({ where: { id: 'order-1' }, data: { status: OrderStatus.DELIVERED } });
       expect(outbox.writeEvent).toHaveBeenCalledWith(
@@ -208,13 +220,13 @@ describe('DeliveryLinksService', () => {
     });
 
     it('reconciles order completion on a delivery, in the same transaction (an already-paid order completes)', async () => {
-      await service.submitOutcome('order-1.sig', deliveredDto as any);
+      await service.submitOutcome(order as any, deliveredDto as any);
 
       expect(orderCompletion.reconcile).toHaveBeenCalledWith(prisma, 'order-1', { type: 'SYSTEM' });
     });
 
     it('does not reconcile completion when the delivery failed', async () => {
-      await service.submitOutcome('order-1.sig', {
+      await service.submitOutcome(order as any, {
         outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER,
         unableReason: UnableToDeliverReason.CUSTOMER_REFUSED,
       } as any);
@@ -223,14 +235,14 @@ describe('DeliveryLinksService', () => {
     });
 
     it('carries what the delivery-facts consumer needs: the committed date, route and run, and how it was dropped', async () => {
-      (prisma as any).order.findUnique.mockResolvedValue({
+      const scheduled = {
         ...order,
         scheduledDeliveryDate: new Date('2026-08-27T00:00:00.000Z'),
         requestedDeliveryDate: new Date('2026-08-26T00:00:00.000Z'),
-      });
+      };
       (prisma as any).orderDeliveryOutcome.create.mockResolvedValue({ outcome: DeliveryOutcomeType.DELIVERED, recordedAt: new Date('2026-08-27T09:00:00Z') });
 
-      await service.submitOutcome('order-1.sig', deliveredDto as any);
+      await service.submitOutcome(scheduled as any, deliveredDto as any);
 
       expect(outbox.writeEvent).toHaveBeenCalledWith(
         prisma, 'Order', 'order-1', 'OrderDelivered',
@@ -246,10 +258,10 @@ describe('DeliveryLinksService', () => {
     });
 
     it('falls back to the requested date as the committed date, and to nulls for an order on no run', async () => {
-      (prisma as any).order.findUnique.mockResolvedValue({ ...order, scheduledDeliveryDate: null, requestedDeliveryDate: new Date('2026-08-26T00:00:00.000Z') });
+      const unscheduled = { ...order, scheduledDeliveryDate: null, requestedDeliveryDate: new Date('2026-08-26T00:00:00.000Z') };
       (prisma as any).deliveryRunOrder.findFirst.mockResolvedValue(null);
 
-      await service.submitOutcome('order-1.sig', deliveredDto as any);
+      await service.submitOutcome(unscheduled as any, deliveredDto as any);
 
       expect(outbox.writeEvent).toHaveBeenCalledWith(
         prisma, 'Order', 'order-1', 'OrderDelivered',
@@ -264,7 +276,7 @@ describe('DeliveryLinksService', () => {
       });
       const unableDto = { outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER, unableReason: UnableToDeliverReason.CUSTOMER_REFUSED };
 
-      await service.submitOutcome('order-1.sig', unableDto as any);
+      await service.submitOutcome(order as any, unableDto as any);
 
       expect(prisma.order.update).toHaveBeenCalledWith({ where: { id: 'order-1' }, data: { status: OrderStatus.DELIVERY_FAILED } });
       expect(outbox.writeEvent).toHaveBeenCalledWith(
@@ -278,7 +290,7 @@ describe('DeliveryLinksService', () => {
 
     it('does not write an outbox event or change status on a rejected validation error', async () => {
       await expect(
-        service.submitOutcome('order-1.sig', { outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER } as any),
+        service.submitOutcome(order as any, { outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER } as any),
       ).rejects.toThrow(UnprocessableEntityException);
 
       expect(outbox.writeEvent).not.toHaveBeenCalled();
@@ -287,13 +299,13 @@ describe('DeliveryLinksService', () => {
 
     it('requires a reason when the outcome is Unable to deliver', async () => {
       await expect(
-        service.submitOutcome('order-1.sig', { outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER } as any),
+        service.submitOutcome(order as any, { outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER } as any),
       ).rejects.toThrow(UnprocessableEntityException);
     });
 
     it('requires a note when the reason is Other', async () => {
       await expect(
-        service.submitOutcome('order-1.sig', {
+        service.submitOutcome(order as any, {
           outcome: DeliveryOutcomeType.UNABLE_TO_DELIVER,
           unableReason: UnableToDeliverReason.OTHER,
         } as any),
@@ -302,14 +314,14 @@ describe('DeliveryLinksService', () => {
 
     it('requires a drop method when the outcome is Delivered', async () => {
       await expect(
-        service.submitOutcome('order-1.sig', { outcome: DeliveryOutcomeType.DELIVERED, recipientName: 'Sam' } as any),
+        service.submitOutcome(order as any, { outcome: DeliveryOutcomeType.DELIVERED, recipientName: 'Sam' } as any),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(prisma.order.update).not.toHaveBeenCalled();
     });
 
     it('requires a recipient name and signature when handed to a person', async () => {
       await expect(
-        service.submitOutcome('order-1.sig', {
+        service.submitOutcome(order as any, {
           outcome: DeliveryOutcomeType.DELIVERED,
           dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
           recipientName: 'Sam Taylor',
@@ -317,7 +329,7 @@ describe('DeliveryLinksService', () => {
       ).rejects.toThrow(UnprocessableEntityException);
 
       await expect(
-        service.submitOutcome('order-1.sig', {
+        service.submitOutcome(order as any, {
           outcome: DeliveryOutcomeType.DELIVERED,
           dropMethod: DeliveryDropMethod.HANDED_TO_PERSON,
           signature,
@@ -328,21 +340,16 @@ describe('DeliveryLinksService', () => {
     it('rejects an oversized signature payload', async () => {
       const huge = { ...signature, strokes: [{ points: Array.from({ length: 5000 }, (_, i) => ({ x: i, y: i, time: i, pressure: 0.5 })) }] };
       await expect(
-        service.submitOutcome('order-1.sig', { ...deliveredDto, signature: huge } as any),
+        service.submitOutcome(order as any, { ...deliveredDto, signature: huge } as any),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(prisma.order.update).not.toHaveBeenCalled();
-    });
-
-    it('throws GoneException for a non-deliverable order', async () => {
-      prisma.order.findUnique.mockResolvedValue({ ...order, status: OrderStatus.REJECTED });
-      await expect(service.submitOutcome('order-1.sig', deliveredDto as any)).rejects.toThrow(GoneException);
     });
 
     it('is idempotent: retrying with the same body after a race returns the existing outcome instead of erroring', async () => {
       prisma.orderDeliveryOutcome.create.mockRejectedValue(uniqueConstraintError());
       prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(storedRow());
 
-      const result = await service.submitOutcome('order-1.sig', deliveredDto as any);
+      const result = await service.submitOutcome(order as any, deliveredDto as any);
       expect(result.state).toBe('SUBMITTED');
     });
 
@@ -359,7 +366,7 @@ describe('DeliveryLinksService', () => {
         }),
       );
 
-      await expect(service.submitOutcome('order-1.sig', deliveredDto as any)).rejects.toThrow(ConflictException);
+      await expect(service.submitOutcome(order as any, deliveredDto as any)).rejects.toThrow(ConflictException);
     });
 
     it('rejects a retry that changes only the signature as a conflict', async () => {
@@ -368,7 +375,7 @@ describe('DeliveryLinksService', () => {
         storedRow({ signature: { ...signature, strokes: [{ points: [{ x: 9, y: 9, time: 1, pressure: 0.1 }] }] } }),
       );
 
-      await expect(service.submitOutcome('order-1.sig', deliveredDto as any)).rejects.toThrow(ConflictException);
+      await expect(service.submitOutcome(order as any, deliveredDto as any)).rejects.toThrow(ConflictException);
     });
 
     it('links supplied photos to the outcome and persists device location', async () => {
@@ -379,7 +386,7 @@ describe('DeliveryLinksService', () => {
         location: { latitude: 53.7, longitude: -1.8, accuracyM: 8, capturedAt: '2026-08-27T10:00:00.000Z' },
       };
 
-      await service.submitOutcome('order-1.sig', dto as any);
+      await service.submitOutcome(order as any, dto as any);
 
       expect(prisma.orderDeliveryOutcome.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -399,7 +406,7 @@ describe('DeliveryLinksService', () => {
     });
 
     it('stores null coordinates when location was unavailable', async () => {
-      await service.submitOutcome('order-1.sig', { ...deliveredDto, location: { unavailable: true } } as any);
+      await service.submitOutcome(order as any, { ...deliveredDto, location: { unavailable: true } } as any);
 
       expect(prisma.orderDeliveryOutcome.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -411,7 +418,7 @@ describe('DeliveryLinksService', () => {
     it('rejects the outcome when a supplied photo is not an unlinked photo for this order', async () => {
       prisma.orderDeliveryPhoto.updateMany.mockResolvedValue({ count: 1 });
       await expect(
-        service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
+        service.submitOutcome(order as any, { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
       ).rejects.toThrow(UnprocessableEntityException);
       expect(prisma.order.update).not.toHaveBeenCalled();
     });
@@ -422,7 +429,7 @@ describe('DeliveryLinksService', () => {
         storedRow({ photos: [{ id: 'ph-2' }, { id: 'ph-1' }] }),
       );
 
-      const result = await service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any);
+      const result = await service.submitOutcome(order as any, { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any);
       expect(result.state).toBe('SUBMITTED');
     });
 
@@ -431,7 +438,7 @@ describe('DeliveryLinksService', () => {
       prisma.orderDeliveryOutcome.findUniqueOrThrow.mockResolvedValue(storedRow({ photos: [{ id: 'ph-1' }] }));
 
       await expect(
-        service.submitOutcome('order-1.sig', { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
+        service.submitOutcome(order as any, { ...deliveredDto, photoIds: ['ph-1', 'ph-2'] } as any),
       ).rejects.toThrow(ConflictException);
     });
   });

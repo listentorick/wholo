@@ -9,14 +9,18 @@ import {
   Param,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryTokenGuard } from './delivery-token.guard';
 
-// Deliberately unauthenticated (no @UseGuards) — mirrors apps/api's public
-// DeliveryLinksController exactly. No :token route param anywhere; the
-// X-Delivery-Token header is the sole credential, end to end.
+// No login: the X-Delivery-Token header is the sole credential, end to end,
+// and there is no :token route param anywhere. DeliveryTokenGuard checks that
+// token's signature before anything else happens — before a body is parsed
+// and before the request is forwarded to apps/api, which checks it again.
+@UseGuards(DeliveryTokenGuard)
 @Controller('delivery-links')
 export class DeliveryLinksController {
   constructor(private readonly deliveryLinksService: DeliveryLinksService) {}

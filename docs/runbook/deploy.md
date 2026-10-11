@@ -37,7 +37,12 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
      ```
      PowerShell has no `<` redirect; pipe instead: `Get-Content apps/api/scripts/clear-accounting-data.js -Raw | kubectl -n wholo exec -i deploy/wholo-api -c api -- node -` (add `--yes` after `node -`).
      If the deploy runs first, the migration fails against the non-empty tables and the new api pod won't start. Don't improvise a fix on the half-migrated schema: restore the backup taken above ([postgres-restore.md](postgres-restore.md)), run the clear-down, then deploy again.
-6. **Check whether a value the images bake in has changed.** If `LIVE_KEYCLOAK_URL`, `LIVE_KEYCLOAK_REALM` or the `WWW_*` repository variables changed after this commit was built, the images carry the old values. Re-run the workflow first ([setup/github.md](setup/github.md)).
+6. **Delivery token keys (ADR-076).** A release that includes ADR-076 will not render, and the api and driver-api will not start, unless `values.live.yaml` has `deliveryToken.privateKey` and `deliveryToken.publicKeys`. Check before deploying:
+   ```bash
+   grep -n -A4 '^deliveryToken:' helm/wholo/values.live.yaml
+   ```
+   If it is missing, follow [keys-and-certificates.md → First-time setup](keys-and-certificates.md#first-time-setup). Links on manifests printed before that first deploy stop working; reprint them.
+7. **Check whether a value the images bake in has changed.** If `LIVE_KEYCLOAK_URL`, `LIVE_KEYCLOAK_REALM` or the `WWW_*` repository variables changed after this commit was built, the images carry the old values. Re-run the workflow first ([setup/github.md](setup/github.md)).
 
 ## 2. Deploy
 

@@ -57,6 +57,8 @@ api:
   smtp:
     from: "notifications@<domain>"
     inviteFrom: "noreply@<domain>"
+    user: "CHANGE_ME"
+    password: "CHANGE_ME"
   r2:
     accountId: "CHANGE_ME"
     bucketName: "CHANGE_ME"
@@ -74,6 +76,15 @@ api:
   # 32-byte key, base64-encoded (openssl rand -base64 32) — encrypts stored
   # accounting OAuth tokens at rest. Changing it orphans stored tokens.
   accountingTokenEncryptionKey: "CHANGE_ME"
+
+# Ed25519 key pair for the QR delivery links on printed manifests (ADR-076).
+# Run scripts/generate-delivery-token-keys.sh and paste its output over this
+# block. The chart will not render, and the api and driver-api will not start,
+# without both. Replacing them later: docs/runbook/keys-and-certificates.md.
+deliveryToken:
+  privateKey: "CHANGE_ME"     # SECRET — keep a copy in the password manager
+  publicKeys:
+    - "CHANGE_ME"             # not secret; newest first
 
 portalApi:
   image:

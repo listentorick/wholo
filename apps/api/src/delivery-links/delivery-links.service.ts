@@ -35,7 +35,7 @@ const orderSelect = {
   lines: { select: { productNameSnapshot: true, quantityOrdered: true }, orderBy: { id: 'asc' as const } },
 } satisfies Prisma.OrderSelect;
 
-type OrderForDeliveryLink = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
+export type OrderForDeliveryLink = Prisma.OrderGetPayload<{ select: typeof orderSelect }>;
 
 // @db.Date columns round-trip as UTC-midnight Dates; the event carries the plain date.
 const toIsoDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
@@ -75,27 +75,26 @@ export class DeliveryLinksService {
     private orderCompletion: OrderCompletionService,
   ) {}
 
-  async uploadPhoto(rawToken: string, file: Express.Multer.File): Promise<DeliveryPhotoDto> {
-    const order = await this.resolveOrder(rawToken);
+  // Every method below takes the order its link resolved to, not the raw
+  // token: DeliveryLinkGuard has already called resolveOrder, before any
+  // request body was read, so nothing here can run for an unverified caller.
+
+  async uploadPhoto(order: OrderForDeliveryLink, file: Express.Multer.File): Promise<DeliveryPhotoDto> {
     return this.deliveryPhoto.uploadPhoto(order, file.buffer, file.mimetype, file.size);
   }
 
-  async deletePhoto(rawToken: string, photoId: string): Promise<void> {
-    const order = await this.resolveOrder(rawToken);
+  async deletePhoto(order: OrderForDeliveryLink, photoId: string): Promise<void> {
     return this.deliveryPhoto.deletePhoto(order, photoId);
   }
 
-  async getOrder(rawToken: string): Promise<DeliveryLinkOrderDto> {
-    const order = await this.resolveOrder(rawToken);
+  async getOrder(order: OrderForDeliveryLink): Promise<DeliveryLinkOrderDto> {
     const outcome = await this.prisma.orderDeliveryOutcome.findUnique({ where: { orderId: order.id } });
     if (!outcome) return this.toPendingDto(order);
     const driverName = await this.getDriverName(order.id);
     return this.toReadOnlyDto(order, outcome, driverName);
   }
 
-  async submitOutcome(rawToken: string, dto: SubmitOutcomeDto): Promise<DeliveryLinkOrderDto> {
-    const order = await this.resolveOrder(rawToken);
-
+  async submitOutcome(order: OrderForDeliveryLink, dto: SubmitOutcomeDto): Promise<DeliveryLinkOrderDto> {
     if (dto.outcome === DeliveryOutcomeType.UNABLE_TO_DELIVER && !dto.unableReason) {
       throw new UnprocessableEntityException('unableReason is required when outcome is UNABLE_TO_DELIVER');
     }
@@ -239,7 +238,9 @@ export class DeliveryLinksService {
     return (await this.getAllocation(orderId))?.driverName ?? null;
   }
 
-  private async resolveOrder(rawToken: string): Promise<OrderForDeliveryLink> {
+  // The one place a delivery token becomes an order — called by
+  // DeliveryLinkGuard for every request.
+  async resolveOrder(rawToken: string): Promise<OrderForDeliveryLink> {
     const orderId = this.signer.verify(rawToken);
     // Every failure mode (malformed, forged, unknown order) is indistinguishable
     // from the caller's point of view — never leak which one it was.

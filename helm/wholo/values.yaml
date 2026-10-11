@@ -132,10 +132,6 @@ api:
   # 32-byte key, base64-encoded (e.g. `openssl rand -base64 32`) — encrypts
   # stored accounting OAuth tokens at rest.
   accountingTokenEncryptionKey: ""
-  # 32-byte key, base64-encoded (e.g. `openssl rand -base64 32`) — HMAC-signs
-  # driver delivery-link tokens (see ADR-059). Rotating it invalidates every
-  # outstanding, unsubmitted delivery link at once.
-  deliveryTokenSigningKey: ""
   # Seeds demo data on every install/upgrade. Must be disabled in live.
   seedJob:
     enabled: true
@@ -170,6 +166,20 @@ portalApi:
       memory: "768Mi"
       cpu: "500m"
   centralApiUrl: "http://wholo-api:3001"
+
+# Ed25519 key pair for the QR delivery links on printed manifests (ADR-076).
+# Generate with scripts/generate-delivery-token-keys.sh. Both must be set or
+# the chart refuses to render; the apps refuse to start on a bad value.
+# Managing and replacing them: docs/runbook/keys-and-certificates.md.
+deliveryToken:
+  # SECRET. base64 PKCS#8 DER. Only the Central API and worker receive it —
+  # they are the only things that can create a link.
+  privateKey: ""
+  # Not secret. base64 SPKI DER, newest first. Given to the Central API, the
+  # worker and the driver BFF, which can check a link but never create one.
+  # A link is valid if any listed key verifies it, so while a key is being
+  # replaced this holds both the new key and the previous one.
+  publicKeys: []
 
 driverApi:
   image:

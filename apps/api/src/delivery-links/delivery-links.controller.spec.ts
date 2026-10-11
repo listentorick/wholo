@@ -2,7 +2,11 @@ import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { DeliveryLinksController } from './delivery-links.controller';
-import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryLinkGuard } from './delivery-link.guard';
+import { DeliveryLinksService, OrderForDeliveryLink } from './delivery-links.service';
+
+// What DeliveryLinkGuard hands each handler once it has resolved the token.
+const order = { id: 'order-1' } as OrderForDeliveryLink;
 
 describe('DeliveryLinksController', () => {
   let controller: DeliveryLinksController;
@@ -25,48 +29,45 @@ describe('DeliveryLinksController', () => {
       controllers: [DeliveryLinksController],
       providers: [{ provide: DeliveryLinksService, useValue: service }],
     })
-      // Rate limiting isn't under test here — only that the route carries no
-      // auth guard beyond it (see the test below), per CLAUDE.md: "Auth
-      // guard coverage is asserted by checking @UseGuards presence, not
-      // re-testing NestJS internals."
+      // Neither guard is under test here (DeliveryLinkGuard has its own spec)
+      // — only that the routes carry them (see the test below), per
+      // CLAUDE.md: "Auth guard coverage is asserted by checking @UseGuards
+      // presence, not re-testing NestJS internals."
       .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(DeliveryLinkGuard)
       .useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get(DeliveryLinksController);
   });
 
-  it('passes the X-Delivery-Token header through to the service on GET', async () => {
-    await controller.getOrder('order-1.sig');
-    expect(service.getOrder).toHaveBeenCalledWith('order-1.sig');
+  it('returns the service view of the resolved order on GET', async () => {
+    await expect(controller.getOrder(order)).resolves.toEqual({ state: 'PENDING' });
+    expect(service.getOrder).toHaveBeenCalledWith(order);
   });
 
-  it('treats a missing token header as an empty token rather than throwing directly', async () => {
-    await controller.getOrder(undefined);
-    expect(service.getOrder).toHaveBeenCalledWith('');
-  });
-
-  it('passes the header and body through to the service on submit', async () => {
+  it('passes the resolved order and body through to the service on submit', async () => {
     const dto = { outcome: 'DELIVERED' } as any;
-    await controller.submitOutcome('order-1.sig', dto);
-    expect(service.submitOutcome).toHaveBeenCalledWith('order-1.sig', dto);
+    await expect(controller.submitOutcome(order, dto)).resolves.toEqual({ state: 'SUBMITTED' });
+    expect(service.submitOutcome).toHaveBeenCalledWith(order, dto);
   });
 
-  it('has no auth guard beyond throttling — this route is deliberately public', () => {
+  it('throttles, then resolves the delivery token, on every route — and has no login guard', () => {
     const guards = Reflect.getMetadata('__guards__', DeliveryLinksController);
-    expect(guards).toHaveLength(1); // ThrottlerGuard only
+    expect(guards).toEqual([ThrottlerGuard, DeliveryLinkGuard]);
   });
 
   it('forwards a photo upload to the service and rejects a request with no file', async () => {
     const file = { buffer: Buffer.from('x'), mimetype: 'image/jpeg', size: 1 } as Express.Multer.File;
-    await controller.uploadPhoto('order-1.sig', file);
-    expect(service.uploadPhoto).toHaveBeenCalledWith('order-1.sig', file);
-    expect(() => controller.uploadPhoto('order-1.sig', undefined)).toThrow(BadRequestException);
+    await controller.uploadPhoto(order, file);
+    expect(service.uploadPhoto).toHaveBeenCalledWith(order, file);
+    expect(() => controller.uploadPhoto(order, undefined)).toThrow(BadRequestException);
   });
 
   it('forwards a photo delete to the service', async () => {
-    await controller.deletePhoto('order-1.sig', 'photo-9');
-    expect(service.deletePhoto).toHaveBeenCalledWith('order-1.sig', 'photo-9');
+    await controller.deletePhoto(order, 'photo-9');
+    expect(service.deletePhoto).toHaveBeenCalledWith(order, 'photo-9');
   });
 
   it('the photos upload route carries a FileInterceptor', () => {

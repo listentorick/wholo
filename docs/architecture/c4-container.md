@@ -136,11 +136,24 @@ and trade customers go to it directly in the browser to sign in, register from a
 invitation and reset a password (OIDC, PKCE); delivery drivers never do. The
 Central API and the Admin and Portal apps' BFFs each verify every inbound token's
 signature against Keycloak's JWKS endpoint, using the in-cluster URL (ADR-049); the
-Driver app does not use Keycloak at all (HMAC delivery-link token, ADR-059). The
+Driver app does not use Keycloak at all (signed delivery-link token, ADR-059 and
+ADR-076, below). The
 token carries only `sub`: `apps/api` resolves organisation and role from its own
 database (Membership). The only other call is `apps/api` using Keycloak's admin
 API, through a service-account client limited to `manage-users`, to disable a
 removed staff member (ADR-067).
+
+**How delivery links are checked.** A delivery link is `<orderId>.<Ed25519
+signature>` (ADR-059, ADR-076). Only the Central API and the Worker hold the
+private key (`DELIVERY_TOKEN_PRIVATE_KEY`, in the `wholo-api` Secret), so only
+they can create a link; the Central API signs one when it generates a manifest
+PDF. The Driver app holds public keys only (`DELIVERY_TOKEN_PUBLIC_KEYS`, in its
+ConfigMap), so it can check a link but never make one. The Driver app verifies
+the signature in a guard before it reads the request body or calls the Central
+API, and still forwards the token; the Central API verifies it again in a guard
+before any body is parsed, and also checks the order can still be delivered. No
+BFF holds a secret. The key material is configuration (Helm `deliveryToken.*`),
+not a container, so it is not drawn.
 
 ### Containers
 
@@ -148,7 +161,7 @@ removed staff member (ADR-067).
 |---|---|---|---|---|---|
 | Portal app | Web app + BFF | `portal-api/` | 3010 | Next.js frontend + NestJS BFF, one image | Customer portal at `portal.<domain>`. Browser calls its same-origin `/api/v1/*` BFF endpoints, which adapt user context into explicit calls to the Central API (ADR-026, ADR-044). |
 | Admin app | Web app + BFF | `admin-api/` | 3020 (BFF code 3002) | Next.js frontend + NestJS BFF, one image | Distributor admin at `admin.<domain>`; same BFF role. Also serves the Xero OAuth callback route (ADR-051). |
-| Driver app | PWA + BFF | `driver-api/` | 3030 | Next.js PWA + NestJS BFF, one image | Delivery PWA at `driver.<domain>/d#<token>` (ADR-059). No login: the HMAC-signed delivery-link token is relayed to the API, which verifies it. |
+| Driver app | PWA + BFF | `driver-api/` | 3030 | Next.js PWA + NestJS BFF, one image | Delivery PWA at `driver.<domain>/d#<token>` (ADR-059). No login: it verifies the Ed25519-signed delivery-link token itself with public keys (ADR-076), before reading the request, then forwards it to the API, which verifies it again. Holds no secret and cannot create links. |
 | Central API | API | `api/` | 3001 | NestJS, Prisma | The only place with business logic and the single auth authority. Reachable only via cluster DNS (no public ingress on live). Writes outbox rows in the same transaction as the change (ADR-034) and enqueues jobs. |
 | Worker | Background processor | `worker/` | none (metrics only) | NestJS, BullMQ, same image as the Central API | Relays the outbox and runs every BullMQ processor, one queue per concern (ADR-047): accounting export/pull, email, scheduled work. Restart it as well as the API after backend changes. |
 | Keycloak | Identity provider | `keycloak/` | 8080 | Keycloak | Identity for staff and trade customers at `auth.<domain>`. Browsers authenticate against it directly (PKCE); it proves who the user is, `apps/api` resolves organisation and role from its own DB. |
@@ -164,10 +177,10 @@ OpenAPI files.
 
 | Container | Exposed to | Auth | Main resource groups |
 |---|---|---|---|
-| Central API | The three app containers over cluster DNS (never browsers) | Keycloak JWT (relayed by the portal and admin BFFs), signature checked via JWKS; organisation and role from Membership. Path ids are checked against what the credential may access. `delivery-links` is instead authorised by the HMAC link token and throttled. | `distributors/:distributorId/...` (orders, customers, cart, catalogue and settings, delivery days/routes/runs/outcomes/overview, accounting contacts/products/tax-types/invoice-exports, members, staff-invitations, payment-terms, tax-types, customer-health, asset-images; a legacy `admin/distributors/...` prefix remains), `organisations/:organisationId`, `order-as`, `portal/invitations`, `staff-invitations`, `users/:userId/notifications`, `delivery-links`, `accounting/xero`, `auth`, `health`. |
+| Central API | The three app containers over cluster DNS (never browsers) | Keycloak JWT (relayed by the portal and admin BFFs), signature checked via JWKS; organisation and role from Membership. Path ids are checked against what the credential may access. `delivery-links` is instead authorised by the Ed25519-signed link token (checked in a guard before the body is parsed, plus a check that the order can still be delivered; ADR-076) and throttled. The only container holding the link-signing private key, with the Worker. | `distributors/:distributorId/...` (orders, customers, cart, catalogue and settings, delivery days/routes/runs/outcomes/overview, accounting contacts/products/tax-types/invoice-exports, members, staff-invitations, payment-terms, tax-types, customer-health, asset-images; a legacy `admin/distributors/...` prefix remains), `organisations/:organisationId`, `order-as`, `portal/invitations`, `staff-invitations`, `users/:userId/notifications`, `delivery-links`, `accounting/xero`, `auth`, `health`. |
 | Admin app | Distributor staff's browser, same origin (`admin.<domain>`) | Keycloak JWT, verified locally against JWKS, then relayed to the API. | Pages plus BFF groups `products`, `price-lists`, `catalogues`, `customers`, `orders`, `delivery-days`/`-profiles`/`-routes`/`-runs`, `accounting` (incl. `accounting/xero` OAuth callback), `analytics`, `team`, `invitations`, `onboarding`, `settings`, `notifications`, `suppliers`, `tax-types`, `payment-terms`, `product-types`, `asset-images`, `auth`, `health`. |
 | Portal app | Trade customers' browser, same origin (`portal.<domain>`) | Keycloak JWT, verified locally, then relayed. "Me" is resolved here into explicit calls to the API. | Pages plus BFF groups `portal`, `distributors`, `cart`, `orders`, `delivery`, `invitations`, `auth`, `health`. |
-| Driver app | Driver's browser, same origin (`driver.<domain>`) | No account: HMAC-signed delivery-link token from the manifest QR code, relayed to the API. | Pages plus `delivery-links` (view, outcome, photos) and `health`. |
+| Driver app | Driver's browser, same origin (`driver.<domain>`) | No account: Ed25519-signed delivery-link token from the manifest QR code, verified here against public keys (404 if invalid), then relayed to the API. | Pages plus `delivery-links` (view, outcome, photos) and `health`. |
 | Keycloak | Browsers (public `auth.<domain>`); the API and both BFFs (in-cluster) | Realm `wholo`; PKCE for browsers; a `manage-users`-only service-account client for the API. | OIDC login, registration and password reset; JWKS keys at `/realms/wholo/protocol/openid-connect/certs`; admin REST at `/admin/realms/wholo` (used only to disable a user). |
 | Postgres, Redis | Central API and Worker (Postgres also Keycloak and pg-backup) | Credentials from Helm-managed Secrets. | SQL on 5432; Redis protocol on 6379. |
 | Worker, pg-backup | Nothing (no inbound interface) | n/a | Worker exposes only Prometheus-format metrics (diagram 3). |
@@ -180,7 +193,7 @@ OpenAPI files.
 | Person → Portal / Admin / Driver app | HTTPS via Traefik host routing | Browser sees only public hostnames. Live edge: Cloudflare → WAF appliance → Traefik. |
 | Portal / Admin app → Keycloak | HTTP, in-cluster JWKS | Each BFF validates the signature of every inbound JWT locally (ADR-049). |
 | Central API → Keycloak | HTTP, in-cluster JWKS and admin REST | Same JWKS check, and disables the Keycloak account of a removed staff member (ADR-067). One drawn line carries both. |
-| Portal / Admin / Driver app → Central API | HTTP/JSON, `CENTRAL_API_URL` | The user's Keycloak JWT is relayed (ADR-046); the driver app relays the link token. The API checks the path ids against what the credential is authorised for. |
+| Portal / Admin / Driver app → Central API | HTTP/JSON, `CENTRAL_API_URL` | The user's Keycloak JWT is relayed (ADR-046); the driver app verifies the link token (public keys) and relays it, and the API verifies it again. The API checks the path ids against what the credential is authorised for. |
 | Central API → Postgres / Redis | SQL / Redis | Domain data; queue producer. |
 | Worker → Postgres / Redis | SQL / Redis | Outbox relay and queue consumer. API and worker never call each other directly: they meet through the outbox table and Redis. |
 | Worker → Xero | HTTPS, OAuth 2.0 | Invoice export and polling pull, always initiated by Stocdup (the accounting framework is provider-neutral; Xero is its first provider, ADR-051). Each distributor connects their own Xero organisation. |

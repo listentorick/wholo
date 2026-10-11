@@ -19,4 +19,7 @@ data:
   METRICS_PORT: {{ include "wholo.metrics.port" . | quote }}
   {{- end }}
   CENTRAL_API_URL: {{ .Values.driverApi.centralApiUrl | quote }}
+  # Public keys that verify delivery-link tokens at the edge (ADR-076). Public
+  # keys only: this BFF can check a link but can never create one.
+  DELIVERY_TOKEN_PUBLIC_KEYS: {{ include "wholo.deliveryToken.publicKeys" . | quote }}
   NEXT_APP_DIR: "/app/driver"

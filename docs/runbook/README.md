@@ -12,7 +12,8 @@ This is how the live Stocdup environment (self-hosted k3s) is set up, deployed, 
 | Something is broken right now | [incidents/README.md](incidents/README.md) |
 | An alert fired | [incidents/alerts.md](incidents/alerts.md) |
 | Rotate or find a secret | [secrets.md](secrets.md) |
-| Reboot or upgrade a node, free disk, check certs, run a backup by hand | [maintenance.md](maintenance.md) |
+| Replace a signing key, check when a certificate or token expires | [keys-and-certificates.md](keys-and-certificates.md) |
+| Reboot or upgrade a node, free disk, run a backup by hand | [maintenance.md](maintenance.md) |
 | Recover from a lost node or build the cluster again | [disaster-recovery.md](disaster-recovery.md) |
 | Restore Postgres from R2 | [postgres-restore.md](postgres-restore.md) |
 | See marketing-site traffic and sign-up conversions | [analytics.md](analytics.md) |

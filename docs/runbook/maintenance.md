@@ -1,6 +1,6 @@
 # Routine maintenance
 
-> Part of the [live-ops runbook](README.md). Rotating secrets: [secrets.md](secrets.md). Recovery: [disaster-recovery.md](disaster-recovery.md).
+> Part of the [live-ops runbook](README.md). Rotating secrets: [secrets.md](secrets.md). Keys, certificates and expiry dates: [keys-and-certificates.md](keys-and-certificates.md). Recovery: [disaster-recovery.md](disaster-recovery.md).
 
 ## Backups
 
@@ -92,9 +92,12 @@ If Postgres itself is growing, see [incidents/database.md → Disk full](inciden
 
 ## Certificates
 
-- **Visitor-facing certificates** are Cloudflare edge certificates, issued and renewed by Cloudflare. Nothing to do.
-- **Cloudflare Origin CA certificate** on the WAF appliance (the Cloudflare → WAF leg). Its validity was chosen when it was created (Cloudflare's default is 15 years). Record the expiry date in the password manager entry. When it expires, Cloudflare returns **526** for every host. To replace it: Cloudflare → SSL/TLS → Origin Server → Create Certificate (`*.<domain>`), then install it on the WAF.
-- Inside the cluster everything is plain HTTP; there are no certificates to maintain.
+See [keys-and-certificates.md](keys-and-certificates.md), which has an expiry calendar and one section per type. The two that need attention on a date:
+
+- **The Cloudflare Origin CA certificate** on the WAF does not renew itself. When it lapses, Cloudflare returns **526** for every host.
+- **k3s's own certificates last 365 days** and are renewed only when k3s restarts close to expiry. A cluster left running untouched for a year locks itself out, and your `kubeconfig` expires with them.
+
+Traffic between pods inside the cluster is plain HTTP, so the apps themselves have no certificates.
 
 ## Upgrading upstream images
 

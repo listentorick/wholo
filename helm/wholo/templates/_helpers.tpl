@@ -98,3 +98,15 @@ Deployment/Job pod spec depth. Renders nothing when the list is empty.
 {{- toYaml . | nindent 8 }}
 {{- end }}
 {{- end }}
+
+{{/*
+Comma-separated public keys that verify delivery-link tokens (ADR-076).
+Fails the render when none is set: with no key the API and the driver BFF
+refuse to start, so say so here rather than in a crash loop.
+*/}}
+{{- define "wholo.deliveryToken.publicKeys" -}}
+{{- if not .Values.deliveryToken.publicKeys -}}
+{{- fail "deliveryToken.publicKeys is required — run scripts/generate-delivery-token-keys.sh" -}}
+{{- end -}}
+{{- join "," .Values.deliveryToken.publicKeys -}}
+{{- end -}}

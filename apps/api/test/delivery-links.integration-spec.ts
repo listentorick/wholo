@@ -12,6 +12,7 @@
  *   kubectl port-forward svc/wholo-postgresql 5432:5432
  *   DATABASE_URL=postgresql://wholo:wholo@localhost:5432/wholo
  */
+import { createHmac } from 'crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
@@ -417,6 +418,42 @@ describe('Delivery links (integration)', () => {
 
       await submitOutcome(token, { ...HANDED_TO_PERSON, photoIds: [b] });
       expect((await deletePhoto(token, b)).status).toBe(409);
+    });
+
+    // The token is checked before anything else (ADR-076): a caller without a
+    // genuine link never reaches the upload handler, and never gets a photo
+    // stored.
+    describe('a caller without a genuine token', () => {
+      const uploadWithoutToken = () => request(app.getHttpServer())
+        .post('/api/v1/delivery-links/photos')
+        .attach('photo', png, { filename: 'shot.png', contentType: 'image/png' });
+
+      it('gets 404 with no token, a forged token, or an old HMAC-format token — and nothing is stored', async () => {
+        const order = await createOrder();
+        const [orderId] = signer.sign(order.id).split('.');
+        const oldHmacToken = `${orderId}.${createHmac('sha256', Buffer.alloc(32)).update(orderId).digest('base64url')}`;
+
+        expect((await uploadWithoutToken()).status).toBe(404);
+        expect((await uploadPhoto(`${orderId}.${'A'.repeat(86)}`)).status).toBe(404);
+        expect((await uploadPhoto(oldHmacToken)).status).toBe(404);
+
+        expect(mockR2.upload).not.toHaveBeenCalled();
+        expect(await prisma.orderDeliveryPhoto.count({ where: { orderId: order.id } })).toBe(0);
+      });
+
+      it('is refused before the upload is read: an oversized file gets 404, where a genuine token gets 413', async () => {
+        const order = await createOrder();
+        const oversized = Buffer.alloc(12_000_001);
+        const uploadOversized = (token: string) => request(app.getHttpServer())
+          .post('/api/v1/delivery-links/photos')
+          .set('X-Delivery-Token', token)
+          .attach('photo', oversized, { filename: 'huge.png', contentType: 'image/png' });
+
+        // The size limit is enforced while the body is parsed, so only a
+        // request whose body is actually read can be told it is too large.
+        expect((await uploadOversized(signer.sign(order.id))).status).toBe(413);
+        expect((await uploadOversized('forged.token')).status).toBe(404);
+      });
     });
 
     it('rejects a non-UUID photo id with 400 (server-minted ids only — no arbitrary strings reach the DB)', async () => {

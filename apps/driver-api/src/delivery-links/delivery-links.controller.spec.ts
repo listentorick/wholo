@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DeliveryLinksController } from './delivery-links.controller';
 import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryTokenGuard } from './delivery-token.guard';
 
 describe('DeliveryLinksController', () => {
   let controller: DeliveryLinksController;
@@ -12,7 +13,11 @@ describe('DeliveryLinksController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DeliveryLinksController],
       providers: [{ provide: DeliveryLinksService, useValue: service }],
-    }).compile();
+    })
+      // The guard has its own spec; here only its presence is asserted.
+      .overrideGuard(DeliveryTokenGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get(DeliveryLinksController);
   });
@@ -33,8 +38,8 @@ describe('DeliveryLinksController', () => {
     expect(service.submitOutcome).toHaveBeenCalledWith('order-1.sig', dto);
   });
 
-  it('has no auth guard at all — this route is deliberately public', () => {
+  it('checks the delivery token on every route, and nothing else — there is no login', () => {
     const guards = Reflect.getMetadata('__guards__', DeliveryLinksController);
-    expect(guards).toBeUndefined();
+    expect(guards).toEqual([DeliveryTokenGuard]);
   });
 });

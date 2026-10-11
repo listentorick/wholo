@@ -4,7 +4,6 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -16,7 +15,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { DeliveryLinksService } from './delivery-links.service';
+import { DeliveryLinkGuard } from './delivery-link.guard';
+import { DeliveryOrder } from './delivery-order.decorator';
+import { DeliveryLinksService, OrderForDeliveryLink } from './delivery-links.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
 
 const MAX_PHOTO_BYTES = 12_000_000;
@@ -26,43 +27,48 @@ const MAX_PHOTO_BYTES = 12_000_000;
 // credential (see DeliveryTokenSigner); there is no `:token` route param
 // anywhere so the token never appears in a URL, and therefore never in
 // Traefik/CDN access logs or Referer headers (see ADR-059).
+//
+// DeliveryLinkGuard turns that token into its order before anything else
+// runs. Guards run before interceptors, so an unverified request is refused
+// before FileInterceptor (multer) reads its body (ADR-076). Handlers receive
+// the resolved order via @DeliveryOrder(), never the raw header.
 @ApiTags('Delivery Links')
-@UseGuards(ThrottlerGuard)
+@UseGuards(ThrottlerGuard, DeliveryLinkGuard)
 @Controller('delivery-links')
 export class DeliveryLinksController {
   constructor(private readonly deliveryLinksService: DeliveryLinksService) {}
 
   @Get()
   @ApiOperation({ summary: 'Resolve a delivery link token to its order (or read-only confirmation, if already submitted)' })
-  getOrder(@Headers('x-delivery-token') token?: string) {
-    return this.deliveryLinksService.getOrder(token ?? '');
+  getOrder(@DeliveryOrder() order: OrderForDeliveryLink) {
+    return this.deliveryLinksService.getOrder(order);
   }
 
   @Post('outcome')
   @HttpCode(200)
   @ApiOperation({ summary: 'Record a delivery outcome — single-use per order, idempotent on retry' })
-  submitOutcome(@Headers('x-delivery-token') token: string | undefined, @Body() dto: SubmitOutcomeDto) {
-    return this.deliveryLinksService.submitOutcome(token ?? '', dto);
+  submitOutcome(@DeliveryOrder() order: OrderForDeliveryLink, @Body() dto: SubmitOutcomeDto) {
+    return this.deliveryLinksService.submitOutcome(order, dto);
   }
 
   @Post('photos')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a delivery-proof photo (before the outcome is submitted)' })
   @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_PHOTO_BYTES } }))
-  uploadPhoto(@Headers('x-delivery-token') token: string | undefined, @UploadedFile() file?: Express.Multer.File) {
+  uploadPhoto(@DeliveryOrder() order: OrderForDeliveryLink, @UploadedFile() file?: Express.Multer.File) {
     if (!file) throw new BadRequestException('No photo provided');
-    return this.deliveryLinksService.uploadPhoto(token ?? '', file);
+    return this.deliveryLinksService.uploadPhoto(order, file);
   }
 
   @Delete('photos/:photoId')
   @HttpCode(204)
   @ApiOperation({ summary: 'Remove a delivery-proof photo (only while the delivery is unrecorded)' })
   deletePhoto(
-    @Headers('x-delivery-token') token: string | undefined,
+    @DeliveryOrder() order: OrderForDeliveryLink,
     // Photo ids are server-minted UUIDs — reject anything else before it
     // reaches the DB (no path-ish strings, no injection surface).
     @Param('photoId', new ParseUUIDPipe()) photoId: string,
   ) {
-    return this.deliveryLinksService.deletePhoto(token ?? '', photoId);
+    return this.deliveryLinksService.deletePhoto(order, photoId);
   }
 }

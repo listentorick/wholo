@@ -1,6 +1,6 @@
 # ADR-059 — Delivery link token design and the first genuinely public endpoint in apps/api
 
-**Status**: Accepted
+**Status**: Accepted — amended by [ADR-076](ADR-076-delivery-tokens-verified-at-the-edge.md): the signature is now Ed25519, not an HMAC, the token is checked in a guard before any request body is read (in the driver BFF as well as `apps/api`), and `DELIVERY_TOKEN_SIGNING_KEY` is replaced by a key pair. The rest of this ADR stands.
 **Date**: 2026-08-25
 **Deciders**: Rick Walsh
 **Related**: ADR-056 (native delivery planning domain model), ADR-054 (application-level audit log), ADR-052 (avoid Prisma-unsupported schema constructs)
