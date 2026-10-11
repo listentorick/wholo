@@ -33,6 +33,8 @@ The driver app checks the token on every request before it reads anything else, 
 
 These are plain keys, not certificates. Nothing expires and there is no authority to renew with.
 
+**Replacing the keys does not break QR codes already printed,** provided the old public key stays in the list. Manifests printed in the morning still open after a replacement that afternoon. Printed codes stop working only when the old public key is *removed*, which is a separate step you take later, when you choose, and can undo.
+
 ### Generate a pair
 
 On your own machine, from the repo:
@@ -74,15 +76,24 @@ Do the steps in this order. Changing a ConfigMap or Secret does not restart the 
    pnpm helm:install:live
    kubectl -n wholo rollout restart deploy/wholo-api deploy/wholo-worker
    ```
-   Manifests printed from now on use the new key. Manifests printed earlier still open.
-3. **Wait** until every delivery on a manifest printed before step 2 is done, or reprint those manifests.
-4. **Stop trusting the old key.** Remove the old public key from the list.
+   Manifests printed from now on use the new key. Manifests printed earlier still open. **Write down the time, in UTC** (`date -u '+%Y-%m-%d %H:%M:%S'`); step 3 needs it.
+3. **Wait** until no deliveries are outstanding on a manifest printed before step 2. There is no deadline: the old public key can stay in the list for days or weeks. Check with the query below, giving it the time from step 2:
+   ```bash
+   kubectl -n wholo exec -i deploy/wholo-postgresql -- psql -U wholo -d wholo \
+     -v switched_at='<YYYY-MM-DD HH:MM:SS, UTC>' < scripts/delivery-links-outstanding.sql
+   ```
+   PowerShell has no `<` redirect; pipe instead: `Get-Content scripts/delivery-links-outstanding.sql -Raw | kubectl -n wholo exec -i deploy/wholo-postgresql -- psql -U wholo -d wholo -v switched_at='<time>'`.
+
+   It lists each run whose manifest was printed with the old key and still has deliveries to record. **Go on to step 4 only when it returns no rows.** A run you no longer expect to be delivered from that paper can be cleared by reprinting its manifest and replacing the driver's copy; it stays in the list until its deliveries are recorded, so judge those by eye.
+4. **Stop trusting the old key.** Remove the old public key from the list, but **keep a copy of it** with the password manager entry.
    ```bash
    pnpm helm:install:live
    kubectl -n wholo rollout restart deploy/wholo-api deploy/wholo-worker deploy/wholo-driver-api
    ```
 
 If you do steps 1 and 2 in a single deploy, new links fail in the driver app until it has been restarted with the new list. Keeping them separate avoids that.
+
+**If the old key was removed too early** and drivers report QR codes that say "not found": put the old public key back in `deliveryToken.publicKeys`, deploy, and restart api, worker and driver-api. The same printed codes work again. A public key is not secret, which is why step 4 says to keep it.
 
 ### Replace the keys in an emergency (private key exposed)
 
@@ -114,7 +125,8 @@ Then print a manifest from the admin app and open one of its links on a phone: t
 | `wholo-api` or `wholo-worker` in `CrashLoopBackOff`, log says `DELIVERY_TOKEN_PRIVATE_KEY is …` or `DELIVERY_TOKEN_PUBLIC_KEYS entry N is …` | A value is empty, cut short, or not the generator's output |
 | Same pods crash with `DELIVERY_TOKEN_PUBLIC_KEYS does not include the public half of DELIVERY_TOKEN_PRIVATE_KEY` | The private key was changed before its public key was added to the list (step 1 was skipped) |
 | `wholo-driver-api` in `CrashLoopBackOff` with a `DELIVERY_TOKEN_PUBLIC_KEYS` message | Same causes, for the driver app |
-| Every delivery link shows "not found", pods healthy | The driver app was not restarted after the list changed, or the old key was removed while its links were still out |
+| Every delivery link shows "not found", pods healthy | The driver app was not restarted after the list changed |
+| Links on older manifests show "not found", newer ones work | The old public key was removed while its manifests were still out. Put it back (see above) |
 
 ```bash
 kubectl -n wholo logs deploy/wholo-api -c api --tail=30
