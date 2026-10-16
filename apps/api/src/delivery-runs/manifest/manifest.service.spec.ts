@@ -3,13 +3,19 @@ import { ConfigService } from '@nestjs/config';
 import { ManifestService } from './manifest.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
-import { DeliveryTokenSigner } from '../../delivery-links/delivery-token.signer';
+import { DeliveryLinkTokensService } from '../../delivery-links/delivery-link-tokens.service';
+import { buildManifestPdf } from './manifest-pdf.builder';
 import { ManifestDataService } from './manifest-data.service';
 import { ManifestLogoService } from './logo.service';
 import { ManifestData } from './manifest-data.types';
 
 jest.mock('./manifest-pdf.builder', () => ({
   buildManifestPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-fake')),
+}));
+// The QR image stands in for the URL it encodes, so the test can read back
+// exactly what each code on the manifest would open.
+jest.mock('./qr-code.util', () => ({
+  generateOrderQrPng: jest.fn(async (url: string) => Buffer.from(url)),
 }));
 
 const manifestData: ManifestData = {
@@ -38,13 +44,13 @@ describe('ManifestService', () => {
   let audit: { record: jest.Mock };
   let manifestDataService: { getManifestData: jest.Mock };
   let logoService: { getLogoPng: jest.Mock };
-  let signer: { sign: jest.Mock };
+  let linkTokens: { ensureFor: jest.Mock };
 
   beforeEach(async () => {
     audit = { record: jest.fn() };
     manifestDataService = { getManifestData: jest.fn().mockResolvedValue(manifestData) };
     logoService = { getLogoPng: jest.fn().mockResolvedValue(null) };
-    signer = { sign: jest.fn().mockReturnValue('order-1.sig') };
+    linkTokens = { ensureFor: jest.fn().mockResolvedValue(new Map([['order-1', 'AbCdEfGhIjKlMnOpQrStUv']])) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -53,7 +59,7 @@ describe('ManifestService', () => {
         { provide: AuditService, useValue: audit },
         { provide: ManifestDataService, useValue: manifestDataService },
         { provide: ManifestLogoService, useValue: logoService },
-        { provide: DeliveryTokenSigner, useValue: signer },
+        { provide: DeliveryLinkTokensService, useValue: linkTokens },
         { provide: ConfigService, useValue: { getOrThrow: () => 'https://driver.stocdup.com' } },
       ],
     }).compile();
@@ -68,10 +74,11 @@ describe('ManifestService', () => {
     expect(result.filename).toBe('manifest-RUN-2026-08-26-ABC123.pdf');
   });
 
-  it('signs the delivery URL from the driver app base URL and each order id, not the order number', async () => {
+  it("prints each order's QR code as the driver app URL with its delivery-link token in the fragment", async () => {
     await service.generate('dist-1', 'run-1', 'user-1');
 
-    expect(signer.sign).toHaveBeenCalledWith('order-1');
+    const [, { qrPngByOrderId }] = (buildManifestPdf as jest.Mock).mock.calls.at(-1);
+    expect(qrPngByOrderId.get('order-1').toString()).toBe('https://driver.stocdup.com/d#AbCdEfGhIjKlMnOpQrStUv');
   });
 
   it('records an audit log entry for the generation', async () => {

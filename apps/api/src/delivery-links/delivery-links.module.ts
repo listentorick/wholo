@@ -8,7 +8,7 @@ import { DeliveryLinksController } from './delivery-links.controller';
 import { DeliveryLinkGuard } from './delivery-link.guard';
 import { DeliveryLinksService } from './delivery-links.service';
 import { DeliveryPhotoService } from './delivery-photo.service';
-import { DeliveryTokenSigner } from './delivery-token.signer';
+import { DeliveryLinkTokensService } from './delivery-link-tokens.service';
 
 @Module({
   imports: [
@@ -23,10 +23,9 @@ import { DeliveryTokenSigner } from './delivery-token.signer';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 20 }]),
   ],
   controllers: [DeliveryLinksController],
-  providers: [DeliveryLinksService, DeliveryPhotoService, DeliveryTokenSigner, DeliveryLinkGuard],
-  // DeliveryTokenSigner is exported so ManifestService (DeliveryRunsModule)
-  // can sign the same durable URL it prints on the manifest — see
-  // manifest.service.ts.
-  exports: [DeliveryTokenSigner],
+  providers: [DeliveryLinksService, DeliveryPhotoService, DeliveryLinkTokensService, DeliveryLinkGuard],
+  // Exported so ManifestService (DeliveryRunsModule) can create the token
+  // it prints on the manifest — see manifest.service.ts.
+  exports: [DeliveryLinkTokensService],
 })
 export class DeliveryLinksModule {}

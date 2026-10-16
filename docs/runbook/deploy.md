@@ -37,13 +37,7 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
      ```
      PowerShell has no `<` redirect; pipe instead: `Get-Content apps/api/scripts/clear-accounting-data.js -Raw | kubectl -n wholo exec -i deploy/wholo-api -c api -- node -` (add `--yes` after `node -`).
      If the deploy runs first, the migration fails against the non-empty tables and the new api pod won't start. Don't improvise a fix on the half-migrated schema: restore the backup taken above ([postgres-restore.md](postgres-restore.md)), run the clear-down, then deploy again.
-6. **Delivery token keys (ADR-076).** A release that includes ADR-076 will not render, and the api and driver-api will not start, unless `values.live.yaml` has `deliveryToken.privateKey` and `deliveryToken.publicKeys`. Check before deploying:
-   ```bash
-   grep -n -A4 '^deliveryToken:' helm/wholo/values.live.yaml
-   ```
-   If it is missing, follow [keys-and-certificates.md → First-time setup](keys-and-certificates.md#first-time-setup). Links on manifests printed before that first deploy stop working; reprint them.
-
-   **Once, straight after the first deploy of that release**, remove two keys the old chart left behind. Helm cannot remove them (see [secrets.md](secrets.md#rules-that-apply-to-every-rotation), rule 4), so until this is done the admin app still has the database password in its environment:
+6. **Once, straight after the first deploy of a release that includes ADR-076**, remove two keys the old chart left behind. Helm cannot remove them (see [secrets.md](secrets.md#rules-that-apply-to-every-rotation), rule 4), so until this is done the admin app still has the database password in its environment, and the api the old, unused delivery-link signing key. Links on manifests printed before that deploy stop working; reprint them.
    ```bash
    kubectl -n wholo patch secret wholo-admin-api --type=json -p '[{"op":"remove","path":"/data/DATABASE_URL"}]'
    kubectl -n wholo patch secret wholo-api --type=json -p '[{"op":"remove","path":"/data/DELIVERY_TOKEN_SIGNING_KEY"}]'

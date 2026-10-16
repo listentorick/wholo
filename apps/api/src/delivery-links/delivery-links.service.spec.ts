@@ -6,7 +6,6 @@ import { DeliveryPhotoService } from './delivery-photo.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
-import { DeliveryTokenSigner } from './delivery-token.signer';
 import { OrderCompletionService } from '../orders/order-completion.service';
 
 const order = {
@@ -59,7 +58,6 @@ describe('DeliveryLinksService', () => {
   };
   let audit: { record: jest.Mock };
   let outbox: { writeEvent: jest.Mock };
-  let signer: { verify: jest.Mock };
   let orderCompletion: { reconcile: jest.Mock };
 
   beforeEach(async () => {
@@ -76,7 +74,6 @@ describe('DeliveryLinksService', () => {
     };
     audit = { record: jest.fn() };
     outbox = { writeEvent: jest.fn() };
-    signer = { verify: jest.fn().mockReturnValue('order-1') };
     orderCompletion = { reconcile: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -85,7 +82,6 @@ describe('DeliveryLinksService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: AuditService, useValue: audit },
         { provide: OutboxService, useValue: outbox },
-        { provide: DeliveryTokenSigner, useValue: signer },
         { provide: OrderCompletionService, useValue: orderCompletion },
         { provide: DeliveryPhotoService, useValue: { uploadPhoto: jest.fn(), deletePhoto: jest.fn() } },
       ],
@@ -117,23 +113,41 @@ describe('DeliveryLinksService', () => {
 
   // Called by DeliveryLinkGuard for every request, before any body is read.
   describe('resolveOrder', () => {
-    it('returns the order a genuine token points at', async () => {
-      await expect(service.resolveOrder('order-1.sig')).resolves.toMatchObject({ id: 'order-1', orderNumber: '10428' });
+    const token = 'AbCdEfGhIjKlMnOpQrStUv';
+
+    it('returns the order a printed token points at', async () => {
+      await expect(service.resolveOrder(token)).resolves.toMatchObject({ id: 'order-1', orderNumber: '10428' });
     });
 
-    it('throws NotFoundException for a malformed/forged token', async () => {
-      signer.verify.mockReturnValue(null);
-      await expect(service.resolveOrder('garbage')).rejects.toThrow(NotFoundException);
+    it.each([
+      ['empty', ''],
+      ['malformed', 'garbage'],
+      ['in the old signed format', `order-1.${'a'.repeat(86)}`],
+    ])('throws NotFoundException for a token that is %s, without querying the database', async (_case, raw) => {
+      await expect(service.resolveOrder(raw)).rejects.toThrow(NotFoundException);
+      expect(prisma.order.findUnique).not.toHaveBeenCalled();
     });
 
-    it('throws GoneException when the order no longer exists', async () => {
+    it('throws NotFoundException for a well-formed token no order carries', async () => {
       prisma.order.findUnique.mockResolvedValue(null);
-      await expect(service.resolveOrder('order-1.sig')).rejects.toThrow(GoneException);
+      await expect(service.resolveOrder(token)).rejects.toThrow(NotFoundException);
     });
 
     it.each([OrderStatus.CANCELLED, OrderStatus.REJECTED])('throws GoneException for a %s order', async (status) => {
       prisma.order.findUnique.mockResolvedValue({ ...order, status });
-      await expect(service.resolveOrder('order-1.sig')).rejects.toThrow(GoneException);
+      await expect(service.resolveOrder(token)).rejects.toThrow(GoneException);
+    });
+  });
+
+  // Called by DeliveryLinkGuard on the routes that change a delivery.
+  describe('assertOpen', () => {
+    it('passes while no outcome is recorded', async () => {
+      await expect(service.assertOpen(order as any)).resolves.toBeUndefined();
+    });
+
+    it('throws GoneException once an outcome is recorded', async () => {
+      prisma.orderDeliveryOutcome.findUnique.mockResolvedValue({ id: 'outcome-1' });
+      await expect(service.assertOpen(order as any)).rejects.toThrow(GoneException);
     });
   });
 
@@ -158,7 +172,9 @@ describe('DeliveryLinksService', () => {
       const result = await service.getOrder(order as any);
 
       expect(result.state).toBe('SUBMITTED');
+      expect(result.orderNumber).toBe('10428');
       expect(result.outcome).toEqual(expect.objectContaining({ outcome: 'DELIVERED', driverName: 'Alex Turner' }));
+      expect(result.customerName).toBeNull();
       expect(result.address).toEqual({ line1: null, line2: null, city: null, state: null, postcode: null, country: null });
       expect(result.lines).toEqual([]);
       expect(JSON.stringify(result)).not.toContain('signature_pad');

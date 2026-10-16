@@ -13,9 +13,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DeliveryLinkGuard } from './delivery-link.guard';
+import { DeliveryLinkThrottlerGuard } from './delivery-link-throttler.guard';
+import { OpenDeliveryOnly } from './open-delivery-only.decorator';
 import { DeliveryOrder } from './delivery-order.decorator';
 import { DeliveryLinksService, OrderForDeliveryLink } from './delivery-links.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
@@ -24,16 +25,17 @@ const MAX_PHOTO_BYTES = 12_000_000;
 
 // The first controller in apps/api with no JwtAuthGuard/DistributorAccessGuard
 // at all — deliberately public. The X-Delivery-Token header is the sole
-// credential (see DeliveryTokenSigner); there is no `:token` route param
+// credential (see DeliveryLinkTokensService); there is no `:token` route param
 // anywhere so the token never appears in a URL, and therefore never in
 // Traefik/CDN access logs or Referer headers (see ADR-059).
 //
 // DeliveryLinkGuard turns that token into its order before anything else
-// runs. Guards run before interceptors, so an unverified request is refused
-// before FileInterceptor (multer) reads its body (ADR-076). Handlers receive
-// the resolved order via @DeliveryOrder(), never the raw header.
+// runs, and on @OpenDeliveryOnly() routes refuses a completed delivery.
+// Guards run before interceptors, so such a request is refused before
+// FileInterceptor (multer) reads its body (ADR-076). Handlers receive the
+// resolved order via @DeliveryOrder(), never the raw header.
 @ApiTags('Delivery Links')
-@UseGuards(ThrottlerGuard, DeliveryLinkGuard)
+@UseGuards(DeliveryLinkThrottlerGuard, DeliveryLinkGuard)
 @Controller('delivery-links')
 export class DeliveryLinksController {
   constructor(private readonly deliveryLinksService: DeliveryLinksService) {}
@@ -52,6 +54,7 @@ export class DeliveryLinksController {
   }
 
   @Post('photos')
+  @OpenDeliveryOnly()
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload a delivery-proof photo (before the outcome is submitted)' })
   @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_PHOTO_BYTES } }))
@@ -61,6 +64,7 @@ export class DeliveryLinksController {
   }
 
   @Delete('photos/:photoId')
+  @OpenDeliveryOnly()
   @HttpCode(204)
   @ApiOperation({ summary: 'Remove a delivery-proof photo (only while the delivery is unrecorded)' })
   deletePhoto(

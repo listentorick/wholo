@@ -29,7 +29,7 @@ const sharp: typeof import('sharp').default = require('sharp');
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
-import { DeliveryTokenSigner } from '../src/delivery-links/delivery-token.signer';
+import { DeliveryLinkTokensService } from '../src/delivery-links/delivery-link-tokens.service';
 import { R2StorageService } from '../src/asset-images/r2-storage.service';
 import { createAccountingConnection } from './support/accounting-fixtures';
 
@@ -50,7 +50,7 @@ const mockR2 = {
 describe('Delivery links (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-  let signer: DeliveryTokenSigner;
+  let linkTokens: DeliveryLinkTokensService;
   let png: Buffer;
 
   beforeAll(async () => {
@@ -69,7 +69,7 @@ describe('Delivery links (integration)', () => {
     await app.init();
 
     prisma = app.get(PrismaService);
-    signer = app.get(DeliveryTokenSigner);
+    linkTokens = app.get(DeliveryLinkTokensService);
 
     await prisma.organisation.upsert({
       where: { id: DIST },
@@ -120,6 +120,9 @@ describe('Delivery links (integration)', () => {
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST, CUSTOMER] } } });
     await app.close();
   });
+
+  // The token a printed manifest would carry for this order.
+  const linkFor = async (orderId: string) => (await linkTokens.ensureFor([orderId])).get(orderId)!;
 
   const createOrder = async (overrides: Record<string, unknown> = {}) => {
     const seqResult = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
@@ -183,7 +186,7 @@ describe('Delivery links (integration)', () => {
     const orderA = await createOrder();
     const orderB = await createOrder();
 
-    const res = await getOrder(signer.sign(orderA.id));
+    const res = await getOrder(await linkFor(orderA.id));
 
     expect(res.status).toBe(200);
     expect(res.body.orderNumber).toBe(orderA.orderNumber);
@@ -191,18 +194,38 @@ describe('Delivery links (integration)', () => {
     expect(res.body).not.toHaveProperty('price');
   });
 
-  it('rejects a forged token (valid-looking but wrong signature) with 404', async () => {
-    const order = await createOrder();
-    const [orderId] = signer.sign(order.id).split('.');
+  it('rejects a well-formed token that no order carries with 404', async () => {
+    await createOrder();
 
-    const res = await getOrder(`${orderId}.not-a-real-signature`);
+    const res = await getOrder(DeliveryLinkTokensService.generate());
 
     expect(res.status).toBe(404);
   });
 
+  describe('printing', () => {
+    it('gives an order the same token every time its manifest is printed', async () => {
+      const order = await createOrder();
+
+      const first = await linkFor(order.id);
+      const reprint = await linkFor(order.id);
+
+      expect(DeliveryLinkTokensService.isWellFormed(first)).toBe(true);
+      expect(reprint).toBe(first);
+    });
+
+    it('gives every order its own token', async () => {
+      const a = await createOrder();
+      const b = await createOrder();
+
+      const tokens = await linkTokens.ensureFor([a.id, b.id]);
+
+      expect(tokens.get(a.id)).not.toBe(tokens.get(b.id));
+    });
+  });
+
   it('enforces single-use against a real DB unique constraint under a genuine race', async () => {
     const order = await createOrder();
-    const token = signer.sign(order.id);
+    const token = await linkFor(order.id);
 
     const [first, second] = await Promise.all([
       submitOutcome(token, HANDED_TO_PERSON),
@@ -218,7 +241,7 @@ describe('Delivery links (integration)', () => {
 
   it('rejects a second submission with a different body as a 409 conflict', async () => {
     const order = await createOrder();
-    const token = signer.sign(order.id);
+    const token = await linkFor(order.id);
 
     await submitOutcome(token, HANDED_TO_PERSON);
     const res = await submitOutcome(token, { outcome: 'UNABLE_TO_DELIVER', unableReason: 'CUSTOMER_REFUSED' });
@@ -228,13 +251,13 @@ describe('Delivery links (integration)', () => {
 
   it('rejects a Delivered submission with no drop method as a 422', async () => {
     const order = await createOrder();
-    const res = await submitOutcome(signer.sign(order.id), { outcome: 'DELIVERED' });
+    const res = await submitOutcome(await linkFor(order.id), { outcome: 'DELIVERED' });
     expect(res.status).toBe(422);
   });
 
   it('persists drop method, signature (jsonb) and capture time for a handed-to-person delivery, and never exposes the signature', async () => {
     const order = await createOrder();
-    const token = signer.sign(order.id);
+    const token = await linkFor(order.id);
 
     const res = await submitOutcome(token, HANDED_TO_PERSON);
     expect(res.status).toBe(200);
@@ -255,7 +278,7 @@ describe('Delivery links (integration)', () => {
 
   it('returns the read-only confirmation, not the pending form, on GET after submission', async () => {
     const order = await createOrder();
-    const token = signer.sign(order.id);
+    const token = await linkFor(order.id);
 
     await submitOutcome(token, HANDED_TO_PERSON);
     const res = await getOrder(token);
@@ -263,13 +286,16 @@ describe('Delivery links (integration)', () => {
     expect(res.status).toBe(200);
     expect(res.body.state).toBe('SUBMITTED');
     expect(res.body.outcome.outcome).toBe('DELIVERED');
-    // Read-only confirmation is deliberately minimal — no address/contact/products.
+    // Read-only confirmation is deliberately minimal — no customer name,
+    // address, contact or products (ADR-076).
     expect(res.body.lines).toEqual([]);
+    expect(res.body.customerName).toBeNull();
+    expect(JSON.stringify(res.body)).not.toContain('The Old Hall');
   });
 
   it('writes exactly one audit row for a successful submission', async () => {
     const order = await createOrder();
-    await submitOutcome(signer.sign(order.id), HANDED_TO_PERSON);
+    await submitOutcome(await linkFor(order.id), HANDED_TO_PERSON);
 
     const rows = await prisma.auditLog.findMany({ where: { entityId: order.id, action: 'DELIVERY_OUTCOME_RECORDED' } });
     expect(rows).toHaveLength(1);
@@ -285,7 +311,7 @@ describe('Delivery links (integration)', () => {
   // MailHog send in manual verification.
   it('transitions Order.status to DELIVERED and writes a correctly-shaped OrderDelivered outbox event', async () => {
     const order = await createOrder();
-    await submitOutcome(signer.sign(order.id), HANDED_TO_PERSON);
+    await submitOutcome(await linkFor(order.id), HANDED_TO_PERSON);
 
     const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(updated.status).toBe(OrderStatus.DELIVERED);
@@ -328,7 +354,7 @@ describe('Delivery links (integration)', () => {
       },
     });
 
-    await submitOutcome(signer.sign(order.id), HANDED_TO_PERSON).expect(200);
+    await submitOutcome(await linkFor(order.id), HANDED_TO_PERSON).expect(200);
 
     expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(OrderStatus.COMPLETED);
     // Same transaction, so the same createdAt — compare as a set.
@@ -340,7 +366,7 @@ describe('Delivery links (integration)', () => {
 
   it('transitions Order.status to DELIVERY_FAILED and writes a correctly-shaped OrderDeliveryFailed outbox event', async () => {
     const order = await createOrder();
-    await submitOutcome(signer.sign(order.id), { outcome: 'UNABLE_TO_DELIVER', unableReason: 'CUSTOMER_REFUSED' });
+    await submitOutcome(await linkFor(order.id), { outcome: 'UNABLE_TO_DELIVER', unableReason: 'CUSTOMER_REFUSED' });
 
     const updated = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
     expect(updated.status).toBe(OrderStatus.DELIVERY_FAILED);
@@ -352,7 +378,7 @@ describe('Delivery links (integration)', () => {
 
   it('410s a cancelled order — even one that was previously viewable — and never accepts a submission for it', async () => {
     const order = await createOrder();
-    const token = signer.sign(order.id);
+    const token = await linkFor(order.id);
 
     expect((await getOrder(token)).status).toBe(200);
 
@@ -365,7 +391,7 @@ describe('Delivery links (integration)', () => {
   describe('delivery-proof photos', () => {
     it('uploads a photo to R2 under the order-scoped prefix and links it to the outcome on submit — never exposing it', async () => {
       const order = await createOrder();
-      const token = signer.sign(order.id);
+      const token = await linkFor(order.id);
 
       const up = await uploadPhoto(token);
       expect(up.status).toBe(201);
@@ -397,7 +423,7 @@ describe('Delivery links (integration)', () => {
 
     it('records "location unavailable" with null coordinates', async () => {
       const order = await createOrder();
-      const token = signer.sign(order.id);
+      const token = await linkFor(order.id);
       await submitOutcome(token, { ...HANDED_TO_PERSON, location: { unavailable: true } });
 
       const outcome = await prisma.orderDeliveryOutcome.findUniqueOrThrow({ where: { orderId: order.id } });
@@ -405,9 +431,9 @@ describe('Delivery links (integration)', () => {
       expect(outcome.latitude).toBeNull();
     });
 
-    it('deletes an unlinked photo (row + both R2 objects) but 409s one already linked to a recorded outcome', async () => {
+    it('deletes an unlinked photo (row + both R2 objects) but 410s once the delivery is recorded', async () => {
       const order = await createOrder();
-      const token = signer.sign(order.id);
+      const token = await linkFor(order.id);
 
       const a = (await uploadPhoto(token)).body.id;
       const b = (await uploadPhoto(token)).body.id;
@@ -416,8 +442,10 @@ describe('Delivery links (integration)', () => {
       expect(mockR2.delete).toHaveBeenCalledTimes(2);
       expect(await prisma.orderDeliveryPhoto.findUnique({ where: { id: a } })).toBeNull();
 
+      // Once recorded, the delivery is closed to changes before anything else
+      // is checked (ADR-076).
       await submitOutcome(token, { ...HANDED_TO_PERSON, photoIds: [b] });
-      expect((await deletePhoto(token, b)).status).toBe(409);
+      expect((await deletePhoto(token, b)).status).toBe(410);
     });
 
     // The token is checked before anything else (ADR-076): a caller without a
@@ -428,44 +456,63 @@ describe('Delivery links (integration)', () => {
         .post('/api/v1/delivery-links/photos')
         .attach('photo', png, { filename: 'shot.png', contentType: 'image/png' });
 
-      it('gets 404 with no token, a forged token, or an old HMAC-format token — and nothing is stored', async () => {
+      it('gets 404 with no token, a made-up token, or an old signed-format token — and nothing is stored', async () => {
         const order = await createOrder();
-        const [orderId] = signer.sign(order.id).split('.');
-        const oldHmacToken = `${orderId}.${createHmac('sha256', Buffer.alloc(32)).update(orderId).digest('base64url')}`;
+        const oldSignedToken = `${order.id}.${createHmac('sha256', Buffer.alloc(32)).update(order.id).digest('base64url')}`;
 
         expect((await uploadWithoutToken()).status).toBe(404);
-        expect((await uploadPhoto(`${orderId}.${'A'.repeat(86)}`)).status).toBe(404);
-        expect((await uploadPhoto(oldHmacToken)).status).toBe(404);
+        expect((await uploadPhoto(DeliveryLinkTokensService.generate())).status).toBe(404);
+        expect((await uploadPhoto(oldSignedToken)).status).toBe(404);
 
         expect(mockR2.upload).not.toHaveBeenCalled();
         expect(await prisma.orderDeliveryPhoto.count({ where: { orderId: order.id } })).toBe(0);
       });
+    });
 
-      it('is refused before the upload is read: an oversized file gets 404, where a genuine token gets 413', async () => {
+    // The size limit is enforced while the body is parsed, so only a request
+    // whose body is actually read can be told it is too large. Any other
+    // answer to an oversized upload proves it was refused unread (ADR-076).
+    describe('an upload is refused before its body is read', () => {
+      const oversized = Buffer.alloc(12_000_001);
+      const uploadOversized = (token: string) => request(app.getHttpServer())
+        .post('/api/v1/delivery-links/photos')
+        .set('X-Delivery-Token', token)
+        .attach('photo', oversized, { filename: 'huge.png', contentType: 'image/png' });
+
+      it('is read for an open delivery (413 — too large)', async () => {
         const order = await createOrder();
-        const oversized = Buffer.alloc(12_000_001);
-        const uploadOversized = (token: string) => request(app.getHttpServer())
-          .post('/api/v1/delivery-links/photos')
-          .set('X-Delivery-Token', token)
-          .attach('photo', oversized, { filename: 'huge.png', contentType: 'image/png' });
+        expect((await uploadOversized(await linkFor(order.id))).status).toBe(413);
+      });
 
-        // The size limit is enforced while the body is parsed, so only a
-        // request whose body is actually read can be told it is too large.
-        expect((await uploadOversized(signer.sign(order.id))).status).toBe(413);
-        expect((await uploadOversized('forged.token')).status).toBe(404);
+      it('is not read for an unknown token (404)', async () => {
+        expect((await uploadOversized(DeliveryLinkTokensService.generate())).status).toBe(404);
+      });
+
+      it('is not read for a delivery already recorded (410)', async () => {
+        const order = await createOrder();
+        const token = await linkFor(order.id);
+        await submitOutcome(token, HANDED_TO_PERSON).expect(200);
+        expect((await uploadOversized(token)).status).toBe(410);
+      });
+
+      it('is not read for a cancelled order (410)', async () => {
+        const order = await createOrder();
+        const token = await linkFor(order.id);
+        await prisma.order.update({ where: { id: order.id }, data: { status: OrderStatus.CANCELLED } });
+        expect((await uploadOversized(token)).status).toBe(410);
       });
     });
 
     it('rejects a non-UUID photo id with 400 (server-minted ids only — no arbitrary strings reach the DB)', async () => {
       const order = await createOrder();
-      const token = signer.sign(order.id);
+      const token = await linkFor(order.id);
       expect((await deletePhoto(token, 'not-a-real-uuid')).status).toBe(400);
       expect((await deletePhoto(token, '....branding')).status).toBe(400);
     });
 
     it('410s a photo upload once the delivery outcome is recorded', async () => {
       const order = await createOrder();
-      const token = signer.sign(order.id);
+      const token = await linkFor(order.id);
       await submitOutcome(token, HANDED_TO_PERSON);
       expect((await uploadPhoto(token)).status).toBe(410);
     });
@@ -473,10 +520,27 @@ describe('Delivery links (integration)', () => {
     it('a token cannot delete another order\'s photo', async () => {
       const orderA = await createOrder();
       const orderB = await createOrder();
-      const photoA = (await uploadPhoto(signer.sign(orderA.id))).body.id;
+      const photoA = (await uploadPhoto(await linkFor(orderA.id))).body.id;
 
-      expect((await deletePhoto(signer.sign(orderB.id), photoA)).status).toBe(404);
+      expect((await deletePhoto(await linkFor(orderB.id), photoA)).status).toBe(404);
       expect(await prisma.orderDeliveryPhoto.findUnique({ where: { id: photoA } })).not.toBeNull();
     });
+  });
+
+  // Every request reaches apps/api from the driver BFF, so the limit is
+  // counted per link rather than per caller — one busy delivery can't use up
+  // every other driver's allowance (ADR-076).
+  it('rate-limits each delivery link separately', async () => {
+    const a = await createOrder();
+    const b = await createOrder();
+    const linkA = await linkFor(a.id);
+    const linkB = await linkFor(b.id);
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) statuses.push((await getOrder(linkA)).status);
+
+    expect(statuses.slice(0, 20).every((status) => status === 200)).toBe(true);
+    expect(statuses[20]).toBe(429);
+    expect((await getOrder(linkB)).status).toBe(200);
   });
 });

@@ -680,6 +680,12 @@ model Order {
   customerReference       String?
   notes                   String?
 
+  // The secret carried by this order's delivery-link QR code (ADR-076):
+  // 128 random bits, base64url. Set the first time a manifest including the
+  // order is printed and never changed, so reprints produce identical codes.
+  // A bearer secret — never derived from the id, number or anything else.
+  deliveryLinkToken String? @unique
+
   submittedAt         DateTime?
   acceptedAt          DateTime?
   acceptedByActorType AcceptedByActorType?

@@ -7,11 +7,12 @@ export interface DeliveryLinkOrderLine {
 }
 
 // Deliberately minimal — never includes pricing, and the SUBMITTED variant
-// never includes address/contact/product detail (PRD §8/§13).
+// never includes the customer's name or address/contact/product detail
+// (PRD §8/§13, ADR-076).
 export interface DeliveryLinkOrderDto {
   orderNumber: string;
   distributorName: string;
-  customerName: string;
+  customerName: string | null;
   address: ManifestAddress;
   customerPhone: string | null;
   deliveryInstructions: string | null;

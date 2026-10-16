@@ -12,7 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { OrderCompletionService } from '../orders/order-completion.service';
-import { DeliveryTokenSigner } from './delivery-token.signer';
+import { DeliveryLinkTokensService } from './delivery-link-tokens.service';
 import { DeliveryPhotoService, DeliveryPhotoDto } from './delivery-photo.service';
 import { SubmitOutcomeDto } from './dto/submit-outcome.dto';
 import { parseAddress } from '../delivery-runs/manifest/manifest-data.service';
@@ -70,7 +70,6 @@ export class DeliveryLinksService {
     private prisma: PrismaService,
     private audit: AuditService,
     private outbox: OutboxService,
-    private signer: DeliveryTokenSigner,
     private deliveryPhoto: DeliveryPhotoService,
     private orderCompletion: OrderCompletionService,
   ) {}
@@ -238,17 +237,27 @@ export class DeliveryLinksService {
     return (await this.getAllocation(orderId))?.driverName ?? null;
   }
 
-  // The one place a delivery token becomes an order — called by
+  // The one place a delivery-link token becomes an order — called by
   // DeliveryLinkGuard for every request.
   async resolveOrder(rawToken: string): Promise<OrderForDeliveryLink> {
-    const orderId = this.signer.verify(rawToken);
-    // Every failure mode (malformed, forged, unknown order) is indistinguishable
-    // from the caller's point of view — never leak which one it was.
-    if (!orderId) throw new NotFoundException();
+    // Every failure mode (missing, malformed, unknown) is indistinguishable
+    // from the caller's point of view — never leak which one it was. Junk is
+    // refused before it reaches the database.
+    if (!DeliveryLinkTokensService.isWellFormed(rawToken)) throw new NotFoundException();
 
-    const order = await this.prisma.order.findUnique({ where: { id: orderId }, select: orderSelect });
-    if (!order || NON_DELIVERABLE_STATUSES.includes(order.status)) throw new GoneException();
+    const order = await this.prisma.order.findUnique({ where: { deliveryLinkToken: rawToken }, select: orderSelect });
+    if (!order) throw new NotFoundException();
+    if (NON_DELIVERABLE_STATUSES.includes(order.status)) throw new GoneException();
     return order;
+  }
+
+  // A recorded delivery can't be changed through its link. Called by
+  // DeliveryLinkGuard on the routes marked @OpenDeliveryOnly(), before any
+  // request body is read; the photo service repeats the check for requests
+  // racing a submission.
+  async assertOpen(order: OrderForDeliveryLink): Promise<void> {
+    const outcome = await this.prisma.orderDeliveryOutcome.findUnique({ where: { orderId: order.id }, select: { id: true } });
+    if (outcome) throw new GoneException();
   }
 
   private matchesExisting(
@@ -298,12 +307,13 @@ export class DeliveryLinksService {
 
   private toReadOnlyDto(order: OrderForDeliveryLink, outcome: OrderDeliveryOutcome, driverName: string | null): DeliveryLinkOrderDto {
     // PRD §13 — the read-only confirmation is deliberately minimal: order
-    // number, outcome, date/time, driver. No address, contact, or product
-    // detail once submitted.
+    // number, outcome, date/time, driver. No customer name, address, contact
+    // or product detail once submitted — a manifest found later must not
+    // reveal who was delivered to (ADR-076).
     return {
       orderNumber: order.orderNumber,
       distributorName: order.distributor.name,
-      customerName: order.customer.name,
+      customerName: null,
       address: { line1: null, line2: null, city: null, state: null, postcode: null, country: null },
       customerPhone: null,
       deliveryInstructions: null,

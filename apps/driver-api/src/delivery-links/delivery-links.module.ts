@@ -2,12 +2,11 @@ import { Module } from '@nestjs/common';
 import { ApiClientModule } from '../api-client/api-client.module';
 import { DeliveryLinksService } from './delivery-links.service';
 import { DeliveryLinksController } from './delivery-links.controller';
-import { DeliveryTokenGuard } from './delivery-token.guard';
-import { DeliveryTokenVerifier } from './delivery-token.verifier';
+import { DeliveryLinkGuard } from './delivery-link.guard';
 
 @Module({
   imports: [ApiClientModule],
   controllers: [DeliveryLinksController],
-  providers: [DeliveryLinksService, DeliveryTokenVerifier, DeliveryTokenGuard],
+  providers: [DeliveryLinksService, DeliveryLinkGuard],
 })
 export class DeliveryLinksModule {}

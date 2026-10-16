@@ -1,8 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { DeliveryLinksController } from './delivery-links.controller';
 import { DeliveryLinkGuard } from './delivery-link.guard';
+import { DeliveryLinkThrottlerGuard } from './delivery-link-throttler.guard';
+import { OPEN_DELIVERY_ONLY_KEY } from './open-delivery-only.decorator';
 import { DeliveryLinksService, OrderForDeliveryLink } from './delivery-links.service';
 
 // What DeliveryLinkGuard hands each handler once it has resolved the token.
@@ -33,7 +34,7 @@ describe('DeliveryLinksController', () => {
       // — only that the routes carry them (see the test below), per
       // CLAUDE.md: "Auth guard coverage is asserted by checking @UseGuards
       // presence, not re-testing NestJS internals."
-      .overrideGuard(ThrottlerGuard)
+      .overrideGuard(DeliveryLinkThrottlerGuard)
       .useValue({ canActivate: () => true })
       .overrideGuard(DeliveryLinkGuard)
       .useValue({ canActivate: () => true })
@@ -55,7 +56,18 @@ describe('DeliveryLinksController', () => {
 
   it('throttles, then resolves the delivery token, on every route — and has no login guard', () => {
     const guards = Reflect.getMetadata('__guards__', DeliveryLinksController);
-    expect(guards).toEqual([ThrottlerGuard, DeliveryLinkGuard]);
+    expect(guards).toEqual([DeliveryLinkThrottlerGuard, DeliveryLinkGuard]);
+  });
+
+  it('closes the photo routes, and only those, once a delivery is recorded', () => {
+    const openOnly = (handler: keyof DeliveryLinksController) =>
+      Reflect.getMetadata(OPEN_DELIVERY_ONLY_KEY, DeliveryLinksController.prototype[handler]) === true;
+    expect(openOnly('uploadPhoto')).toBe(true);
+    expect(openOnly('deletePhoto')).toBe(true);
+    expect(openOnly('getOrder')).toBe(false);
+    // Stays open so a retry after a dropped connection gets the same answer;
+    // the service returns 409 for a different outcome.
+    expect(openOnly('submitOutcome')).toBe(false);
   });
 
   it('forwards a photo upload to the service and rejects a request with no file', async () => {

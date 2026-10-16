@@ -8,7 +8,7 @@
 - **Password manager:** a copy of every value below, plus the account logins. It is the only way back if `values.live.yaml` or the cluster is lost. Keep it updated whenever you rotate something.
 - **Outside the cluster:** Cloudflare (Origin CA cert on the WAF, R2 tokens), GitHub (Actions variables), PurelyMail, Xero developer app, ops-host InfluxDB.
 
-There is **no shared JWT secret** in live. BFFs validate Keycloak-issued tokens against Keycloak's JWKS (ADR-049). Portal and admin log in through public Keycloak clients that have no client secret. **No BFF holds a secret at all:** the admin, portal and driver apps' Secrets are empty, and the driver app checks delivery links with public keys only (ADR-076).
+There is **no shared JWT secret** in live. BFFs validate Keycloak-issued tokens against Keycloak's JWKS (ADR-049). Portal and admin log in through public Keycloak clients that have no client secret. **No BFF holds a secret at all:** the admin, portal and driver apps' Secrets are empty. The driver app checks a delivery link by asking the api, which looks it up in the database (ADR-076).
 
 Signing keys, certificates and anything that expires on a date are covered in [keys-and-certificates.md](keys-and-certificates.md).
 
@@ -42,7 +42,6 @@ Signing keys, certificates and anything that expires on a date are covered in [k
 | Backup encryption password + salt | `postgresql.backup.encryption.*` | `wholo-pg-backup` → `encryptionPassword`, `encryptionSalt` | backup CronJob; needed for **every restore** | Avoid. If you must: keep the **old** pair in the password manager until every backup made with it has aged out (3 days), since restoring those needs the old pair | **Lose both copies and every backup is unrecoverable** |
 | Xero client secret | `api.xero.clientSecret` (`clientId` is not secret) | `wholo-api` → `XERO_CLIENT_SECRET` | api, worker (OAuth token exchange and refresh) | Generate a new secret in the Xero developer app, update values, `helm:install:live`, restart api and worker | Xero connect and token refresh fail. Invoice exports fail and retry |
 | Accounting token encryption key | `api.accountingTokenEncryptionKey` | `wholo-api` → `ACCOUNTING_TOKEN_ENCRYPTION_KEY` | api, worker (decrypts stored Xero tokens) | **Only if compromised.** Changing it orphans every stored token, so every distributor must reconnect Xero | Must decode to 32 bytes or the api won't start |
-| Delivery token private key | `deliveryToken.privateKey` | `wholo-api` → `DELIVERY_TOKEN_PRIVATE_KEY` | api, worker (sign QR delivery links, ADR-076) | Follow [keys-and-certificates.md → Delivery token keys](keys-and-certificates.md#delivery-token-keys). It is replaced together with its public key, in a set order | Done out of order, the api won't start or printed links stop opening. The matching public keys (`deliveryToken.publicKeys`) are not secret |
 | Plausible keys | `plausible.secretKeyBase`, `plausible.totpVaultKey` | `wholo-plausible` | plausible | Only if compromised | Invalidates Plausible sessions and 2FA |
 | InfluxDB write token | `telegraf.influx.token` | `wholo-telegraf` → `INFLUX_TOKEN` | telegraf Deployment and `wholo-telegraf-node` DaemonSet | New token in the ops-host InfluxDB (write to `stocdup`), update values, `helm:install:live`, `kubectl -n wholo rollout restart deploy/wholo-telegraf ds/wholo-telegraf-node`, revoke the old token | Metrics gap only |
 | GHCR pull secret | `ghcr-pull` (created by hand) | Secret `ghcr-pull` | image pulls | Only needed if the packages are made private (they're public now). New PAT (`read:packages`), recreate the Secret | New pods can't pull images |
@@ -51,6 +50,10 @@ Signing keys, certificates and anything that expires on a date are covered in [k
 ### GHCR pull secret
 
 `values.live.example.yaml` lists `imagePullSecrets: ghcr-pull`, but the GHCR packages are **public**, so leave `imagePullSecrets` unset. If the packages are ever made private, create the Secret as in [setup/cluster.md](setup/cluster.md) (step 5) and set `imagePullSecrets`.
+
+### Held in the database, not in the chart
+
+**Delivery links.** Each QR code on a printed manifest carries a random token stored on its order (`orders.deliveryLinkToken`, ADR-076). There is no key to rotate: a token is created on first print and never changes. Whoever holds a link can act on that delivery until it is recorded, so a copy of the database holds working links. This is one more reason backups are encrypted before they leave the cluster, and why a database dump must never be shared unencrypted. To stop one link working, cancel the order.
 
 ### Not secret, but only in the gitignored file
 

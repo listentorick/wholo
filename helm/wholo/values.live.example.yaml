@@ -77,15 +77,6 @@ api:
   # accounting OAuth tokens at rest. Changing it orphans stored tokens.
   accountingTokenEncryptionKey: "CHANGE_ME"
 
-# Ed25519 key pair for the QR delivery links on printed manifests (ADR-076).
-# Run scripts/generate-delivery-token-keys.sh and paste its output over this
-# block. The chart will not render, and the api and driver-api will not start,
-# without both. Replacing them later: docs/runbook/keys-and-certificates.md.
-deliveryToken:
-  privateKey: "CHANGE_ME"     # SECRET — keep a copy in the password manager
-  publicKeys:
-    - "CHANGE_ME"             # not secret; newest first
-
 portalApi:
   image:
     repository: ghcr.io/listentorick/wholo/portal-api

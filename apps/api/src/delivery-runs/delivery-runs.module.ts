@@ -18,8 +18,8 @@ import { ManifestService } from './manifest/manifest.service';
     // Plain (queue-free) module — reuses DeliveryRunAllocationService's
     // findOrCreateRun synchronously from the change-delivery-date action.
     DeliveryRunAllocationModule,
-    // For DeliveryTokenSigner — ManifestService signs the same durable
-    // delivery URL the public delivery-links endpoints verify.
+    // For DeliveryLinkTokensService — ManifestService prints the token the
+    // public delivery-links endpoints look the order up by.
     DeliveryLinksModule,
     // AssetImagesModule is @Global() (see apps/api/src/asset-images) — its
     // exported R2StorageService/ImageProcessingService are injectable into

@@ -7,7 +7,7 @@ export class DeliveryLinksService {
   constructor(private api: ApiClientService) {}
 
   getOrder(token: string) {
-    return this.api.get('/delivery-links', { 'X-Delivery-Token': token });
+    return this.api.get<{ state: 'PENDING' | 'SUBMITTED' }>('/delivery-links', { 'X-Delivery-Token': token });
   }
 
   submitOutcome(token: string, dto: unknown) {
@@ -18,7 +18,7 @@ export class DeliveryLinksService {
     const form = new FormData();
     // Fixed filename — the client's original filename is never forwarded (it is
     // unused downstream and there is no reason to pass a user-controlled string
-    // through). apps/api derives everything from the verified token.
+    // through). apps/api derives everything from the token.
     form.append('photo', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), 'delivery-photo');
     return this.api.postMultipart('/delivery-links/photos', { 'X-Delivery-Token': token }, form);
   }

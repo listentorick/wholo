@@ -53,7 +53,7 @@ export type UnableToDeliverReason =
 export interface DeliveryLinkOrder {
   orderNumber: string;
   distributorName: string;
-  customerName: string;
+  customerName: string | null;
   address: DeliveryAddress;
   customerPhone: string | null;
   deliveryInstructions: string | null;

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ActorType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../../audit/audit.service';
-import { DeliveryTokenSigner } from '../../delivery-links/delivery-token.signer';
+import { DeliveryLinkTokensService } from '../../delivery-links/delivery-link-tokens.service';
 import { ManifestDataService } from './manifest-data.service';
 import { ManifestLogoService } from './logo.service';
 import { generateOrderQrPng } from './qr-code.util';
@@ -23,7 +23,7 @@ export class ManifestService {
     private audit: AuditService,
     private manifestData: ManifestDataService,
     private logoService: ManifestLogoService,
-    private signer: DeliveryTokenSigner,
+    private linkTokens: DeliveryLinkTokensService,
     config: ConfigService,
   ) {
     this.driverAppUrl = config.getOrThrow<string>('DRIVER_APP_URL');
@@ -35,12 +35,14 @@ export class ManifestService {
     const data = await this.manifestData.getManifestData(distributorId, runId);
     const logoPng = await this.logoService.getLogoPng(distributorId);
 
-    // Signing is synchronous and stateless (no DB write) — the same order
-    // always produces the same URL, so reprinting this manifest reproduces
-    // an identical QR code. See DeliveryTokenSigner.
+    // Each order's link carries its random delivery-link token (ADR-076),
+    // created on the first print and reused afterwards, so reprinting this
+    // manifest reproduces identical QR codes. The token goes in the URL
+    // fragment, which browsers never send to a server (ADR-059).
+    const tokens = await this.linkTokens.ensureFor(data.orders.map((order) => order.orderId));
     const qrEntries = await Promise.all(
       data.orders.map(async (order) => {
-        const deliveryUrl = `${this.driverAppUrl}/d#${this.signer.sign(order.orderId)}`;
+        const deliveryUrl = `${this.driverAppUrl}/d#${tokens.get(order.orderId)}`;
         return [order.orderId, await generateOrderQrPng(deliveryUrl)] as const;
       }),
     );
