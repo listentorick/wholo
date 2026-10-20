@@ -35,6 +35,7 @@ import { AdminNotificationsModule } from './admin-notifications/admin-notificati
 import { AnalyticsModule } from './analytics/analytics.module';
 import { CustomerHealthModule } from './customer-health/customer-health.module';
 import { CustomerPaymentsModule } from './customer-payments/customer-payments.module';
+import { CustomerOrderingModule } from './customer-ordering/customer-ordering.module';
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 import { HealthModule } from './health/health.module';
@@ -79,6 +80,7 @@ import './asset-images/branding-asset-types';
     AnalyticsModule,
     CustomerHealthModule,
     CustomerPaymentsModule,
+    CustomerOrderingModule,
     DeliveryOverviewModule,
     MetricsModule.forRoot(),
     HealthModule,

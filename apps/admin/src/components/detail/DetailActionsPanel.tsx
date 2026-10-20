@@ -128,7 +128,7 @@ function DangerZoneCard({ actions, onTrigger }: { actions: ActionItem[]; onTrigg
   );
 }
 
-function ConfirmModal({ action, onCancel }: { action: ActionItem; onCancel: () => void }) {
+export function ConfirmModal({ action, onCancel }: { action: ActionItem; onCancel: () => void }) {
   const confirm = action.confirm!;
   const tone = action.tone ?? 'secondary';
   const confirmClassName = tone === 'danger' ? MODAL_CONFIRM_DANGER_CLS : MODAL_CONFIRM_PRIMARY_CLS;

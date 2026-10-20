@@ -131,9 +131,10 @@ The header (lines 20-71) is the guide for pulls: what the base owns, what a subc
   - `enqueueDue(distributorId: string, connectionId: string, resourceType: AccountingSyncResourceType, slot: Date | null, now: Date): Promise<EnqueueDueResult>` (line 82). In one transaction: `requestRun` (SCHEDULED), writes the outbox event only if `shouldEnqueue`, then `advanceSchedule` to `nextSlotAfter`. Process: Worker (scheduler).
   - `skipDue(runId: string, resourceType: AccountingSyncResourceType, slot: Date, now: Date): Promise<Date>` (line 109). Advances a due slot without queueing. Process: Worker.
   - `getStatus(distributorId: string): Promise<AccountingSyncStatusResponse>` (line 115). Returns mapping-resource runs for the current connection and `lastSucceededAt` across all connections to the same organisation. Process: API.
-  - Private `enqueue(distributorId, connectionId, resourceTypes, trigger): Promise<AccountingSyncResourceType[]>` (line 154). Returns the types actually queued.
-  - Private `writeSyncEvent(tx: Prisma.TransactionClient, connectionId, resourceType, runId): Promise<void>` (line 179). `outbox.writeEvent(tx, 'AccountingConnection', connectionId, ACCOUNTING_SYNC_EVENT_TYPE[type], { runId })`.
-  - Module-private `toSummary(run: IngestionRun): IngestionRunSummary` (line 195).
+  - `getInvoiceSyncStatus(distributorId: string): Promise<{ connected: boolean; lastSyncedAt: string | null }>` (line 156). Read-only: no queue, no outbox event. Returns `connected: false` when the distributor has no current connection (CONNECTED or ERROR). Otherwise it loads every connection of the same accounting organisation, lists the `accounting` ingestion runs for them, and returns the newest `lastSucceededAt` (falling back to `lastFullRunAt`) among the `invoice` runs as an ISO string, or `null` when there is none. Called from `apps/api/src/customer-payments/customer-payments.service.ts` (line 103) for the customer payment summary.
+  - Private `enqueue(distributorId, connectionId, resourceTypes, trigger): Promise<AccountingSyncResourceType[]>` (line 178). Returns the types actually queued.
+  - Private `writeSyncEvent(tx: Prisma.TransactionClient, connectionId, resourceType, runId): Promise<void>` (line 203). `outbox.writeEvent(tx, 'AccountingConnection', connectionId, ACCOUNTING_SYNC_EVENT_TYPE[type], { runId })`.
+  - Module-private `toSummary(run: IngestionRun): IngestionRunSummary` (line 219).
   - Process: API and Worker.
 
 ---

@@ -11,7 +11,6 @@ import { ListPagination } from '@/components/list/ListPagination';
 import { ListErrorBanner } from '@/components/list/ListErrorBanner';
 import { ListEmptyState } from '@/components/list/ListEmptyState';
 import { ListSpinner } from '@/components/list/ListSpinner';
-import { StatusBadge, type StatusTone } from '@/components/list/StatusBadge';
 import { MobileCardList } from '@/components/list/MobileCardList';
 import { MobileCardField } from '@/components/list/MobileCardField';
 import { FilterBar } from '@/components/list/filter-bar/FilterBar';
@@ -19,6 +18,7 @@ import type { ActiveFilter, FilterFieldConfig } from '@/components/list/filter-b
 import { TaxTypeUnmappedWarningModal } from '@/components/orders/TaxTypeUnmappedWarningModal';
 import { ProofOfDeliveryDrawer } from '@/components/orders/ProofOfDeliveryDrawer';
 import { PaymentBadge } from '@/components/orders/PaymentBadge';
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { adminOrdersApi, ApiError } from '@wholo/admin-api-client';
 import type { OrderSummary, OrderListParams, OrderPaymentFilter } from '@wholo/types';
 import { OrderStatus, formatMoney } from '@wholo/types';
@@ -109,23 +109,6 @@ function buildApiParams(
     }
   }
   return params;
-}
-
-// ─── Status badge ─────────────────────────────────────────────────────────────
-
-const STATUS_META: Record<OrderStatus, { label: string; tone: StatusTone }> = {
-  [OrderStatus.SUBMITTED]: { label: 'Pending', tone: 'orange' },
-  [OrderStatus.ACCEPTED]: { label: 'Accepted', tone: 'green' },
-  [OrderStatus.REJECTED]: { label: 'Rejected', tone: 'red' },
-  [OrderStatus.CANCELLED]: { label: 'Cancelled', tone: 'gray' },
-  [OrderStatus.COMPLETED]: { label: 'Completed', tone: 'blue' },
-  [OrderStatus.DELIVERED]: { label: 'Delivered', tone: 'green' },
-  [OrderStatus.DELIVERY_FAILED]: { label: 'Delivery failed', tone: 'red' },
-};
-
-function OrderStatusBadge({ status }: { status: OrderStatus }) {
-  const meta = STATUS_META[status] ?? { label: status, tone: 'gray' as const };
-  return <StatusBadge label={meta.label} tone={meta.tone} />;
 }
 
 // Any order with a recorded delivery outcome — status is outcome-driven, so it's

@@ -357,33 +357,35 @@ Each of the three record types has a controller (HTTP) and a service (business l
 
 #### `InvoicePaymentStateService` (service, single writer)
 
-- **Location**: `apps/api/src/accounting/invoice-payment-state.service.ts:83`
-- **Module-level declarations**: `type ExportWithOrder` (13), `interface SyncedState` (17), `sameAmount` (31, private), `sameDate` (35, private), `isoDate` (39, private), `syncedStateChanged(current: AccountingInvoiceExport, next: SyncedState): boolean` (42, exported), `interface PaymentStateContext` (57), `interface PaymentStateResult` (65)
+- **Location**: `apps/api/src/accounting/invoice-payment-state.service.ts:110`
+- **Module-level declarations**: `type ExportWithOrder` (14), `interface SyncedState` (18), `sameAmount` (32, private), `sameDate` (36, private), `isoDate` (40, private), `factFieldsChanged(current: AccountingInvoiceExport, next: SyncedState): boolean` (43, exported), `syncedStateChanged(current: AccountingInvoiceExport, next: SyncedState): boolean` (55, exported), `changedAt(stored: AccountingInvoiceExport, next: SyncedState): Date` (74, private), `interface PaymentStateContext` (80), `interface PaymentStateResult` (88)
 - **Group**: framework (provider-neutral). Named in the header as the single writer of invoice payment columns (layer 8). The file is exempted from the ESLint rule that forbids other writes.
 - **Process**: Worker (called by `AccountingInvoiceSyncProcessor`, outside this directory); also `Both` through the module provider
-- **Constructor**: `(audit: AuditService, outbox: OutboxService, orderCompletion: OrderCompletionService)` (84-88)
-- **Method**: `apply(tx: Prisma.TransactionClient, current: ExportWithOrder, next: SyncedState, ctx: PaymentStateContext): Promise<PaymentStateResult>` (90)
+- **Constructor**: `(audit: AuditService, outbox: OutboxService, orderCompletion: OrderCompletionService)` (111-115)
+- **Method**: `apply(tx: Prisma.TransactionClient, current: ExportWithOrder, next: SyncedState, ctx: PaymentStateContext): Promise<PaymentStateResult>` (117)
 - **Behaviour** (in the caller's transaction):
   1. `toStatus = derivePaymentStatus(next)`. If `syncedStateChanged(current, next)` is false, return `{ changed: false }`.
   2. `orderCompletion.lockOrder(tx, current.orderId)`, then re-read the export row and compare again. If nothing changed, return `changed: false`.
   3. `update` the export row: `invoiceState`, `invoiceTotal`, `amountPaid`, `amountCredited`, `amountDue`, `issueDate`, `dueDate`, `fullyPaidOn`, `providerUpdatedAt`, `externalInvoiceStatus`, `externalInvoiceNumber` (only when non-null), `stateSyncedAt = now`.
-  4. If the derived status did not change (`fromStatus === toStatus`), return `changed: true` with no event and no audit row.
-  5. Otherwise write outbox event `InvoicePaymentStatusChanged` on entity `AccountingInvoiceExport`, then audit `INVOICE_PAYMENT_STATUS_CHANGED` on entity `ORDER`, then `orderCompletion.reconcile(tx, orderId, ctx.actor)`.
-- **Dependencies**: `AuditService`, `OutboxService`, `OrderCompletionService` (`lockOrder`, `reconcile`, in `orders/`), `derivePaymentStatus`, `paymentStatusSummary`, `INVOICE_PAYMENT_STATUS_CHANGED`
+  4. Build the event payload once: `exportId`, `orderId`, `distributorId`, `customerId`, `provider`, `fromStatus`, `toStatus`, `invoiceState`, `currency`, the amounts, the three dates as `YYYY-MM-DD`, and `occurredAt`. `occurredAt` is `changedAt(fresh, next)`: the provider's `providerUpdatedAt` when it is later than the stored one, otherwise the current time.
+  5. If the derived status did not change (`fromStatus === toStatus`): when `factFieldsChanged(fresh, next)` is true (total, amount paid, amount due, issue date, due date or fully-paid date), write outbox event `InvoiceBalanceChanged` on entity `AccountingInvoiceExport` with the same payload. No audit row and no reconcile. Return `changed: true` in every case. When only `amountCredited`, the invoice number, the invoice state or the external status moved, nothing is written.
+  6. Otherwise write outbox event `InvoicePaymentStatusChanged` on entity `AccountingInvoiceExport`, then audit `INVOICE_PAYMENT_STATUS_CHANGED` on entity `ORDER`, then `orderCompletion.reconcile(tx, orderId, ctx.actor)`.
+- **Dependencies**: `AuditService`, `OutboxService`, `OrderCompletionService` (`lockOrder`, `reconcile`, in `orders/`), `derivePaymentStatus`, `paymentStatusSummary`, `INVOICE_PAYMENT_STATUS_CHANGED`, `INVOICE_BALANCE_CHANGED`
 
 #### `invoice-payment-status.ts` (utility module)
 
 - **Location**: `apps/api/src/accounting/invoice-payment-status.ts`
   - `INVOICE_PAYMENT_STATUS_CHANGED = 'InvoicePaymentStatusChanged'` (line 5)
-  - `type InvoicePaymentStatus = 'NOT_SYNCED' | 'UNPAID' | 'PART_PAID' | 'PAID' | 'VOID'` (17)
-  - `interface InvoicePaymentFacts` (22)
-  - `derivePaymentStatus(facts: InvoicePaymentFacts): InvoicePaymentStatus` (37)
-  - `isOverdue(facts: InvoicePaymentFacts, today: string): boolean` (53): AWAITING_PAYMENT, amountDue > 0, dueDate before `today` (YYYY-MM-DD)
-  - `SETTLED_INVOICE_STATES: AccountingInvoiceState[] = [PAID, VOIDED, DELETED]` (61)
-  - `paymentStatusSummary(fromStatus, toStatus, ctx: { invoiceRef, source, amountDue?, currency? }): string` (69): timeline wording
+  - `INVOICE_BALANCE_CHANGED = 'InvoiceBalanceChanged'` (line 10): same payload with fromStatus = toStatus; amounts or dates changed with no status change
+  - `type InvoicePaymentStatus = 'NOT_SYNCED' | 'UNPAID' | 'PART_PAID' | 'PAID' | 'VOID'` (22)
+  - `interface InvoicePaymentFacts` (27)
+  - `derivePaymentStatus(facts: InvoicePaymentFacts): InvoicePaymentStatus` (42)
+  - `isOverdue(facts: InvoicePaymentFacts, today: string): boolean` (58): AWAITING_PAYMENT, amountDue > 0, dueDate before `today` (YYYY-MM-DD)
+  - `SETTLED_INVOICE_STATES: AccountingInvoiceState[] = [PAID, VOIDED, DELETED]` (66)
+  - `paymentStatusSummary(fromStatus, toStatus, ctx: { invoiceRef, source, amountDue?, currency? }): string` (74): timeline wording
 - **Group**: framework (provider-neutral). Wording uses the `source` argument, not a provider name.
 - **Process**: Both (imported by the API read models and by Worker code)
-- **Derivation rules** (37-47): no state → `NOT_SYNCED`; VOIDED or DELETED → `VOID`; PAID → `PAID`; AWAITING_PAYMENT with due ≤ 0 and total > 0 → `PAID`; paid-plus-credited > 0 with due > 0 → `PART_PAID`; otherwise `UNPAID`.
+- **Derivation rules** (42-52): no state → `NOT_SYNCED`; VOIDED or DELETED → `VOID`; PAID → `PAID`; AWAITING_PAYMENT with due ≤ 0 and total > 0 → `PAID`; paid-plus-credited > 0 with due > 0 → `PART_PAID`; otherwise `UNPAID`.
 - **Consumers outside this directory** (verified by grep): `orders/order-completion.service.ts`, `customer-payments/customer-payments.logic.ts`, `customer-health/customer-health.service.ts`
 - **Dependencies**: `AccountingInvoiceState` (Prisma enum)
 
@@ -557,7 +559,9 @@ flowchart TD
     D -- no change --> Z1
     D -- changed --> E["update invoice columns<br/>and stateSyncedAt"]
     E --> F{"derived PaymentStatus changed?"}
-    F -- no --> Z2["changed: true, no event, no audit"]
+    F -- no --> G1{"factFieldsChanged?<br/>(total, paid, due, dates)"}
+    G1 -- yes --> Z3["changed: true<br/>outbox InvoiceBalanceChanged<br/>(no audit, no reconcile)"]
+    G1 -- no --> Z2["changed: true, no event, no audit"]
     F -- yes --> G["outbox InvoicePaymentStatusChanged<br/>(entity AccountingInvoiceExport)"]
     G --> H["audit INVOICE_PAYMENT_STATUS_CHANGED<br/>(entity ORDER)"]
     H --> I["orderCompletion.reconcile(tx, orderId, actor)"]
@@ -582,7 +586,8 @@ No direct BullMQ `queue.add` calls exist in the in-scope files (verified by grep
 |---|---|---|---|---|
 | `AccountingInvoiceExportRequested` | `Order`, `orderId` | `AccountingInvoiceExportService.retryExport` (`accounting-invoice-export.service.ts:36`) | `accounting-invoice-export` (`ACCOUNTING_INVOICE_EXPORT_QUEUE`) | `accounting-invoice-export/accounting-invoice-export.processor.ts` |
 | `AccountingBulkImportRequested` | `AccountingBulkImportJob`, job id, payload `{}` | `AccountingContactService.requestBulkImport` (`accounting-contact.service.ts:279`); `AccountingProductService.requestBulkImport` (`accounting-product.service.ts:282`) | `accounting-bulk-import` (`ACCOUNTING_BULK_IMPORT_QUEUE`) | `accounting-bulk-import/accounting-bulk-import.processor.ts` |
-| `InvoicePaymentStatusChanged` | `AccountingInvoiceExport`, export id | `InvoicePaymentStateService.apply` (`invoice-payment-state.service.ts:128`) | `analytics-facts` (`ANALYTICS_FACTS_QUEUE`) | analytics invoice facts (ADR-072) |
+| `InvoicePaymentStatusChanged` | `AccountingInvoiceExport`, export id | `InvoicePaymentStateService.apply` (`invoice-payment-state.service.ts:179`) | `analytics-facts` (`ANALYTICS_FACTS_QUEUE`) | analytics invoice facts (ADR-072), which handle it and `InvoiceBalanceChanged` the same way |
+| `InvoiceBalanceChanged` | `AccountingInvoiceExport`, export id | `InvoicePaymentStateService.apply` (`invoice-payment-state.service.ts:174`) | `analytics-facts` (`ANALYTICS_FACTS_QUEUE`) | analytics invoice facts (ADR-072); same payload, `fromStatus = toStatus` |
 | `AccountingContactSyncRequested` | per `AccountingSyncService` (`sync/accounting-sync.service.ts:185`) | `AccountingSyncScheduler.runOnce` via `enqueueDue`; `AccountingConnectionController.requestSync` via `requestSync` | `accounting-contact-sync` | `accounting-contact-sync/*` |
 | `AccountingProductSyncRequested` | as above | as above | `accounting-product-sync` | `accounting-product-sync/*` |
 | `AccountingTaxTypeSyncRequested` | as above | as above | `accounting-tax-type-sync` | `accounting-tax-type-sync/*` |
@@ -643,6 +648,6 @@ Also in the framework wiring: `apps/api/src/accounting/adapters/accounting-adapt
 - `handleCallback` consumes the `AccountingOAuthState` row before the expiry and code checks, so a failed or expired callback cannot be retried with the same state.
 - `getValidTokenSet` returns the stored credential without refreshing while more than 5 minutes of life remain. A dormant connection is refreshed by the daily sweep only because its access token has already expired.
 - `CALL_BUDGET_EXHAUSTED` produces a transient error with `retryAfterMs` set to the wait for the oldest call in the window. It is not the total wait.
-- `InvoicePaymentStateService.apply` returns `changed: true` without an event or audit row when the sync changes amounts or dates but not the derived payment status.
+- `InvoicePaymentStateService.apply` writes `InvoiceBalanceChanged` (no audit row, no reconcile) when amounts or dates change but the derived payment status does not. When only the credited amount, invoice number, invoice state or external status moves, it writes nothing and still returns `changed: true`.
 - `XeroCallbackController` returns `reason: 'unknown'` for any error that is not an `AccountingOAuthError`, including database and provider errors that escape `handleCallback`.
 - `formatContact` and `formatProduct` are public and are reused by the bulk import processor (documented elsewhere), so the status vocabulary is defined in one place per record type.

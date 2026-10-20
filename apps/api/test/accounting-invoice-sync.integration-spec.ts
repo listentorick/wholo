@@ -83,6 +83,8 @@ describe('Invoice status sync (integration)', () => {
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    // The cluster's own worker can schedule syncs for a test connection while it exists.
+    await prisma.ingestionRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingOrganisation.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
   };

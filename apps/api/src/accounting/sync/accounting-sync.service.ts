@@ -149,6 +149,30 @@ export class AccountingSyncService {
     return { runs, lastSucceededAt: lastSucceededAt ? lastSucceededAt.toISOString() : null };
   }
 
+  // When invoice payment status last synced back from the accounting system
+  // (the freshness of every owed / overdue figure). Like getStatus, it looks
+  // across every connection to the current organisation (ADR-074), so a
+  // reconnect does not reset it. connected is false with no current connection.
+  async getInvoiceSyncStatus(distributorId: string): Promise<{ connected: boolean; lastSyncedAt: string | null }> {
+    const connection = await this.connections.getCurrentConnection(distributorId);
+    if (!connection) return { connected: false, lastSyncedAt: null };
+    const organisationConnections = await this.prisma.accountingConnection.findMany({
+      where: { distributorId, accountingOrganisationId: connection.accountingOrganisationId },
+      select: { id: true },
+    });
+    const rows = await this.ingestionRuns.listRuns({
+      distributorId,
+      sourceType: ACCOUNTING_SOURCE_TYPE,
+      sourceRefs: organisationConnections.map((c) => c.id),
+    });
+    const lastSyncedAt = rows
+      .filter((r) => r.resourceType === ('invoice' satisfies AccountingSyncResourceType))
+      .map((r) => r.lastSucceededAt ?? r.lastFullRunAt)
+      .filter((d): d is Date => d != null)
+      .sort((a, b) => b.getTime() - a.getTime())[0];
+    return { connected: true, lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null };
+  }
+
   // Returns the resource types actually queued — a type whose run is already
   // queued/processing gets no second event (requestRun's shouldEnqueue).
   private async enqueue(

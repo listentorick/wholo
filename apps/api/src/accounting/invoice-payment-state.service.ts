@@ -5,6 +5,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { OrderCompletionService } from '../orders/order-completion.service';
 import {
   derivePaymentStatus,
+  INVOICE_BALANCE_CHANGED,
   INVOICE_PAYMENT_STATUS_CHANGED,
   InvoicePaymentStatus,
   paymentStatusSummary,
@@ -38,6 +39,18 @@ function sameDate(a: Date | null, b: Date | null): boolean {
 
 const isoDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 
+// Whether any of the amounts or dates the invoice facts record has moved.
+export function factFieldsChanged(current: AccountingInvoiceExport, next: SyncedState): boolean {
+  return (
+    !sameAmount(current.invoiceTotal, next.invoiceTotal) ||
+    !sameAmount(current.amountPaid, next.amountPaid) ||
+    !sameAmount(current.amountDue, next.amountDue) ||
+    !sameDate(current.issueDate, next.issueDate) ||
+    !sameDate(current.dueDate, next.dueDate) ||
+    !sameDate(current.fullyPaidOn, next.fullyPaidOn)
+  );
+}
+
 // Whether anything Stocdup shows or derives from has moved.
 export function syncedStateChanged(current: AccountingInvoiceExport, next: SyncedState): boolean {
   return (
@@ -52,6 +65,16 @@ export function syncedStateChanged(current: AccountingInvoiceExport, next: Synce
     (next.externalInvoiceNumber !== null && current.externalInvoiceNumber !== next.externalInvoiceNumber) ||
     current.externalInvoiceStatus !== next.externalInvoiceStatus
   );
+}
+
+// When the change happened: the provider's own update time when it has moved
+// past what was stored, else now. Some providers don't move it for every edit
+// (Xero, for a due date on a part-paid invoice), and an event stamped with the
+// old time would never move the invoice facts' state row forward.
+function changedAt(stored: AccountingInvoiceExport, next: SyncedState): Date {
+  const provider = next.providerUpdatedAt;
+  if (provider && (!stored.providerUpdatedAt || provider > stored.providerUpdatedAt)) return provider;
+  return new Date();
 }
 
 export interface PaymentStateContext {
@@ -77,6 +100,10 @@ export interface PaymentStateResult {
 //   - the InvoicePaymentStatusChanged outbox event (invoice facts, ADR-072),
 //   - an audit row on the order (the order timeline),
 //   - the order's COMPLETED reconciliation (OrderCompletionService).
+// A change to the amounts or dates the facts record, with no status change,
+// writes only the InvoiceBalanceChanged outbox event, so the facts hold every
+// balance the invoice had (ADR-077's overdue history); the order timeline
+// stays about status changes.
 // Whatever changes payment state — the accounting status sync today, a
 // manual "mark as paid" later — goes through here so none of those is skipped.
 @Injectable()
@@ -122,10 +149,8 @@ export class InvoicePaymentStateService {
         stateSyncedAt: new Date(),
       },
     });
-    if (fromStatus === toStatus) return { changed: true, fromStatus, toStatus };
-
     const currency = ctx.currency ?? current.order.currency;
-    await this.outbox.writeEvent(tx, 'AccountingInvoiceExport', current.id, INVOICE_PAYMENT_STATUS_CHANGED, {
+    const payload = {
       exportId: current.id,
       orderId: current.orderId,
       distributorId: current.distributorId,
@@ -142,8 +167,16 @@ export class InvoicePaymentStateService {
       issueDate: isoDate(next.issueDate),
       dueDate: isoDate(next.dueDate),
       fullyPaidOn: isoDate(next.fullyPaidOn),
-      occurredAt: (next.providerUpdatedAt ?? new Date()).toISOString(),
-    });
+      occurredAt: changedAt(fresh, next).toISOString(),
+    };
+    if (fromStatus === toStatus) {
+      if (factFieldsChanged(fresh, next)) {
+        await this.outbox.writeEvent(tx, 'AccountingInvoiceExport', current.id, INVOICE_BALANCE_CHANGED, payload);
+      }
+      return { changed: true, fromStatus, toStatus };
+    }
+
+    await this.outbox.writeEvent(tx, 'AccountingInvoiceExport', current.id, INVOICE_PAYMENT_STATUS_CHANGED, payload);
     await this.audit.record(tx, {
       distributorId: current.distributorId,
       entityType: 'ORDER',

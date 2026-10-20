@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { OrderCompletionService } from '../orders/order-completion.service';
-import { INVOICE_PAYMENT_STATUS_CHANGED } from './invoice-payment-status';
+import { INVOICE_BALANCE_CHANGED, INVOICE_PAYMENT_STATUS_CHANGED } from './invoice-payment-status';
 import { ExportWithOrder, InvoicePaymentStateService, SyncedState } from './invoice-payment-state.service';
 
 function current(over: Partial<ExportWithOrder> = {}): ExportWithOrder {
@@ -101,14 +101,48 @@ describe('InvoicePaymentStateService', () => {
     expect(locked).toHaveLength(0);
   });
 
-  it('updates the row but records no transition when only non-payment facts move', async () => {
+  it('records a balance change, but no transition, when a due date moves without a status change', async () => {
+    const before = Date.now();
     const result = await service.apply(tx, current(), next({ dueDate: new Date('2026-10-15T00:00:00Z') }), ctx);
 
     expect(result).toEqual({ changed: true, fromStatus: 'UNPAID', toStatus: 'UNPAID' });
     expect(rowWrites[0]).toMatchObject({ dueDate: new Date('2026-10-15T00:00:00Z') });
-    expect(events).toHaveLength(0);
+    expect(events).toEqual([
+      {
+        eventType: INVOICE_BALANCE_CHANGED,
+        payload: expect.objectContaining({ fromStatus: 'UNPAID', toStatus: 'UNPAID', dueDate: '2026-10-15' }),
+      },
+    ]);
+    // The provider's update time didn't move, so the event is stamped when Stocdup saw the change.
+    expect(Date.parse(events[0].payload.occurredAt as string)).toBeGreaterThanOrEqual(before);
     expect(audits).toHaveLength(0);
     expect(reconciled).toHaveLength(0);
+  });
+
+  it('records a balance change on a further part-payment, stamped with the provider time', async () => {
+    stored = current({ amountPaid: new Prisma.Decimal('20'), amountDue: new Prisma.Decimal('100') });
+    const result = await service.apply(
+      tx,
+      stored,
+      next({ amountPaid: '50', amountDue: '70', providerUpdatedAt: new Date('2026-09-15T12:00:00Z') }),
+      ctx,
+    );
+
+    expect(result).toMatchObject({ fromStatus: 'PART_PAID', toStatus: 'PART_PAID' });
+    expect(events).toEqual([
+      {
+        eventType: INVOICE_BALANCE_CHANGED,
+        payload: expect.objectContaining({ amountPaid: '50', amountDue: '70', occurredAt: '2026-09-15T12:00:00.000Z' }),
+      },
+    ]);
+    expect(audits).toHaveLength(0);
+  });
+
+  it('records no balance change when only the provider\'s own status text moves', async () => {
+    const result = await service.apply(tx, current(), next({ externalInvoiceStatus: 'SUBMITTED' }), ctx);
+
+    expect(result.changed).toBe(true);
+    expect(events).toHaveLength(0);
   });
 
   it('on a payment status change writes the event, the order audit row and reconciles completion, after locking the order', async () => {

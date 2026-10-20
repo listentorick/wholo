@@ -3,6 +3,11 @@ import { AccountingInvoiceState } from '@prisma/client';
 // Outbox event written whenever an invoice's derived payment status changes
 // (AccountingInvoiceSyncProcessor); consumed by the invoice facts (ADR-072).
 export const INVOICE_PAYMENT_STATUS_CHANGED = 'InvoicePaymentStatusChanged';
+// Outbox event written when an invoice's amounts or dates change but its
+// derived payment status does not (a second part-payment, a credit, a due date
+// edited in the accounting system). Same payload, fromStatus = toStatus; also
+// consumed by the invoice facts, so they hold every balance an invoice had.
+export const INVOICE_BALANCE_CHANGED = 'InvoiceBalanceChanged';
 
 // How paid an order's invoice is, derived from the synced accounting state.
 // One definition used everywhere (order read models, facts, stats). Payment

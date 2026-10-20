@@ -162,6 +162,7 @@ export class AdminOrdersService {
       distributorId,
       ...(query.status && { status: query.status }),
       ...(query.statusExclude && { status: { not: query.statusExclude } }),
+      ...(query.customerId && { traderCustomerId: query.customerId }),
       ...(query.customerName && {
         customer: { name: { contains: query.customerName, mode: 'insensitive' } },
       }),

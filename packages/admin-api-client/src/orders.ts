@@ -20,6 +20,7 @@ export const adminOrdersApi = {
     if (params.cursor) qs.set('cursor', params.cursor);
     if (params.status) qs.set('status', params.status);
     if (params.customerName) qs.set('customerName', params.customerName);
+    if (params.customerId) qs.set('customerId', params.customerId);
     if (params.statusExclude) qs.set('statusExclude', params.statusExclude);
     if (params.deliveryDateAfter) qs.set('deliveryDateAfter', params.deliveryDateAfter);
     if (params.deliveryDateBefore) qs.set('deliveryDateBefore', params.deliveryDateBefore);

@@ -1001,21 +1001,31 @@ describe('XeroAccountingAdapter', () => {
   describe('listInvoiceStatuses', () => {
     const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'accounting.invoices' };
 
-    // Shapes as xero-node 18 returns them: date-only fields are raw
-    // "/Date(ms+0000)/" strings, updatedDateUTC is already a Date.
-    const xeroInvoice = {
-      invoiceID: 'inv-1',
-      invoiceNumber: 'INV-0042',
-      status: 'AUTHORISED',
-      currencyCode: 'GBP',
-      total: 120,
-      amountPaid: 50,
-      amountCredited: 0,
-      amountDue: 70,
-      date: '/Date(1756684800000+0000)/', // 2025-09-01
-      dueDate: '/Date(1759190400000+0000)/', // 2025-09-30
-      updatedDateUTC: new Date('2025-09-10T08:00:00.000Z'),
-    };
+    // Built the way xero-node 18 builds it: Xero's JSON run through the SDK's
+    // own deserialiser, which turns "/Date(ms+0000)/" date-only fields into JS
+    // Dates. A hand-written fixture once assumed they stayed strings, and every
+    // invoice date was dropped in production code without a failing test.
+    const xeroInvoice = jest.requireActual('xero-node/dist/gen/model/accounting/models').ObjectSerializer.deserialize(
+      {
+        Invoices: [
+          {
+            InvoiceID: 'inv-1',
+            InvoiceNumber: 'INV-0042',
+            Type: 'ACCREC',
+            Status: 'AUTHORISED',
+            CurrencyCode: 'GBP',
+            Total: 120,
+            AmountPaid: 50,
+            AmountCredited: 0,
+            AmountDue: 70,
+            Date: '/Date(1756684800000+0000)/', // 2025-09-01
+            DueDate: '/Date(1759190400000+0000)/', // 2025-09-30
+            UpdatedDateUTC: '/Date(1757491200000+0000)/', // 2025-09-10T08:00:00Z
+          },
+        ],
+      },
+      'Invoices',
+    ).invoices[0];
 
     it('asks Xero only for sales invoices this app created, a whole page at a time', async () => {
       mockGetInvoices.mockResolvedValueOnce({ body: { invoices: [] } });
@@ -1090,7 +1100,12 @@ describe('XeroAccountingAdapter', () => {
 });
 
 describe('parseXeroCalendarDate', () => {
-  it('takes the UTC calendar date of a Xero /Date(ms+0000)/ value, never shifting time zones', () => {
+  it('takes the UTC calendar date of the Date the SDK builds, never shifting time zones', () => {
+    expect(parseXeroCalendarDate(new Date(1759190400000))).toBe('2025-09-30');
+    expect(parseXeroCalendarDate(new Date(Number.NaN))).toBeNull();
+  });
+
+  it('takes the UTC calendar date of a raw Xero /Date(ms+0000)/ value', () => {
     expect(parseXeroCalendarDate('/Date(1759190400000+0000)/')).toBe('2025-09-30');
   });
 

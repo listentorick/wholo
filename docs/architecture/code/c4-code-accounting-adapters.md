@@ -118,7 +118,7 @@ File header (lines 1-92) is the framework overview and the provider checklist. T
 Exported declarations:
 
 - `XERO_SCOPES` (const, line 34; re-exported at line 804): `['openid', 'profile', 'email', 'accounting.contacts', 'accounting.settings', 'accounting.invoices', 'offline_access']`. Requested at consent. Not a provider call; used as the default scope string in `toAccountingTokenSet`.
-- `parseXeroCalendarDate(value: unknown): string | null` (function, line 93). Converts Xero's `/Date(ms+0000)/` strings (and ISO forms) to a `YYYY-MM-DD` date by taking the UTC date part. Returns `null` for anything else.
+- `parseXeroCalendarDate(value: unknown): string | null` (function, line 95). Converts a JS `Date` (what xero-node 18 returns for Xero's `/Date(ms+0000)/` fields), the raw `/Date(ms+0000)/` string, and ISO forms to a `YYYY-MM-DD` date by taking the UTC date part. Returns `null` for anything else.
 - `nextXeroCursor` (function, line 121; re-exported at line 137): `(previous: string | null | undefined, updatedAt: Array<Date | string | undefined>): string | null`. Builds the next ISO UTC cursor as the newest `UpdatedDateUTC` minus `CURSOR_OVERLAP_MS` (5 min), never moving backwards; returns `null` if there is no previous cursor and no records.
 - `XeroAccountingAdapter` (`@Injectable()` class, line 151, `implements AccountingConnectionAdapter`)
   - Field: `readonly displayName = 'Xero'` (line 152).

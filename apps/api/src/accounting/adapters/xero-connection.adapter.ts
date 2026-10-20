@@ -86,11 +86,14 @@ const XERO_TO_INVOICE_STATE: Record<string, AccountingInvoiceStateValue> = {
 };
 
 // Xero's JSON sends date-only fields (Date, DueDate, FullyPaidOnDate) as
-// "/Date(1759104000000+0000)/" — midnight UTC of the organisation's calendar
-// date — and xero-node 18 passes them through as raw strings (verified). Take
-// the UTC date part; never shift through a local time zone. ISO forms are
-// accepted too, in case a future SDK deserialises them.
+// "/Date(1759104000000+0000)/", midnight UTC of the organisation's calendar
+// date. xero-node 18's deserialiser turns those into JS Date objects (pinned by
+// the adapter spec, which runs real Xero JSON through the SDK's
+// ObjectSerializer), so a Date is the normal case. Take the UTC date part and
+// never shift through a local time zone. The raw string and ISO forms are
+// accepted too, in case the SDK stops converting them.
 export function parseXeroCalendarDate(value: unknown): string | null {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.toISOString().slice(0, 10) : null;
   if (typeof value !== 'string' || value.length === 0) return null;
   const msDate = /^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/.exec(value);
   if (msDate) {

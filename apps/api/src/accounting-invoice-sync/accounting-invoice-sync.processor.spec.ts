@@ -211,7 +211,7 @@ describe('AccountingInvoiceSyncProcessor', () => {
     expect(events[0].payload).toMatchObject({ fromStatus: 'UNPAID', toStatus: 'PART_PAID', amountDue: '70' });
   });
 
-  it('updates the row but emits no event when only non-payment facts move (e.g. the due date)', async () => {
+  it('updates the row and records a balance change, but no status change, when only the due date moves', async () => {
     listInvoiceStatuses.mockResolvedValue({
       records: [status({ dueDate: '2026-10-15', providerUpdatedAt: new Date('2026-09-05T00:00:00Z') })],
       nextCursor: null,
@@ -220,7 +220,7 @@ describe('AccountingInvoiceSyncProcessor', () => {
     await processor.process(makeJob());
 
     expect(updates[0].data).toMatchObject({ dueDate: new Date('2026-10-15T00:00:00.000Z') });
-    expect(events).toHaveLength(0);
+    expect(events.map((e) => e.eventType)).toEqual(['InvoiceBalanceChanged']);
     expect(audits).toHaveLength(0);
     expect(reconciled).toHaveLength(0);
   });

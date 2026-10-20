@@ -117,6 +117,32 @@ provider via the adapter's `displayName`. The framework overview, the provider c
 and the drift guards are described at the top of
 `apps/api/src/accounting/adapters/accounting-connection-adapter.interface.ts`.
 
+## Update (2026-10-20): balance changes and invoice dates
+- **Every balance change is a fact.** When the synced total, amount paid, amount due,
+  issue date, due date or paid date changes but the derived payment status does not (a
+  second part-payment, a credit, a due date edited in the accounting system),
+  `InvoicePaymentStateService` writes an `InvoiceBalanceChanged` outbox event. It carries
+  the same payload as `InvoicePaymentStatusChanged`, with from = to status, and routes to
+  `analytics-facts`, which handles it identically. It writes no audit row and no
+  completion reconcile; the order timeline stays about status changes. The change is in
+  the generic writer and compares only provider-neutral fields, so no provider adapter
+  changes.
+- **`occurredAt` is the provider's update time only when it has moved forward.** Some
+  providers don't move it for every edit (Xero, for a due date on a part-paid invoice).
+  Otherwise the event is stamped when Stocdup saw the change, so the facts' state row
+  still moves on.
+- **Facts record `invoiceState`** (nullable; null on facts recorded before this). History
+  can then use the same definition of overdue as today's figures (`isOverdue`: awaiting
+  payment, something due, due date passed); see ADR-077.
+- **Fixed: invoice dates from Xero were dropped.** xero-node 18 deserialises Xero's
+  `"/Date(…)/"` fields into JS `Date` objects, and `parseXeroCalendarDate` accepted only
+  strings, so every synced issue date, due date and paid date was null. It now takes the
+  UTC calendar date of a `Date`. The adapter spec builds its fixture by running real Xero
+  JSON through the SDK's own `ObjectSerializer`, so a change in the SDK's behaviour fails
+  the test. Existing rows are repaired by a full pull (manual Sync, or the periodic
+  full reconcile). Facts recorded before the fix keep their null dates; there is no
+  backfill.
+
 ## Consequences
 - "Order shows as paid" lags payment by up to ~15 minutes plus queue wait; the
   `accounting-invoice-sync` queue's oldest-waiting-age gauge measures it.

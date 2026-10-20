@@ -456,7 +456,7 @@ Not overridden: `handleStaleRecords`, `fetchExternalRecords`, and the other sync
 
 #### Domain services
 
-- `InvoicePaymentStateService.apply(tx, current, next, ctx)` (`apps/api/src/accounting/invoice-payment-state.service.ts:90`). It is the single writer of payment state. Per the ADR-072 description, it also writes the order timeline audit row, reconciles order COMPLETED status, and writes `InvoicePaymentStatusChanged`. Those details are in the `accounting/` docs; this processor does not do them itself.
+- `InvoicePaymentStateService.apply(tx, current, next, ctx)` (`apps/api/src/accounting/invoice-payment-state.service.ts:117`). It is the single writer of payment state. Per the ADR-072 description, a payment status change also writes the order timeline audit row, reconciles order COMPLETED status, and writes `InvoicePaymentStatusChanged`; an amount or date change with no status change writes `InvoiceBalanceChanged` only. Those details are in the `accounting/` docs; this processor does not do them itself.
 - `syncedStateChanged(current, next)` (`invoice-payment-state.service.ts:42`), used as a pre-check.
 - `ExportWithOrder` and `SyncedState` types from the same file.
 

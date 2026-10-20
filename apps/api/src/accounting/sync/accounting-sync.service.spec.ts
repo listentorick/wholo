@@ -197,4 +197,45 @@ describe('AccountingSyncService', () => {
       });
     });
   });
+
+  describe('getInvoiceSyncStatus', () => {
+    const run = (resourceType: string, fields: Record<string, unknown>) => ({
+      id: resourceType,
+      sourceRef: 'conn-1',
+      resourceType,
+      status: 'COMPLETED',
+      lastSucceededAt: null,
+      lastFullRunAt: null,
+      ...fields,
+    });
+    const syncFor = async (rows: unknown[]) => {
+      (service as unknown as { ingestionRuns: { listRuns: jest.Mock } }).ingestionRuns.listRuns.mockResolvedValue(rows);
+      return service.getInvoiceSyncStatus('dist-1');
+    };
+
+    it('reports the last invoice sync, not the mapping pulls', async () => {
+      const status = await syncFor([
+        run('contact', { lastSucceededAt: new Date('2026-10-02T12:00:00Z') }),
+        run('invoice', { lastSucceededAt: new Date('2026-10-02T09:45:00Z') }),
+      ]);
+
+      expect(status).toEqual({ connected: true, lastSyncedAt: '2026-10-02T09:45:00.000Z' });
+    });
+
+    it('keeps the last invoice sync of an earlier connection to the same organisation (ADR-074)', async () => {
+      const status = await syncFor([run('invoice', { sourceRef: 'conn-old', lastSucceededAt: new Date('2026-10-01T08:00:00Z') })]);
+
+      expect(status.lastSyncedAt).toBe('2026-10-01T08:00:00.000Z');
+    });
+
+    it('is connected but never synced when no invoice pull has succeeded', async () => {
+      expect(await syncFor([run('invoice', { status: 'FAILED' })])).toEqual({ connected: true, lastSyncedAt: null });
+    });
+
+    it('is not connected without a current connection', async () => {
+      (service as unknown as { connections: { getCurrentConnection: jest.Mock } }).connections.getCurrentConnection.mockResolvedValue(null);
+
+      expect(await service.getInvoiceSyncStatus('dist-1')).toEqual({ connected: false, lastSyncedAt: null });
+    });
+  });
 });

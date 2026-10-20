@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { classifyComparison, classifyShareComparison } from './comparison';
 import { PeriodKey, PeriodRange, resolvePeriod } from './period';
@@ -12,6 +12,14 @@ import { PeriodQueryDto } from './dto/period-query.dto';
 // legitimately accepted doesn't stop counting just because it later moved
 // past ACCEPTED in its lifecycle.
 export const QUALIFYING_STATUSES = Prisma.sql`('SUBMITTED', 'ACCEPTED', 'COMPLETED', 'DELIVERED', 'DELIVERY_FAILED')`;
+// The same set, for Prisma queries (`status: { in: QUALIFYING_ORDER_STATUSES }`).
+export const QUALIFYING_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.SUBMITTED,
+  OrderStatus.ACCEPTED,
+  OrderStatus.COMPLETED,
+  OrderStatus.DELIVERED,
+  OrderStatus.DELIVERY_FAILED,
+];
 
 export interface PeriodResponse {
   key: PeriodKey;

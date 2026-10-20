@@ -1,12 +1,14 @@
 export interface ChartLegendItem {
   label: string;
   color: string;
-  /** line (default), dashed line, filled box, or a hatched box for "still to come". */
-  variant?: 'line' | 'dashed' | 'box' | 'hatch';
+  /** line (default), dashed line, filled box, a hatched box for "still to come", a dot, or a short upright tick. */
+  variant?: 'line' | 'dashed' | 'box' | 'hatch' | 'dot' | 'tick';
 }
 
 function Swatch({ color, variant = 'line' }: Pick<ChartLegendItem, 'color' | 'variant'>) {
   if (variant === 'box') return <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />;
+  if (variant === 'dot') return <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />;
+  if (variant === 'tick') return <span aria-hidden className="inline-block h-3 w-0.5 rounded-full" style={{ backgroundColor: color }} />;
   if (variant === 'hatch') {
     return (
       <span

@@ -249,6 +249,24 @@ describe('Admin Orders (integration)', () => {
       expect(ids).not.toContain(datedA.id);
       expect(ids).not.toContain(undatedB.id);
     });
+
+    // The customer dashboard's recent orders: one customer's orders, still
+    // only from the distributor in the path.
+    it("the customerId filter returns only that customer's orders with this distributor", async () => {
+      const forCustomer = await createOrder(DIST_A, OrderStatus.ACCEPTED, { traderCustomerId: DIST_B });
+      const otherCustomer = await createOrder(DIST_A, OrderStatus.ACCEPTED);
+      const otherDistributor = await createOrder(DIST_B, OrderStatus.ACCEPTED, { traderCustomerId: DIST_B });
+
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/distributors/${DIST_A}/orders?customerId=${DIST_B}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((o: { id: string }) => o.id);
+      expect(ids).toContain(forCustomer.id);
+      expect(ids).not.toContain(otherCustomer.id);
+      expect(ids).not.toContain(otherDistributor.id);
+    });
   });
 
   // ── GET /distributors/:distributorId/orders/:id ──────────────────────

@@ -25,6 +25,16 @@ describe('OrdersService (BFF)', () => {
       expect(url.searchParams.get('payment')).toBe('UNPAID,OVERDUE');
     });
 
+    it("forwards the customer filter (one customer's orders) to apps/api", async () => {
+      api.get.mockResolvedValue({ data: [] });
+
+      await service.listOrders('dist-1', { customerId: 'cust-1', limit: 6 }, 'token');
+
+      const url = new URL(api.get.mock.calls[0][0], 'http://api');
+      expect(url.searchParams.get('customerId')).toBe('cust-1');
+      expect(url.searchParams.get('limit')).toBe('6');
+    });
+
     it('sends no payment filter when none is selected', async () => {
       api.get.mockResolvedValue({ data: [] });
 

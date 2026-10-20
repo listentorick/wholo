@@ -99,4 +99,11 @@ describe('AnalyticsFactsProcessor', () => {
     expect(orderFacts.handleOrderEvent).not.toHaveBeenCalled();
     expect(relationshipFacts.handleRelationshipEvent).not.toHaveBeenCalled();
   });
+
+  it('dispatches InvoiceBalanceChanged to InvoiceFactsService too', async () => {
+    const payload = { exportId: 'exp-1', fromStatus: 'PART_PAID', toStatus: 'PART_PAID' };
+    await processor.process(makeJob('InvoiceBalanceChanged', payload));
+
+    expect(invoiceFacts.handleInvoiceEvent).toHaveBeenCalledWith('evt-1', 'InvoiceBalanceChanged', payload);
+  });
 });

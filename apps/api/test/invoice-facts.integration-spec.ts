@@ -54,6 +54,7 @@ describe('Invoice facts (integration)', () => {
     customerId: 'cust-1',
     fromStatus: 'UNPAID',
     toStatus: 'PART_PAID',
+    invoiceState: 'AWAITING_PAYMENT',
     currency: 'GBP',
     total: '120.00',
     amountPaid: '50.00',
@@ -70,11 +71,25 @@ describe('Invoice facts (integration)', () => {
 
     const facts = await prisma.invoiceFact.findMany({ where: { distributorId: DIST_A } });
     expect(facts).toHaveLength(1);
-    expect(facts[0]).toMatchObject({ fromStatus: 'UNPAID', toStatus: 'PART_PAID' });
+    expect(facts[0]).toMatchObject({ fromStatus: 'UNPAID', toStatus: 'PART_PAID', invoiceState: 'AWAITING_PAYMENT' });
     const state = await prisma.invoiceAnalyticsState.findUniqueOrThrow({ where: { exportId: 'exp-1' } });
     expect(state.status).toBe('PART_PAID');
     expect(state.amountDue.toFixed(2)).toBe('70.00');
     expect(state.dueDate?.toISOString().slice(0, 10)).toBe('2026-09-30');
+  });
+
+  it('records a balance change with no status change, and moves the state row on', async () => {
+    await service.handleInvoiceEvent('evt-1', 'InvoicePaymentStatusChanged', event());
+    await service.handleInvoiceEvent(
+      'evt-balance',
+      'InvoiceBalanceChanged',
+      event({ fromStatus: 'PART_PAID', toStatus: 'PART_PAID', amountPaid: '100.00', amountDue: '20.00', occurredAt: '2026-09-15T09:00:00.000Z' }),
+    );
+
+    expect(await prisma.invoiceFact.count({ where: { distributorId: DIST_A } })).toBe(2);
+    const state = await prisma.invoiceAnalyticsState.findUniqueOrThrow({ where: { exportId: 'exp-1' } });
+    expect(state.status).toBe('PART_PAID');
+    expect(state.amountDue.toFixed(2)).toBe('20.00');
   });
 
   it('is idempotent on a replayed event', async () => {

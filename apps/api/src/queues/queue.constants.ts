@@ -56,7 +56,8 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   AccountingProductSyncRequested: [ACCOUNTING_PRODUCT_SYNC_QUEUE],
   AccountingTaxTypeSyncRequested: [ACCOUNTING_TAX_TYPE_SYNC_QUEUE],
   AccountingInvoiceSyncRequested: [ACCOUNTING_INVOICE_SYNC_QUEUE],
-  // Invoice payment status changes (ADR-072) feed invoice_facts.
+  // Invoice payment status and balance changes (ADR-072, ADR-077) feed invoice_facts.
   InvoicePaymentStatusChanged: [ANALYTICS_FACTS_QUEUE],
+  InvoiceBalanceChanged: [ANALYTICS_FACTS_QUEUE],
   AccountingBulkImportRequested: [ACCOUNTING_BULK_IMPORT_QUEUE],
 };

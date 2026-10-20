@@ -15,7 +15,8 @@ import { AccountTab } from '@/components/customers/tabs/AccountTab';
 import { DeliveryTab } from '@/components/customers/tabs/DeliveryTab';
 import { CataloguePricingTab } from '@/components/customers/tabs/CataloguePricingTab';
 import { PortalAccessTab } from '@/components/customers/tabs/PortalAccessTab';
-import { PaymentsTab } from '@/components/customers/tabs/PaymentsTab';
+import { DashboardTab } from '@/components/customers/tabs/DashboardTab';
+import { OrdersInvoicesTab } from '@/components/customers/tabs/OrdersInvoicesTab';
 import type { TabSaveState } from '@/components/customers/tabs/tab-save-state';
 import { adminCustomersApi, adminOrderAsApi } from '@wholo/admin-api-client';
 import { TradeRelationshipStatus } from '@wholo/types';
@@ -33,15 +34,16 @@ const STATUS_META: Record<TradeRelationshipStatus, { label: string; tone: Status
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
-type TabKey = 'overview' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access' | 'payments';
+type TabKey = 'dashboard' | 'orders-invoices' | 'overview' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access';
 
 const TABS: { key: TabKey; label: string }[] = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'orders-invoices', label: 'Orders & invoices' },
   { key: 'overview', label: 'Overview' },
   { key: 'account', label: 'Account' },
   { key: 'delivery', label: 'Delivery' },
   { key: 'catalogue-pricing', label: 'Catalogue & Pricing' },
   { key: 'portal-access', label: 'Portal Access' },
-  { key: 'payments', label: 'Payments' },
 ];
 
 // ─── Inner page (uses hooks that require Suspense) ────────────────────────────
@@ -50,7 +52,7 @@ function CustomerPageInner() {
   const { accessToken } = useAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { activeTab, setTab } = useQueryParamTab<TabKey>('overview');
+  const { activeTab, setTab } = useQueryParamTab<TabKey>('dashboard');
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -183,6 +185,28 @@ function CustomerPageInner() {
       ? `Heads up: this customer doesn't have ${new Intl.ListFormat('en', { type: 'conjunction' }).format(missingSetup)} set up yet. You can still accept and configure this afterwards.`
       : `${customer.organisation.name} will be notified and can start browsing your catalogue immediately.`;
 
+  // One suspend action for the sidebar and the dashboard's alert, so both confirm the same way.
+  const suspendAction: ActionItem | null =
+    customer.status === TradeRelationshipStatus.ACTIVE
+      ? {
+          key: 'suspend',
+          label: 'Suspend',
+          tone: 'danger',
+          loading: isSuspending,
+          loadingLabel: 'Suspending…',
+          onClick: handleSuspend,
+          confirm: {
+            prompt: "They won't be able to order until you unsuspend them.",
+            confirmLabel: 'Yes, suspend',
+          },
+        }
+      : null;
+  // What the dashboard's alert offers: the Account tab, where the credit limit is set, and suspending ordering.
+  const dashboardAlertActions: ActionItem[] = [
+    { key: 'raise-limit', label: 'Raise limit', onClick: () => setTab('account') },
+    ...(suspendAction ? [{ ...suspendAction, label: 'Suspend ordering', confirm: { ...suspendAction.confirm, title: 'Suspend ordering' } }] : []),
+  ];
+
   const actions: ActionItem[] = [
     ...(activeSaveState
       ? ([
@@ -231,22 +255,7 @@ function CustomerPageInner() {
           },
         ] satisfies ActionItem[])
       : []),
-    ...(customer.status === TradeRelationshipStatus.ACTIVE
-      ? ([
-          {
-            key: 'suspend',
-            label: 'Suspend',
-            tone: 'danger',
-            loading: isSuspending,
-            loadingLabel: 'Suspending…',
-            onClick: handleSuspend,
-            confirm: {
-              prompt: "They won't be able to order until you unsuspend them.",
-              confirmLabel: 'Yes, suspend',
-            },
-          },
-        ] satisfies ActionItem[])
-      : []),
+    ...(suspendAction ? [suspendAction] : []),
     ...(customer.status === TradeRelationshipStatus.SUSPENDED
       ? ([
           {
@@ -306,6 +315,8 @@ function CustomerPageInner() {
           />
         }
       >
+        {activeTab === 'dashboard' && <DashboardTab customer={customer} alertActions={dashboardAlertActions} />}
+        {activeTab === 'orders-invoices' && <OrdersInvoicesTab customer={customer} />}
         {activeTab === 'overview' && (
           <OverviewTab
             customer={customer}
@@ -349,7 +360,6 @@ function CustomerPageInner() {
             onSaved={fetchCustomer}
           />
         )}
-        {activeTab === 'payments' && <PaymentsTab customer={customer} />}
       </DetailPageLayout>
     </>
   );

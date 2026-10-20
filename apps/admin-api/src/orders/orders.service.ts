@@ -16,6 +16,7 @@ export class OrdersService {
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.status) params.set('status', query.status);
     if (query.customerName) params.set('customerName', query.customerName);
+    if (query.customerId) params.set('customerId', query.customerId);
     if (query.statusExclude) params.set('statusExclude', query.statusExclude);
     if (query.deliveryDateAfter) params.set('deliveryDateAfter', query.deliveryDateAfter);
     if (query.deliveryDateBefore) params.set('deliveryDateBefore', query.deliveryDateBefore);

@@ -476,6 +476,8 @@ export interface OrderListParams {
   distributorSlug?: string;
   statusExclude?: OrderStatus;
   customerName?: string;
+  /** One customer's orders (the customer organisation id). */
+  customerId?: string;
   deliveryDateAfter?: string;
   deliveryDateBefore?: string;
   // ACCEPTED orders with no delivery date at all — invisible on every dated
@@ -2265,19 +2267,149 @@ export interface MoneyAmount {
   amount: number;
 }
 
+/** Days-overdue bands for the ageing breakdown. */
+export type OverdueAgeingBucket = '1-30' | '31-60' | '61-90' | '90+';
+
+/** The oldest unpaid overdue invoice — the one to chase first. */
+export interface CustomerOldestOverdueInvoice {
+  orderId: string;
+  orderNumber: string;
+  externalInvoiceNumber: string | null;
+  currency: string;
+  amountDue: number;
+  daysOverdue: number;
+}
+
+/**
+ * Outstanding balance against the agreed credit limit, in the distributor's
+ * currency (the limit has no other). Invoices in any other currency are not
+ * counted against it.
+ */
+export interface CustomerCreditPosition {
+  /** Null when no credit limit is set. */
+  limit: MoneyAmount | null;
+  used: MoneyAmount;
+  /** limit − used, never below 0; null without a limit. */
+  available: MoneyAmount | null;
+  /** used / limit, 0–100+ (whole number); null without a limit or with a 0 limit. */
+  usedPercent: number | null;
+  overLimit: boolean;
+}
+
+/**
+ * Whether a behaviour got better or worse against the previous period of the
+ * same length. insufficient_history: not enough data in one of the two periods
+ * to compare them reliably.
+ */
+export type PaymentTrendStatus = 'insufficient_history' | 'improving' | 'steady' | 'worsening';
+
+/**
+ * One raised invoice on the customer's invoice timeline: when its order was
+ * placed, when it is due and, once paid, when it was paid. Dates are calendar
+ * dates (YYYY-MM-DD).
+ */
+export interface CustomerInvoiceTimelineEntry {
+  orderId: string;
+  orderNumber: string;
+  /** The order's date in the distributor's calendar; null when the order has no analytics record. */
+  orderedOn: string | null;
+  dueDate: string | null;
+  /** null while the invoice is unpaid. */
+  paidOn: string | null;
+  /** Paid: days paid after the due date, 0 when on time. Unpaid: days overdue so far, 0 when not yet due. null without a due date. */
+  daysLate: number | null;
+  currency: string;
+  /** The invoice total. */
+  total: number;
+  /** What is still owed on it; 0 once paid. */
+  amountDue: number;
+}
+
+/**
+ * What the customer had overdue at the end of each day, by days past due,
+ * rebuilt from the invoice facts (ADR-077). In the distributor's currency only.
+ */
+export interface CustomerOverdueHistory {
+  currency: string;
+  /** The first day shown: the start of the window, or the day facts began if later; null with no history at all. */
+  since: string | null;
+  /** One point per day from `since` to today, oldest first. */
+  days: Array<{ date: string; buckets: Record<OverdueAgeingBucket, number> }>;
+}
+
 export interface CustomerPaymentSummary {
   customerId: string;
   /** Distributor-local date the figures were computed for (YYYY-MM-DD). */
   asOf: string;
-  outstanding: { amounts: MoneyAmount[]; count: number };
-  overdue: { amounts: MoneyAmount[]; count: number; oldestDaysOverdue: number | null };
+  outstanding: {
+    amounts: MoneyAmount[];
+    count: number;
+    /** Distinct orders behind the unpaid invoices. */
+    orderCount: number;
+  };
+  overdue: {
+    amounts: MoneyAmount[];
+    count: number;
+    oldestDaysOverdue: number | null;
+    /** Always all four bands, in order; empty amounts for a band with nothing in it. */
+    ageing: Array<{ bucket: OverdueAgeingBucket; amounts: MoneyAmount[]; count: number }>;
+    oldest: CustomerOldestOverdueInvoice | null;
+  };
+  /** Unpaid, not yet overdue, and due today or within the next 7 days. */
+  dueNext7Days: { amounts: MoneyAmount[]; count: number };
+  credit: CustomerCreditPosition;
   last90Days: {
     paidCount: number;
     /** Mean days from invoice date to fully paid; null with nothing paid in the window. */
     averageDaysToPay: number | null;
+    /** Mean days from invoice date to due date (the terms given); null without both dates on any paid invoice. */
+    averageDaysAllowed: number | null;
+    /** Mean days paid after the due date, early or on time counting as 0; null with nothing paid. */
+    averageDaysLate: number | null;
     /** Share of those paid on or before their due date, 0–100; null with nothing paid. */
     paidOnTimePercent: number | null;
+    /** Average days late against the 90 days before. */
+    trend: PaymentTrendStatus;
   };
+  /** Every unpaid invoice and every invoice paid in the last 90 days, in order date order. */
+  invoiceTimeline: CustomerInvoiceTimelineEntry[];
+  overdueHistory: CustomerOverdueHistory;
+  /**
+   * Accepted orders with no invoice in the accounting system yet, accepted
+   * since the current accounting connection was made; empty when not connected.
+   */
+  notYetInvoiced: { amounts: MoneyAmount[]; count: number };
+  /** When invoice payment status last synced from the accounting system. */
+  accountingSync: { connected: boolean; lastSyncedAt: string | null };
   openInvoices: CustomerOpenInvoice[];
+}
+
+/** Whether ordering went up or down against the previous period of the same length. */
+export type OrderingTrendStatus = 'insufficient_history' | 'up' | 'steady' | 'down';
+
+/**
+ * How a customer orders from one distributor (recency, frequency, monetary
+ * value and product breadth), over an explicit reporting period ending on
+ * asOf. Sales figures: needs analytics:read.
+ */
+export interface CustomerOrderingBehaviour {
+  customerId: string;
+  /** Distributor-local date the figures were computed for (YYYY-MM-DD). */
+  asOf: string;
+  periodDays: number;
+  /** First and last day of the reporting period, inclusive (YYYY-MM-DD). */
+  periodStart: string;
+  periodEnd: string;
+  recency: {
+    /** Null when the customer has never ordered. */
+    lastOrderDate: string | null;
+    daysSinceLastOrder: number | null;
+  };
+  frequency: { orders: number };
+  /** Net order value (before tax) in the period, per currency. */
+  monetary: { amounts: MoneyAmount[] };
+  productBreadth: { distinctProducts: number };
+  /** Spend against the previous period. */
+  trend: OrderingTrendStatus;
 }
 

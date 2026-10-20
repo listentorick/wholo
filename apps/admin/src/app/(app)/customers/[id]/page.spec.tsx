@@ -19,8 +19,9 @@ vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ accessToken: 'test-token' }),
 }));
 
+// No ?tab= in the URL: the page's own default tab is shown.
 vi.mock('@/lib/hooks/use-query-param-tab', () => ({
-  useQueryParamTab: () => ({ activeTab: 'overview', setTab: vi.fn() }),
+  useQueryParamTab: (defaultTab: string) => ({ activeTab: defaultTab, setTab: vi.fn() }),
 }));
 
 // AdminLayout pulls in the full app chrome (Sidebar, TopBar/notifications) —
@@ -31,6 +32,8 @@ vi.mock('@/components/AdminLayout', () => ({
 
 // The tabs aren't the subject of this test — stub them out so only the
 // actions panel (built from customer.status) is under test.
+vi.mock('@/components/customers/tabs/DashboardTab', () => ({ DashboardTab: () => <p>Customer dashboard</p> }));
+vi.mock('@/components/customers/tabs/OrdersInvoicesTab', () => ({ OrdersInvoicesTab: () => null }));
 vi.mock('@/components/customers/tabs/OverviewTab', () => ({ OverviewTab: () => null }));
 vi.mock('@/components/customers/tabs/AccountTab', () => ({ AccountTab: () => null }));
 vi.mock('@/components/customers/tabs/DeliveryTab', () => ({ DeliveryTab: () => null }));
@@ -201,5 +204,19 @@ describe('CustomerPage — status transition actions', () => {
     expect(screen.queryByText('Decline connection request')).not.toBeInTheDocument();
     expect(screen.queryByText('Suspend')).not.toBeInTheDocument();
     expect(screen.queryByText('Unsuspend')).not.toBeInTheDocument();
+  });
+});
+
+describe('CustomerPage — tabs', () => {
+  beforeEach(() => mockGet.mockReset());
+
+  it('opens on the Dashboard tab, the first tab', async () => {
+    mockGet.mockResolvedValue(makeCustomer(TradeRelationshipStatus.ACTIVE));
+    render(<CustomerPage />);
+
+    expect(await screen.findByText('Customer dashboard')).toBeInTheDocument();
+    const labels = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(labels.indexOf('Dashboard')).toBeGreaterThanOrEqual(0);
+    expect(labels.indexOf('Dashboard')).toBeLessThan(labels.indexOf('Overview'));
   });
 });

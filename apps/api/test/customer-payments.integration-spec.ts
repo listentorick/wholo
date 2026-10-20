@@ -72,7 +72,10 @@ describe('Customer payments (integration)', () => {
   });
 
   const cleanup = async () => {
+    await prisma.ingestionRun.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.invoiceFact.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.invoiceAnalyticsState.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await prisma.orderAnalyticsState.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingInvoiceExport.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.order.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.accountingConnection.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
@@ -173,11 +176,206 @@ describe('Customer payments (integration)', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.outstanding).toEqual({ amounts: [{ currency: 'GBP', amount: 120 }], count: 1 });
+    expect(res.body.outstanding).toEqual({ amounts: [{ currency: 'GBP', amount: 120 }], count: 1, orderCount: 1 });
     expect(res.body.overdue).toMatchObject({ amounts: [{ currency: 'GBP', amount: 120 }], count: 1 });
+    expect(res.body.overdue.ageing.find((b: { bucket: string }) => b.bucket === '90+')).toMatchObject({ count: 1 });
     expect(res.body.openInvoices).toHaveLength(1);
     expect(res.body.openInvoices[0]).toMatchObject({ paymentStatus: 'UNPAID', isOverdue: true });
-    expect(res.body.last90Days).toEqual({ paidCount: 0, averageDaysToPay: null, paidOnTimePercent: null });
+    expect(res.body.last90Days).toEqual({
+      paidCount: 0,
+      averageDaysToPay: null,
+      averageDaysAllowed: null,
+      averageDaysLate: null,
+      paidOnTimePercent: null,
+      trend: 'insufficient_history',
+    });
+    expect(res.body.invoiceTimeline).toEqual([expect.objectContaining({ paidOn: null, dueDate: '2020-01-01' })]);
+    // Only this distributor's credit limit and balance.
+    expect(res.body.credit).toMatchObject({ limit: null, used: { currency: 'GBP', amount: 120 } });
+  });
+
+  it("puts each raised invoice on the timeline with its order and payment dates, from this distributor's orders only", async () => {
+    const day = (daysAgo: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - daysAgo));
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const ownOrder = await unpaidInvoice(DIST_A, '0.00', '2020-01-01');
+    const otherOrder = await unpaidInvoice(DIST_B, '0.00', '2020-01-01');
+    // Both invoices have been paid in the accounting system.
+    await prisma.accountingInvoiceExport.updateMany({
+      where: { orderId: { in: [ownOrder.id, otherOrder.id] } },
+      data: { invoiceState: AccountingInvoiceState.PAID },
+    });
+    await prisma.orderAnalyticsState.create({
+      data: {
+        orderId: ownOrder.id,
+        distributorId: DIST_A,
+        traderCustomerId: CUSTOMER,
+        status: OrderStatus.ACCEPTED,
+        subtotalAmount: '100.00',
+        distributorLocalDate: day(40),
+        lastEventAt: new Date(),
+      },
+    });
+    const paid = (exportId: string, orderId: string) => ({
+      exportId,
+      distributorId: DIST_A,
+      customerId: CUSTOMER,
+      orderId,
+      currency: 'GBP',
+      status: InvoicePaymentStatus.PAID,
+      total: '120',
+      amountDue: '0',
+      issueDate: day(40),
+      dueDate: day(10),
+      fullyPaidOn: day(5),
+      lastEventAt: new Date(),
+    });
+    // The second row names another distributor's order: it must not be shown.
+    await prisma.invoiceAnalyticsState.createMany({ data: [paid('paid-own', ownOrder.id), paid('paid-other', otherOrder.id)] });
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/payments`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.invoiceTimeline).toEqual([
+      // The paid invoice; its order's own export is settled, so it is not also listed as unpaid.
+      {
+        orderId: ownOrder.id,
+        orderNumber: ownOrder.orderNumber,
+        orderedOn: iso(day(40)),
+        dueDate: iso(day(10)),
+        paidOn: iso(day(5)),
+        daysLate: 5,
+        currency: 'GBP',
+        total: 120,
+        amountDue: 0,
+      },
+    ]);
+  });
+
+  it("rebuilds what was overdue each day from this distributor's invoice facts only", async () => {
+    const day = (daysAgo: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - daysAgo));
+    const fact = (distributorId: string, amountDue: string) =>
+      prisma.invoiceFact.create({
+        data: {
+          eventId: `custpay-fact-${distributorId}`,
+          distributorId,
+          exportId: `custpay-exp-${distributorId}`,
+          orderId: `custpay-order-${distributorId}`,
+          customerId: CUSTOMER,
+          fromStatus: InvoicePaymentStatus.NOT_SYNCED,
+          toStatus: InvoicePaymentStatus.UNPAID,
+          invoiceState: AccountingInvoiceState.AWAITING_PAYMENT,
+          currency: 'GBP',
+          total: amountDue,
+          amountPaid: '0',
+          amountDue,
+          dueDate: day(10),
+          occurredAt: day(5),
+          distributorLocalDate: day(5),
+        },
+      });
+    await fact(DIST_A, '120.00');
+    await fact(DIST_B, '999.00'); // another distributor's — must not appear
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/payments`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const history = res.body.overdueHistory;
+    expect(history.since).toBe(day(5).toISOString().slice(0, 10));
+    expect(history.days).toHaveLength(6);
+    expect(history.days.at(-1).buckets).toEqual({ '1-30': 120, '31-60': 0, '61-90': 0, '90+': 0 });
+  });
+
+  it("measures credit used against this distributor's limit and reports when invoices last synced", async () => {
+    await prisma.tradeRelationship.update({
+      where: { distributorId_customerId: { distributorId: DIST_A, customerId: CUSTOMER } },
+      data: { creditLimit: new Prisma.Decimal('500.00') },
+    });
+    await prisma.tradeRelationship.update({
+      where: { distributorId_customerId: { distributorId: DIST_B, customerId: CUSTOMER } },
+      data: { creditLimit: new Prisma.Decimal('99999.00') },
+    });
+    const order = await unpaidInvoice(DIST_A, '120.00', '2099-01-01'); // not yet due
+    const connection = await prisma.accountingConnection.findFirstOrThrow({ where: { distributorId: DIST_A } });
+    await prisma.ingestionRun.create({
+      data: {
+        distributorId: DIST_A,
+        sourceType: 'accounting',
+        sourceRef: connection.id,
+        resourceType: 'invoice',
+        trigger: 'SCHEDULED',
+        status: 'COMPLETED',
+        lastSucceededAt: new Date('2026-10-17T09:45:00Z'),
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/payments`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.credit).toEqual({
+      limit: { currency: 'GBP', amount: 500 },
+      used: { currency: 'GBP', amount: 120 },
+      available: { currency: 'GBP', amount: 380 },
+      usedPercent: 24,
+      overLimit: false,
+    });
+    expect(res.body.overdue).toMatchObject({ count: 0, oldest: null });
+    expect(res.body.outstanding.orderCount).toBe(1);
+    expect(res.body.openInvoices[0].orderId).toBe(order.id);
+    expect(res.body.accountingSync).toEqual({ connected: true, lastSyncedAt: '2026-10-17T09:45:00.000Z' });
+  });
+
+  it("counts this distributor's accepted orders not yet invoiced, since accounting was connected", async () => {
+    await unpaidInvoice(DIST_A, '120.00', '2099-01-01'); // invoiced — not counted; also makes the connection
+    await unpaidInvoice(DIST_B, '120.00', '2099-01-01');
+    const connection = await prisma.accountingConnection.findFirstOrThrow({ where: { distributorId: DIST_A } });
+    const uninvoicedOrder = async (distributorId: string, totalAmount: string, status: OrderStatus, acceptedAt: Date) => {
+      const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('order_number_seq')`;
+      await prisma.order.create({
+        data: {
+          distributorId,
+          traderCustomerId: CUSTOMER,
+          placedByUserId: ADMIN_USER,
+          orderNumber: `TEST-CUSTPAY-${nextval}`,
+          currency: 'GBP',
+          status,
+          acceptanceModeSnapshot: 'MANUAL',
+          acceptanceModeSourceSnapshot: 'DISTRIBUTOR_DEFAULT',
+          subtotalAmount: new Prisma.Decimal(totalAmount),
+          taxAmount: new Prisma.Decimal('0'),
+          totalAmount: new Prisma.Decimal(totalAmount),
+          acceptedAt,
+        },
+      });
+    };
+    const afterConnecting = new Date(connection.connectedAt.getTime() + 60_000);
+    await uninvoicedOrder(DIST_A, '75.00', OrderStatus.ACCEPTED, afterConnecting);
+    await uninvoicedOrder(DIST_A, '25.00', OrderStatus.DELIVERED, afterConnecting);
+    await uninvoicedOrder(DIST_A, '500.00', OrderStatus.CANCELLED, afterConnecting); // never invoiced
+    await uninvoicedOrder(DIST_A, '300.00', OrderStatus.COMPLETED, new Date(connection.connectedAt.getTime() - 86_400_000)); // before connecting
+    await uninvoicedOrder(DIST_B, '999.00', OrderStatus.ACCEPTED, afterConnecting); // another distributor's
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/payments`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.notYetInvoiced).toEqual({ amounts: [{ currency: 'GBP', amount: 100 }], count: 2 });
+  });
+
+  it('reports accounting as not connected when there is no connection', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/distributors/${DIST_A}/customers/${CUSTOMER}/payments`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.accountingSync).toEqual({ connected: false, lastSyncedAt: null });
+    expect(res.body.notYetInvoiced).toEqual({ amounts: [], count: 0 });
   });
 
   it("refuses another distributor's view of the same customer", async () => {

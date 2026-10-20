@@ -35,6 +35,8 @@ import { OrderLineStatus, OrderStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { distributorLocalDate } from '../src/common/distributor-local-date';
 import { CustomerHealthService } from '../src/customer-health/customer-health.service';
+import { AccountingConnectionService } from '../src/accounting/accounting-connection.service';
+import { AccountingSyncService } from '../src/accounting/sync/accounting-sync.service';
 import { CustomerPaymentsService } from '../src/customer-payments/customer-payments.service';
 import { DeliveryOverviewService } from '../src/delivery-overview/delivery-overview.service';
 import { ImageProcessingService } from '../src/asset-images/image-processing.service';
@@ -569,7 +571,10 @@ async function main() {
     console.log(`Wrote ${story.orders.length} orders (${lines.length} lines), ${story.runs.length} delivery runs, ${attempted.length} delivery outcomes (${withEvidence.length} with a proof photo, ${[...evidence.values()].filter((e) => e.signature).length} signed for), ${auditEntries} audit entries for "${distributor.name}".`);
 
     // ── Check the dashboards now say what the story intends, using the services that feed them ──
-    const health = await new CustomerHealthService(prisma, new CustomerPaymentsService(prisma)).getHealth(DISTRIBUTOR_ID);
+    // Health only reads open invoices from the payments service, never the sync status.
+    const noSyncStatus = { getInvoiceSyncStatus: async () => ({ connected: false, lastSyncedAt: null }) } as unknown as AccountingSyncService;
+    const noConnection = { getCurrentConnection: async () => null } as unknown as AccountingConnectionService;
+    const health = await new CustomerHealthService(prisma, new CustomerPaymentsService(prisma, noSyncStatus, noConnection)).getHealth(DISTRIBUTOR_ID);
     const overview = await new DeliveryOverviewService(prisma).getOverview(DISTRIBUTOR_ID);
     const [orderStatuses, stateStatuses] = await Promise.all([
       prisma.order.groupBy({ by: ['status'], where: { distributorId: DISTRIBUTOR_ID }, _count: true, _sum: { subtotalAmount: true } }),

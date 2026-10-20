@@ -22,7 +22,10 @@ export class CustomerPaymentsController {
   constructor(private readonly service: CustomerPaymentsService) {}
 
   @Get()
-  @ApiOperation({ summary: "Customer's outstanding and overdue invoices, and how promptly they have paid (last 90 days)" })
+  @ApiOperation({
+    summary:
+      "Customer's outstanding and overdue invoices (with ageing, credit used and what falls due this week), how promptly they have paid (last 90 days), and when invoice status last synced",
+  })
   @ApiOkResponse({ description: 'CustomerPaymentSummary' })
   getSummary(@Param('distributorId') distributorId: string, @Param('customerId') customerId: string) {
     return this.service.getSummary(distributorId, customerId);

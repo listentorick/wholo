@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InvoicePaymentStatus, Prisma } from '@prisma/client';
+import { AccountingInvoiceState, InvoicePaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { distributorLocalDate } from '../common/distributor-local-date';
-import { INVOICE_PAYMENT_STATUS_CHANGED } from '../accounting/invoice-payment-status';
+import { INVOICE_BALANCE_CHANGED, INVOICE_PAYMENT_STATUS_CHANGED } from '../accounting/invoice-payment-status';
 
-export const INVOICE_EVENT_TYPES = new Set<string>([INVOICE_PAYMENT_STATUS_CHANGED]);
+// A balance change carries the same payload with fromStatus = toStatus.
+export const INVOICE_EVENT_TYPES = new Set<string>([INVOICE_PAYMENT_STATUS_CHANGED, INVOICE_BALANCE_CHANGED]);
 
 // Payload written by AccountingInvoiceSyncProcessor (ADR-072).
 export interface InvoiceEventPayload {
@@ -14,6 +15,7 @@ export interface InvoiceEventPayload {
   customerId?: string;
   fromStatus?: InvoicePaymentStatus;
   toStatus?: InvoicePaymentStatus;
+  invoiceState?: AccountingInvoiceState;
   currency?: string;
   total?: string;
   amountPaid?: string;
@@ -71,6 +73,7 @@ export class InvoiceFactsService {
             customerId,
             fromStatus,
             toStatus,
+            invoiceState: payload.invoiceState ?? null,
             currency,
             total,
             amountPaid: payload.amountPaid ?? '0',

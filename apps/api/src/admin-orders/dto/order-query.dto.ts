@@ -27,6 +27,11 @@ export class OrderQueryDto {
   @IsString()
   customerName?: string;
 
+  /** One customer's orders (the customer organisation id). */
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
   @IsOptional()
   @IsEnum(OrderStatus)
   statusExclude?: OrderStatus;

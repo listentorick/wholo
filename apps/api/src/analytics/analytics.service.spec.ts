@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AnalyticsService } from './analytics.service';
+import { AnalyticsService, QUALIFYING_ORDER_STATUSES, QUALIFYING_STATUSES } from './analytics.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 // $queryRaw is a tagged template; Prisma invokes it as `strings, ...values`.
@@ -187,5 +187,11 @@ describe('AnalyticsService', () => {
         expect.objectContaining({ where: expect.objectContaining({ distributorId: 'dist-1', status: 'ACCEPTED' }) }),
       );
     });
+  });
+});
+
+describe('QUALIFYING_ORDER_STATUSES', () => {
+  it('is the same set of statuses as the SQL fragment', () => {
+    expect(QUALIFYING_STATUSES.sql).toBe(`(${QUALIFYING_ORDER_STATUSES.map((s) => `'${s}'`).join(', ')})`);
   });
 });
