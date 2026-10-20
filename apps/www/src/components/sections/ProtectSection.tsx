@@ -5,7 +5,6 @@ import { SectionHeader } from '../ui/SectionHeader';
 import { SectionCta } from '../ui/SectionCta';
 import { Card } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
-import { ScreenshotFrame } from '../ui/ScreenshotFrame';
 import { Reveal } from '../motion/Reveal';
 
 export function ProtectSection() {
@@ -41,7 +40,16 @@ export function ProtectSection() {
               className="h-auto w-full"
             />
           </div>
-          <ScreenshotFrame tab="Stocdup · Customer" label={PROTECT.customerScreenshotLabel} />
+          <div className="overflow-hidden rounded-lg border border-border bg-white">
+            <Image
+              src="/screenshot-customer-dashboard.png"
+              alt={PROTECT.customerScreenshotAlt}
+              width={1888}
+              height={1114}
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="h-auto w-full"
+            />
+          </div>
         </div>
         <p className="mt-4 text-[14px] text-muted">{PROTECT.note}</p>
       </Reveal>

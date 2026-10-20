@@ -118,6 +118,11 @@ describe('ProtectSection', () => {
     expect(screen.getByRole('img', { name: PROTECT.screenshotAlt })).toBeInTheDocument();
   });
 
+  it('shows the single customer dashboard screenshot', () => {
+    render(<ProtectSection />);
+    expect(screen.getByRole('img', { name: PROTECT.customerScreenshotAlt })).toBeInTheDocument();
+  });
+
   it('renders every card', () => {
     render(<ProtectSection />);
     for (const card of PROTECT.cards) {

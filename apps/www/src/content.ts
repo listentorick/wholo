@@ -144,7 +144,8 @@ export const PROTECT = {
     },
   ],
   note: 'Early warning for your team, not credit scoring or automated decisions.',
-  customerScreenshotLabel: 'Add product screenshot: single customer dashboard',
+  customerScreenshotAlt:
+    'The Stocdup single customer dashboard, "How do they pay?": payment terms of 30 days against 98 days to pay in practice, 68 days late on average and paying later than before, none of the last 6 invoices paid on time, and a timeline of each invoice showing when it was ordered, when it was due and how late it was paid.',
   screenshotAlt:
     'The Stocdup customer health dashboard: healthy, watch and at-risk customer counts, and a list of customers needing attention with the reason each was flagged.',
 } as const;
