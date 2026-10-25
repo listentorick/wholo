@@ -8,6 +8,10 @@ const isOpsBuild = process.env.NEXT_PUBLIC_APP_MODE === 'ops';
 
 const nextConfig: NextConfig = {
   pageExtensions: isOpsBuild ? ['tsx', 'ts', 'ops.tsx', 'ops.ts'] : ['tsx', 'ts'],
+  // Always inline the mode, even when it is unset: Next leaves an unset
+  // NEXT_PUBLIC_ variable as a runtime lookup, and then the bundler cannot
+  // drop the Ops imports behind `=== 'ops'` in lib/ops-seam.tsx.
+  env: { NEXT_PUBLIC_APP_MODE: isOpsBuild ? 'ops' : '' },
   // Linting is a separate repo-root concern (`pnpm lint`), run in CI before
   // tests. Keep it out of `next build` so image builds stay independent of it.
   eslint: { ignoreDuringBuilds: true },
