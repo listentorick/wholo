@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InviteTeamMemberDto, UpdateTeamRolesDto } from './dto/team.dto';
@@ -52,5 +52,17 @@ export class TeamController {
   removeMember(@Req() req: Request, @Param('userId') userId: string) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };
     return this.teamService.removeMember(organisationId, userId, token);
+  }
+
+  @Get('support-grants')
+  supportGrants(@Req() req: Request, @Query('active') active?: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.teamService.supportGrants(organisationId, active === 'true', token);
+  }
+
+  @Delete('support-grants/:grantId')
+  endSupportGrant(@Req() req: Request, @Param('grantId') grantId: string) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.teamService.endSupportGrant(organisationId, grantId, token);
   }
 }

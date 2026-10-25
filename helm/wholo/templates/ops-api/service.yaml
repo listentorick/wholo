@@ -1,0 +1,16 @@
+{{- if .Values.opsApi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wholo.fullname" . }}-ops-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-ops-api
+spec:
+  type: {{ .Values.opsApi.service.type }}
+  selector:
+    app: {{ include "wholo.fullname" . }}-ops-api
+  ports:
+    - name: http
+      port: {{ .Values.opsApi.service.port }}
+      targetPort: 3020
+{{- end }}

@@ -29,12 +29,22 @@ const config: Config = {
           DEFAULT: 'hsl(var(--color-accent))',
           fg: 'hsl(var(--color-accent-fg))',
         },
+        support: {
+          DEFAULT: 'hsl(var(--color-support) / <alpha-value>)',
+          fg: 'hsl(var(--color-support-fg))',
+          soft: 'hsl(var(--color-support-soft))',
+          border: 'hsl(var(--color-support-border))',
+          text: 'hsl(var(--color-support-text))',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       width: {
         sidebar: 'var(--sidebar-width)',
+      },
+      height: {
+        topbar: 'var(--topbar-height)',
       },
     },
   },

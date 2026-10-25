@@ -39,6 +39,8 @@ import { CustomerOrderingModule } from './customer-ordering/customer-ordering.mo
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
 import { HealthController } from './health.controller';
 import { HealthModule } from './health/health.module';
+import { SupportGrantsModule } from './support-grants/support-grants.module';
+import { PlatformModule } from './platform/platform.module';
 import './admin-products/product-image.asset-config';
 import './asset-images/branding-asset-types';
 
@@ -82,6 +84,8 @@ import './asset-images/branding-asset-types';
     CustomerPaymentsModule,
     CustomerOrderingModule,
     DeliveryOverviewModule,
+    SupportGrantsModule,
+    PlatformModule,
     MetricsModule.forRoot(),
     HealthModule,
   ],

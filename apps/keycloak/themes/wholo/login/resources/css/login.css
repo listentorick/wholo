@@ -422,3 +422,33 @@ input[type="password"]:focus {
   flex-shrink: 0;
   accent-color: #1565FF;
 }
+
+/* ─── Authenticator app (login-config-totp, login-otp) ─── */
+
+.wh-steps {
+  margin: 0 0 28px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #1e2436;
+  line-height: 1.6;
+}
+
+.wh-steps li + li {
+  margin-top: 10px;
+}
+
+.wh-qr {
+  display: block;
+  width: 168px;
+  height: 168px;
+  margin: 12px 0 8px;
+}
+
+.wh-secret {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  color: #1e2436;
+}

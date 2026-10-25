@@ -39,4 +39,11 @@ export enum Permission {
   ADMIN_NOTIFICATIONS_MANAGE = 'admin-notifications:manage',
 
   TEAM_MANAGE = 'team:manage',
+
+  // Platform-level permissions (ADR-078). Held only by PLATFORM_ADMIN on the
+  // Stocdup (PLATFORM) organisation, and honoured only for an ops session —
+  // never inside a distributor's scope.
+  PLATFORM_DISTRIBUTORS_READ = 'platform:distributors:read',
+  PLATFORM_STATS_READ = 'platform:stats:read',
+  SUPPORT_GRANTS_SELF_CREATE = 'support-grants:self-create',
 }

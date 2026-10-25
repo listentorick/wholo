@@ -55,6 +55,11 @@ jobs:
           COVERAGE_MIN_BRANCHES: ${{ vars.COVERAGE_MIN_BRANCHES }}
           COVERAGE_MIN_FUNCTIONS: ${{ vars.COVERAGE_MIN_FUNCTIONS }}
           COVERAGE_MIN_STATEMENTS: ${{ vars.COVERAGE_MIN_STATEMENTS }}
+      # ADR-078: the admin build must contain no Ops routes or Ops code.
+      - run: pnpm --filter @wholo/admin build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+      - run: node scripts/check-admin-build-has-no-ops.mjs apps/admin/.next
       # Whatever was produced is published, including after a test failure.
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -174,6 +179,16 @@ jobs:
               NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL || 'http://localhost:8080' }}
               NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM || 'wholo' }}
               NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=wholo-admin
+          # The Ops app (ADR-078): the admin app and BFF built again with the
+          # Ops Keycloak client and NEXT_PUBLIC_APP_MODE=ops. Same Dockerfile.
+          - name: ops-api
+            dockerfile: apps/admin-api/Dockerfile
+            context: .
+            build-args: |
+              NEXT_PUBLIC_KEYCLOAK_URL=${{ vars.LIVE_KEYCLOAK_URL || 'http://localhost:8080' }}
+              NEXT_PUBLIC_KEYCLOAK_REALM=${{ vars.LIVE_KEYCLOAK_REALM || 'wholo' }}
+              NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=stocdup-ops
+              NEXT_PUBLIC_APP_MODE=ops
           # Driver PWA is baked into driver-api. No NEXT_PUBLIC_* build args —
           # the driver app has no login yet (see apps/driver-api/Dockerfile).
           - name: driver-api

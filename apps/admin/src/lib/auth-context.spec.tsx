@@ -148,6 +148,17 @@ describe('AuthProvider', () => {
     );
   });
 
+  it('keeps what kind of account was denied, so /access-denied can say why', async () => {
+    (adminAuthApi.session as any).mockResolvedValue({
+      status: 'ACCESS_DENIED',
+      user: { id: 'op', email: 'ops@stocdup.local', firstName: 'Olive', lastName: 'Operator', organisationId: 'platform', organisationType: 'PLATFORM' },
+    });
+
+    renderWithProbe(await loadContext(), (ctx) => <div data-testid="denied-as">{ctx.deniedOrganisationType}</div>);
+
+    await waitFor(() => expect(screen.getByTestId('denied-as').textContent).toBe('PLATFORM'));
+  });
+
   it('logout drives kc.logout() and does not clear auth state first', async () => {
     // Clearing `user` before navigating would re-render the shell, and
     // useRequireAuth would fire login() → kc.login(), whose /authorize redirect

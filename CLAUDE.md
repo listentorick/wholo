@@ -36,6 +36,7 @@ Three primary actor types:
 | `apps/admin-api` | 3002 | BFF for admin UI — proxies to apps/api |
 | `apps/portal-api` | 3003 | BFF for customer portal — proxies to apps/api |
 | `apps/admin` | 3020 | Admin Next.js frontend |
+| Ops app (`ops-api`) | 3050 | Stocdup operators: `apps/admin` + `apps/admin-api` built with `NEXT_PUBLIC_APP_MODE=ops`, run with `APP_MODE=ops`; Keycloak client `stocdup-ops` requires an authenticator. See [ADR-078](docs/adrs/ADR-078-platform-operator-access.md) |
 | `apps/portal` | 3010 | Customer portal Next.js frontend |
 | `apps/www` | 3040 | Public marketing site (`www.stocdup.com`) — standalone Next.js, no BFF, no DB. See [ADR-060](docs/adrs/ADR-060-marketing-site.md) |
 
@@ -221,6 +222,7 @@ kubectl rollout restart deployment/wholo-<service>
 
 - The image tag must be `wholo/<service>:local` — **slash**, not hyphen. The Helm chart references that exact name; a hyphenated tag (`wholo-<service>:local`) silently builds an image the pods never see, and the old code keeps running.
 - `portal-api` and `admin-api` bake their Next.js frontend (`portal`/`admin` respectively) into the same image at build time — rebuild `portal-api`/`admin-api` (not `portal`/`admin`) to pick up frontend-only changes.
+- `ops-api` (the Ops app, ADR-078) is built from `apps/admin-api/Dockerfile` with `--build-arg NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=stocdup-ops --build-arg NEXT_PUBLIC_APP_MODE=ops` and tagged `wholo/ops-api:local` (`pnpm k8s:build` does this). A change to `apps/admin` or `apps/admin-api` needs both `admin-api` and `ops-api` rebuilt and restarted.
 - `www` (the marketing site) is its own standalone image `wholo/www:local` with no BFF — build and restart it directly. It needs Plausible only when analytics is being tested (`plausible.enabled` in `values.local.yaml`); the register form posts to in-cluster MailHog locally. See [ADR-060](docs/adrs/ADR-060-marketing-site.md).
 
 #### Local URLs
@@ -230,6 +232,7 @@ Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `loca
 | Service | URL |
 |---|---|
 | Admin app (frontend + BFF) | `http://localhost:3020` |
+| Ops app (operators, ADR-078) | `http://localhost:3050` |
 | Portal app (frontend + BFF) | `http://localhost:3010` |
 | Marketing site (`apps/www`) | `http://localhost:3040` |
 | API (central domain API) | `http://localhost:3001` |

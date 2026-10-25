@@ -18,7 +18,8 @@ export const ROLE_DESCRIPTIONS: Record<(typeof ASSIGNABLE_STAFF_ROLES)[number], 
 
 export const OWNER_DESCRIPTION = 'Full access, including the team and company settings. Can’t be granted by invitation.';
 
-const OWNER_ROLES: Role[] = [Role.DISTRIBUTOR_ADMIN, Role.PLATFORM_ADMIN];
+// PLATFORM_ADMIN is a Stocdup operator role (ADR-078), not an Owner of anything.
+const OWNER_ROLES: Role[] = [Role.DISTRIBUTOR_ADMIN];
 
 export function isOwner(roles: Role[]): boolean {
   return roles.some((r) => OWNER_ROLES.includes(r));

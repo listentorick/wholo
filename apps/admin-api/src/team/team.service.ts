@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AcceptedStaffInvitation, StaffInvitation, TeamMember, TeamOverview } from '@wholo/types';
+import type { AcceptedStaffInvitation, StaffInvitation, SupportGrant, TeamMember, TeamOverview } from '@wholo/types';
 import { ApiClientService } from '../api-client/api-client.service';
 import { InviteTeamMemberDto, UpdateTeamRolesDto } from './dto/team.dto';
 
@@ -40,6 +40,16 @@ export class TeamService {
 
   removeMember(distributorId: string, userId: string, token: string) {
     return this.api.delete(`/distributors/${distributorId}/members/${userId}`, token);
+  }
+
+  // Stocdup support access to this distributor (ADR-078): what is open now
+  // (any member — it feeds the banner) or the full history (team managers).
+  supportGrants(distributorId: string, activeOnly: boolean, token: string) {
+    return this.api.get<SupportGrant[]>(`/distributors/${distributorId}/support-grants${activeOnly ? '?active=true' : ''}`, token);
+  }
+
+  endSupportGrant(distributorId: string, grantId: string, token: string) {
+    return this.api.delete<SupportGrant>(`/distributors/${distributorId}/support-grants/${encodeURIComponent(grantId)}`, token);
   }
 
   // The invitee has no membership yet, so this is not scoped to a distributor:

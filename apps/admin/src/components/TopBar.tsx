@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useNotifications } from '@/lib/notification-context';
+import { isOpsBuild } from '@/lib/ops-mode';
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -86,7 +87,8 @@ export function TopBar({ onMenuClick }: TopBarProps) {
       </button>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* Notification bell */}
+        {/* Notification bell — not in the Ops build: they are the wholesaler's notifications, not the operator's */}
+        {!isOpsBuild && (
         <div ref={containerRef} className="relative">
           <button
             onClick={handleToggleOpen}
@@ -146,6 +148,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* User identity */}
         {user && (

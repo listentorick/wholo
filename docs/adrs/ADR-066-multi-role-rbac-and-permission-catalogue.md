@@ -101,29 +101,34 @@ Integration permissions follow one shape per integration type: `<type>:read` (vi
 
 Source: `apps/api/src/auth/role-permissions.ts`.
 
-| Permission | PLATFORM_ADMIN | DISTRIBUTOR_ADMIN | OPERATIONS_MANAGER | WAREHOUSE_STAFF | DRIVER | TRADE_CUSTOMER |
-|---|:-:|:-:|:-:|:-:|:-:|:-:|
-| `order-as:initiate` | ✓ | ✓ | ✓ |  |  |  |
-| `orders:read` | ✓ | ✓ | ✓ | ✓ |  |  |
-| `orders:manage` | ✓ | ✓ | ✓ | ✓ |  |  |
-| `catalogue:read` | ✓ | ✓ | ✓ | ✓ |  | ✓ |
-| `catalogue:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `customers:read` | ✓ | ✓ | ✓ | ✓ |  |  |
-| `customers:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `price-lists:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `suppliers:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `delivery:read` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
-| `delivery:manage` | ✓ | ✓ | ✓ | ✓ | ✓ |  |
-| `accounting:read` | ✓ | ✓ | ✓ |  |  |  |
-| `accounting:import` | ✓ | ✓ | ✓ |  |  |  |
-| `accounting:manage` | ✓ | ✓ |  |  |  |  |
-| `settings:manage` | ✓ | ✓ |  |  |  |  |
-| `asset-images:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `analytics:read` | ✓ | ✓ | ✓ |  |  |  |
-| `tax-types:read` | ✓ | ✓ | ✓ |  |  |  |
-| `tax-types:manage` | ✓ | ✓ | ✓ |  |  |  |
-| `team:manage` | ✓ | ✓ |  |  |  |  |
-| `admin-notifications:manage` | ✓ | ✓ | ✓ |  |  |  |
+| Permission | PLATFORM_ADMIN | DISTRIBUTOR_ADMIN | SUPPORT | OPERATIONS_MANAGER | WAREHOUSE_STAFF | DRIVER | TRADE_CUSTOMER |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| `order-as:initiate` |  | ✓ |  | ✓ |  |  |  |
+| `orders:read` |  | ✓ | ✓ | ✓ | ✓ |  |  |
+| `orders:manage` |  | ✓ | ✓ | ✓ | ✓ |  |  |
+| `catalogue:read` |  | ✓ | ✓ | ✓ | ✓ |  | ✓ |
+| `catalogue:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `customers:read` |  | ✓ | ✓ | ✓ | ✓ |  |  |
+| `customers:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `price-lists:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `suppliers:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `delivery:read` |  | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `delivery:manage` |  | ✓ | ✓ | ✓ | ✓ | ✓ |  |
+| `accounting:read` |  | ✓ | ✓ | ✓ |  |  |  |
+| `accounting:import` |  | ✓ | ✓ | ✓ |  |  |  |
+| `accounting:manage` |  | ✓ |  |  |  |  |  |
+| `settings:manage` |  | ✓ | ✓ |  |  |  |  |
+| `asset-images:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `analytics:read` |  | ✓ | ✓ | ✓ |  |  |  |
+| `tax-types:read` |  | ✓ | ✓ | ✓ |  |  |  |
+| `tax-types:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `team:manage` |  | ✓ |  |  |  |  |  |
+| `admin-notifications:manage` |  | ✓ | ✓ | ✓ |  |  |  |
+| `platform:distributors:read` | ✓ |  |  |  |  |  |  |
+| `platform:stats:read` | ✓ |  |  |  |  |  |  |
+| `support-grants:self-create` | ✓ |  |  |  |  |  |  |
+
+Changed by [ADR-078](ADR-078-platform-operator-access.md): `PLATFORM_ADMIN` no longer holds every permission. It holds only the three platform permissions, and only on a Stocdup `PLATFORM` organisation in an Ops session (Ops client, authenticator-level `acr`). Work inside a distributor is done with `SUPPORT`, which an operator holds only through a time-limited support grant — it is never assigned as a membership.
 
 ## Endpoints that do not use permissions
 

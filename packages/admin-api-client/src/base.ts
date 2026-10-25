@@ -35,6 +35,42 @@ export async function getRequestToken(explicitToken?: string): Promise<string | 
   return tokenProvider ? tokenProvider() : undefined;
 }
 
+type HeadersProvider = () => Record<string, string>;
+type ApiErrorListener = (error: ApiError) => void;
+
+let headersProvider: HeadersProvider | null = null;
+let errorListener: ApiErrorListener | null = null;
+
+/**
+ * Register extra headers for every authenticated request. The Ops build of
+ * `apps/admin` uses this to send the wholesaler a tab has selected
+ * (`X-Organisation-Id`, ADR-078); the admin build never sets one. Pass `null`
+ * to clear.
+ */
+export function setRequestHeadersProvider(provider: HeadersProvider | null): void {
+  headersProvider = provider;
+}
+
+/** Extra headers for an authenticated request — for the bespoke fetch paths too. */
+export function getRequestHeaders(): Record<string, string> {
+  return headersProvider ? headersProvider() : {};
+}
+
+/**
+ * Register one listener told about every failed request before it is thrown
+ * (the Ops build uses it to notice that support access has ended). Pass
+ * `null` to clear.
+ */
+export function setApiErrorListener(listener: ApiErrorListener | null): void {
+  errorListener = listener;
+}
+
+/** Tell the listener, then hand the error back for the caller to throw. */
+export function reportApiError(error: ApiError): ApiError {
+  errorListener?.(error);
+  return error;
+}
+
 export function getBaseUrl(): string {
   return '';
 }
@@ -55,6 +91,7 @@ export async function apiFetch<T>(
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  if (!anonymous) Object.assign(headers, getRequestHeaders());
 
   const res = await fetch(`${getBaseUrl()}${path}`, { ...rest, headers });
 
@@ -65,7 +102,7 @@ export async function apiFetch<T>(
     } catch {
       problem = { type: 'about:blank', title: res.statusText, status: res.status, detail: res.statusText };
     }
-    throw new ApiError(problem, res.status);
+    throw reportApiError(new ApiError(problem, res.status));
   }
 
   if (res.status === 204) return undefined as T;

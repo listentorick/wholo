@@ -9,12 +9,43 @@ describe('ROLE_PERMISSIONS', () => {
     }
   });
 
-  it('gives PLATFORM_ADMIN every permission', () => {
-    expect(ROLE_PERMISSIONS[Role.PLATFORM_ADMIN].sort()).toEqual(Object.values(Permission).sort());
+  const PLATFORM_PERMISSIONS = [
+    Permission.PLATFORM_DISTRIBUTORS_READ,
+    Permission.PLATFORM_STATS_READ,
+    Permission.SUPPORT_GRANTS_SELF_CREATE,
+  ];
+
+  it('gives PLATFORM_ADMIN only the platform permissions, nothing inside a distributor', () => {
+    expect(ROLE_PERMISSIONS[Role.PLATFORM_ADMIN].sort()).toEqual([...PLATFORM_PERMISSIONS].sort());
   });
 
-  it('gives only the distributor-side management roles (and the superset PLATFORM_ADMIN) the order-as initiation permission', () => {
-    const allowed: Role[] = [Role.DISTRIBUTOR_ADMIN, Role.OPERATIONS_MANAGER, Role.PLATFORM_ADMIN];
+  it('gives the platform permissions to PLATFORM_ADMIN alone', () => {
+    for (const role of Object.values(Role)) {
+      for (const permission of PLATFORM_PERMISSIONS) {
+        expect(ROLE_PERMISSIONS[role].includes(permission)).toBe(role === Role.PLATFORM_ADMIN);
+      }
+    }
+  });
+
+  it('gives SUPPORT configuration access but not the team, the accounting connection or order-as', () => {
+    const perms = ROLE_PERMISSIONS[Role.SUPPORT];
+    expect(perms).toEqual(
+      expect.arrayContaining([
+        Permission.CATALOGUE_MANAGE,
+        Permission.PRICE_LISTS_MANAGE,
+        Permission.CUSTOMERS_MANAGE,
+        Permission.DELIVERY_MANAGE,
+        Permission.SETTINGS_MANAGE,
+        Permission.ACCOUNTING_IMPORT,
+      ]),
+    );
+    for (const p of [Permission.TEAM_MANAGE, Permission.ACCOUNTING_MANAGE, Permission.ORDER_AS_INITIATE]) {
+      expect(perms).not.toContain(p);
+    }
+  });
+
+  it('gives only the distributor-side management roles the order-as initiation permission', () => {
+    const allowed: Role[] = [Role.DISTRIBUTOR_ADMIN, Role.OPERATIONS_MANAGER];
     for (const role of Object.values(Role)) {
       if (allowed.includes(role)) {
         expect(ROLE_PERMISSIONS[role]).toContain(Permission.ORDER_AS_INITIATE);
@@ -29,10 +60,10 @@ describe('ROLE_PERMISSIONS', () => {
     expect(manageOnly).toEqual([]);
   });
 
-  it('gives team management only to DISTRIBUTOR_ADMIN (and the superset PLATFORM_ADMIN)', () => {
+  it('gives team management only to DISTRIBUTOR_ADMIN', () => {
     for (const role of Object.values(Role)) {
       const has = ROLE_PERMISSIONS[role].includes(Permission.TEAM_MANAGE);
-      expect(has).toBe(role === Role.DISTRIBUTOR_ADMIN || role === Role.PLATFORM_ADMIN);
+      expect(has).toBe(role === Role.DISTRIBUTOR_ADMIN);
     }
   });
 
@@ -53,12 +84,20 @@ describe('ROLE_PERMISSIONS', () => {
     );
   });
 
-  it('keeps company settings, the integration connection and the team Owner-only', () => {
-    const ownerOnly = [Permission.SETTINGS_MANAGE, Permission.ACCOUNTING_MANAGE, Permission.TEAM_MANAGE];
+  it('keeps the integration connection and the team Owner-only', () => {
+    const ownerOnly = [Permission.ACCOUNTING_MANAGE, Permission.TEAM_MANAGE];
     for (const role of Object.values(Role)) {
       for (const permission of ownerOnly) {
-        expect(ROLE_PERMISSIONS[role].includes(permission)).toBe(role === Role.DISTRIBUTOR_ADMIN || role === Role.PLATFORM_ADMIN);
+        expect(ROLE_PERMISSIONS[role].includes(permission)).toBe(role === Role.DISTRIBUTOR_ADMIN);
       }
+    }
+  });
+
+  it('gives company settings to the Owner and to Stocdup support only', () => {
+    for (const role of Object.values(Role)) {
+      expect(ROLE_PERMISSIONS[role].includes(Permission.SETTINGS_MANAGE)).toBe(
+        role === Role.DISTRIBUTOR_ADMIN || role === Role.SUPPORT,
+      );
     }
   });
 

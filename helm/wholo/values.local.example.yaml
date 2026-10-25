@@ -32,6 +32,9 @@ influxdb:
   enabled: true
   adminPassword: "local-influx-admin"
   adminToken: "local-influx-token-change-me"
+# The Ops app (ADR-078) at http://localhost:3050 — off unless switched on.
+opsApi:
+  enabled: true
 grafana:
   enabled: true
   adminPassword: "admin"

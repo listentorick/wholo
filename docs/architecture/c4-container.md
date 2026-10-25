@@ -12,11 +12,12 @@ level and is not documented. The deployed topology and hostnames are in
 [`docs/runbook/url-map.md`](../runbook/url-map.md); the Helm templates in
 `helm/wholo/templates/` are the source of truth.
 
-Three diagrams, because one would be unreadable:
+Four diagrams, because one would be unreadable:
 
 1. [Application containers](#1-application-containers) — what serves users:
-   the three apps, the central API, the worker, Keycloak (and who talks to it),
+   the apps, the central API, the worker, Keycloak (and who talks to it),
    Postgres, Redis, and the off-site backup CronJob.
+   Diagram [1b](#1b-operator-access) adds the Ops app and the Stocdup operator.
 2. [Marketing site and analytics](#2-marketing-site-and-analytics) — the public
    site, Plausible and ClickHouse.
 3. [Telemetry](#3-telemetry) — metrics and logs, for the operator.
@@ -39,7 +40,7 @@ left by half their width, give vertical lines `$offsetX="10"`, and keep labels
 clear of boundary titles. Keep labels short (about 30 characters; technology in
 the 4th argument, detail in the tables) and re-render after every change.
 
-**One container or frontend + BFF?** `admin-api`, `portal-api` and
+**One container or frontend + BFF?** `admin-api`, `ops-api`, `portal-api` and
 `driver-api` each ship the Next.js frontend (`admin`, `portal`, `driver`) and
 its BFF in **one image and one pod** (ADR-044, ADR-045): a custom NestJS server
 serves the pages and the BFF endpoints on one origin. Because the container is
@@ -165,6 +166,7 @@ database.
 |---|---|---|---|---|---|
 | Portal app | Web app + BFF | `portal-api/` | 3010 | Next.js frontend + NestJS BFF, one image | Customer portal at `portal.<domain>`. Browser calls its same-origin `/api/v1/*` BFF endpoints, which adapt user context into explicit calls to the Central API (ADR-026, ADR-044). |
 | Admin app | Web app + BFF | `admin-api/` | 3020 (BFF code 3002) | Next.js frontend + NestJS BFF, one image | Distributor admin at `admin.<domain>`; same BFF role. Also serves the Xero OAuth callback route (ADR-051). |
+| Ops app | Web app + BFF | `ops-api/` | 3050 locally (BFF code 3020) | Next.js frontend + NestJS BFF, one image | Operator console for Stocdup staff, built from the Admin app's code; drawn in diagram 1b. |
 | Driver app | PWA + BFF | `driver-api/` | 3030 | Next.js PWA + NestJS BFF, one image | Delivery PWA at `driver.<domain>/d#<token>` (ADR-059). No login: the delivery-link token is a random value the Central API looks up (ADR-076). The BFF rejects a missing or malformed token itself and, before reading a photo upload, asks the API whether the delivery is still open. Holds no secret, no key and no database. |
 | Central API | API | `api/` | 3001 | NestJS, Prisma | The only place with business logic and the single auth authority. Reachable only via cluster DNS (no public ingress on live). Writes outbox rows in the same transaction as the change (ADR-034) and enqueues jobs. |
 | Worker | Background processor | `worker/` | none (metrics only) | NestJS, BullMQ, same image as the Central API | Relays the outbox and runs every BullMQ processor, one queue per concern (ADR-047): accounting export/pull, email, scheduled work. Restart it as well as the API after backend changes. |
@@ -181,10 +183,11 @@ OpenAPI files.
 
 | Container | Exposed to | Auth | Main resource groups |
 |---|---|---|---|
-| Central API | The three app containers over cluster DNS (never browsers) | Keycloak JWT (relayed by the portal and admin BFFs), signature checked via JWKS; organisation and role from Membership. Path ids are checked against what the credential may access. `delivery-links` is instead authorised by the random link token, looked up in the database in a guard before the body is parsed (404 unknown, 410 cancelled or already delivered; ADR-076), and throttled per link. Creates the token when a manifest is printed. | `distributors/:distributorId/...` (orders, customers, cart, catalogue and settings, delivery days/routes/runs/outcomes/overview, accounting contacts/products/tax-types/invoice-exports, members, staff-invitations, payment-terms, tax-types, customer-health, asset-images; a legacy `admin/distributors/...` prefix remains), `organisations/:organisationId`, `order-as`, `portal/invitations`, `staff-invitations`, `users/:userId/notifications`, `delivery-links`, `accounting/xero`, `auth`, `health`. |
+| Central API | The four app containers over cluster DNS (never browsers) | Keycloak JWT (relayed by the portal, admin and ops BFFs), signature checked via JWKS; organisation and role from Membership. Path ids are checked against what the credential may access. `delivery-links` is instead authorised by the random link token, looked up in the database in a guard before the body is parsed (404 unknown, 410 cancelled or already delivered; ADR-076), and throttled per link. Creates the token when a manifest is printed. | `distributors/:distributorId/...` (orders, customers, cart, catalogue and settings, delivery days/routes/runs/outcomes/overview, accounting contacts/products/tax-types/invoice-exports, members, staff-invitations, payment-terms, tax-types, customer-health, asset-images; a legacy `admin/distributors/...` prefix remains), `organisations/:organisationId`, `order-as`, `portal/invitations`, `staff-invitations`, `users/:userId/notifications`, `delivery-links`, `accounting/xero`, `auth`, `health`. |
 | Admin app | Distributor staff's browser, same origin (`admin.<domain>`) | Keycloak JWT, verified locally against JWKS, then relayed to the API. | Pages plus BFF groups `products`, `price-lists`, `catalogues`, `customers`, `orders`, `delivery-days`/`-profiles`/`-routes`/`-runs`, `accounting` (incl. `accounting/xero` OAuth callback), `analytics`, `team`, `invitations`, `onboarding`, `settings`, `notifications`, `suppliers`, `tax-types`, `payment-terms`, `product-types`, `asset-images`, `auth`, `health`. |
 | Portal app | Trade customers' browser, same origin (`portal.<domain>`) | Keycloak JWT, verified locally, then relayed. "Me" is resolved here into explicit calls to the API. | Pages plus BFF groups `portal`, `distributors`, `cart`, `orders`, `delivery`, `invitations`, `auth`, `health`. |
 | Driver app | Driver's browser, same origin (`driver.<domain>`) | No account: random delivery-link token from the manifest QR code. Missing or malformed gets 404 here; otherwise relayed to the API, which looks it up (photo uploads are first checked with a `GET`). | Pages plus `delivery-links` (view, outcome, photos) and `health`. |
+| Ops app | Stocdup operators' browser, same origin (`ops.<domain>`, when `ingress.hosts.ops` is set) | Keycloak JWT from the `stocdup-ops` client (password + OTP), verified locally against JWKS, then relayed to the API. | Pages plus BFF group `ops` (platform stats, wholesalers, support grants) and `health`. |
 | Keycloak | Browsers (public `auth.<domain>`); the API and both BFFs (in-cluster) | Realm `wholo`; PKCE for browsers; a `manage-users`-only service-account client for the API. | OIDC login, registration and password reset; JWKS keys at `/realms/wholo/protocol/openid-connect/certs`; admin REST at `/admin/realms/wholo` (used only to disable a user). |
 | Postgres, Redis | Central API and Worker (Postgres also Keycloak and pg-backup) | Credentials from Helm-managed Secrets. | SQL on 5432; Redis protocol on 6379. |
 | Worker, pg-backup | Nothing (no inbound interface) | n/a | Worker exposes only Prometheus-format metrics (diagram 3). |
@@ -194,6 +197,8 @@ OpenAPI files.
 | From → To | Protocol | Notes |
 |---|---|---|
 | Trade customer / Distributor staff → Keycloak | HTTPS, OIDC with PKCE, via `auth.<domain>` | Sign in, register from an invitation, reset a password. The apps redirect the browser there and get the token back. Drivers never use Keycloak. |
+| Stocdup operator → Keycloak / Ops app (diagram 1b) | HTTPS, OIDC with PKCE | Operators sign in through the `stocdup-ops` client with password and authenticator-app code. |
+| Ops app → Keycloak / Central API (diagram 1b) | HTTP, in-cluster JWKS / HTTP/JSON, `CENTRAL_API_URL` | Verifies tokens locally; relays the operator's bearer token and the selected wholesaler as `X-Organisation-Id`. The API accepts it as an Ops session only for `azp` = `stocdup-ops` and `acr` at least 2. |
 | Person → Portal / Admin / Driver app | HTTPS via Traefik host routing | Browser sees only public hostnames. Live edge: Cloudflare → WAF appliance → Traefik. |
 | Portal / Admin app → Keycloak | HTTP, in-cluster JWKS | Each BFF validates the signature of every inbound JWT locally (ADR-049). |
 | Central API → Keycloak | HTTP, in-cluster JWKS and admin REST | Same JWKS check, and disables the Keycloak account of a removed staff member (ADR-067). One drawn line carries both. |
@@ -214,7 +219,7 @@ defaults in `helm/wholo/values.yaml`; every Deployment runs one replica
 |---|---|---|---|---|
 | Central API | Deployment `api/deployment.yaml`, Service `api/service.yaml` | RollingUpdate | 256Mi, 100m → 512Mi, 500m | Config in `api/configmap.yaml`, secrets in `api/secret.yaml`. No ingress route is given to it. |
 | Worker | Deployment `worker/deployment.yaml` (`node dist/worker.js`) | Recreate | 128Mi, 50m → 256Mi, 250m | Same image as the API; only one processor instance runs. |
-| Portal / Admin / Driver app | Deployment + Service in `portal-api/`, `admin-api/`, `driver-api/` | RollingUpdate | 384Mi, 100m → 768Mi, 500m each | Frontend baked into the BFF image; `NEXT_PUBLIC_KEYCLOAK_*` is fixed at build time, so live images are never reused locally. Public hosts are routed by `app-ingressroute.yaml` (health path is routed separately). |
+| Portal / Admin / Ops / Driver app | Deployment + Service in `portal-api/`, `admin-api/`, `ops-api/`, `driver-api/` | RollingUpdate | 384Mi, 100m → 768Mi, 500m each | Frontend baked into the BFF image; `NEXT_PUBLIC_KEYCLOAK_*` is fixed at build time, so live images are never reused locally. The Ops app's image is built from `apps/admin-api/Dockerfile` with `NEXT_PUBLIC_APP_MODE=ops` and `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=stocdup-ops`. Public hosts are routed by `app-ingressroute.yaml` (the Ops host only when `ingress.hosts.ops` is set; health path is routed separately). |
 | Keycloak | Deployment `keycloak/deployment.yaml`, realm import `realm-secret.yaml` | Kubernetes default (none set) | 768Mi, 250m → 2Gi, 1000m | Image built from `apps/keycloak`; published at `auth.<domain>` through `ingress.yaml`. |
 | Postgres | Deployment `postgres/deployment.yaml`, PVC `pvc.yaml` | Recreate (node-local RWO volume) | 128Mi, 100m → 512Mi, 500m | Single instance; backup via the CronJob. |
 | Redis | Deployment `redis/deployment.yaml`, PVC `pvc.yaml` | Recreate (node-local RWO volume) | 64Mi, 50m → 256Mi, 250m | |
@@ -235,8 +240,75 @@ drawing them would cross other lines:
   upload and read images and delivery photos directly in R2 (ADR-016,
   ADR-038).
 - **Browsers → OpenFreeMap** — map tiles for the admin app, browser-side.
-- **All five application pods → Telegraf** — see diagram 3.
+- **All six application pods → Telegraf** — see diagram 3.
+- **Ops app and Stocdup operator** — diagram 1b. They are left out of this
+  diagram because the Ops app needs the same neighbours as the Admin app (the
+  operator, Keycloak, the Central API) and the grid has no free cell that touches
+  all three.
 - **Marketing site (`www`)** — diagram 2.
+
+## 1b. Operator access
+
+The Ops app is the console Stocdup's own operators use to support wholesalers
+(ADR-078). It is a separate build and a separate Deployment of the same Next.js
+frontend and NestJS BFF code as the Admin app (`apps/admin-api/Dockerfile`, with
+`NEXT_PUBLIC_APP_MODE=ops` and `NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=stocdup-ops`).
+The Admin app is drawn again only to show that it follows the same pattern.
+
+```mermaid
+%%{init: {"wrap": true, "c4": {"c4ShapeMargin": 110, "diagramMarginX": 40, "diagramMarginY": 20}}}%%
+C4Container
+    title Stocdup — Containers (operator access)
+
+    Person(operator, "Stocdup operator", "Supports wholesalers; signs in with password and authenticator code")
+    Container(keycloak, "Keycloak", "Keycloak", "Identity provider")
+    Container(admin, "Admin app", "Next.js + NestJS BFF", "Same code as the Ops app, built for distributor staff")
+    Container(opsapp, "Ops app", "Next.js + NestJS BFF", "Operator console and its BFF")
+    Container(api, "Central API", "NestJS, Prisma", "All business logic")
+    ContainerDb(pg, "Postgres", "TimescaleDB 16", "Holds support_access_grants")
+
+    Rel(operator, keycloak, "Signs in (password + OTP)", "HTTPS, OIDC")
+    Rel(operator, opsapp, "Supports wholesalers in", "HTTPS")
+    Rel(opsapp, keycloak, "Verifies tokens", "JWKS")
+    Rel(admin, keycloak, "Verifies tokens", "JWKS")
+    Rel(opsapp, api, "Calls, relays JWT", "HTTP/JSON")
+    Rel(admin, api, "Calls, relays JWT", "HTTP/JSON")
+    Rel(api, keycloak, "Verifies tokens", "JWKS")
+    Rel(api, pg, "Reads and writes", "SQL")
+
+    UpdateRelStyle(operator, keycloak, $offsetX="-60", $offsetY="-40")
+    UpdateRelStyle(operator, opsapp, $offsetX="-150", $offsetY="0")
+    UpdateRelStyle(opsapp, keycloak, $offsetX="25", $offsetY="-10")
+    UpdateRelStyle(admin, keycloak, $offsetX="-60", $offsetY="-40")
+    UpdateRelStyle(opsapp, api, $offsetX="-60", $offsetY="-40")
+    UpdateRelStyle(admin, api, $offsetX="65", $offsetY="0")
+    UpdateRelStyle(api, keycloak, $offsetX="10", $offsetY="0")
+    UpdateRelStyle(api, pg, $offsetX="-60", $offsetY="-40")
+
+    UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+```
+
+Grid, row by row: row 1 Stocdup operator / Keycloak / Admin app; row 2 Ops app /
+Central API / Postgres. The Redis queue, the Worker and the other apps are not
+repeated; see diagram 1.
+
+**How operators sign in.** An operator goes to Keycloak directly through the
+`stocdup-ops` client, which requires a password and an authenticator-app code
+(OTP); direct access grants are off. The Ops app's BFF verifies each token's
+signature against Keycloak's JWKS (in-cluster URL) and holds no secret. It calls
+the Central API with the operator's bearer token and forwards the wholesaler the
+operator picked as `X-Organisation-Id`, which the API reads as
+`GET /auth/me?organisationId=`. The Central API verifies the token again against
+JWKS and treats it as an Ops session only when `azp` is `stocdup-ops` and `acr`
+is at least 2 (the OTP step was done). Support grants are stored in the Postgres
+table `support_access_grants`.
+
+| Container | Type | Helm template | Port | Technology | Responsibility |
+|---|---|---|---|---|---|
+| Ops app | Web app + BFF | `ops-api/` | 3050 locally (`opsApi.service.port`; BFF code 3020) | Next.js frontend + NestJS BFF, one image, `APP_MODE=ops` | Operator console, optionally at `ops.<domain>` (`ingress.hosts.ops`, empty by default). Its own endpoints `/api/v1/ops/*` forward to the Central API: `GET /platform/stats`, `GET /distributors`, `GET` and `POST /distributors/:id/support-grants`, `GET /users/:id/support-grants`, and `DELETE` of a grant. Holds no secret and no database. |
+
+Not drawn in 1b: the Ops app and the Admin app's other calls (see diagram 1),
+and the Central API's Keycloak admin-API calls, Redis and Worker.
 
 ## 2. Marketing site and analytics
 
@@ -295,7 +367,7 @@ C4Container
     System_Ext(ops, "Ops monitoring host", "InfluxDB, Loki, Grafana (live)")
 
     System_Boundary(always, "Always in the cluster") {
-        Container(apps, "Application pods", "NestJS", "API, worker and the three app containers")
+        Container(apps, "Application pods", "NestJS", "API, worker and the four app containers")
         Container(telegraf, "Telegraf", "Telegraf", "Metrics collector")
         Container(fluentbit, "Fluent Bit", "Fluent Bit", "Log shipper")
     }
@@ -329,7 +401,7 @@ C4Container
 
 | Container | Helm template | Where | Notes |
 |---|---|---|---|
-| Application pods | (drawn once for legibility) | always | Stands for the five pods that emit telemetry: Central API, worker, and the admin, portal and driver apps. Order-activity counters and queue-depth gauges go over StatsD (UDP 8125, ADR-062/063); every pod also serves Prometheus-format `/metrics` on 9464 through a per-app `-metrics` ClusterIP Service (ADR-065). Structured JSON logs go to stdout. |
+| Application pods | (drawn once for legibility) | always | Stands for the six pods that emit telemetry: Central API, worker, and the admin, ops, portal and driver apps. Order-activity counters and queue-depth gauges go over StatsD (UDP 8125, ADR-062/063); every pod also serves Prometheus-format `/metrics` on 9464 through a per-app `-metrics` ClusterIP Service (ADR-065). Structured JSON logs go to stdout. |
 | Telegraf | `telegraf/` | live and local | Receives StatsD, scrapes the `/metrics` endpoints, polls `/api/v1/health` and the Kubernetes API (`kube_inventory`, read-only ServiceAccount). Drawn as one container but deployed as a Deployment **plus** a per-node DaemonSet (`telegraf-node`, node CPU/memory/disk from read-only hostPath mounts). |
 | Fluent Bit | `fluent-bit/` | live and local | DaemonSet; tails the namespace's container logs from `/var/log/pods` and pushes them to Loki (ADR-064). |
 | InfluxDB | `influxdb/` | local only | `influxdb.enabled`; on live this is the ops host. |
@@ -350,7 +422,7 @@ C4Container
 ## Deliberately not containers
 
 - **Traefik** — the cluster's ingress controller (host routing: `www`, `portal`,
-  `admin`, `driver`, `auth`), shared infrastructure rather than part of the
+  `admin`, `ops`, `driver`, `auth`), shared infrastructure rather than part of the
   Stocdup release. On live the edge is Cloudflare → WAF appliance → Traefik.
 - **MailHog** — local-only SMTP sink and UI; live uses an SMTP provider.
 - **Seed Job** (`api/seed-job.yaml`) — local demo-data job, disabled on live.

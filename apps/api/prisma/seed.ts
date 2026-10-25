@@ -265,6 +265,29 @@ async function main() {
 
   await upsertMembership(cryerAndStottAdmin.id, cryerAndStott.id, Role.DISTRIBUTOR_ADMIN);
 
+  // Stocdup itself, and a local operator for the Ops app (ADR-078). The
+  // operator signs in at the Ops address with an authenticator app and opens
+  // wholesalers through time-limited support access — never as a member.
+  const stocdup = await prisma.organisation.upsert({
+    where: { id: 'seed-platform' },
+    update: {},
+    create: { id: 'seed-platform', name: 'Stocdup', type: OrganisationType.PLATFORM },
+  });
+
+  const operator = await prisma.user.upsert({
+    where: { email: 'ops@stocdup.local' },
+    update: {},
+    create: {
+      id: 'seed-operator-1',
+      email: 'ops@stocdup.local',
+      keycloakId: 'kc-seed-operator-1',
+      firstName: 'Olive',
+      lastName: 'Operator',
+    },
+  });
+
+  await upsertMembership(operator.id, stocdup.id, Role.PLATFORM_ADMIN);
+
   // Product types for Vine & Co
   const productTypeData = [
     { id: 'seed-pt-wine', name: 'Wine', code: 'wine', displayOrder: 1 },

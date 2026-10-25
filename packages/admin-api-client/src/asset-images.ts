@@ -1,17 +1,17 @@
 import type { AssetImage, ReorderAssetImagesRequest } from '@wholo/types';
-import { apiFetch, ApiError, getRequestToken } from './base';
+import { apiFetch, ApiError, getRequestHeaders, getRequestToken, reportApiError } from './base';
 
 async function apiFetchMultipart<T>(path: string, formData: FormData): Promise<T> {
   const token = await getRequestToken();
   const res = await fetch(path, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getRequestHeaders() },
     body: formData,
   });
   if (!res.ok) {
     let problem;
     try { problem = await res.json(); } catch { problem = { type: 'about:blank', title: res.statusText, status: res.status, detail: res.statusText }; }
-    throw new ApiError(problem, res.status);
+    throw reportApiError(new ApiError(problem, res.status));
   }
   return res.json() as Promise<T>;
 }

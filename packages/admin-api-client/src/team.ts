@@ -2,6 +2,7 @@ import type {
   AcceptedStaffInvitation,
   InviteTeamMemberRequest,
   StaffInvitation,
+  SupportGrant,
   TeamMember,
   TeamOverview,
   UpdateTeamRolesRequest,
@@ -35,6 +36,15 @@ export const adminTeamApi = {
 
   removeMember(userId: string): Promise<void> {
     return apiFetch<void>(`/api/v1/team/members/${userId}`, { method: 'DELETE' });
+  },
+
+  /** Stocdup support access to this distributor (ADR-078): open now (any member), or the full history (team managers). */
+  supportGrants(options: { activeOnly?: boolean } = {}): Promise<SupportGrant[]> {
+    return apiFetch<SupportGrant[]>(`/api/v1/team/support-grants${options.activeOnly ? '?active=true' : ''}`);
+  },
+
+  endSupportGrant(grantId: string): Promise<SupportGrant> {
+    return apiFetch<SupportGrant>(`/api/v1/team/support-grants/${encodeURIComponent(grantId)}`, { method: 'DELETE' });
   },
 
   /** Accept the emailed invitation as the signed-in, email-verified user. */

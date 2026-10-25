@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { OpsDialogChip } from '@/lib/ops-seam';
 
 interface ModalProps {
   onClose: () => void;
@@ -58,6 +59,7 @@ export function Modal({ onClose, labelledBy, closable = true, size = 'sm', child
         onClick={(e) => e.stopPropagation()}
         className={`w-full ${size === 'md' ? 'max-w-lg' : 'max-w-sm'} rounded-lg border border-border bg-white p-6 shadow-lg`}
       >
+        <OpsDialogChip />
         {children}
       </div>
     </div>,

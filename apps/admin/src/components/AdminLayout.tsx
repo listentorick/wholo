@@ -4,40 +4,48 @@ import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { SupportPresenceStrip } from './team/SupportPresenceStrip';
+import { OpsSupportBar } from '@/lib/ops-seam';
+import { isOpsBuild } from '@/lib/ops-mode';
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { logout } = useAuth();
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas">
+    <div className="flex h-dvh flex-col overflow-hidden bg-canvas">
+      {/* Ops build inside a wholesaler: the amber bar spans the whole window, above the nav. */}
+      <OpsSupportBar />
 
-      {/* Mobile backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 z-20 bg-black/40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
-      {/* Sidebar — static on lg+, slide-over drawer on smaller screens */}
-      <aside
-        className={[
-          'fixed inset-y-0 left-0 z-30 flex flex-col bg-sidebar-bg transition-transform duration-200 ease-in-out',
-          'lg:static lg:z-auto lg:translate-x-0',
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-        ].join(' ')}
-        style={{ width: 'var(--sidebar-width)' }}
-      >
-        <Sidebar onClose={() => setSidebarOpen(false)} onLogout={logout} />
-      </aside>
+        {/* Sidebar — static on lg+, slide-over drawer on smaller screens */}
+        <aside
+          className={[
+            'fixed inset-y-0 left-0 z-30 flex flex-col bg-sidebar-bg transition-transform duration-200 ease-in-out',
+            'lg:static lg:z-auto lg:translate-x-0',
+            sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+          ].join(' ')}
+          style={{ width: 'var(--sidebar-width)' }}
+        >
+          <Sidebar onClose={() => setSidebarOpen(false)} onLogout={logout} />
+        </aside>
 
-      {/* Main content area */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <TopBar onMenuClick={() => setSidebarOpen(true)} />
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
-          {children}
-        </main>
+        {/* Main content area */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <TopBar onMenuClick={() => setSidebarOpen(true)} />
+          {!isOpsBuild && <SupportPresenceStrip />}
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );

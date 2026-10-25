@@ -2,10 +2,32 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import type { AuthUser } from '@wholo/types';
 import { useAuth } from '@/lib/auth-context';
+import { isOpsBuild } from '@/lib/ops-mode';
+
+// Why this account can't use this app, by which app it is and what the account is.
+function explanation(deniedAs: AuthUser['organisationType'] | null): { title: string; body: string } {
+  if (isOpsBuild) {
+    return {
+      title: 'This is Stocdup Ops',
+      body: 'Only Stocdup operators can sign in here. If you work for a distributor, sign in to your distributor workspace instead.',
+    };
+  }
+  if (deniedAs === 'PLATFORM') {
+    return {
+      title: 'This is the distributor workspace',
+      body: 'The account you’re signed in with is a Stocdup operator account. Operators work in Stocdup Ops, and open a distributor’s account from there.',
+    };
+  }
+  return {
+    title: 'This is the distributor workspace',
+    body: 'The account you’re signed in with is registered as a trade customer, not a distributor. This admin workspace is for distributor teams managing their own catalogue, pricing, orders and deliveries.',
+  };
+}
 
 export default function AccessDeniedPage() {
-  const { isLoading, user, accessDenied, identity, logout } = useAuth();
+  const { isLoading, user, accessDenied, identity, deniedOrganisationType, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,6 +44,7 @@ export default function AccessDeniedPage() {
     );
   }
 
+  const { title, body } = explanation(deniedOrganisationType ?? null);
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-6 py-12">
       <div className="w-full max-w-md rounded-lg border border-border bg-white p-8 text-center">
@@ -30,11 +53,8 @@ export default function AccessDeniedPage() {
           <img src="/logos/stocdup-logo-only.png" alt="" className="h-7 w-7 shrink-0" />
         </div>
 
-        <h1 className="text-lg font-semibold text-text">This is the distributor workspace</h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted">
-          The account you&rsquo;re signed in with is registered as a trade customer, not a distributor. This admin
-          workspace is for distributor teams managing their own catalogue, pricing, orders and deliveries.
-        </p>
+        <h1 className="text-lg font-semibold text-text">{title}</h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted">{body}</p>
 
         {identity?.email && (
           <p className="mt-5 text-xs text-muted">

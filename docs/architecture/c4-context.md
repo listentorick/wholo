@@ -43,6 +43,7 @@ database, queues and web analytics — is hosted and versioned together. The out
 | Trade customer | Human | Order from a distributor quickly and see order, delivery and invoice status. The logged-in portal user is always the buyer. | Customer portal (`portal.<domain>/{distributor-slug}`). Keycloak login. Access to a distributor requires an active trade relationship. |
 | Delivery driver | Human, no account | Deliver the orders on a printed manifest and record each outcome from a phone. | Driver PWA (`driver.<domain>/d#<token>`). No login: an HMAC-signed, single-order link from the printed manifest's QR code (ADR-059). |
 | Prospective distributor | Human, anonymous | Find out what Stocdup does and register interest. | Marketing site (`www.<domain>`). No login. |
+| Stocdup operator | Human | Support wholesalers: see platform-wide stats and wholesalers, and open a wholesaler's account to help with a problem. Acts as themselves, never as another user. | Ops app (`ops.<domain>`). Keycloak login through the `stocdup-ops` client with a password **and** an authenticator-app code (OTP) (ADR-078). |
 | Platform operator | Human | Build, deploy, monitor and back up Stocdup. | Command line and the ops monitoring host — see the operations diagram. |
 
 A distributor can also place an order **on behalf of** a trade customer
@@ -71,6 +72,7 @@ Stocdup holds only a simple supplier name that staff can attach to products.
 | Team management | The owner invites, re-roles and removes staff (ADR-067). | Owner |
 | Notifications | Email for invitations, order placed and delivery outcomes; in-app notifications for staff. | Staff, trade customer |
 | Marketing site | Public site with a contact form that emails the lead; cookieless analytics (ADR-060). | Prospective distributor |
+| Operator support access | A Stocdup operator sees platform-wide stats and wholesalers, and opens one wholesaler's account through time-limited support access: a reason is given, it lasts up to 8 hours, and the wholesaler's owner can see it and end it (ADR-078). | Stocdup operator, owner |
 | Operations telemetry, logs and backups | Metrics, logs and encrypted off-site database backups (ADR-062 to ADR-065, ADR-069). | Platform operator |
 
 ## User Journeys
@@ -112,6 +114,13 @@ Stocdup holds only a simple supplier name that staff can attach to products.
 2. The portal opens as that customer, within the distributor's own storefront (ADR-041, ADR-042).
 3. Staff build and submit the order; the customer receives it as normal.
 
+### Support a wholesaler — Stocdup operator
+
+1. Sign in to Keycloak through the `stocdup-ops` client with password and authenticator-app code.
+2. In the Ops app, see platform-wide stats and the list of wholesalers.
+3. Pick a wholesaler and open its account through support access: give a reason; it lasts up to 8 hours (ADR-078).
+4. Work in that account as themselves (no impersonation). The wholesaler's owner can see the access and end it at any time.
+
 ### Register interest — prospective distributor
 
 1. Visit the marketing site and submit the contact form.
@@ -139,6 +148,7 @@ it is a separate system that people use directly, so it has its own box.
 
 | Relationship | What happens |
 |---|---|
+| Stocdup operators → Keycloak | Operators sign in through the separate `stocdup-ops` client, which requires a password and an authenticator-app code (OTP). `apps/api` accepts a token as an operator session only if it came from that client and the OTP step was done (ADR-078). |
 | Distributor staff and trade customers → Keycloak | The admin app and portal send the browser to Keycloak to sign in, register (from an invitation) and reset a password. Keycloak issues the token the apps then present. Drivers and prospective distributors never touch it. |
 | Stocdup → Keycloak | `apps/api` and both BFFs verify the signature of every token against Keycloak's published signing keys (JWKS). `apps/api` also calls Keycloak's admin API to disable the account of a removed staff member (ADR-067). |
 
@@ -183,16 +193,18 @@ they are part of the Stocdup system, not external dependencies:
 
 ## System Context Diagram
 
-Two diagrams, because the platform has two distinct audiences:
+Three diagrams, because the platform has three distinct audiences:
 
 1. [Business context](#business-context) — the people trading through
    Stocdup and the business systems it integrates with.
 2. [Operations context](#operations-context) — the platform operator and the
    systems used to build, observe and back up Stocdup.
+3. [Operator access](#operator-access) — the Stocdup operator who supports
+   wholesalers, and how they sign in.
 
 **Editing the diagrams.** Mermaid's C4 renderer places elements on a grid in
 declaration order and draws straight lines between them — it does no edge
-routing. Both diagrams are a 3-column grid (`$c4ShapeInRow="3"`) with Stocdup
+routing. All diagrams are a 3-column grid (`$c4ShapeInRow="3"`) with Stocdup
 declared so that it lands in the middle column, which is what keeps lines from
 crossing. In the business diagram Keycloak sits directly above Stocdup, between
 the two people who sign in to it. Label positions are set per relationship with `UpdateRelStyle`
@@ -279,6 +291,36 @@ C4Context
     UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
 ```
 
+### Operator access
+
+```mermaid
+%%{init: {"wrap": true, "c4": {"c4ShapeMargin": 110, "diagramMarginX": 40, "diagramMarginY": 20}}}%%
+C4Context
+    title Stocdup — System Context (operator access)
+
+    Person(sop, "Stocdup operator", "Stocdup support staff; signs in with password and authenticator code")
+    System(keycloak, "Keycloak", "Identity provider: sign-in, registration, account security")
+
+    System(stocdup, "Stocdup", "Mobile-first wholesale commerce and operations platform")
+
+    Rel(sop, keycloak, "Signs in with", "browser, OIDC")
+    Rel(sop, stocdup, "Supports wholesalers in", "Ops app")
+    Rel(stocdup, keycloak, "Verifies tokens with", "JWKS")
+
+    UpdateRelStyle(sop, keycloak, $offsetX="-40", $offsetY="-40")
+    UpdateRelStyle(sop, stocdup, $offsetX="10", $offsetY="0")
+    UpdateRelStyle(stocdup, keycloak, $offsetX="10", $offsetY="0")
+
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
+```
+
+This diagram uses 2 columns (`$c4ShapeInRow="2"`) so that all three elements are
+neighbours: operator and Keycloak in row 1, Stocdup below the operator.
+
+The operator reaches wholesaler accounts only through time-limited support access,
+which the wholesaler's owner can see and end. Distributor staff and trade
+customers are not repeated; see the business context.
+
 ## Related Documentation
 
 - [URL map and deployed topology](../runbook/url-map.md)
@@ -288,4 +330,5 @@ C4Context
 - [ADR-059](../adrs/ADR-059-delivery-link-token-and-first-public-endpoint.md) — driver delivery link
 - [ADR-060](../adrs/ADR-060-marketing-site.md) — marketing site
 - [ADR-067](../adrs/ADR-067-distributor-staff-invitations.md) — staff invitations
+- [ADR-078](../adrs/ADR-078-platform-operator-access.md) — Stocdup operator access
 - [ADR-048](../adrs/ADR-048-live-environment-k3s.md) — live environment

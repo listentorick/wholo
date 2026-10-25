@@ -28,7 +28,23 @@
   --color-accent:          21 86% 63%;    /* Amber Accent #F2864D */
   --color-accent-fg:       217 68% 14%;   /* Deep Navy — text on amber fills */
 
+  /* Stocdup support (ADR-078) — amber means only "Stocdup is in this
+     account". Strong: the Ops support bar; soft: notices and strips. */
+  --color-support:         37 91% 55%;    /* Amber #F5A524 */
+  --color-support-fg:      44 100% 5%;     /* Ink #1A1300 — text on amber */
+  --color-support-soft:    40 100% 95%;   /* #FFF7E6 — notice background */
+  --color-support-border:  40 81% 69%;    /* #F0C36D */
+  --color-support-text:    37 74% 24%;    /* #6B4A10 — text on the soft background */
+
   /* Layout */
   --sidebar-width:         220px;
   --topbar-height:         56px;
+}
+
+/* Ops build (ADR-078): the root layout sets data-app="ops" on <html>. Only the
+   sidebar darkens — amber is kept for "you are in someone else's account". */
+:root[data-app='ops'] {
+  --color-sidebar-bg:      223 14% 10%;   /* #16181D */
+  --color-sidebar-hover:   222 13% 19%;   /* #2A2E37 */
+  --color-sidebar-border:  223 12% 18%;
 }

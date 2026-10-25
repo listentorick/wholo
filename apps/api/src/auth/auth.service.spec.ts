@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
+import { ForbiddenException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ROLE_PERMISSIONS } from './role-permissions';
 
 const mockUser = {
@@ -22,6 +24,10 @@ const mockUsersService = {
   findById: jest.fn(),
 };
 
+const mockPrisma = {
+  organisation: { findUnique: jest.fn() },
+};
+
 describe('AuthService', () => {
   let service: AuthService;
 
@@ -31,6 +37,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: UsersService, useValue: mockUsersService },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
     }).compile();
 
@@ -52,6 +59,7 @@ describe('AuthService', () => {
         organisationName: 'Vine & Co',
         organisationType: 'DISTRIBUTOR',
         organisationCurrencyCode: 'GBP',
+        access: { kind: 'MEMBER' },
       });
     });
 
@@ -124,6 +132,43 @@ describe('AuthService', () => {
       });
     });
 
+    describe('an operator who also works at a wholesaler (ADR-078)', () => {
+      const operator = {
+        ...mockUser,
+        memberships: [
+          {
+            role: 'DISTRIBUTOR_ADMIN',
+            organisationId: 'org-1',
+            roles: [{ role: 'DISTRIBUTOR_ADMIN' }],
+            organisation: { id: 'org-1', name: 'Vine & Co', type: 'DISTRIBUTOR' },
+          },
+          {
+            role: 'PLATFORM_ADMIN',
+            organisationId: 'stocdup',
+            roles: [{ role: 'PLATFORM_ADMIN' }],
+            organisation: { id: 'stocdup', name: 'Stocdup', type: 'PLATFORM' },
+          },
+        ],
+      };
+
+      beforeEach(() => mockUsersService.findById.mockResolvedValue(operator));
+
+      it('gets the Stocdup membership when the Ops app asks for PLATFORM', async () => {
+        const result = await service.getProfile('user-1', { organisationType: 'PLATFORM' as never });
+        expect(result).toMatchObject({ organisationId: 'stocdup', organisationType: 'PLATFORM', roles: ['PLATFORM_ADMIN'] });
+      });
+
+      it('gets the wholesaler when the admin app asks for DISTRIBUTOR', async () => {
+        const result = await service.getProfile('user-1', { organisationType: 'DISTRIBUTOR' as never });
+        expect(result).toMatchObject({ organisationId: 'org-1', organisationType: 'DISTRIBUTOR' });
+      });
+
+      it('falls back to the usual pick when the caller holds nothing of the asked-for kind', async () => {
+        const result = await service.getProfile('user-1', { organisationType: 'TRADE_CUSTOMER' as never });
+        expect(result).toMatchObject({ organisationId: 'org-1', organisationType: 'DISTRIBUTOR' });
+      });
+    });
+
     it('resolves roles/permissions from the legacy role column when no MembershipRole rows exist yet', async () => {
       // Live-rollout safety net: correctness must not depend on the
       // db:membership-roles:backfill script having run yet.
@@ -142,6 +187,45 @@ describe('AuthService', () => {
       const result = await service.getProfile('user-1');
       expect(result?.roles).toEqual(['DISTRIBUTOR_ADMIN']);
       expect(result?.permissions).toEqual(ROLE_PERMISSIONS['DISTRIBUTOR_ADMIN']);
+    });
+  });
+
+  describe('getProfile with a selected organisation (ADR-078)', () => {
+    const expiresAt = new Date('2026-10-23T16:00:00Z');
+    const grantClaim = { organisationId: 'dist-9', roles: ['SUPPORT'], supportGrantId: 'grant-1', expiresAt };
+
+    beforeEach(() => {
+      mockUsersService.findById.mockResolvedValue(mockUser);
+    });
+
+    it('scopes to an organisation the user is a member of', async () => {
+      const result = await service.getProfile('user-1', { organisationId: 'org-1' });
+      expect(result).toMatchObject({ organisationId: 'org-1', roles: ['DISTRIBUTOR_ADMIN'], access: { kind: 'MEMBER' } });
+    });
+
+    it('scopes to an organisation reached through an active support grant, with SUPPORT permissions only', async () => {
+      mockPrisma.organisation.findUnique.mockResolvedValue({ id: 'dist-9', name: 'Harbour Cellars', type: 'DISTRIBUTOR', distributorSettings: { currencyCode: 'GBP' } });
+
+      const result = await service.getProfile('user-1', { organisationId: 'dist-9', memberships: [grantClaim as never] });
+
+      expect(result).toMatchObject({
+        organisationId: 'dist-9',
+        organisationName: 'Harbour Cellars',
+        organisationType: 'DISTRIBUTOR',
+        roles: ['SUPPORT'],
+        permissions: ROLE_PERMISSIONS['SUPPORT'],
+        access: { kind: 'SUPPORT', grantId: 'grant-1', expiresAt },
+      });
+    });
+
+    it('refuses an organisation the user neither belongs to nor holds a grant for', async () => {
+      await expect(service.getProfile('user-1', { organisationId: 'dist-other', memberships: [grantClaim as never] })).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+    });
+
+    it('refuses when the per-request memberships carry no grant (not an ops session)', async () => {
+      await expect(service.getProfile('user-1', { organisationId: 'dist-9', memberships: [] })).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

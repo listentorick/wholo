@@ -89,6 +89,16 @@ data:
       response_timeout = "5s"
       [inputs.http_response.tags]
         service = "admin-api"
+{{- if .Values.opsApi.enabled }}
+
+    [[inputs.http_response]]
+      interval = "15s"
+      urls = ["http://{{ include "wholo.fullname" . }}-ops-api:{{ .Values.opsApi.service.port }}/api/v1/health"]
+      method = "GET"
+      response_timeout = "5s"
+      [inputs.http_response.tags]
+        service = "ops-api"
+{{- end }}
 
     [[inputs.http_response]]
       interval = "15s"

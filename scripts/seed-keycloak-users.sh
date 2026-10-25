@@ -81,5 +81,7 @@ create_user_and_link "admin@rogersbakery.com"    "Roger"    "Baker" "password123
 create_user_and_link "admin@goo-cheese.co.uk"    "Goo"      "Admin" "password123"
 create_user_and_link "admin@croftersfoods.co.uk" "Crofters" "Admin" "password123"
 create_user_and_link "admin@cryerandstott.co.uk" "Cryer"    "Admin" "password123"
+# Stocdup operator for the Ops app (ADR-078); sets up an authenticator on first sign-in.
+create_user_and_link "ops@stocdup.local"         "Olive"    "Operator" "Password123!"
 
 echo "Done."

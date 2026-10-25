@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { HttpException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ApiClientService } from '../api-client/api-client.service';
@@ -16,12 +17,59 @@ describe('AuthService', () => {
   let service: AuthService;
   const api = { get: jest.fn() };
 
+  async function build(appMode?: string) {
+    const module = await Test.createTestingModule({
+      providers: [
+        AuthService,
+        { provide: ApiClientService, useValue: api },
+        { provide: ConfigService, useValue: { get: (key: string) => (key === 'APP_MODE' ? appMode : undefined) } },
+      ],
+    }).compile();
+    return module.get(AuthService);
+  }
+
   beforeEach(async () => {
     jest.clearAllMocks();
-    const module = await Test.createTestingModule({
-      providers: [AuthService, { provide: ApiClientService, useValue: api }],
-    }).compile();
-    service = module.get(AuthService);
+    service = await build();
+  });
+
+  describe('me', () => {
+    it('asks for the selected organisation when there is one', async () => {
+      api.get.mockResolvedValue({});
+      await service.me('token-1', 'dist-b');
+      expect(api.get).toHaveBeenCalledWith('/auth/me?organisationId=dist-b', 'token-1');
+    });
+  });
+
+  describe('session in the Ops app (ADR-078)', () => {
+    beforeEach(async () => {
+      service = await build('ops');
+    });
+
+    it('is ACTIVE for a Stocdup platform user', async () => {
+      const user = { id: 'op', organisationType: 'PLATFORM' };
+      api.get.mockResolvedValue(user);
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACTIVE', user });
+    });
+
+    it('is ACTIVE as the operator for an operator who also works at a wholesaler', async () => {
+      const operator = { id: 'op', organisationType: 'PLATFORM' };
+      api.get.mockImplementation(async (path: string) =>
+        path.includes('organisationType=PLATFORM') ? operator : { id: 'op', organisationType: 'DISTRIBUTOR' },
+      );
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACTIVE', user: operator });
+    });
+
+    it('is ACCESS_DENIED for a distributor user', async () => {
+      const user = { id: 'u1', organisationType: 'DISTRIBUTOR' };
+      api.get.mockResolvedValue(user);
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACCESS_DENIED', user });
+    });
+
+    it('never offers distributor onboarding', async () => {
+      api.get.mockRejectedValue(new HttpException('No Wholo user found', 401));
+      await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACCESS_DENIED' });
+    });
   });
 
   describe('session', () => {
@@ -30,7 +78,7 @@ describe('AuthService', () => {
       api.get.mockResolvedValue(user);
 
       await expect(service.session('token-1', principal)).resolves.toEqual({ status: 'ACTIVE', user });
-      expect(api.get).toHaveBeenCalledWith('/auth/me', 'token-1');
+      expect(api.get).toHaveBeenCalledWith('/auth/me?organisationType=DISTRIBUTOR', 'token-1');
     });
 
     it('returns ACCESS_DENIED when the resolved profile is a trade customer', async () => {

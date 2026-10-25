@@ -10,6 +10,7 @@ export enum Role {
   WAREHOUSE_STAFF = 'WAREHOUSE_STAFF',
   DRIVER = 'DRIVER',
   TRADE_CUSTOMER = 'TRADE_CUSTOMER',
+  SUPPORT = 'SUPPORT',
 }
 
 /**
@@ -28,6 +29,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   [Role.WAREHOUSE_STAFF]: 'Warehouse staff',
   [Role.DRIVER]: 'Driver',
   [Role.TRADE_CUSTOMER]: 'Trade customer',
+  [Role.SUPPORT]: 'Stocdup support',
 };
 
 // ─── Team (distributor staff) ─────────────────────────────────────────────────
@@ -87,10 +89,14 @@ export interface AuthUser {
   permissions: Permission[];
   organisationId: string;
   organisationName: string;
-  organisationType?: 'DISTRIBUTOR' | 'TRADE_CUSTOMER';
+  organisationType?: 'DISTRIBUTOR' | 'TRADE_CUSTOMER' | 'PLATFORM';
   /** ISO 4217 currency code, only present for a DISTRIBUTOR-side membership. */
   organisationCurrencyCode?: string;
+  /** How the user reaches this organisation: as a member, or through Stocdup support access (ADR-078). */
+  access?: AuthAccess;
 }
+
+export type AuthAccess = { kind: 'MEMBER' } | { kind: 'SUPPORT'; grantId: string; expiresAt: string };
 
 export interface LoginRequest {
   email: string;
@@ -2413,3 +2419,68 @@ export interface CustomerOrderingBehaviour {
   trend: OrderingTrendStatus;
 }
 
+
+// ─── Stocdup support access (ADR-078) ─────────────────────────────────────────
+
+/** Shortest, default and longest support visit, in minutes. Longer requests are clamped. */
+export const SUPPORT_GRANT_MIN_MINUTES = 15;
+export const SUPPORT_GRANT_DEFAULT_MINUTES = 240;
+export const SUPPORT_GRANT_MAX_MINUTES = 480;
+
+export type SupportGrantStatus = 'ACTIVE' | 'EXPIRED' | 'ENDED';
+/** Who ended a grant early: its holder, someone at the distributor, or another Stocdup operator. */
+export type SupportGrantEndedBy = 'HOLDER' | 'DISTRIBUTOR' | 'STOCDUP';
+
+/** A platform operator's time-limited support visit to one distributor. Dates are ISO strings on the wire. */
+export interface SupportGrant {
+  id: string;
+  distributorId: string;
+  distributorName: string;
+  distributorSlug: string | null;
+  holder: { id: string; name: string };
+  reason: string;
+  startsAt: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  status: SupportGrantStatus;
+  endedBy: SupportGrantEndedBy | null;
+  /** Audit-logged actions the holder took at the distributor during the visit (distributor history view only). */
+  changeCount?: number;
+}
+
+export interface CreateSupportGrantRequest {
+  reason: string;
+  durationMinutes?: number;
+}
+
+// ─── Ops platform views (ADR-078) ─────────────────────────────────────────────
+
+export type DistributorAttentionReason = 'NEW_WITHOUT_PRODUCTS' | 'NO_RECENT_ORDERS';
+
+/** One wholesaler as a platform operator sees it in the Ops app. */
+export interface PlatformDistributor {
+  id: string;
+  name: string;
+  slug: string | null;
+  ownerEmail: string | null;
+  createdAt: string;
+  activeCustomers: number;
+  products: number;
+  ordersLast30Days: number;
+  lastOrderAt: string | null;
+  attention: DistributorAttentionReason[];
+  /** The caller's grant here, when one is in effect. */
+  myActiveGrant: { id: string; expiresAt: string; reason: string } | null;
+}
+
+export interface PlatformStats {
+  activeWholesalers: number;
+  wholesalersJoinedLast30Days: number;
+  activeTradeCustomers: number;
+  ordersLast30Days: number;
+  ordersPrevious30Days: number;
+  openSupportGrants: number;
+  wholesalersWithOpenSupport: number;
+  /** One entry per day, oldest first, each wholesaler's orders counted on its own local date. */
+  ordersPerDay: { date: string; orders: number }[];
+}

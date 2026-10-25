@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Role } from '@wholo/types';
 import type { StaffInvitation, TeamMember, TeamOverview } from '@wholo/types';
 import {
-  buildTeamEntries, countByFilter, entryStatus, entryTitle, expiryText, initials, matchesFilter, sameRoleSet,
+  buildTeamEntries, countByFilter, entryStatus, entryTitle, expiryText, initials, isOwner, matchesFilter, sameRoleSet,
 } from './team';
 
 // Local-time constructors: expiry is counted in the viewer's calendar days, so
@@ -103,5 +103,15 @@ describe('small helpers', () => {
     expect(sameRoleSet([Role.OPERATIONS_MANAGER, Role.WAREHOUSE_STAFF], [Role.WAREHOUSE_STAFF, Role.OPERATIONS_MANAGER])).toBe(true);
     expect(sameRoleSet([Role.OPERATIONS_MANAGER], [Role.WAREHOUSE_STAFF])).toBe(false);
     expect(sameRoleSet([Role.OPERATIONS_MANAGER], [Role.OPERATIONS_MANAGER, Role.WAREHOUSE_STAFF])).toBe(false);
+  });
+});
+
+describe('isOwner', () => {
+  it('is the distributor admin only — a Stocdup operator role owns no wholesaler (ADR-078)', () => {
+    expect(isOwner([Role.DISTRIBUTOR_ADMIN])).toBe(true);
+    expect(isOwner([Role.OPERATIONS_MANAGER, Role.DISTRIBUTOR_ADMIN])).toBe(true);
+    expect(isOwner([Role.PLATFORM_ADMIN])).toBe(false);
+    expect(isOwner([Role.SUPPORT])).toBe(false);
+    expect(isOwner([Role.WAREHOUSE_STAFF])).toBe(false);
   });
 });

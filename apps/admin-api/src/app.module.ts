@@ -27,6 +27,8 @@ import { CustomerHealthModule } from './customer-health/customer-health.module';
 import { CustomerPaymentsModule } from './customer-payments/customer-payments.module';
 import { CustomerOrderingModule } from './customer-ordering/customer-ordering.module';
 import { DeliveryOverviewModule } from './delivery-overview/delivery-overview.module';
+import { opsOnlyModules } from './ops/ops-only-modules';
+import { appMode } from './auth/app-mode';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -60,6 +62,8 @@ import { HealthController } from './health.controller';
     CustomerPaymentsModule,
     CustomerOrderingModule,
     DeliveryOverviewModule,
+    // The Ops app's endpoints exist only in the Ops deployment (ADR-078).
+    ...opsOnlyModules(appMode()),
   ],
   controllers: [HealthController],
 })

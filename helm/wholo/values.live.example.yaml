@@ -41,6 +41,10 @@ redis:
 global:
   portalUrl: "https://portal.<domain>"
   adminUrl: "https://admin.<domain>"
+  # The Ops app for Stocdup operators (ADR-078). Must match ingress.hosts.ops
+  # below; scripts/setup-keycloak-ops-client.sh registers it on the
+  # stocdup-ops client.
+  opsUrl: "https://ops.<domain>"
   # Driver PWA host — apps/api builds QR delivery URLs from this. Must match
   # ingress.hosts.driver below.
   driverUrl: "https://driver.<domain>"
@@ -88,6 +92,18 @@ portalApi:
 adminApi:
   image:
     repository: ghcr.io/listentorick/wholo/admin-api
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+
+# The Ops app (ADR-078): built by CI from apps/admin-api/Dockerfile with the
+# stocdup-ops client and NEXT_PUBLIC_APP_MODE=ops baked in. Set
+# `enabled: false` to run live without it.
+opsApi:
+  enabled: true
+  image:
+    repository: ghcr.io/listentorick/wholo/ops-api
     tag: sha-CHANGE_ME
     pullPolicy: IfNotPresent
   service:
@@ -209,6 +225,8 @@ ingress:
   hosts:
     portal: portal.<domain>
     admin: admin.<domain>
+    # The Ops app (ADR-078). Must match global.opsUrl.
+    ops: ops.<domain>
     auth: auth.<domain>
     # Public marketing site. The bare apex (<domain>) is handled by a
     # Cloudflare Redirect Rule -> https://www.<domain>; the cluster only

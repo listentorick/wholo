@@ -11,7 +11,7 @@ import type {
   ReschedulePreviewResponse,
   UpdateDeliveryRunRequest,
 } from '@wholo/types';
-import { ApiError, apiFetch, getBaseUrl, getRequestToken } from './base';
+import { ApiError, apiFetch, getBaseUrl, getRequestHeaders, getRequestToken, reportApiError } from './base';
 
 export const adminDeliveryRunsApi = {
   listDays(params: DeliveryDaysListParams, signal?: AbortSignal): Promise<DeliveryDaysListResponse> {
@@ -82,7 +82,7 @@ export const adminDeliveryRunsApi = {
   async downloadManifest(runId: string): Promise<Blob> {
     const token = await getRequestToken();
     const res = await fetch(`${getBaseUrl()}/api/v1/delivery-runs/${runId}/manifest`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getRequestHeaders() },
     });
 
     if (!res.ok) {
@@ -92,7 +92,7 @@ export const adminDeliveryRunsApi = {
       } catch {
         problem = { type: 'about:blank', title: res.statusText, status: res.status, detail: res.statusText };
       }
-      throw new ApiError(problem, res.status);
+      throw reportApiError(new ApiError(problem, res.status));
     }
 
     return res.blob();

@@ -23,6 +23,7 @@ const mockPrisma = {
   taxType: { findMany: jest.fn() },
   user: { findUnique: jest.fn() },
   auditLog: { findMany: jest.fn(), count: jest.fn() },
+  supportAccessGrant: { findMany: jest.fn().mockResolvedValue([]) },
   deliveryRunOrder: { findFirst: jest.fn() },
   $transaction: jest.fn(),
 };
@@ -446,6 +447,19 @@ describe('AdminOrdersService', () => {
       expect(result.data).toHaveLength(30);
       expect(result.pagination.hasMore).toBe(true);
       expect(result.pagination.nextCursor).not.toBeNull();
+    });
+
+    it('labels entries made by a Stocdup support visitor (ADR-078)', async () => {
+      mockPrisma.order.findFirst.mockResolvedValue({ id: 'order-1' });
+      mockPrisma.auditLog.findMany.mockResolvedValue([makeEntry({ actorUserId: 'op-1', actorName: 'Rick Walsh' })]);
+      mockPrisma.auditLog.count.mockResolvedValue(1);
+      mockPrisma.supportAccessGrant.findMany.mockResolvedValueOnce([
+        { userId: 'op-1', startsAt: new Date('2026-01-01T09:00:00.000Z'), expiresAt: new Date('2026-01-01T13:00:00.000Z'), revokedAt: null },
+      ]);
+
+      const result = await service.getOrderAuditLog('order-1', 'dist-1', {});
+
+      expect(result.data[0]).toEqual(expect.objectContaining({ actorName: 'Rick Walsh (Stocdup support)', viaSupport: true }));
     });
 
     it('throws BadRequestException for an invalid cursor', async () => {

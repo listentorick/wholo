@@ -1,14 +1,24 @@
 import { HttpException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { AuthSession, AuthUser } from '@wholo/types';
 import { ApiClientService } from '../api-client/api-client.service';
+import { AppMode, appMode, mayUseApp, profilePath } from './app-mode';
 import type { KeycloakPrincipal } from './strategies/keycloak-jwt.strategy';
 
 @Injectable()
 export class AuthService {
-  constructor(private api: ApiClientService) {}
+  private readonly mode: AppMode;
 
-  me(bearerToken: string) {
-    return this.api.get('/auth/me', bearerToken);
+  constructor(
+    private api: ApiClientService,
+    config: ConfigService,
+  ) {
+    this.mode = appMode(config.get<string>('APP_MODE'));
+  }
+
+  /** The profile in the organisation this request is about (the Ops app's selection, if any). */
+  me(bearerToken: string, organisationId?: string) {
+    return this.api.get(profilePath(this.mode, organisationId), bearerToken);
   }
 
   /**
@@ -21,16 +31,21 @@ export class AuthService {
    * here too since this endpoint resolves the profile itself rather than going
    * through that guard. Any other upstream failure is a real error and is
    * rethrown.
+   *
+   * In the Ops app (ADR-078) the session is the operator's home organisation,
+   * which must be Stocdup's PLATFORM one; a selected wholesaler is checked on
+   * every other request instead. Ops never offers distributor onboarding.
    */
   async session(bearerToken: string, principal: KeycloakPrincipal): Promise<AuthSession> {
     try {
-      const user = await this.api.get<AuthUser>('/auth/me', bearerToken);
-      if (user.organisationType !== 'DISTRIBUTOR') {
+      const user = await this.api.get<AuthUser>(profilePath(this.mode, undefined), bearerToken);
+      if (!mayUseApp(user, this.mode, false)) {
         return { status: 'ACCESS_DENIED', user };
       }
       return { status: 'ACTIVE', user };
     } catch (e) {
       if (e instanceof HttpException && e.getStatus() === 401) {
+        if (this.mode === 'ops') return { status: 'ACCESS_DENIED' };
         return {
           status: 'ONBOARDING_REQUIRED',
           identity: {

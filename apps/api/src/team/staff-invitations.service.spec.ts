@@ -113,6 +113,7 @@ describe('StaffInvitationsService', () => {
     it.each([
       ['the Owner role', [Role.DISTRIBUTOR_ADMIN]],
       ['the platform admin role', [Role.PLATFORM_ADMIN]],
+      ['the Stocdup support role', [Role.SUPPORT]],
       ['the driver role', [Role.DRIVER]],
       ['a trade customer role', [Role.TRADE_CUSTOMER]],
       ['an assignable role mixed with the Owner role', [Role.OPERATIONS_MANAGER, Role.DISTRIBUTOR_ADMIN]],

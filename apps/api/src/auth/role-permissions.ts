@@ -6,7 +6,14 @@ import { Permission } from '@wholo/types';
 // given coherent permission sets even though nothing assigns those roles to
 // a real membership yet, so the taxonomy stays consistent as they come into use.
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [Role.PLATFORM_ADMIN]: Object.values(Permission),
+  // Platform work only (ADR-078): see wholesalers, platform stats, and open a
+  // support grant for yourself. It grants nothing inside a distributor — work
+  // there happens under a SupportAccessGrant carrying SUPPORT.
+  [Role.PLATFORM_ADMIN]: [
+    Permission.PLATFORM_DISTRIBUTORS_READ,
+    Permission.PLATFORM_STATS_READ,
+    Permission.SUPPORT_GRANTS_SELF_CREATE,
+  ],
   [Role.DISTRIBUTOR_ADMIN]: [
     Permission.ORDER_AS_INITIATE,
     Permission.ORDERS_READ,
@@ -64,4 +71,27 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   [Role.DRIVER]: [Permission.DELIVERY_READ, Permission.DELIVERY_MANAGE],
   [Role.TRADE_CUSTOMER]: [Permission.CATALOGUE_READ],
+  // Stocdup support inside a distributor, via a time-limited grant (ADR-078):
+  // configure the account, but never its team, its accounting connection, or
+  // ordering on a customer's behalf.
+  [Role.SUPPORT]: [
+    Permission.ORDERS_READ,
+    Permission.ORDERS_MANAGE,
+    Permission.CATALOGUE_READ,
+    Permission.CATALOGUE_MANAGE,
+    Permission.CUSTOMERS_READ,
+    Permission.CUSTOMERS_MANAGE,
+    Permission.PRICE_LISTS_MANAGE,
+    Permission.SUPPLIERS_MANAGE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_MANAGE,
+    Permission.ACCOUNTING_READ,
+    Permission.ACCOUNTING_IMPORT,
+    Permission.SETTINGS_MANAGE,
+    Permission.ASSET_IMAGES_MANAGE,
+    Permission.ANALYTICS_READ,
+    Permission.TAX_TYPES_READ,
+    Permission.TAX_TYPES_MANAGE,
+    Permission.ADMIN_NOTIFICATIONS_MANAGE,
+  ],
 };

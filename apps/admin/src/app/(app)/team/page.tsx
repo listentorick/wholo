@@ -11,6 +11,7 @@ import { ListSpinner } from '@/components/list/ListSpinner';
 import { InviteTeamMemberModal } from '@/components/team/InviteTeamMemberModal';
 import { TeamList } from '@/components/team/TeamList';
 import { TeamPersonDrawer } from '@/components/team/TeamPersonDrawer';
+import { SupportAccessSection } from '@/components/team/SupportAccessSection';
 import { useAuth } from '@/lib/auth-context';
 import { buildTeamEntries, countByFilter, matchesFilter, type TeamFilter } from '@/lib/team';
 
@@ -125,6 +126,8 @@ export default function TeamPage() {
           )}
         </>
       )}
+
+      <SupportAccessSection />
 
       {inviting && <InviteTeamMemberModal onClose={() => setInviting(false)} onInvited={invited} />}
       {selected && (

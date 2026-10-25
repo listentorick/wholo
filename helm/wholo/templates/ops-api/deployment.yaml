@@ -1,0 +1,49 @@
+{{- if .Values.opsApi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wholo.fullname" . }}-ops-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-ops-api
+spec:
+  replicas: {{ .Values.opsApi.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "wholo.fullname" . }}-ops-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "wholo.fullname" . }}-ops-api
+    spec:
+      {{- include "wholo.imagePullSecrets" . }}
+      containers:
+        - name: ops-api
+          image: {{ .Values.opsApi.image.repository }}:{{ .Values.opsApi.image.tag }}
+          imagePullPolicy: {{ .Values.opsApi.image.pullPolicy }}
+          ports:
+            - containerPort: 3020
+          envFrom:
+            - configMapRef:
+                name: {{ include "wholo.fullname" . }}-ops-api
+            - secretRef:
+                name: {{ include "wholo.fullname" . }}-ops-api
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 3020
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 3020
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.opsApi.resources | nindent 12 }}
+{{- end }}

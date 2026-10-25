@@ -7,6 +7,7 @@ vi.mock('@/lib/hooks/use-require-auth', () => ({ useRequireAuth: () => authState
 
 vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ logout: vi.fn() }) }));
 vi.mock('@/lib/nav-badges-context', () => ({ useNavBadges: () => ({ counts: {} }) }));
+vi.mock('@/lib/support-presence-context', () => ({ useSupportPresence: () => ({ active: [], refresh: vi.fn() }) }));
 vi.mock('@wholo/admin-api-client', () => ({
   adminAccountingApi: { getSyncStatus: vi.fn().mockResolvedValue({ runs: [], lastSucceededAt: null }) },
 }));

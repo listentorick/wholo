@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { adminAccountingApi, adminOrdersApi } from '@wholo/admin-api-client';
 import { useAuth } from './auth-context';
+import { needsWholesalerSelection } from './ops-mode';
 
 // The sidebar "needs attention" badges used to be fetched inside <Sidebar> on
 // every mount. With the sidebar remounting on every navigation that made them
@@ -41,7 +42,8 @@ export function NavBadgesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    // Ops build with no wholesaler open: there is nothing to count.
+    if (!user || needsWholesalerSelection(user)) return;
     refresh();
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(interval);

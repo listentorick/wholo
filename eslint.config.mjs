@@ -149,6 +149,31 @@ export default tseslint.config(
     },
   },
 
-  // (i) Keep this explicit so a future ESLint default change can't red the build.
+  // (i) Ops code stays out of the admin build (ADR-078). In apps/admin only
+  //     src/ops itself, the `.ops.tsx` routes and the one seam
+  //     (src/lib/ops-seam.tsx, whose imports are build-time dead in admin) may
+  //     import it; in apps/admin-api only the module that registers it by mode.
+  {
+    files: ['apps/admin/src/**/*.{ts,tsx}'],
+    ignores: ['apps/admin/src/ops/**', 'apps/admin/src/app/**/*.ops.{ts,tsx}', 'apps/admin/src/lib/ops-seam.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['@/ops', '@/ops/*', '**/ops/*'], message: 'Ops code is loaded only through src/lib/ops-seam.tsx (ADR-078).' }] },
+      ],
+    },
+  },
+  {
+    files: ['apps/admin-api/src/**/*.ts'],
+    ignores: ['apps/admin-api/src/ops/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [{ group: ['./ops/ops.module', '**/ops/ops.module', '**/ops/ops.controller', '**/ops/ops.service'], message: 'Register Ops endpoints only through opsOnlyModules (ADR-078).' }] },
+      ],
+    },
+  },
+
+  // (j) Keep this explicit so a future ESLint default change can't red the build.
   { linterOptions: { reportUnusedDisableDirectives: 'warn' } },
 );

@@ -1,10 +1,10 @@
 import { Role } from '@wholo/types';
-import { roleLabel } from '@/lib/team';
+import { isOwner, roleLabel } from '@/lib/team';
 
 // The Owner chip is deliberately the one dark chip on the page, so the Owner
 // reads as different in kind from the roles that can be granted.
 export function RoleChip({ role }: { role: Role }) {
-  const owner = role === Role.DISTRIBUTOR_ADMIN || role === Role.PLATFORM_ADMIN;
+  const owner = isOwner([role]);
   return (
     <span
       className={[

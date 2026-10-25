@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { adminAuthApi, adminAssetImagesApi, ApiError } from '@wholo/admin-api-client';
 import type { AuthUser, SessionIdentity } from '@wholo/types';
 import { ensureKeycloak, getKeycloak } from './keycloak';
+import { loadOpsScope } from './ops-seam';
 import {
   installAuthToken,
   isSessionExpired,
@@ -24,6 +25,8 @@ interface AuthContextValue {
   accessDenied: boolean;
   /** Identity claims for prefilling the onboarding wizard, or for display on /access-denied. */
   identity: SessionIdentity | null;
+  /** On /access-denied: the kind of organisation the account belongs to, when it has one. */
+  deniedOrganisationType: AuthUser['organisationType'] | null;
   /**
    * Email of the signed-in Keycloak identity, whatever its Stocdup state —
    * `identity` is only set for onboarding / access-denied, so this is what a
@@ -74,19 +77,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [identity, setIdentity] = useState<SessionIdentity | null>(null);
+  const [deniedOrganisationType, setDeniedOrganisationType] = useState<AuthUser['organisationType'] | null>(null);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
 
   const loadSession = useCallback(async () => {
     try {
+      // The Ops build (ADR-078) runs as the wholesaler selected in this tab,
+      // when there is one; the admin build gets null and is unchanged.
+      const opsScope = await loadOpsScope();
+      opsScope?.install();
       // Token comes from the centralised provider (installAuthToken) — no snapshot here.
       const session = await adminAuthApi.session();
       if (session.status === 'ACTIVE' && session.user) {
-        setUser(session.user);
+        const user = opsScope ? await opsScope.resolveUser(session.user) : session.user;
+        setUser(user);
         setOnboardingRequired(false);
         setAccessDenied(false);
         setIdentity(null);
-        if (session.user.organisationId) {
-          fetchLogoUrl(session.user.organisationId, setLogoUrl);
+        if (user.organisationId && user.organisationType === 'DISTRIBUTOR') {
+          fetchLogoUrl(user.organisationId, setLogoUrl);
         }
       } else if (session.status === 'ONBOARDING_REQUIRED') {
         setUser(null);
@@ -101,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setOnboardingRequired(false);
         setAccessDenied(true);
+        setDeniedOrganisationType(session.user?.organisationType ?? null);
         setIdentity(
           session.user
             ? { email: session.user.email, firstName: session.user.firstName, lastName: session.user.lastName }
@@ -174,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setOnboardingRequired(false);
     setAccessDenied(false);
     setIdentity(null);
+    setDeniedOrganisationType(null);
     setIdentityEmail(null);
     window.location.href = landing;
   }, []);
@@ -195,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onboardingRequired,
         accessDenied,
         identity,
+        deniedOrganisationType,
         identityEmail,
         refreshSession,
         login,

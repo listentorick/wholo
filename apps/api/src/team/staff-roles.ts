@@ -2,8 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { ASSIGNABLE_STAFF_ROLES } from '@wholo/types';
 
-/** Roles that mark a person as the Owner (or above) — never editable via Team. */
-export const OWNER_ROLES: readonly Role[] = [Role.DISTRIBUTOR_ADMIN, Role.PLATFORM_ADMIN];
+/** Roles that mark a person as the Owner — never editable via Team. */
+export const OWNER_ROLES: readonly Role[] = [Role.DISTRIBUTOR_ADMIN];
 
 const ASSIGNABLE = new Set<string>(ASSIGNABLE_STAFF_ROLES);
 

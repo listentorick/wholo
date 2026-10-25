@@ -46,6 +46,34 @@ client, `wholo-api-admin`, which holds only `realm-management: manage-users`.
   the API), but the queued Keycloak disables retry and fail — check the worker
   logs for `KEYCLOAK_ADMIN_CLIENT_SECRET` / `Keycloak could not …`.
 
+## Ops app client and operators (ADR-078)
+
+The Ops app (`ops-api`, `global.opsUrl`) signs in through the `stocdup-ops`
+client, whose sign-in flow asks for the password and then an authenticator-app
+code. Every realm, fresh or existing, needs it created once:
+
+```bash
+kubectl port-forward svc/wholo-keycloak 3080:8080 -n wholo &
+OPS_URL='<global.opsUrl from values.live.yaml>' \
+REALM=<your realm, e.g. prod> KEYCLOAK_ADMIN=<admin user> KEYCLOAK_ADMIN_PASSWORD=<admin password> \
+scripts/setup-keycloak-ops-client.sh
+```
+
+It is idempotent: re-running rebuilds the `stocdup-ops-browser` flow and
+converges the client. Until it has run, nobody can sign in to Ops.
+
+To make someone a Stocdup operator:
+
+1. Create their Keycloak user as usual (they set up an authenticator on their
+   first Ops sign-in).
+2. Give their Stocdup user a membership with role `PLATFORM_ADMIN` on the
+   Stocdup organisation (type `PLATFORM`). This is a database change; there is
+   no screen for it.
+
+An operator never becomes a member of a wholesaler. They open one from the Ops
+app with a reason, for up to 8 hours, and the wholesaler's Owner sees it on the
+Team page and can end it.
+
 ## Branded emails and error page
 
 Keycloak sends its own emails (verify email, password reset, security notices)

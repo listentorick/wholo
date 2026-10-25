@@ -27,6 +27,7 @@ import { AuditService } from '../audit/audit.service';
 import { R2StorageService } from '../asset-images/r2-storage.service';
 import { OrderQueryDto } from './dto/order-query.dto';
 import { AuditLogQueryDto } from './dto/audit-log-query.dto';
+import { labelSupportActors } from '../audit/support-attribution';
 import { organisationScope } from '../accounting/accounting-organisation';
 
 // Delivery proof photos live in a private bucket; hand admins short-lived
@@ -366,8 +367,10 @@ export class AdminOrdersService {
         ? Buffer.from(JSON.stringify({ createdAt: last.createdAt.toISOString(), id: last.id })).toString('base64url')
         : null;
 
+    const labelled = await labelSupportActors(this.prisma, distributorId, data);
+
     return {
-      data: data.map((entry) => ({
+      data: labelled.map((entry) => ({
         id: entry.id,
         entityType: entry.entityType,
         entityId: entry.entityId,
@@ -375,6 +378,7 @@ export class AdminOrdersService {
         actorType: entry.actorType,
         actorUserId: entry.actorUserId,
         actorName: entry.actorName,
+        viaSupport: entry.viaSupport,
         summary: entry.summary,
         changes: entry.changes,
         createdAt: entry.createdAt.toISOString(),

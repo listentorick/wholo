@@ -10,15 +10,21 @@ describe('TeamController', () => {
   });
 
   it('scopes every call to the caller’s own distributor, never one named by the client', () => {
-    const service = { overview: jest.fn(), removeMember: jest.fn() } as unknown as TeamService;
+    const service = { overview: jest.fn(), removeMember: jest.fn(), supportGrants: jest.fn(), endSupportGrant: jest.fn() } as unknown as TeamService;
     const controller = new TeamController(service);
     const req = { user: { organisationId: 'dist-own', token: 'tok' } } as never;
 
     controller.overview(req);
     controller.removeMember(req, 'user-1');
+    controller.supportGrants(req, 'true');
+    controller.supportGrants(req);
+    controller.endSupportGrant(req, 'g-1');
 
     expect(service.overview).toHaveBeenCalledWith('dist-own', 'tok');
     expect(service.removeMember).toHaveBeenCalledWith('dist-own', 'user-1', 'tok');
+    expect(service.supportGrants).toHaveBeenNthCalledWith(1, 'dist-own', true, 'tok');
+    expect(service.supportGrants).toHaveBeenNthCalledWith(2, 'dist-own', false, 'tok');
+    expect(service.endSupportGrant).toHaveBeenCalledWith('dist-own', 'g-1', 'tok');
   });
 });
 

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { adminNotificationsApi } from '@wholo/admin-api-client';
 import type { AdminNotification } from '@wholo/types';
 import { useAuth } from './auth-context';
+import { isOpsBuild } from './ops-mode';
 
 // No existing polling precedent in this codebase — kept deliberately simple:
 // a plain setInterval, no backoff, no visibility-change pausing. A future
@@ -42,7 +43,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    // The Ops build shows no bell: these would be the wholesaler's notifications.
+    if (!user || isOpsBuild) return;
     refreshUnreadCount();
     const interval = setInterval(refreshUnreadCount, POLL_INTERVAL_MS);
     return () => clearInterval(interval);

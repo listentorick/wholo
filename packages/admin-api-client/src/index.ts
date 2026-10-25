@@ -23,4 +23,4 @@ export { adminCustomerOrderingApi } from './customer-ordering';
 export { adminDeliveryOverviewApi } from './delivery-overview';
 export { adminNotificationsApi } from './notifications';
 export { adminTeamApi } from './team';
-export { ApiError, setTokenProvider } from './base';
+export { ApiError, setTokenProvider, setRequestHeadersProvider, setApiErrorListener, apiFetch } from './base';

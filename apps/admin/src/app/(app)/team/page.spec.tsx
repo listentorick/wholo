@@ -10,6 +10,7 @@ const auth: { user: { id: string; permissions: string[]; organisationName: strin
   accessToken: 'tok',
 };
 vi.mock('@/lib/auth-context', () => ({ useAuth: () => auth }));
+vi.mock('@/lib/support-presence-context', () => ({ useSupportPresence: () => ({ active: [], refresh: vi.fn() }) }));
 
 const overview = vi.fn();
 const invite = vi.fn();

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Permission } from '@wholo/types';
 import { useCan } from '@/lib/permissions';
 import { useNavBadges } from '@/lib/nav-badges-context';
+import { OpsLogoTag, OpsSidebarNote } from '@/lib/ops-seam';
 
 interface NavItem {
   label: string;
@@ -246,6 +247,7 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
         <span className="text-[18px] font-extrabold tracking-[-0.045em] text-text">
           stocd<span className="text-primary">up</span>
         </span>
+        <OpsLogoTag />
         {/* Close button — visible on mobile only */}
         <button
           onClick={onClose}
@@ -297,6 +299,8 @@ export function Sidebar({ onClose, onLogout }: SidebarProps) {
           </div>
         ))}
       </nav>
+
+      <OpsSidebarNote />
 
       {/* Bottom section */}
       <div className="shrink-0 border-t border-sidebar-border px-3 py-3 space-y-0.5">

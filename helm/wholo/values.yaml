@@ -20,6 +20,8 @@ logging:
 global:
   portalUrl: "http://localhost:3010"
   adminUrl: "http://localhost:3020"
+  # The Ops app for Stocdup operators (ADR-078).
+  opsUrl: "http://localhost:3050"
   driverUrl: "http://localhost:3030"
 
 postgresql:
@@ -194,6 +196,29 @@ adminApi:
   service:
     type: LoadBalancer
     port: 3020
+  resources:
+    requests:
+      memory: "384Mi"
+      cpu: "100m"
+    limits:
+      memory: "768Mi"
+      cpu: "500m"
+  centralApiUrl: "http://wholo-api:3001"
+
+# The Ops app (ADR-078): the admin frontend + BFF built again with
+# NEXT_PUBLIC_APP_MODE=ops and the `stocdup-ops` Keycloak client (which
+# requires an authenticator app). Same Dockerfile as admin-api. Off unless an
+# environment switches it on with its own image (values.local.yaml, live).
+opsApi:
+  enabled: false
+  image:
+    repository: wholo/ops-api
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3050
   resources:
     requests:
       memory: "384Mi"
@@ -497,6 +522,7 @@ ingress:
   hosts:
     portal: ""
     admin: ""
+    ops: ""
     driver: ""
     www: ""
     api: ""

@@ -1,0 +1,31 @@
+{{- if .Values.opsApi.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wholo.fullname" . }}-ops-api
+  labels:
+    app: {{ include "wholo.fullname" . }}-ops-api
+data:
+  PORT: "3020"
+  NODE_ENV: "production"
+  APP_ENV: {{ .Values.appEnv | default "local" | quote }}
+  # `service` label on every metric this process emits (ADR-063/065).
+  SERVICE_NAME: "ops-api"
+  # Structured logging level (ADR-064).
+  LOG_LEVEL: {{ .Values.logging.level | default "info" | quote }}
+  {{- if and .Values.telegraf.enabled .Values.telegraf.platformHealth.enabled }}
+  # Platform-health metrics (ADR-065): prom-client served on this port at
+  # /metrics for Telegraf's scrape; unset ⇒ no metrics server. This BFF
+  # sends nothing over StatsD.
+  METRICS_PORT: {{ include "wholo.metrics.port" . | quote }}
+  {{- end }}
+  CENTRAL_API_URL: {{ .Values.opsApi.centralApiUrl | quote }}
+  KEYCLOAK_URL: {{ printf "http://%s:%d" (include "wholo.keycloak.host" .) (int .Values.keycloak.port) | quote }}
+  KEYCLOAK_REALM: {{ .Values.keycloak.realm | quote }}
+  NEXT_APP_DIR: "/app/admin"
+  PORTAL_URL: {{ .Values.global.portalUrl | quote }}
+  # The Ops app (ADR-078): the admin BFF + frontend built with
+  # NEXT_PUBLIC_APP_MODE=ops. Registers the /ops endpoints and requires the
+  # Stocdup PLATFORM organisation (or support access) instead of a distributor.
+  APP_MODE: "ops"
+{{- end }}
