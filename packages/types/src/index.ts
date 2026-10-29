@@ -1387,6 +1387,70 @@ export interface AccountingProductNeedsAttentionCountResponse {
   count: number;
 }
 
+// One Stocdup record's link to the accounting system, read from the record's
+// side (customer or product detail page). Provider-neutral like everything
+// above: providerName comes from the adapter, never from the client.
+export interface AccountingRecordLinkConnection {
+  provider: AccountingProvider;
+  providerName: string;
+  status: AccountingConnectionStatus;
+  lastSyncedAt: string | null;
+}
+
+export interface AccountingRecordLinkUser {
+  name: string;
+}
+
+export interface AccountingLinkedContact {
+  id: string;
+  displayName: string;
+  code: string | null;
+  email: string | null;
+}
+
+export interface AccountingLinkedProduct {
+  id: string;
+  displayName: string;
+  code: string | null;
+  salesUnitPrice: string | null;
+  taxCode: string | null;
+  taxName: string | null;
+}
+
+export interface AccountingRecordLinkHistoryEntry {
+  externalDisplayName: string;
+  linkedAt: string;
+  linkedBy: AccountingRecordLinkUser | null;
+  unlinkedAt: string | null;
+}
+
+export interface AccountingRecordLink<TExternal, TMatchMethod> {
+  // null = no accounting connection; every other field is then empty.
+  connection: AccountingRecordLinkConnection | null;
+  link: {
+    mappingId: string;
+    matchMethod: TMatchMethod;
+    linkedAt: string;
+    linkedBy: AccountingRecordLinkUser | null;
+    external: TExternal;
+  } | null;
+  // The linked provider record changed on a later sync and nobody has
+  // acknowledged it yet. The current values are in link.external.
+  change: { detectedAt: string } | null;
+  // An open match suggestion pointing at this record (only when not linked).
+  suggestion: {
+    id: string;
+    confidence: number;
+    matchMethod: TMatchMethod;
+    matchReason: string;
+    external: TExternal;
+  } | null;
+  history: (AccountingRecordLinkHistoryEntry & { matchMethod: TMatchMethod })[];
+}
+
+export type AccountingCustomerLink = AccountingRecordLink<AccountingLinkedContact, AccountingContactMatchMethod>;
+export type AccountingProductLink = AccountingRecordLink<AccountingLinkedProduct, AccountingProductMatchMethod>;
+
 export interface ImportAccountingProductRequest {
   name?: string;
   description?: string;

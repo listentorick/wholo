@@ -313,6 +313,22 @@ describe('AccountingService (BFF)', () => {
     });
   });
 
+  describe('getCustomerLink', () => {
+    it("gets the customer's accounting link route", async () => {
+      mockApi.get.mockResolvedValue({ connection: null });
+      const result = await service.getCustomerLink('dist-1', 'cust-1', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/customers/cust-1/accounting', 'token-1');
+      expect(result).toEqual({ connection: null });
+    });
+  });
+
+  describe('getProductLink', () => {
+    it("gets the product's accounting link route", async () => {
+      await service.getProductLink('dist-1', 'prod-1', 'token-1');
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/products/prod-1/accounting', 'token-1');
+    });
+  });
+
   describe('handleXeroCallback', () => {
     it('calls api.postAnonymous with no bearer token — this is a server-to-server call, not a user request', async () => {
       mockApi.postAnonymous.mockResolvedValue({ status: 'connected' });

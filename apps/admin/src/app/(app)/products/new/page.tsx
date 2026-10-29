@@ -18,8 +18,6 @@ export default function NewProductPage() {
 
   return (
     <ProductForm
-      mode="create"
-     
       currencyCode={user?.organisationCurrencyCode ?? 'GBP'}
       onSubmit={handleSubmit}
     />

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ProductStatus, PriceListRuleSelectorType, PriceListRuleValueType, PriceListRuleDiscountBaseType, formatMoney, getCurrencySymbol } from '@wholo/types';
@@ -23,7 +23,7 @@ const priceField = z
     'Enter a valid price (e.g. 12.99)',
   );
 
-const schema = z
+export const productSchema = z
   .object({
     name: z.string().min(1, 'Title is required'),
     description: z.string().optional(),
@@ -44,7 +44,7 @@ const schema = z
     }
   });
 
-type FormValues = z.infer<typeof schema>;
+export type ProductFormValues = z.infer<typeof productSchema>;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -347,7 +347,7 @@ interface ProductPricingTableProps {
   productId: string;
 }
 
-function ProductPricingTable({ productId }: ProductPricingTableProps) {
+export function ProductPricingTable({ productId }: ProductPricingTableProps) {
   const [entries, setEntries] = useState<ProductPricingEntry[]>([]);
   const [priceLists, setPriceLists] = useState<PriceListSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -437,45 +437,48 @@ function ProductPricingTable({ productId }: ProductPricingTableProps) {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Shared pieces ────────────────────────────────────────────────────────────
+// The create form below and the tabbed product page (app/(app)/products/[id])
+// are built from the same sections, so a field is defined once.
 
-interface ProductFormProps {
-  mode: 'create' | 'edit';
-  currencyCode: string;
-  initialValues?: Product;
-  onSubmit: (data: CreateProductRequest) => Promise<void>;
-  onDelete?: () => Promise<void>;
+export function productDefaultValues(product?: Product): ProductFormValues {
+  return {
+    name: product?.name ?? '',
+    description: product?.description ?? '',
+    sku: product?.sku ?? '',
+    status: product?.status ?? ProductStatus.DRAFT,
+    productTypeId: product?.productType?.id ?? '',
+    supplierId: product?.supplier?.id ?? '',
+    taxTypeId: product?.taxType?.id ?? '',
+    price: product?.price ?? '',
+  };
 }
 
-export function ProductForm({ mode, currencyCode, initialValues, onSubmit, onDelete }: ProductFormProps) {
+export function toProductRequest(data: ProductFormValues): CreateProductRequest {
+  return {
+    name: data.name,
+    description: data.description || undefined,
+    sku: data.sku || undefined,
+    status: data.status,
+    productTypeId: data.productTypeId || undefined,
+    supplierId: data.supplierId || undefined,
+    taxTypeId: data.taxTypeId || undefined,
+    price: data.price || undefined,
+  };
+}
+
+export interface ProductMeta {
+  productTypes: ProductType[];
+  suppliers: Supplier[];
+  taxTypes: TaxType[];
+  loading: boolean;
+}
+
+export function useProductMeta(): ProductMeta {
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [taxTypes, setTaxTypes] = useState<TaxType[]>([]);
-  const [metaLoading, setMetaLoading] = useState(true);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: initialValues?.name ?? '',
-      description: initialValues?.description ?? '',
-      sku: initialValues?.sku ?? '',
-      status: initialValues?.status ?? ProductStatus.DRAFT,
-      productTypeId: initialValues?.productType?.id ?? '',
-      supplierId: initialValues?.supplier?.id ?? '',
-      taxTypeId: initialValues?.taxType?.id ?? '',
-      price: initialValues?.price ?? '',
-    },
-  });
-
-  const selectedTaxTypeId = watch('taxTypeId');
-  const selectedTaxType = taxTypes.find((t) => t.id === selectedTaxTypeId);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([adminProductTypesApi.list(), adminSuppliersApi.list(), adminTaxTypesApi.list({ limit: 100 })])
@@ -485,43 +488,245 @@ export function ProductForm({ mode, currencyCode, initialValues, onSubmit, onDel
         setTaxTypes(taxes.data);
       })
       .catch(() => {})
-      .finally(() => setMetaLoading(false));
+      .finally(() => setLoading(false));
   }, []);
 
-  async function onFormSubmit(data: FormValues) {
+  return { productTypes, suppliers, taxTypes, loading };
+}
+
+interface FieldsProps {
+  form: UseFormReturn<ProductFormValues>;
+  meta: ProductMeta;
+  disabled: boolean;
+  /** Set once the product exists — enables the parts that need its id (images, price list overrides). */
+  productId?: string;
+}
+
+/** Fields that live under the Pricing tab — used to open that tab when one fails validation. */
+export const PRICING_FIELDS: (keyof ProductFormValues)[] = ['price', 'taxTypeId'];
+
+// Title, description, organisation and images.
+export function ProductDetailsFields({ form, meta, disabled, productId }: FieldsProps) {
+  const { register, formState: { errors } } = form;
+  return (
+    <div className="space-y-5">
+      {/* Title + Description */}
+      <FormCard>
+        <div className="space-y-4">
+          <div>
+            <FieldLabel htmlFor="name">Title</FieldLabel>
+            <TextInput
+              id="name"
+              placeholder="Short sleeve t-shirt"
+              disabled={disabled}
+              {...register('name')}
+            />
+            <FieldError message={errors.name?.message} />
+          </div>
+          <div>
+            <FieldLabel htmlFor="description">Description</FieldLabel>
+            <textarea
+              id="description"
+              rows={5}
+              placeholder="Add a description for this product…"
+              disabled={disabled}
+              className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+              {...register('description')}
+            />
+            <FieldError message={errors.description?.message} />
+          </div>
+        </div>
+      </FormCard>
+
+      {/* Product organization */}
+      <FormCard title="Product organization">
+        <div className="space-y-4">
+          <div>
+            <FieldLabel htmlFor="productTypeId">Product type</FieldLabel>
+            {meta.loading ? (
+              <div className="h-9 animate-pulse rounded-md bg-border/30" />
+            ) : (
+              <SelectInput
+                id="productTypeId"
+                disabled={disabled}
+                {...register('productTypeId')}
+              >
+                <option value="">— None —</option>
+                {meta.productTypes.map((pt) => (
+                  <option key={pt.id} value={pt.id}>
+                    {pt.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
+          </div>
+          <div>
+            <FieldLabel htmlFor="supplierId">Supplier</FieldLabel>
+            {meta.loading ? (
+              <div className="h-9 animate-pulse rounded-md bg-border/30" />
+            ) : (
+              <SelectInput
+                id="supplierId"
+                disabled={disabled}
+                {...register('supplierId')}
+              >
+                <option value="">— None —</option>
+                {meta.suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </SelectInput>
+            )}
+          </div>
+          <div>
+            <FieldLabel htmlFor="sku">SKU (Stock Keeping Unit)</FieldLabel>
+            <TextInput
+              id="sku"
+              placeholder="e.g. WINE-CAB-2021"
+              disabled={disabled}
+              {...register('sku')}
+            />
+          </div>
+        </div>
+      </FormCard>
+
+      {/* Product images — existing products only */}
+      {productId && (
+        <FormCard title="Product images">
+          <ProductImageUploader productId={productId} />
+        </FormCard>
+      )}
+    </div>
+  );
+}
+
+// Default price, tax type and price list overrides.
+export function ProductPricingFields({ form, meta, disabled, productId, currencyCode }: FieldsProps & { currencyCode: string }) {
+  const { register, watch, formState: { errors } } = form;
+  const selectedTaxType = meta.taxTypes.find((t) => t.id === watch('taxTypeId'));
+  return (
+    <FormCard title="Pricing">
+      <div className="max-w-[calc(50%-0.5rem)]">
+        <FieldLabel htmlFor="price">Price</FieldLabel>
+        <div className="relative">
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">{getCurrencySymbol(currencyCode)}</span>
+          <TextInput
+            id="price"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            disabled={disabled}
+            style={{ paddingLeft: '1.75rem' }}
+            {...register('price')}
+          />
+        </div>
+        <p className="mt-1 text-xs text-muted">The price customers pay by default.</p>
+        <FieldError message={errors.price?.message} />
+      </div>
+
+      {/* Tax */}
+      <div className="mt-4">
+        <FieldLabel htmlFor="taxTypeId">Tax type</FieldLabel>
+        {meta.loading ? (
+          <div className="h-9 animate-pulse rounded-md bg-border/30" />
+        ) : (
+          <SelectInput id="taxTypeId" disabled={disabled} {...register('taxTypeId')}>
+            <option value="">— None —</option>
+            {meta.taxTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.ratePercentage}%){t.active ? '' : ' — inactive'}
+              </option>
+            ))}
+          </SelectInput>
+        )}
+        <p className="mt-1 text-xs text-muted">
+          Tax is calculated on top of the price above. Required before this product can be set to Active.
+        </p>
+        {selectedTaxType?.isDefault && (
+          <p className="mt-1.5 text-xs text-amber-700">
+            This is the automatic default tax type — pick the correct one for this product when you know it.
+          </p>
+        )}
+        <FieldError message={errors.taxTypeId?.message} />
+      </div>
+
+      {/* Price list rules — existing products only */}
+      {productId && (
+        <div className="mt-5 border-t border-border pt-5">
+          <FieldLabel>Price list overrides</FieldLabel>
+          <p className="mb-3 text-xs text-muted">Overrides the default price above for customers on a matching price list.</p>
+          <ProductPricingTable productId={productId} />
+        </div>
+      )}
+    </FormCard>
+  );
+}
+
+export function ProductStatusCard({ form, disabled }: { form: UseFormReturn<ProductFormValues>; disabled: boolean }) {
+  return (
+    <FormCard title="Product status">
+      <div className="space-y-2">
+        {STATUS_OPTIONS.map(({ value, label, color }) => (
+          <label
+            key={value}
+            className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[hsl(var(--color-border)/20%)]"
+          >
+            <input
+              type="radio"
+              value={value}
+              disabled={disabled}
+              className="h-4 w-4 accent-primary"
+              {...form.register('status')}
+            />
+            <span className="flex items-center gap-2 text-sm font-medium text-text">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+              {label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </FormCard>
+  );
+}
+
+// ─── Create form ──────────────────────────────────────────────────────────────
+// Adding a product is one stacked form; an existing product opens the tabbed
+// page instead.
+
+interface ProductFormProps {
+  currencyCode: string;
+  onSubmit: (data: CreateProductRequest) => Promise<void>;
+}
+
+export function ProductForm({ currencyCode, onSubmit }: ProductFormProps) {
+  const meta = useProductMeta();
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const form = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: productDefaultValues(),
+  });
+  const { handleSubmit, formState: { isSubmitting } } = form;
+
+  async function onFormSubmit(data: ProductFormValues) {
     setApiError(null);
     try {
-      await onSubmit({
-        name: data.name,
-        description: data.description || undefined,
-        sku: data.sku || undefined,
-        status: data.status,
-        productTypeId: data.productTypeId || undefined,
-        supplierId: data.supplierId || undefined,
-        taxTypeId: data.taxTypeId || undefined,
-        price: data.price || undefined,
-      });
+      await onSubmit(toProductRequest(data));
     } catch (err: unknown) {
       setApiError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     }
   }
 
-  async function handleDelete() {
-    if (!onDelete) return;
-    setIsDeleting(true);
-    try {
-      await onDelete();
-    } catch {
-      setIsDeleting(false);
-    }
-  }
-
-  const disabled = isSubmitting || metaLoading;
+  const disabled = isSubmitting || meta.loading;
 
   const actions: ActionItem[] = [
     {
       key: 'save',
-      label: mode === 'create' ? 'Save product' : 'Save changes',
+      label: 'Save product',
       tone: 'primary',
       type: 'submit',
       disabled,
@@ -529,211 +734,24 @@ export function ProductForm({ mode, currencyCode, initialValues, onSubmit, onDel
       loadingLabel: 'Saving…',
     },
     { key: 'discard', label: 'Discard', href: '/products' },
-    ...(mode === 'edit' && onDelete
-      ? ([
-          {
-            key: 'delete',
-            label: 'Delete product',
-            tone: 'danger',
-            dangerZone: true,
-            loading: isDeleting,
-            loadingLabel: 'Deleting…',
-            onClick: handleDelete,
-            confirm: { prompt: 'Are you sure? This cannot be undone.', confirmLabel: 'Yes, delete' },
-          },
-        ] satisfies ActionItem[])
-      : []),
   ];
 
   return (
     <>
-      <DetailPageHeader
-        backHref="/products"
-        backLabel="Products"
-        heading={mode === 'create' ? 'Add product' : initialValues?.name ?? 'Edit product'}
-        headingStyle={mode === 'create' ? 'accent' : 'plain'}
-      />
+      <DetailPageHeader backHref="/products" backLabel="Products" heading="Add product" headingStyle="accent" />
 
       <form onSubmit={handleSubmit(onFormSubmit)} noValidate>
         <DetailPageLayout
           sidebar={
             <>
               <DetailActionsPanel layout="sidebar" actions={actions} banner={{ error: apiError }} />
-
-              {/* Product status */}
-              <FormCard title="Product status">
-                <div className="space-y-2">
-                  {STATUS_OPTIONS.map(({ value, label, color }) => (
-                    <label
-                      key={value}
-                      className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-[hsl(var(--color-border)/20%)]"
-                    >
-                      <input
-                        type="radio"
-                        value={value}
-                        disabled={disabled}
-                        className="h-4 w-4 accent-primary"
-                        {...register('status')}
-                      />
-                      <span className="flex items-center gap-2 text-sm font-medium text-text">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: color }}
-                        />
-                        {label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </FormCard>
+              <ProductStatusCard form={form} disabled={disabled} />
             </>
           }
         >
           <div className="space-y-5">
-
-            {/* Title + Description */}
-            <FormCard>
-              <div className="space-y-4">
-                <div>
-                  <FieldLabel htmlFor="name">Title</FieldLabel>
-                  <TextInput
-                    id="name"
-                    placeholder="Short sleeve t-shirt"
-                    disabled={disabled}
-                    {...register('name')}
-                  />
-                  <FieldError message={errors.name?.message} />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="description">Description</FieldLabel>
-                  <textarea
-                    id="description"
-                    rows={5}
-                    placeholder="Add a description for this product…"
-                    disabled={disabled}
-                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text placeholder-muted/60 outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                    {...register('description')}
-                  />
-                  <FieldError message={errors.description?.message} />
-                </div>
-              </div>
-            </FormCard>
-
-            {/* Pricing */}
-            <FormCard title="Pricing">
-              <div className="max-w-[calc(50%-0.5rem)]">
-                <FieldLabel htmlFor="price">Price</FieldLabel>
-                <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted">{getCurrencySymbol(currencyCode)}</span>
-                  <TextInput
-                    id="price"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    disabled={disabled}
-                    style={{ paddingLeft: '1.75rem' }}
-                    {...register('price')}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-muted">The price customers pay by default.</p>
-                <FieldError message={errors.price?.message} />
-              </div>
-
-              {/* Tax */}
-              <div className="mt-4">
-                <FieldLabel htmlFor="taxTypeId">Tax type</FieldLabel>
-                {metaLoading ? (
-                  <div className="h-9 animate-pulse rounded-md bg-border/30" />
-                ) : (
-                  <SelectInput id="taxTypeId" disabled={disabled} {...register('taxTypeId')}>
-                    <option value="">— None —</option>
-                    {taxTypes.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.ratePercentage}%){t.active ? '' : ' — inactive'}
-                      </option>
-                    ))}
-                  </SelectInput>
-                )}
-                <p className="mt-1 text-xs text-muted">
-                  Tax is calculated on top of the price above. Required before this product can be set to Active.
-                </p>
-                {selectedTaxType?.isDefault && (
-                  <p className="mt-1.5 text-xs text-amber-700">
-                    This is the automatic default tax type — pick the correct one for this product when you know it.
-                  </p>
-                )}
-                <FieldError message={errors.taxTypeId?.message} />
-              </div>
-
-              {/* Price list rules — edit mode only */}
-              {mode === 'edit' && initialValues && (
-                <div className="mt-5 border-t border-border pt-5">
-                  <FieldLabel>Price list overrides</FieldLabel>
-                  <p className="mb-3 text-xs text-muted">Overrides the default price above for customers on a matching price list.</p>
-                  <ProductPricingTable productId={initialValues.id} />
-                </div>
-              )}
-            </FormCard>
-
-            {/* Product organization */}
-            <FormCard title="Product organization">
-              <div className="space-y-4">
-                <div>
-                  <FieldLabel htmlFor="productTypeId">Product type</FieldLabel>
-                  {metaLoading ? (
-                    <div className="h-9 animate-pulse rounded-md bg-border/30" />
-                  ) : (
-                    <SelectInput
-                      id="productTypeId"
-                      disabled={disabled}
-                      {...register('productTypeId')}
-                    >
-                      <option value="">— None —</option>
-                      {productTypes.map((pt) => (
-                        <option key={pt.id} value={pt.id}>
-                          {pt.name}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  )}
-                </div>
-                <div>
-                  <FieldLabel htmlFor="supplierId">Supplier</FieldLabel>
-                  {metaLoading ? (
-                    <div className="h-9 animate-pulse rounded-md bg-border/30" />
-                  ) : (
-                    <SelectInput
-                      id="supplierId"
-                      disabled={disabled}
-                      {...register('supplierId')}
-                    >
-                      <option value="">— None —</option>
-                      {suppliers.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </SelectInput>
-                  )}
-                </div>
-                <div>
-                  <FieldLabel htmlFor="sku">SKU (Stock Keeping Unit)</FieldLabel>
-                  <TextInput
-                    id="sku"
-                    placeholder="e.g. WINE-CAB-2021"
-                    disabled={disabled}
-                    {...register('sku')}
-                  />
-                </div>
-              </div>
-            </FormCard>
-
-            {/* Product images — edit mode only */}
-            {mode === 'edit' && initialValues?.id && (
-              <FormCard title="Product images">
-                <ProductImageUploader productId={initialValues.id} />
-              </FormCard>
-            )}
+            <ProductDetailsFields form={form} meta={meta} disabled={disabled} />
+            <ProductPricingFields form={form} meta={meta} disabled={disabled} currencyCode={currencyCode} />
           </div>
         </DetailPageLayout>
       </form>

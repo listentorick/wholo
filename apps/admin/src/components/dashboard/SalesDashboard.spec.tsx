@@ -173,7 +173,7 @@ describe('SalesDashboard', () => {
     const customerLink = await screen.findByRole('link', { name: 'Blackbird Restaurant' });
     expect(customerLink).toHaveAttribute('href', '/customers/cust-1');
     const productLink = screen.getByRole('link', { name: 'Cabernet Sauvignon' });
-    expect(productLink).toHaveAttribute('href', '/products/prod-1/edit');
+    expect(productLink).toHaveAttribute('href', '/products/prod-1');
   });
 
   it("no longer carries a 'Needs attention' list: what needs doing lives on the Delivery dashboard", async () => {

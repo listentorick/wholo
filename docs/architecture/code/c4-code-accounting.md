@@ -3,7 +3,7 @@
 ## Overview
 
 - **Name**: Accounting integration core (provider-neutral framework, with the Xero OAuth edge and the invoice payment state writer)
-- **Description**: The files directly in `apps/api/src/accounting/` plus `dto/`. They hold the connection and OAuth lifecycle, token encryption and refresh, provider call budget and failure classification, the organisation scope rule, the HTTP surface for contacts / products / tax types / invoice export, the single writer of invoice payment state, derived payment status, and the sync scheduler.
+- **Description**: The files directly in `apps/api/src/accounting/` plus `dto/`. They hold the connection and OAuth lifecycle, token encryption and refresh, provider call budget and failure classification, the organisation scope rule, the HTTP surface for contacts / products / tax types / invoice export, the reverse link lookup from customer and product records, the single writer of invoice payment state, derived payment status, and the sync scheduler.
 - **Location**: `apps/api/src/accounting/` (excluding `adapters/`, `sync/`, `matching/`, and the `*.spec.ts` files)
 - **Language**: TypeScript (NestJS, Prisma, BullMQ, ioredis)
 - **Purpose**: Connect a distributor to an accounting provider (Xero today), keep the provider's contacts, products and tax rates cached and matched to Stocdup records, export orders as invoices, sync invoice payment status back, and expose the admin HTTP API for all of it. Provider-specific behaviour is behind `AccountingConnectionAdapter` (in `adapters/`, documented elsewhere).
@@ -60,7 +60,7 @@ Process column: **API** = served by `apps/api` (`main.ts`, `AppModule`); **Worke
 - **Public methods**:
   - `getConnectionStatus(distributorId: string)` (49): status view of the CONNECTED-or-ERROR connection, or `null`.
   - `updateConnectionSettings(distributorId: string, settings: { invoiceExportTargetStatus: AccountingInvoiceTargetStatus })` (58): writes `AccountingOrganisation.invoiceExportTargetStatus`; throws `NotFoundException` if no connection.
-  - `getCurrentConnection(distributorId: string)` (76): returns the CONNECTED-or-ERROR connection row (with organisation) or `null`; used by `AccountingSyncService.getStatus`.
+  - `getCurrentConnection(distributorId: string)` (76): returns the CONNECTED-or-ERROR connection row (with organisation) or `null`; used by `AccountingSyncService.getStatus` and `AccountingRecordLinkService` (`getCustomerLink`, `getProductLink`).
   - `getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnectionWithOrganisation>` (82): CONNECTED only; `NotFoundException` otherwise; used by `AccountingSyncService.requestSync`.
   - `createAuthorizationUrl(distributorId: string, connectedByUserId: string, provider: AccountingProvider): Promise<{ authorizationUrl: string }>` (121): writes an `AccountingOAuthState` row (random 32-byte hex state, 10-minute expiry), then `adapters.get(provider).buildAuthorizationUrl(state)`.
   - `handleCallback(callbackUrl: string, code: string | undefined, state: string | undefined): Promise<void>` (142): see the OAuth flow below.
@@ -329,6 +329,45 @@ Each of the three record types has a controller (HTTP) and a service (business l
 - **Behaviour**: does nothing unless `hasActiveMapping` and `previous` are both set. Compares `params.fields` with `String(...)`. On difference it calls `markChanged()` (supplied by the caller) and `AdminNotificationsService.notifyOrganisationAdmins(distributorId, notification)`. It never changes the Wholo side of a mapping.
 - **Dependencies**: `AdminNotificationsService`; Prisma `Prisma.InputJsonValue` type
 
+#### `AccountingRecordLinkController` (controller)
+
+- **Kind**: HTTP controller, read-only
+- **Location**: `apps/api/src/accounting/accounting-record-link.controller.ts:17` (`@Controller('distributors/:distributorId')` at line 16)
+- **Group**: framework (provider-neutral)
+- **Process**: API
+- **Class guards** (line 15): `JwtAuthGuard`, `DistributorAccessGuard`, `PermissionsGuard`
+
+| Method and path (under `/api/v1/distributors/:distributorId`) | Handler (line) | Permission (line) | Delegates to |
+|---|---|---|---|
+| `GET /customers/:customerId/accounting` | `getCustomerLink(distributorId, customerId)` (24) | `ACCOUNTING_READ` (21) | `AccountingRecordLinkService.getCustomerLink`; `customerId` is the customer organisation id |
+| `GET /products/:productId/accounting` | `getProductLink(distributorId, productId)` (31) | `ACCOUNTING_READ` (29) | `AccountingRecordLinkService.getProductLink` |
+
+- **Dependencies**: `AccountingRecordLinkService`
+
+#### `AccountingRecordLinkService` (service)
+
+- **Kind**: service, read-only (reverse lookup from a Stocdup customer or product to its accounting link)
+- **Location**: `apps/api/src/accounting/accounting-record-link.service.ts:51` (`@Injectable()` at line 50)
+- **Group**: framework (provider-neutral). The provider name comes from `AccountingAdapterRegistry.displayName`; the service has no provider branch.
+- **Process**: Both (HTTP via the controller; constructed in both processes as an `AccountingModule` provider)
+- **Module-level declarations** (not exported): `interface MappingRow<TExternal>` (28), `interface SuggestionRow<TExternal>` (37), `interface ChangeTracked` (45), `emptyLink<TExternal, TMatchMethod>()` (218)
+- **Public methods**:
+  - `getCustomerLink(distributorId: string, customerId: string): Promise<AccountingCustomerLink>` (58): looks up the `TradeRelationship` by `{ distributorId, customerId, deletedAt: null }` and throws `NotFoundException('Customer not found')` (63) when there is none. Reads `CustomerAccountingMapping` rows (with `externalContact`, newest `linkedAt` first) and, when there is no active link, an `AccountingContactMatchSuggestion` for the relationship.
+  - `getProductLink(distributorId: string, productId: string): Promise<AccountingProductLink>` (103): looks up the `Product` by `{ id, distributorId, deletedAt: null }` and throws `NotFoundException('Product not found')` (108) when there is none. Reads `ProductAccountingMapping` rows and, when there is no active link, an `AccountingProductMatchSuggestion`. Resolves tax names from `ExternalAccountingTaxType`.
+- **Private methods**: `build` (161, shapes the `AccountingRecordLink` result for both record types), `userNames` (207, `User` display names for `linkedByUserId`)
+- **Behaviour**:
+  - Both methods check the Stocdup record first (404), then the current connection through `getCurrentConnection` (CONNECTED or ERROR). With no connection the result is `{ connection: null, link: null, change: null, suggestion: null, history: [] }` (`emptyLink`, 218-220).
+  - Scope: every mapping, suggestion and tax type query spreads `organisationScope(connection)` (ADR-074).
+  - `link`: the first mapping with `unlinkedAt: null`. `history`: all mappings for the record, active and unlinked, newest first.
+  - `suggestion`: queried only when there is no active link. Status `SUGGESTED`, highest `confidence` first. Excludes external records with `ignoredAt` set and external records already linked to another record (`mappings: { none: { unlinkedAt: null } }`, lines 84 and 127).
+  - `change`: set when the active link's external record has `changeDetectedAt` and that is either unacknowledged or acknowledged before the detection time (lines 169-173). Returned as `{ detectedAt }`.
+  - Product `taxName`: the tax codes of the active link's external product and of the suggestion's external product are looked up in `ExternalAccountingTaxType` (`taxType in codes`, scoped). `taxName` is `null` when the product has no tax code or no matching tax type row (lines 133-156).
+  - `linkedBy`: the `User` first and last name, trimmed, or `null` when no user row is found (lines 207-215).
+  - `providerName`: `AccountingAdapterRegistry.displayName(connection.provider)` (line 178).
+  - Dates are returned as ISO strings. `salesUnitPrice` is returned as a string or `null`.
+  - Read-only: writes no rows, outbox events or audit rows. Linking, unlinking and acknowledging use the contact and product routes.
+- **Dependencies**: `PrismaService`; `AccountingConnectionService.getCurrentConnection`; `AccountingAdapterRegistry.displayName`; `organisationScope` and `AccountingConnectionWithOrganisation` (`accounting-organisation.ts`); Prisma models `TradeRelationship`, `Product`, `CustomerAccountingMapping`, `ProductAccountingMapping`, `AccountingContactMatchSuggestion`, `AccountingProductMatchSuggestion`, `ExternalAccountingTaxType`, `User`; result types `AccountingRecordLink`, `AccountingCustomerLink`, `AccountingProductLink` from `@wholo/types`
+
 ### 5. Invoice export
 
 #### `AccountingInvoiceExportController` (controller)
@@ -427,13 +466,13 @@ Each of the three record types has a controller (HTTP) and a service (business l
 
 #### `AccountingModule` (module)
 
-- **Location**: `apps/api/src/accounting/accounting.module.ts:96` (decorator at line 33)
+- **Location**: `apps/api/src/accounting/accounting.module.ts:100` (decorator at line 35)
 - **Group**: framework wiring. It is one of the allowed provider-edge files, since it registers `XeroAccountingAdapter`.
 - **Process**: Both (`app.module.ts:77` and `worker.module.ts:165`)
-- **Imports** (34-43): `AdminCustomersModule`, `AdminProductsModule`, `TaxTypesModule`, `OutboxModule`, `IngestionRunModule`, `AuditModule`, `AdminNotificationsModule`, `OrderCompletionModule`
-- **Controllers** (44-51): `AccountingConnectionController`, `AccountingContactController`, `AccountingInvoiceExportController`, `AccountingProductController`, `AccountingTaxTypeController`, `XeroCallbackController`
-- **Providers** (52-69, 16 entries): the services, `AccountingRefreshLockService`, `AccountingCallBudgetService`, `TokenEncryptionService`, `AccountingAdapterRegistry`, `XeroAccountingAdapter`, and the three matcher services
-- **Exports** (79-94): `IngestionRunModule`, `AccountingConnectionService`, `AccountingSyncService`, `AccountingContactService`, `AccountingProductService`, `AccountingTaxTypeService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, the three matcher services, `InvoicePaymentStateService`
+- **Imports** (36-45): `AdminCustomersModule`, `AdminProductsModule`, `TaxTypesModule`, `OutboxModule`, `IngestionRunModule`, `AuditModule`, `AdminNotificationsModule`, `OrderCompletionModule`
+- **Controllers** (46-54, 7 entries): `AccountingConnectionController`, `AccountingContactController`, `AccountingInvoiceExportController`, `AccountingProductController`, `AccountingRecordLinkController`, `AccountingTaxTypeController`, `XeroCallbackController`
+- **Providers** (55-73, 17 entries): the services, `AccountingRefreshLockService`, `AccountingCallBudgetService`, `TokenEncryptionService`, `AccountingAdapterRegistry`, `XeroAccountingAdapter`, and the three matcher services. `AccountingRecordLinkService` is among the services.
+- **Exports** (83-98): `IngestionRunModule`, `AccountingConnectionService`, `AccountingSyncService`, `AccountingContactService`, `AccountingProductService`, `AccountingTaxTypeService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, the three matcher services, `InvoicePaymentStateService`
 
 Scheduler providers are not in this module. They are registered in `WorkerModule` (`worker.module.ts:182-183`): `AccountingTokenRefreshScheduler` and `AccountingSyncScheduler`.
 
@@ -492,18 +531,20 @@ Internal dependency edges inside this directory:
 - `invoice-payment-status.ts` is imported by `InvoicePaymentStateService`, `order-invoice-payment.ts`, the scheduler
 - `accounting-job-failure.ts` imports `CALL_BUDGET_EXHAUSTED` from `accounting-call-budget.service.ts`
 - `AccountingChangeDetectionService` is injected by the sync processors (outside this directory)
+- `AccountingRecordLinkController` depends on `AccountingRecordLinkService`
+- `AccountingRecordLinkService` depends on `AccountingConnectionService.getCurrentConnection`, `AccountingAdapterRegistry.displayName` and `accounting-organisation.ts`
 
 ### External Dependencies
 
 - `@nestjs/common`, `@nestjs/config` (`ConfigService`), `@nestjs/schedule` (`@Interval`), `@nestjs/swagger` (`ApiTags`, `ApiBearerAuth`, `ApiParam`, `ApiOperation`, `ApiExcludeController`, `ApiProperty`)
-- `@prisma/client` (enums `AccountingConnectionStatus`, `AccountingInvoiceTargetStatus`, `AccountingProvider`, `AccountingInvoiceExportStatus`, `AccountingInvoiceState`, `AccountingContactMatchStatus`, `AccountingProductMatchStatus`, `AccountingTaxTypeMatchStatus`, match-method enums, `AccountingBulkImportRecordType`, `IngestionRunTrigger`, `ProductStatus`, `TaxClassification`, `Role`, `ActorType`, `AccountingConnection`, `Prisma` types)
+- `@prisma/client` (enums `AccountingConnectionStatus`, `AccountingInvoiceTargetStatus`, `AccountingProvider`, `AccountingInvoiceExportStatus`, `AccountingInvoiceState`, `AccountingContactMatchStatus`, `AccountingProductMatchStatus`, `AccountingTaxTypeMatchStatus`, match-method enums, `AccountingBulkImportRecordType`, `IngestionRunTrigger`, `ProductStatus`, `TaxClassification`, `Role`, `ActorType`, `AccountingConnection`, `ExternalAccountingContact`, `ExternalAccountingProduct`, `Prisma` types)
 - `ioredis` (Redis clients for the refresh lock and call budget)
 - `bullmq` (type-only `Job` in `accounting-job-failure.ts`)
 - `crypto` (Node: `randomBytes`, `randomUUID`, `createCipheriv`, `createDecipheriv`)
 - `class-validator`, `class-transformer` (DTOs)
 - `express` (`Request`, `Response` types in controllers)
 - `@wholo/nest-telemetry` (`loggableError`)
-- `@wholo/types` (`Permission`, `OrderInvoicePayment`, `OrderPaymentFilter`)
+- `@wholo/types` (`Permission`, `OrderInvoicePayment`, `OrderPaymentFilter`, `AccountingRecordLink`, `AccountingCustomerLink`, `AccountingProductLink`, `AccountingLinkedContact`, `AccountingLinkedProduct`, `AccountingRecordLinkUser`)
 
 ## Relationships
 
@@ -512,7 +553,7 @@ Internal dependency edges inside this directory:
 ```mermaid
 flowchart LR
     subgraph API["API process (main.ts, AppModule)"]
-        HTTP["6 HTTP controllers<br/>(JWT, distributor access, permissions)"]
+        HTTP["7 HTTP controllers<br/>(JWT, distributor access, permissions)"]
         AMOD["AccountingModule providers<br/>(constructed in both processes)"]
     end
     subgraph WORKER["Worker process (worker.ts, WorkerModule, no HTTP)"]
@@ -608,7 +649,7 @@ Grouping for each element is in the Code Elements section. This section lists th
 Where the code branches on `AccountingProvider` or names Xero, outside `adapters/`:
 
 - `apps/api/src/accounting/accounting-connection.controller.ts:45` route `connections/xero/authorization-url`; line 47 Swagger summary contains "Xero"; line 48 method `createXeroAuthorizationUrl`; line 52 passes `AccountingProvider.XERO`. The file is on the allowlist in `accounting-framework.arch.spec.ts` (`PROVIDER_EDGES`).
-- `apps/api/src/accounting/accounting.module.ts:28` imports `XeroAccountingAdapter`; line 65 registers it as a provider. The module is on the allowlist.
+- `apps/api/src/accounting/accounting.module.ts:30` imports `XeroAccountingAdapter`; line 69 registers it as a provider. The module is on the allowlist.
 - `apps/api/src/accounting/xero-callback.controller.ts` and `dto/xero-callback.dto.ts`: Xero by name; both on the allowlist.
 
 Xero is named only in comments in framework files (no code effect; the arch spec does not check comments):

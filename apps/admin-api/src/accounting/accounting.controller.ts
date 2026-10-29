@@ -196,6 +196,21 @@ export class AccountingController {
     return this.service.acknowledgeContactChange(organisationId, externalContactId, token);
   }
 
+  // A customer's or product's link, read from the record's side (the
+  // Integrations tab). Under links/ so it never collides with the
+  // provider-side contacts/:id and products/:id routes above.
+  @Get('links/customers/:customerId')
+  getCustomerLink(@Param('customerId') customerId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.getCustomerLink(organisationId, customerId, token);
+  }
+
+  @Get('links/products/:productId')
+  getProductLink(@Param('productId') productId: string, @Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.getProductLink(organisationId, productId, token);
+  }
+
   @Get('tax-types')
   listTaxTypes(@Query() query: TaxTypeQueryDto, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };

@@ -107,7 +107,7 @@ function ProductsEmptyState({ hasFilters, onClearFilters }: { hasFilters: boolea
 // ─── Product row ──────────────────────────────────────────────────────────────
 
 function ProductRow({ product }: { product: Product }) {
-  const href = `/products/${product.id}/edit`;
+  const href = `/products/${product.id}`;
   return (
     <ListRow>
       <td className="py-3 pl-5 pr-4">
@@ -257,7 +257,7 @@ export default function ProductsPage() {
                 <MobileCardField label="Type" value={product.productType?.name ?? '—'} />
                 <MobileCardField label="Supplier" value={product.supplier?.name ?? '—'} />
                 <MobileCardField label="Tax" value={renderTaxCell(product)} />
-                <Link href={`/products/${product.id}/edit`} className="block text-sm font-medium text-primary hover:underline">
+                <Link href={`/products/${product.id}`} className="block text-sm font-medium text-primary hover:underline">
                   View product →
                 </Link>
               </>

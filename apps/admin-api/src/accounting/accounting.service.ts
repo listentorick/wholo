@@ -34,6 +34,14 @@ export class AccountingService {
     return this.api.post(`/distributors/${distributorId}/accounting/invoice-exports/${exportId}/retry`, token);
   }
 
+  getCustomerLink(distributorId: string, customerId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/customers/${customerId}/accounting`, token);
+  }
+
+  getProductLink(distributorId: string, productId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/products/${productId}/accounting`, token);
+  }
+
   disconnect(distributorId: string, token: string) {
     return this.api.delete(`/distributors/${distributorId}/accounting/connection`, token);
   }

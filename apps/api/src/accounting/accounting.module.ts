@@ -11,6 +11,7 @@ import { AccountingConnectionController } from './accounting-connection.controll
 import { AccountingContactController } from './accounting-contact.controller';
 import { AccountingInvoiceExportController } from './accounting-invoice-export.controller';
 import { AccountingProductController } from './accounting-product.controller';
+import { AccountingRecordLinkController } from './accounting-record-link.controller';
 import { AccountingTaxTypeController } from './accounting-tax-type.controller';
 import { XeroCallbackController } from './xero-callback.controller';
 import { AccountingConnectionService } from './accounting-connection.service';
@@ -21,6 +22,7 @@ import { AccountingContactService } from './accounting-contact.service';
 import { AccountingInvoiceExportService } from './accounting-invoice-export.service';
 import { InvoicePaymentStateService } from './invoice-payment-state.service';
 import { AccountingProductService } from './accounting-product.service';
+import { AccountingRecordLinkService } from './accounting-record-link.service';
 import { AccountingTaxTypeService } from './accounting-tax-type.service';
 import { AccountingChangeDetectionService } from './accounting-change-detection.service';
 import { TokenEncryptionService } from './token-encryption.service';
@@ -46,6 +48,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     AccountingContactController,
     AccountingInvoiceExportController,
     AccountingProductController,
+    AccountingRecordLinkController,
     AccountingTaxTypeController,
     XeroCallbackController,
   ],
@@ -58,6 +61,7 @@ import { AccountingTaxTypeMatcherService } from './matching/accounting-tax-type-
     AccountingInvoiceExportService,
     InvoicePaymentStateService,
     AccountingProductService,
+    AccountingRecordLinkService,
     AccountingTaxTypeService,
     AccountingChangeDetectionService,
     TokenEncryptionService,

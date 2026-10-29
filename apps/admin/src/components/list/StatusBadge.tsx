@@ -5,7 +5,7 @@ interface StatusBadgeProps {
   tone: StatusTone;
 }
 
-const TONE_STYLES: Record<StatusTone, { bg: string; text: string }> = {
+export const STATUS_TONE_STYLES: Record<StatusTone, { bg: string; text: string }> = {
   green: { bg: '#dcfce7', text: '#15803d' },
   yellow: { bg: '#fef9c3', text: '#a16207' },
   red: { bg: '#fee2e2', text: '#b91c1c' },
@@ -15,7 +15,7 @@ const TONE_STYLES: Record<StatusTone, { bg: string; text: string }> = {
 };
 
 export function StatusBadge({ label, tone }: StatusBadgeProps) {
-  const s = TONE_STYLES[tone];
+  const s = STATUS_TONE_STYLES[tone];
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"

@@ -5,6 +5,8 @@ import type {
   AccountingContactListParams,
   AccountingContactListResponse,
   AccountingContactNeedsAttentionCountResponse,
+  AccountingCustomerLink,
+  AccountingProductLink,
   AccountingProductListParams,
   AccountingProductListResponse,
   AccountingProductNeedsAttentionCountResponse,
@@ -147,6 +149,15 @@ export const adminAccountingApi = {
 
   getContactBulkImportJob(jobId: string): Promise<AccountingBulkImportJob> {
     return apiFetch<AccountingBulkImportJob>(`/api/v1/accounting/contacts/bulk-import-jobs/${jobId}`);
+  },
+
+  // The record's side of a link — for the customer and product Integrations tabs.
+  getCustomerAccountingLink(customerId: string): Promise<AccountingCustomerLink> {
+    return apiFetch<AccountingCustomerLink>(`/api/v1/accounting/links/customers/${customerId}`);
+  },
+
+  getProductAccountingLink(productId: string): Promise<AccountingProductLink> {
+    return apiFetch<AccountingProductLink>(`/api/v1/accounting/links/products/${productId}`);
   },
 
   listProducts(params: AccountingProductListParams): Promise<AccountingProductListResponse> {

@@ -176,7 +176,7 @@ describe('ProductRowActions', () => {
     const user = userEvent.setup();
 
     render(<ProductRowActions product={product} providerLabel="Xero" onActionComplete={onActionComplete} />);
-    expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1/edit');
+    expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1');
 
     await user.click(screen.getByText('Unlink'));
 
@@ -226,7 +226,7 @@ describe('ProductRowActions — without accounting:import', () => {
     });
     render(<ProductRowActions product={product} providerLabel="Xero" onActionComplete={() => {}} />);
 
-    expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1/edit');
+    expect(screen.getByText('View product').closest('a')).toHaveAttribute('href', '/products/prod-1');
     expect(screen.queryByText('Unlink')).not.toBeInTheDocument();
   });
 });

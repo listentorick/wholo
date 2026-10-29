@@ -176,7 +176,7 @@ function ProductPicker({ token, currency, selectedId, onSelect, disabled }: Prod
                 Change
               </button>
               <a
-                href={`/products/${selectedProduct.id}/edit`}
+                href={`/products/${selectedProduct.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-primary hover:bg-white/70 transition-colors"
@@ -232,7 +232,7 @@ function ProductPicker({ token, currency, selectedId, onSelect, disabled }: Prod
                   </span>
                 </span>
                 <a
-                  href={`/products/${p.id}/edit`}
+                  href={`/products/${p.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
@@ -419,7 +419,7 @@ function RuleDrawer({ state, priceListId, currency, pricelists, token, onSaved, 
                 </p>
                 {editRule?.selectorType === PriceListRuleSelectorType.PRODUCT && editRule.productId && (
                   <a
-                    href={`/products/${editRule.productId}/edit`}
+                    href={`/products/${editRule.productId}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-primary hover:underline"

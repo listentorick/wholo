@@ -42,13 +42,13 @@ interface DetailActionsPanelProps {
   banner?: { success?: string | null; error?: string | null };
 }
 
-const PRIMARY_CLS =
+export const BUTTON_PRIMARY_CLS =
   'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50';
-const SIDEBAR_SECONDARY_CLS =
+export const BUTTON_SECONDARY_CLS =
   'rounded-md border border-border px-4 py-2 text-sm font-medium text-text transition-colors hover:bg-border/20 disabled:cursor-not-allowed disabled:opacity-50';
 const FOOTER_SECONDARY_CLS =
   'rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text disabled:cursor-not-allowed disabled:opacity-50';
-const SIDEBAR_DANGER_CLS =
+export const BUTTON_DANGER_CLS =
   'rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50';
 const DANGER_ZONE_CLS =
   'w-full rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:border-red-400 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50';
@@ -60,9 +60,9 @@ const MODAL_CONFIRM_PRIMARY_CLS =
   'rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 function mainActionClassName(tone: ActionTone, layout: 'sidebar' | 'footer') {
-  if (tone === 'primary') return `${PRIMARY_CLS} ${layout === 'sidebar' ? 'w-full' : ''}`;
-  if (tone === 'danger' && layout === 'sidebar') return `${SIDEBAR_DANGER_CLS} w-full`;
-  return `${layout === 'sidebar' ? SIDEBAR_SECONDARY_CLS : FOOTER_SECONDARY_CLS} ${layout === 'sidebar' ? 'w-full' : ''}`;
+  if (tone === 'primary') return `${BUTTON_PRIMARY_CLS} ${layout === 'sidebar' ? 'w-full' : ''}`;
+  if (tone === 'danger' && layout === 'sidebar') return `${BUTTON_DANGER_CLS} w-full`;
+  return `${layout === 'sidebar' ? BUTTON_SECONDARY_CLS : FOOTER_SECONDARY_CLS} ${layout === 'sidebar' ? 'w-full' : ''}`;
 }
 
 /** A regular action button — hrefs behave as links; onClick actions route through `onTrigger`

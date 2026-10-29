@@ -90,7 +90,7 @@ describe('ProductsPage', () => {
 
       expect(list.getByText('Red Wine')).toBeInTheDocument();
       expect(list.getByText('Napa Imports')).toBeInTheDocument();
-      expect(list.getByRole('link', { name: /View product/ })).toHaveAttribute('href', '/products/prod-1/edit');
+      expect(list.getByRole('link', { name: /View product/ })).toHaveAttribute('href', '/products/prod-1');
     });
 
     it('surfaces the "Needs review" tax warning on the collapsed card face', async () => {

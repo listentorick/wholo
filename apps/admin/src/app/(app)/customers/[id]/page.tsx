@@ -18,8 +18,18 @@ import { PortalAccessTab } from '@/components/customers/tabs/PortalAccessTab';
 import { DashboardTab } from '@/components/customers/tabs/DashboardTab';
 import { OrdersInvoicesTab } from '@/components/customers/tabs/OrdersInvoicesTab';
 import type { TabSaveState } from '@/components/customers/tabs/tab-save-state';
+import { AccountingLinkSection } from '@/components/integrations/record-link/AccountingLinkSection';
+import { IntegrationsTab } from '@/components/integrations/record-link/IntegrationsTab';
+import { LinkProblemPill } from '@/components/integrations/record-link/LinkProblemPill';
+import { customerLinkConfig, linkProblem } from '@/components/integrations/record-link/record-link-config';
+import {
+  resolveIntegrationsTab,
+  useRecordAccountingLink,
+} from '@/components/integrations/record-link/useRecordAccountingLink';
+import { ListSpinner } from '@/components/list/ListSpinner';
+import { useCan } from '@/lib/permissions';
 import { adminCustomersApi, adminOrderAsApi } from '@wholo/admin-api-client';
-import { TradeRelationshipStatus } from '@wholo/types';
+import { Permission, TradeRelationshipStatus } from '@wholo/types';
 import type { Customer } from '@wholo/types';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -34,7 +44,15 @@ const STATUS_META: Record<TradeRelationshipStatus, { label: string; tone: Status
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
-type TabKey = 'dashboard' | 'orders-invoices' | 'overview' | 'account' | 'delivery' | 'catalogue-pricing' | 'portal-access';
+type TabKey =
+  | 'dashboard'
+  | 'orders-invoices'
+  | 'overview'
+  | 'account'
+  | 'delivery'
+  | 'catalogue-pricing'
+  | 'portal-access'
+  | 'integrations';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -44,6 +62,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'delivery', label: 'Delivery' },
   { key: 'catalogue-pricing', label: 'Catalogue & Pricing' },
   { key: 'portal-access', label: 'Portal Access' },
+  { key: 'integrations', label: 'Integrations' },
 ];
 
 // ─── Inner page (uses hooks that require Suspense) ────────────────────────────
@@ -52,7 +71,18 @@ function CustomerPageInner() {
   const { accessToken } = useAuth();
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const { activeTab, setTab } = useQueryParamTab<TabKey>('dashboard');
+  const { activeTab: requestedTab, setTab } = useQueryParamTab<TabKey>('dashboard');
+  const canReadAccounting = useCan()(Permission.ACCOUNTING_READ);
+  const {
+    link: accountingLink,
+    accounting,
+    settled: accountingSettled,
+    refresh: refreshAccountingLink,
+  } = useRecordAccountingLink(
+    customerLinkConfig,
+    params?.id,
+    canReadAccounting,
+  );
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -173,6 +203,12 @@ function CustomerPageInner() {
   }
 
   const statusMeta = STATUS_META[customer.status];
+
+  const { showTab: showIntegrations, activeTab } = resolveIntegrationsTab(requestedTab, 'dashboard', {
+    accounting,
+    settled: accountingSettled,
+  });
+  const visibleTabs = TABS.filter((t) => t.key !== 'integrations' || showIntegrations);
 
   const missingSetup = [
     customer.catalogues.length === 0 && 'a catalogue',
@@ -297,11 +333,19 @@ function CustomerPageInner() {
         backHref="/customers"
         backLabel="Customers"
         heading={customer.organisation.name}
-        badge={<StatusBadge label={statusMeta.label} tone={statusMeta.tone} />}
+        badge={
+          <>
+            <StatusBadge label={statusMeta.label} tone={statusMeta.tone} />
+            <LinkProblemPill
+              problem={linkProblem(accountingLink, customerLinkConfig.notLinked.tone)}
+              onClick={() => setTab('integrations')}
+            />
+          </>
+        }
       />
 
       <DetailTabs
-        tabs={TABS}
+        tabs={visibleTabs}
         activeKey={activeTab}
         onChange={setTab}
       />
@@ -359,6 +403,24 @@ function CustomerPageInner() {
             mode="tab"
             onSaved={fetchCustomer}
           />
+        )}
+        {activeTab === 'integrations' && !accounting && <ListSpinner />}
+        {activeTab === 'integrations' && accounting && (
+          <IntegrationsTab>
+            <AccountingLinkSection
+              config={customerLinkConfig}
+              link={accounting}
+              matchTargetId={customer.id}
+              record={{
+                displayName: customer.organisation.name,
+                rows: [
+                  { label: 'Code', value: customer.accountNumber },
+                  { label: 'Email', value: customer.organisation.email },
+                ],
+              }}
+              onChanged={refreshAccountingLink}
+            />
+          </IntegrationsTab>
         )}
       </DetailPageLayout>
     </>

@@ -25,6 +25,8 @@ const mockService = {
   unlinkProductMapping: jest.fn(),
   bulkImportProducts: jest.fn(),
   getProductBulkImportJob: jest.fn(),
+  getCustomerLink: jest.fn(),
+  getProductLink: jest.fn(),
 };
 
 function mockRequest() {
@@ -125,6 +127,16 @@ describe('AccountingController (BFF)', () => {
   it('unlinkMapping forwards the mapping id with the resolved organisationId', async () => {
     await controller.unlinkMapping('mapping-1', mockRequest());
     expect(mockService.unlinkMapping).toHaveBeenCalledWith('dist-1', 'mapping-1', 'token-1');
+  });
+
+  it('getCustomerLink forwards the customer id with the resolved organisationId', async () => {
+    await controller.getCustomerLink('cust-1', mockRequest());
+    expect(mockService.getCustomerLink).toHaveBeenCalledWith('dist-1', 'cust-1', 'token-1');
+  });
+
+  it('getProductLink forwards the product id with the resolved organisationId', async () => {
+    await controller.getProductLink('prod-1', mockRequest());
+    expect(mockService.getProductLink).toHaveBeenCalledWith('dist-1', 'prod-1', 'token-1');
   });
 
   it('listProducts resolves organisationId from req.user and forwards the query', async () => {

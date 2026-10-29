@@ -67,7 +67,7 @@ export function ProductRowActions({ product, providerLabel, onActionComplete }: 
 
   if (!canImport) {
     return product.status === 'LINKED' && product.mapping ? (
-      <Link href={`/products/${product.mapping.productId}/edit`} className="text-xs text-primary hover:underline">
+      <Link href={`/products/${product.mapping.productId}`} className="text-xs text-primary hover:underline">
         View product
       </Link>
     ) : null;
@@ -144,7 +144,7 @@ export function ProductRowActions({ product, providerLabel, onActionComplete }: 
         {product.status === 'LINKED' && product.mapping && (
           <>
             <Link
-              href={`/products/${product.mapping.productId}/edit`}
+              href={`/products/${product.mapping.productId}`}
               className="text-xs text-primary hover:underline"
             >
               View product

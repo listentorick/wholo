@@ -18,6 +18,16 @@ describe('FormCard', () => {
     expect(screen.getByText('Basic information')).toBeInTheDocument();
   });
 
+  it('renders header actions beside the title', () => {
+    render(
+      <FormCard title="Accounting" actions={<span>Last synced just now</span>}>
+        content
+      </FormCard>,
+    );
+    expect(screen.getByRole('heading', { name: 'Accounting' })).toBeInTheDocument();
+    expect(screen.getByText('Last synced just now')).toBeInTheDocument();
+  });
+
   it('omits the header entirely when no title is given', () => {
     render(<FormCard>content</FormCard>);
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();

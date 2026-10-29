@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CustomerPage from './page';
-import { TradeRelationshipStatus } from '@wholo/types';
-import type { Customer } from '@wholo/types';
+import { Permission, TradeRelationshipStatus } from '@wholo/types';
+import type { AccountingCustomerLink, Customer } from '@wholo/types';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -15,13 +15,20 @@ vi.mock('@/lib/hooks/use-require-auth', () => ({
   useRequireAuth: () => ({ isLoading: false }),
 }));
 
+let mockPermissions: Permission[] = [];
 vi.mock('@/lib/auth-context', () => ({
-  useAuth: () => ({ accessToken: 'test-token' }),
+  useAuth: () => ({ accessToken: 'test-token', user: { permissions: mockPermissions } }),
 }));
 
-// No ?tab= in the URL: the page's own default tab is shown.
+// null = no ?tab= in the URL: the page's own default tab is shown.
+let mockRequestedTab: string | null = null;
+const mockSetTab = vi.fn();
 vi.mock('@/lib/hooks/use-query-param-tab', () => ({
-  useQueryParamTab: (defaultTab: string) => ({ activeTab: defaultTab, setTab: vi.fn() }),
+  useQueryParamTab: (defaultTab: string) => ({ activeTab: mockRequestedTab ?? defaultTab, setTab: mockSetTab }),
+}));
+
+vi.mock('@/lib/ingestion-sync-context', () => ({
+  useIngestionSync: () => ({ reloadSignal: 0, triggerSync: vi.fn(), isSyncing: false }),
 }));
 
 // AdminLayout pulls in the full app chrome (Sidebar, TopBar/notifications) —
@@ -39,12 +46,16 @@ vi.mock('@/components/customers/tabs/AccountTab', () => ({ AccountTab: () => nul
 vi.mock('@/components/customers/tabs/DeliveryTab', () => ({ DeliveryTab: () => null }));
 vi.mock('@/components/customers/tabs/CataloguePricingTab', () => ({ CataloguePricingTab: () => null }));
 vi.mock('@/components/customers/tabs/PortalAccessTab', () => ({ PortalAccessTab: () => null }));
+vi.mock('@/components/integrations/record-link/AccountingLinkSection', () => ({
+  AccountingLinkSection: () => <p>Accounting link section</p>,
+}));
 
 const mockAcceptRequest = vi.fn();
 const mockDeclineRequest = vi.fn();
 const mockSuspend = vi.fn();
 const mockUnsuspend = vi.fn();
 const mockGet = vi.fn();
+const mockGetCustomerAccountingLink = vi.fn();
 
 vi.mock('@wholo/admin-api-client', () => ({
   adminCustomersApi: {
@@ -56,6 +67,9 @@ vi.mock('@wholo/admin-api-client', () => ({
     unsuspend: (...args: unknown[]) => mockUnsuspend(...args),
   },
   adminOrderAsApi: { createSession: vi.fn() },
+  adminAccountingApi: {
+    getCustomerAccountingLink: (...args: unknown[]) => mockGetCustomerAccountingLink(...args),
+  },
 }));
 
 function makeCustomer(status: TradeRelationshipStatus, overrides: Partial<Customer> = {}): Customer {
@@ -218,5 +232,100 @@ describe('CustomerPage — tabs', () => {
     const labels = screen.getAllByRole('button').map((b) => b.textContent);
     expect(labels.indexOf('Dashboard')).toBeGreaterThanOrEqual(0);
     expect(labels.indexOf('Dashboard')).toBeLessThan(labels.indexOf('Overview'));
+  });
+});
+
+function makeLink(overrides: Partial<AccountingCustomerLink> = {}): AccountingCustomerLink {
+  return {
+    connection: { provider: 'FAKE', providerName: 'Fake Books', status: 'CONNECTED', lastSyncedAt: null },
+    link: null,
+    change: null,
+    suggestion: null,
+    history: [],
+    ...overrides,
+  } as AccountingCustomerLink;
+}
+
+const LINKED: AccountingCustomerLink['link'] = {
+  mappingId: 'map-1',
+  matchMethod: 'MANUAL',
+  linkedAt: '2026-10-12T09:00:00.000Z',
+  linkedBy: null,
+  external: { id: 'ext-1', displayName: 'Blackbird Kitchen Ltd', code: null, email: null },
+};
+
+describe('CustomerPage — Integrations tab and link pill', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPermissions = [Permission.ACCOUNTING_READ];
+    mockRequestedTab = null;
+    mockGet.mockResolvedValue(makeCustomer(TradeRelationshipStatus.ACTIVE));
+  });
+
+  it('without ACCOUNTING_READ: no lookup, no Integrations tab', async () => {
+    mockPermissions = [];
+    render(<CustomerPage />);
+    await screen.findByText('Customer dashboard');
+    expect(mockGetCustomerAccountingLink).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Integrations' })).not.toBeInTheDocument();
+  });
+
+  it('with no accounting connection: no Integrations tab and no pill', async () => {
+    mockGetCustomerAccountingLink.mockResolvedValue({ connection: null, link: null, change: null, suggestion: null, history: [] });
+    render(<CustomerPage />);
+    await screen.findByText('Customer dashboard');
+    await waitFor(() => expect(mockGetCustomerAccountingLink).toHaveBeenCalledWith('org-1'));
+    expect(screen.queryByRole('button', { name: 'Integrations' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Not linked/)).not.toBeInTheDocument();
+  });
+
+  it('shows the Integrations tab and no pill when the customer is linked', async () => {
+    mockGetCustomerAccountingLink.mockResolvedValue(makeLink({ link: LINKED }));
+    render(<CustomerPage />);
+    expect(await screen.findByRole('button', { name: 'Integrations' })).toBeInTheDocument();
+    expect(screen.queryByText(/Not linked|Changed in/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['not linked', makeLink(), 'Not linked'],
+    [
+      'not linked with a suggestion',
+      makeLink({
+        suggestion: {
+          id: 's-1', confidence: 95, matchMethod: 'EMAIL_EXACT', matchReason: 'Same email',
+          external: { id: 'ext-1', displayName: 'Blackbird Kitchen Ltd', code: null, email: null },
+        },
+      }),
+      'Not linked · match found',
+    ],
+    ['changed in the provider', makeLink({ link: LINKED, change: { detectedAt: '2026-10-24T08:00:00.000Z' } }), 'Changed in Fake Books'],
+  ])('pill for %s opens the Integrations tab', async (_state, link, label) => {
+    mockGetCustomerAccountingLink.mockResolvedValue(link);
+    render(<CustomerPage />);
+    fireEvent.click(await screen.findByRole('button', { name: label }));
+    expect(mockSetTab).toHaveBeenCalledWith('integrations');
+  });
+
+  it('?tab=integrations renders the accounting section', async () => {
+    mockRequestedTab = 'integrations';
+    mockGetCustomerAccountingLink.mockResolvedValue(makeLink({ link: LINKED }));
+    render(<CustomerPage />);
+    expect(await screen.findByText('Accounting link section')).toBeInTheDocument();
+  });
+
+  it('?tab=integrations waits for the link instead of flashing the Dashboard', async () => {
+    mockRequestedTab = 'integrations';
+    mockGetCustomerAccountingLink.mockReturnValue(new Promise(() => {}));
+    render(<CustomerPage />);
+    expect(await screen.findByRole('button', { name: 'Integrations' })).toBeInTheDocument();
+    expect(screen.queryByText('Customer dashboard')).not.toBeInTheDocument();
+  });
+
+  it('?tab=integrations without a connection falls back to the Dashboard', async () => {
+    mockRequestedTab = 'integrations';
+    mockGetCustomerAccountingLink.mockResolvedValue({ connection: null, link: null, change: null, suggestion: null, history: [] });
+    render(<CustomerPage />);
+    expect(await screen.findByText('Customer dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('Accounting link section')).not.toBeInTheDocument();
   });
 });
