@@ -313,6 +313,18 @@ describe('AccountingService (BFF)', () => {
     });
   });
 
+  describe('listSalesAccounts', () => {
+    it('calls api.get with the distributor path and bearer token', async () => {
+      const accounts = [{ id: 'acct-200', code: '200', displayName: 'Sales' }];
+      mockApi.get.mockResolvedValue(accounts);
+
+      const result = await service.listSalesAccounts('dist-1', 'token-1');
+
+      expect(mockApi.get).toHaveBeenCalledWith('/distributors/dist-1/accounting/accounts', 'token-1');
+      expect(result).toBe(accounts);
+    });
+  });
+
   describe('getCustomerLink', () => {
     it("gets the customer's accounting link route", async () => {
       mockApi.get.mockResolvedValue({ connection: null });

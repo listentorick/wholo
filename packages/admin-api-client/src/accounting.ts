@@ -2,6 +2,7 @@ import type {
   AccountingAuthorizationUrlResponse,
   AccountingBulkImportJob,
   AccountingConnectionStatusResponse,
+  AccountingSalesAccount,
   AccountingContactListParams,
   AccountingContactListResponse,
   AccountingContactNeedsAttentionCountResponse,
@@ -68,6 +69,10 @@ export const adminAccountingApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
+  },
+
+  listSalesAccounts(): Promise<AccountingSalesAccount[]> {
+    return apiFetch<AccountingSalesAccount[]>('/api/v1/accounting/accounts');
   },
 
   disconnect(): Promise<void> {

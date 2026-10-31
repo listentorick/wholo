@@ -5,10 +5,11 @@
 export const ACCOUNTING_SOURCE_TYPE = 'accounting';
 
 // Every record type pulled from the accounting system. The first three feed
-// the mapping review screens (and the sync progress panel); `invoice` is the
-// invoice status/payment sync — scheduled and triggered the same way, but it
-// has nothing to review, so it is not shown in the sync status.
-export const ACCOUNTING_SYNC_RESOURCE_TYPES = ['contact', 'product', 'tax_type', 'invoice'] as const;
+// the mapping review screens (and the sync progress panel). `invoice` is the
+// invoice status/payment sync and `account` the chart of sales accounts (for
+// the default sales account) — scheduled and triggered the same way, but with
+// nothing to review, so neither is shown in the sync status.
+export const ACCOUNTING_SYNC_RESOURCE_TYPES = ['contact', 'product', 'tax_type', 'invoice', 'account'] as const;
 export type AccountingSyncResourceType = (typeof ACCOUNTING_SYNC_RESOURCE_TYPES)[number];
 export const ACCOUNTING_MAPPING_RESOURCE_TYPES: readonly AccountingSyncResourceType[] = ['contact', 'product', 'tax_type'];
 
@@ -17,6 +18,7 @@ export const ACCOUNTING_SYNC_EVENT_TYPE: Record<AccountingSyncResourceType, stri
   product: 'AccountingProductSyncRequested',
   tax_type: 'AccountingTaxTypeSyncRequested',
   invoice: 'AccountingInvoiceSyncRequested',
+  account: 'AccountingAccountSyncRequested',
 };
 
 // How often each resource type is pulled on schedule (ADR-061 "Scheduling").
@@ -30,6 +32,8 @@ export const ACCOUNTING_SYNC_INTERVAL_MS: Record<AccountingSyncResourceType, num
   // "Order shows as paid" is the user-visible latency. Only connections with
   // unsettled invoices are pulled at all (see AccountingSyncScheduler).
   invoice: 15 * MINUTE_MS,
+  // The chart of accounts changes rarely, like tax rates.
+  account: 6 * 60 * MINUTE_MS,
 };
 
 // Incremental pulls can't see deletions or re-offer matches for records that

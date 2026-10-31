@@ -6,6 +6,7 @@ const mockService = {
   getConnection: jest.fn(),
   createXeroAuthorizationUrl: jest.fn(),
   updateConnectionSettings: jest.fn(),
+  listSalesAccounts: jest.fn(),
   disconnect: jest.fn(),
   listContacts: jest.fn(),
   countContactsNeedingAttention: jest.fn(),
@@ -78,6 +79,14 @@ describe('AccountingController (BFF)', () => {
     await controller.createXeroAuthorizationUrl(mockRequest());
 
     expect(mockService.createXeroAuthorizationUrl).toHaveBeenCalledWith('dist-1', 'token-1');
+  });
+
+  it('listSalesAccounts resolves organisationId from req.user and returns the upstream list', async () => {
+    const accounts = [{ externalId: 'acc-200', code: '200', displayName: 'Sales' }];
+    mockService.listSalesAccounts.mockResolvedValue(accounts);
+
+    await expect(controller.listSalesAccounts(mockRequest())).resolves.toBe(accounts);
+    expect(mockService.listSalesAccounts).toHaveBeenCalledWith('dist-1', 'token-1');
   });
 
   it('disconnect resolves organisationId from req.user, never a client-supplied id', async () => {

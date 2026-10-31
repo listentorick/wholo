@@ -7,6 +7,7 @@ export const ACCOUNTING_CONTACT_SYNC_QUEUE = 'accounting-contact-sync';
 export const ACCOUNTING_PRODUCT_SYNC_QUEUE = 'accounting-product-sync';
 export const ACCOUNTING_TAX_TYPE_SYNC_QUEUE = 'accounting-tax-type-sync';
 export const ACCOUNTING_INVOICE_SYNC_QUEUE = 'accounting-invoice-sync';
+export const ACCOUNTING_ACCOUNT_SYNC_QUEUE = 'accounting-account-sync';
 export const ANALYTICS_FACTS_QUEUE = 'analytics-facts';
 export const ACCOUNTING_BULK_IMPORT_QUEUE = 'accounting-bulk-import';
 export const DELIVERY_RUN_ALLOCATION_QUEUE = 'delivery-run-allocation';
@@ -56,6 +57,7 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   AccountingProductSyncRequested: [ACCOUNTING_PRODUCT_SYNC_QUEUE],
   AccountingTaxTypeSyncRequested: [ACCOUNTING_TAX_TYPE_SYNC_QUEUE],
   AccountingInvoiceSyncRequested: [ACCOUNTING_INVOICE_SYNC_QUEUE],
+  AccountingAccountSyncRequested: [ACCOUNTING_ACCOUNT_SYNC_QUEUE],
   // Invoice payment status and balance changes (ADR-072, ADR-077) feed invoice_facts.
   InvoicePaymentStatusChanged: [ANALYTICS_FACTS_QUEUE],
   InvoiceBalanceChanged: [ANALYTICS_FACTS_QUEUE],

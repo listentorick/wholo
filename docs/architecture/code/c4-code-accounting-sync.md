@@ -26,6 +26,7 @@ Concrete subclasses (found by grep for `extends`):
 | `AccountingProductSyncProcessor` | `apps/api/src/accounting-product-sync/accounting-product-sync.processor.ts` (line 52) | `AccountingSyncProcessorBase` | `product` |
 | `AccountingTaxTypeSyncProcessor` | `apps/api/src/accounting-tax-type-sync/accounting-tax-type-sync.processor.ts` (line 51) | `AccountingSyncProcessorBase` | `tax_type` |
 | `AccountingInvoiceSyncProcessor` | `apps/api/src/accounting-invoice-sync/accounting-invoice-sync.processor.ts` (line 60) | `AccountingPullProcessorBase` | `invoice` |
+| `AccountingAccountSyncProcessor` | `apps/api/src/accounting-account-sync/accounting-account-sync.processor.ts` (line 30) | `AccountingPullProcessorBase` | `account` |
 
 `accounting-invoice-export.processor.ts` is a push, not a pull, and does not extend either base.
 
@@ -35,41 +36,41 @@ Concrete subclasses (found by grep for `extends`):
 
 ### `accounting-pull-processor.base.ts` (the pull guide)
 
-The header (lines 20-71) is the guide for pulls: what the base owns, what a subclass supplies, which base to extend, and the checklist for adding a pull.
+The header (lines 20-72) is the guide for pulls: what the base owns, what a subclass supplies, which base to extend, and the checklist for adding a pull.
 
-- `shouldRunFull(run: Pick<IngestionRun, 'trigger' | 'cursor' | 'lastFullRunAt'>, now: Date = new Date()): boolean` (function, line 77)
+- `shouldRunFull(run: Pick<IngestionRun, 'trigger' | 'cursor' | 'lastFullRunAt'>, now: Date = new Date()): boolean` (function, line 78)
   - Description: Full pull when the trigger is `MANUAL`, when there is no cursor, when there is no `lastFullRunAt`, or when the last full pull is at least `ACCOUNTING_FULL_SYNC_INTERVAL_MS` old.
   - Process: Worker.
-- `OutboxEventJobData` (interface, line 87)
+- `OutboxEventJobData` (interface, line 88)
   - Shape: `{ eventId: string; aggregateType: string; aggregateId: string /* AccountingConnection id */; payload: unknown /* { runId?: string } */ }`
   - Description: The BullMQ job payload written by the outbox.
   - Process: Worker.
-- `RunProgress` (class, line 97)
-  - Constructor (line 101): `(ingestionRuns: IngestionRunService, runId: string, now: () => number = Date.now)`.
-  - `setTotal(recordsTotal: number): Promise<void>` (line 111). Records the total, which also marks the run live.
-  - `tick(counts: RunCounts, items = 1): Promise<void>` (line 117). Writes a heartbeat every `HEARTBEAT_ITEM_INTERVAL` items or after `HEARTBEAT_TIME_INTERVAL_MS`.
-  - `flush(counts: RunCounts): Promise<void>` (line 125). Writes a heartbeat now.
+- `RunProgress` (class, line 98)
+  - Constructor (line 102): `(ingestionRuns: IngestionRunService, runId: string, now: () => number = Date.now)`.
+  - `setTotal(recordsTotal: number): Promise<void>` (line 112). Records the total, which also marks the run live.
+  - `tick(counts: RunCounts, items = 1): Promise<void>` (line 118). Writes a heartbeat every `HEARTBEAT_ITEM_INTERVAL` items or after `HEARTBEAT_TIME_INTERVAL_MS`.
+  - `flush(counts: RunCounts): Promise<void>` (line 126). Writes a heartbeat now.
   - Description: Keeps `IngestionRun.updatedAt` fresh during long pulls, so a live pull is not treated as stalled (`PROCESSING_STALE_MS`, per the header).
   - Process: Worker.
-- `PullContext` (interface, line 132)
+- `PullContext` (interface, line 133)
   - Shape: `{ connection: AccountingConnectionWithOrganisation; adapter: AccountingConnectionAdapter; tokenSet: AccountingTokenSet; cursor: string | null; full: boolean; progress: RunProgress }`
   - Description: Everything a `pull` implementation receives. `cursor` is `null` for a full pull.
-- `PullResult` (interface, line 144)
+- `PullResult` (interface, line 145)
   - Shape: `{ counts: RunCounts; nextCursor: string | null; summary: { fields: Record<string, unknown>; message: string } }`
   - Description: What `pull` returns. `nextCursor: null` means the next pull is full. `summary` feeds the `accounting.sync.completed` log line.
-- `AccountingPullProcessorBase` (abstract class, line 152, `extends LoggedWorkerHost`)
-  - Constructor (line 159): `(prisma: PrismaService, accountingConnectionService: AccountingConnectionService, adapters: AccountingAdapterRegistry, ingestionRuns: IngestionRunService)`. All four are `protected readonly`.
+- `AccountingPullProcessorBase` (abstract class, line 153, `extends LoggedWorkerHost`)
+  - Constructor (line 160): `(prisma: PrismaService, accountingConnectionService: AccountingConnectionService, adapters: AccountingAdapterRegistry, ingestionRuns: IngestionRunService)`. All four are `protected readonly`.
   - Abstract members a subclass must supply:
-    - `protected abstract readonly logger: Logger` (line 153)
-    - `protected abstract readonly recordNoun: string` (line 155): used in log text (e.g. `contact`).
-    - `protected abstract readonly resourceType: string` (line 157): the `IngestionRun.resourceType` (e.g. `contact`, `invoice`).
-    - `protected abstract pull(ctx: PullContext): Promise<PullResult>` (line 174): the provider call(s) through `ctx.adapter`, the writes, `ctx.progress.tick`, and the result.
+    - `protected abstract readonly logger: Logger` (line 154)
+    - `protected abstract readonly recordNoun: string` (line 156): used in log text (e.g. `contact`).
+    - `protected abstract readonly resourceType: string` (line 158): the `IngestionRun.resourceType` (e.g. `contact`, `invoice`).
+    - `protected abstract pull(ctx: PullContext): Promise<PullResult>` (line 175): the provider call(s) through `ctx.adapter`, the writes, `ctx.progress.tick`, and the result.
   - Hook with a default:
-    - `protected async preflight(_connection: AccountingConnectionWithOrganisation, _adapter: AccountingConnectionAdapter): Promise<void>` (line 170). Default does nothing. Invoice sync overrides it to throw `SCOPE_MISSING` (permanent) when the connection lacks the read scope.
+    - `protected async preflight(_connection: AccountingConnectionWithOrganisation, _adapter: AccountingConnectionAdapter): Promise<void>` (line 171). Default does nothing. Invoice sync overrides it to throw `SCOPE_MISSING` (permanent) when the connection lacks the read scope.
   - Template method:
-    - `async process(job: Job<OutboxEventJobData>): Promise<void>` (line 176). Runs the lifecycle: load the connection with `CONNECTION_WITH_ORGANISATION`; skip (and finalise the run if a `runId` is in the payload) when the connection is missing or not `CONNECTED`; `ensureRun` for pre-`runId` jobs; `claim(runId)` (return if none); compute full or incremental; log `accounting.sync.started`; `adapters.get(provider)`; `preflight`; `getValidTokenSet`; `pull`; set `lastSyncedAt`; `finalizeSuccess(runId, counts, { cursor, full })`; log `accounting.sync.completed`. Any error goes to `handleFailure`.
+    - `async process(job: Job<OutboxEventJobData>): Promise<void>` (line 177). Runs the lifecycle: load the connection with `CONNECTION_WITH_ORGANISATION`; skip (and finalise the run if a `runId` is in the payload) when the connection is missing or not `CONNECTED`; `ensureRun` for pre-`runId` jobs; `claim(runId)` (return if none); compute full or incremental; log `accounting.sync.started`; `adapters.get(provider)`; `preflight`; `getValidTokenSet`; `pull`; set `lastSyncedAt`; `finalizeSuccess(runId, counts, { cursor, full })`; log `accounting.sync.completed`. Any error goes to `handleFailure`.
   - Private:
-    - `handleFailure(err: unknown, job: Job<OutboxEventJobData>, runId: string, logFields: Record<string, unknown>, started: number): Promise<never>` (line 261). Classifies with `classifyJobFailure`. Permanent or last attempt: `finalizeFailure`. Otherwise `requeueForRetry`. Permanent provider errors throw `UnrecoverableError`; transient ones are rethrown so BullMQ backs off. Non-provider errors are logged at error level with the stack.
+    - `handleFailure(err: unknown, job: Job<OutboxEventJobData>, runId: string, logFields: Record<string, unknown>, started: number): Promise<never>` (line 262). Classifies with `classifyJobFailure`. Permanent or last attempt: `finalizeFailure`. Otherwise `requeueForRetry`. Permanent provider errors throw `UnrecoverableError`; transient ones are rethrown so BullMQ backs off. Non-provider errors are logged at error level with the stack.
   - Process: Worker.
 - Logger name and job name strings in the process log lines are set by subclasses via `logger` and `recordNoun`.
 
@@ -112,12 +113,12 @@ The header (lines 20-71) is the guide for pulls: what the base owns, what a subc
 ### `accounting-sync.constants.ts`
 
 - `ACCOUNTING_SOURCE_TYPE = 'accounting'` (const, line 5). `IngestionRun.sourceType` for every accounting run.
-- `ACCOUNTING_SYNC_RESOURCE_TYPES` (const, line 11): `['contact', 'product', 'tax_type', 'invoice'] as const`.
-- `AccountingSyncResourceType` (type, line 12): `(typeof ACCOUNTING_SYNC_RESOURCE_TYPES)[number]`.
-- `ACCOUNTING_MAPPING_RESOURCE_TYPES` (const, line 13): `readonly AccountingSyncResourceType[]` = `['contact', 'product', 'tax_type']`. The resource types shown on the sync status panel.
-- `ACCOUNTING_SYNC_EVENT_TYPE` (const, line 15): `Record<AccountingSyncResourceType, string>`. Maps each type to its outbox event name: `AccountingContactSyncRequested`, `AccountingProductSyncRequested`, `AccountingTaxTypeSyncRequested`, `AccountingInvoiceSyncRequested`.
-- `ACCOUNTING_SYNC_INTERVAL_MS` (const, line 26): `Record<AccountingSyncResourceType, number>`. contact 30 min, product 30 min, tax_type 6 h, invoice 15 min. (`MINUTE_MS` at line 25 is module-private.)
-- `ACCOUNTING_FULL_SYNC_INTERVAL_MS` (const, line 38): `24 * 60 * MINUTE_MS` (24 h).
+- `ACCOUNTING_SYNC_RESOURCE_TYPES` (const, line 12): `['contact', 'product', 'tax_type', 'invoice', 'account'] as const`. `account` is the chart of sales accounts for the default sales account (ADR-079).
+- `AccountingSyncResourceType` (type, line 13): `(typeof ACCOUNTING_SYNC_RESOURCE_TYPES)[number]`.
+- `ACCOUNTING_MAPPING_RESOURCE_TYPES` (const, line 14): `readonly AccountingSyncResourceType[]` = `['contact', 'product', 'tax_type']`. The resource types shown on the sync status panel.
+- `ACCOUNTING_SYNC_EVENT_TYPE` (const, line 16): `Record<AccountingSyncResourceType, string>`. Maps each type to its outbox event name: `AccountingContactSyncRequested`, `AccountingProductSyncRequested`, `AccountingTaxTypeSyncRequested`, `AccountingInvoiceSyncRequested`, `AccountingAccountSyncRequested`.
+- `ACCOUNTING_SYNC_INTERVAL_MS` (const, line 28): `Record<AccountingSyncResourceType, number>`. contact 30 min, product 30 min, tax_type 6 h, invoice 15 min, account 6 h. (`MINUTE_MS` at line 27 is module-private.)
+- `ACCOUNTING_FULL_SYNC_INTERVAL_MS` (const, line 42): `24 * 60 * MINUTE_MS` (24 h).
 - Process: API and Worker.
 
 ### `accounting-sync.service.ts`
@@ -126,7 +127,7 @@ The header (lines 20-71) is the guide for pulls: what the base owns, what a subc
 - `EnqueueDueResult` (interface, line 26): `{ enqueued: boolean; nextRunAt: Date }`.
 - `AccountingSyncService` (`@Injectable()` class, line 36)
   - Constructor (line 39): `(prisma: PrismaService, outbox: OutboxService, ingestionRuns: IngestionRunService, connections: AccountingConnectionService)`.
-  - `requestSync(distributorId: string, trigger: IngestionRunTrigger): Promise<AccountingSyncStatusResponse>` (line 48). Queues every resource type (including `invoice`) in one transaction. Returns `getStatus`. Used by the manual "Sync" endpoint. Process: API.
+  - `requestSync(distributorId: string, trigger: IngestionRunTrigger): Promise<AccountingSyncStatusResponse>` (line 48). Queues every resource type (including `invoice` and `account`) in one transaction. Returns `getStatus`. Used by the manual "Sync" endpoint. Process: API.
   - `requestSyncForConnection(distributorId: string, connectionId: string, resourceType: AccountingSyncResourceType, trigger: IngestionRunTrigger): Promise<AccountingSyncStatusResponse>` (line 68). Queues one resource type for one connection. Process: API.
   - `enqueueDue(distributorId: string, connectionId: string, resourceType: AccountingSyncResourceType, slot: Date | null, now: Date): Promise<EnqueueDueResult>` (line 82). In one transaction: `requestRun` (SCHEDULED), writes the outbox event only if `shouldEnqueue`, then `advanceSchedule` to `nextSlotAfter`. Process: Worker (scheduler).
   - `skipDue(runId: string, resourceType: AccountingSyncResourceType, slot: Date, now: Date): Promise<Date>` (line 109). Advances a due slot without queueing. Process: Worker.
@@ -235,6 +236,9 @@ classDiagram
         class AccountingInvoiceSyncProcessor {
             resourceType invoice
         }
+        class AccountingAccountSyncProcessor {
+            resourceType account
+        }
     }
 
     AccountingSyncProcessorBase --|> AccountingPullProcessorBase : extends
@@ -242,6 +246,7 @@ classDiagram
     AccountingProductSyncProcessor --|> AccountingSyncProcessorBase : extends
     AccountingTaxTypeSyncProcessor --|> AccountingSyncProcessorBase : extends
     AccountingInvoiceSyncProcessor --|> AccountingPullProcessorBase : extends
+    AccountingAccountSyncProcessor --|> AccountingPullProcessorBase : extends
     AccountingPullProcessorBase ..> RunProgress : creates per run
     AccountingSyncService ..> AccountingContactSyncProcessor : outbox event consumed by
 ```

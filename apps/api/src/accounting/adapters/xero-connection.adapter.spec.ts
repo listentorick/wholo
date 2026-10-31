@@ -10,6 +10,7 @@ const mockGetItems = jest.fn();
 const mockCreateInvoices = jest.fn();
 const mockGetTaxRates = jest.fn();
 const mockGetInvoices = jest.fn();
+const mockGetAccounts = jest.fn();
 const mockBudgetAcquire = jest.fn();
 
 const mockXeroClientInstance = {
@@ -17,7 +18,7 @@ const mockXeroClientInstance = {
   apiCallback: jest.fn(),
   setTokenSet: jest.fn(),
   updateTenants: jest.fn(),
-  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices, getTaxRates: mockGetTaxRates, getInvoices: mockGetInvoices },
+  accountingApi: { getContacts: mockGetContacts, getItems: mockGetItems, createInvoices: mockCreateInvoices, getTaxRates: mockGetTaxRates, getInvoices: mockGetInvoices, getAccounts: mockGetAccounts },
 };
 
 jest.mock('xero-node', () => ({
@@ -25,6 +26,7 @@ jest.mock('xero-node', () => ({
   Contact: { ContactStatusEnum: { ACTIVE: 'ACTIVE', ARCHIVED: 'ARCHIVED', GDPRREQUEST: 'GDPRREQUEST' } },
   Address: { AddressTypeEnum: { POBOX: 'POBOX', STREET: 'STREET' } },
   TaxRate: { StatusEnum: { ACTIVE: 'ACTIVE', DELETED: 'DELETED' } },
+  Account: { StatusEnum: { ACTIVE: 'ACTIVE', ARCHIVED: 'ARCHIVED', DELETED: 'DELETED' } },
   Invoice: {
     TypeEnum: { ACCREC: 'ACCREC', ACCPAY: 'ACCPAY' },
     StatusEnum: { DRAFT: 'DRAFT', SUBMITTED: 'SUBMITTED', AUTHORISED: 'AUTHORISED', PAID: 'PAID' },
@@ -607,6 +609,53 @@ describe('XeroAccountingAdapter', () => {
       await adapter.listProducts(tokenSet, 'tenant-1', '2026-03-01T00:00:00.000Z');
 
       expect(mockGetItems).toHaveBeenCalledWith('tenant-1', new Date('2026-03-01T00:00:00.000Z'), undefined, undefined, 4);
+    });
+  });
+
+  describe('listSalesAccounts', () => {
+    const tokenSet = { accessToken: 'a', refreshToken: 'r', expiresAt: new Date().toISOString(), scope: 'openid' };
+
+    it('asks Xero for revenue accounts only', async () => {
+      mockGetAccounts.mockResolvedValueOnce({ body: { accounts: [] }, response: { status: 200, headers: {} } });
+
+      await adapter.listSalesAccounts(tokenSet, 'tenant-1');
+
+      expect(mockGetAccounts).toHaveBeenCalledWith('tenant-1', undefined, 'Class=="REVENUE"');
+    });
+
+    it('fails rather than reporting an empty chart when Xero sends no accounts list', async () => {
+      mockGetAccounts.mockResolvedValueOnce({ body: {}, response: { status: 200, headers: {} } });
+
+      await expect(adapter.listSalesAccounts(tokenSet, 'tenant-1')).rejects.toMatchObject({
+        name: 'AccountingProviderError',
+        transient: true,
+      });
+    });
+
+    it('maps accounts to the neutral shape, keeps archived ones as inactive and drops ones without a code', async () => {
+      const sales = { accountID: 'acc-200', code: '200', name: 'Sales', status: 'ACTIVE' };
+      const archived = { accountID: 'acc-210', code: '210', name: 'Old Sales', status: 'ARCHIVED' };
+      const unnamed = { accountID: 'acc-260', code: '260', name: '', status: 'ACTIVE' };
+      mockGetAccounts.mockResolvedValueOnce({
+        body: { accounts: [sales, { accountID: 'acc-none', name: 'No code', status: 'ACTIVE' }, archived, unnamed] },
+        response: { status: 200, headers: {} },
+      });
+
+      const accounts = await adapter.listSalesAccounts(tokenSet, 'tenant-1');
+
+      expect(accounts).toEqual([
+        { externalId: 'acc-200', code: '200', displayName: 'Sales', isActive: true, raw: sales },
+        { externalId: 'acc-210', code: '210', displayName: 'Old Sales', isActive: false, raw: archived },
+        { externalId: 'acc-260', code: '260', displayName: '260', isActive: true, raw: unnamed },
+      ]);
+    });
+
+    it('throws a transient AccountingProviderError when Xero is down', async () => {
+      mockGetAccounts.mockRejectedValueOnce(xeroSdkRejection(503, 'Service Unavailable'));
+
+      await expect(adapter.listSalesAccounts(tokenSet, 'tenant-1')).rejects.toMatchObject({
+        transient: true,
+      });
     });
   });
 

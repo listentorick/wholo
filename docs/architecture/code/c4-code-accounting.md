@@ -3,7 +3,7 @@
 ## Overview
 
 - **Name**: Accounting integration core (provider-neutral framework, with the Xero OAuth edge and the invoice payment state writer)
-- **Description**: The files directly in `apps/api/src/accounting/` plus `dto/`. They hold the connection and OAuth lifecycle, token encryption and refresh, provider call budget and failure classification, the organisation scope rule, the HTTP surface for contacts / products / tax types / invoice export, the reverse link lookup from customer and product records, the single writer of invoice payment state, derived payment status, and the sync scheduler.
+- **Description**: The files directly in `apps/api/src/accounting/` plus `dto/`. They hold the connection and OAuth lifecycle, token encryption and refresh, provider call budget and failure classification, the organisation scope rule, the HTTP surface for contacts / products / tax types / sales accounts / invoice export, the default sales account setting, the reverse link lookup from customer and product records, the single writer of invoice payment state, derived payment status, and the sync scheduler.
 - **Location**: `apps/api/src/accounting/` (excluding `adapters/`, `sync/`, `matching/`, and the `*.spec.ts` files)
 - **Language**: TypeScript (NestJS, Prisma, BullMQ, ioredis)
 - **Purpose**: Connect a distributor to an accounting provider (Xero today), keep the provider's contacts, products and tax rates cached and matched to Stocdup records, export orders as invoices, sync invoice payment status back, and expose the admin HTTP API for all of it. Provider-specific behaviour is behind `AccountingConnectionAdapter` (in `adapters/`, documented elsewhere).
@@ -58,21 +58,22 @@ Process column: **API** = served by `apps/api` (`main.ts`, `AppModule`); **Worke
 - **Process**: Both (API for HTTP calls; Worker via `AccountingTokenRefreshScheduler` and the pull/export processors that call `getValidTokenSet`)
 - **Constants**: `STATE_TTL_MS = 10 min` (line 22), `REFRESH_BUFFER_MS = 5 min` (26), `WAITER_DEADLINE_MS = 45 s` (31), `POLL_BASE_MS = 1 s` (32), `POLL_JITTER_MS = 500` (33)
 - **Public methods**:
-  - `getConnectionStatus(distributorId: string)` (49): status view of the CONNECTED-or-ERROR connection, or `null`.
-  - `updateConnectionSettings(distributorId: string, settings: { invoiceExportTargetStatus: AccountingInvoiceTargetStatus })` (58): writes `AccountingOrganisation.invoiceExportTargetStatus`; throws `NotFoundException` if no connection.
-  - `getCurrentConnection(distributorId: string)` (76): returns the CONNECTED-or-ERROR connection row (with organisation) or `null`; used by `AccountingSyncService.getStatus` and `AccountingRecordLinkService` (`getCustomerLink`, `getProductLink`).
-  - `getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnectionWithOrganisation>` (82): CONNECTED only; `NotFoundException` otherwise; used by `AccountingSyncService.requestSync`.
-  - `createAuthorizationUrl(distributorId: string, connectedByUserId: string, provider: AccountingProvider): Promise<{ authorizationUrl: string }>` (121): writes an `AccountingOAuthState` row (random 32-byte hex state, 10-minute expiry), then `adapters.get(provider).buildAuthorizationUrl(state)`.
-  - `handleCallback(callbackUrl: string, code: string | undefined, state: string | undefined): Promise<void>` (142): see the OAuth flow below.
-  - `getValidTokenSet(distributorId: string, provider: AccountingProvider): Promise<AccountingTokenSet>` (284): the only token gateway (see the token flow diagram).
-  - `disconnect(distributorId: string): Promise<void>` (572): sets the CONNECTED row to DISCONNECTED; `NotFoundException` if none.
-- **Private methods**: `findCurrentConnection(distributorId)` (96, orders by `connectedAt desc`, statuses CONNECTED or ERROR); `toConnectionStatus` (110); `sleep` (333); `refreshHoldingLock(lock, connectionId, distributorId)` (341); `performRefresh(connection, currentTokenSet, distributorId)` (393); `notifyReconnectNeeded(distributorId, provider, error)` (503).
+  - `getConnectionStatus(distributorId: string)` (49): status view of the CONNECTED-or-ERROR connection, or `null` (see `toConnectionStatus`).
+  - `updateConnectionSettings(distributorId: string, settings: { invoiceExportTargetStatus?: AccountingInvoiceTargetStatus; invoiceDefaultAccountId?: string | null })` (60): updates only the fields given. `invoiceExportTargetStatus` writes `AccountingOrganisation.invoiceExportTargetStatus`. `invoiceDefaultAccountId` (ADR-079) first checks, with `findFirst` on `ExternalAccountingAccount` in this organisation's scope and `isActive: true`, that the account exists and is active, else `BadRequestException`; then it writes `AccountingOrganisation.invoiceDefaultAccountId`. `null` clears it. Throws `NotFoundException` if no connection. Returns the status view.
+  - `getCurrentConnection(distributorId: string)` (95): returns the CONNECTED-or-ERROR connection row (with organisation) or `null`; used by `AccountingSyncService.getStatus` and `AccountingRecordLinkService` (`getCustomerLink`, `getProductLink`).
+  - `getActiveConnectionOrThrow(distributorId: string): Promise<AccountingConnectionWithOrganisation>` (101): CONNECTED only; `NotFoundException` otherwise; used by `AccountingSyncService.requestSync` and `AccountingAccountService.listSalesAccounts`.
+  - `createAuthorizationUrl(distributorId: string, connectedByUserId: string, provider: AccountingProvider): Promise<{ authorizationUrl: string }>` (147): writes an `AccountingOAuthState` row (random 32-byte hex state, 10-minute expiry), then `adapters.get(provider).buildAuthorizationUrl(state)`.
+  - `handleCallback(callbackUrl: string, code: string | undefined, state: string | undefined): Promise<void>` (168): see the OAuth flow below.
+  - `getValidTokenSet(distributorId: string, provider: AccountingProvider): Promise<AccountingTokenSet>` (310): the only token gateway (see the token flow diagram).
+  - `disconnect(distributorId: string): Promise<void>` (598): sets the CONNECTED row to DISCONNECTED; `NotFoundException` if none.
+- **Private methods**: `findCurrentConnection(distributorId)` (115, orders by `connectedAt desc`, statuses CONNECTED or ERROR); `toConnectionStatus(connection)` (129, async, see below); `sleep` (359); `refreshHoldingLock(lock, connectionId, distributorId)` (367); `performRefresh(connection, currentTokenSet, distributorId)` (419); `notifyReconnectNeeded(distributorId, provider, error)` (529).
+- **Behaviour of `toConnectionStatus`**: async. Returns the status fields (provider, status, connection and sync timestamps, `invoiceExportTargetStatus`) and `invoiceDefaultAccount`: `{ id, code, displayName, isActive }` read by id from `ExternalAccountingAccount`, or `null` when no default is set (ADR-079). A default that has since gone inactive is still returned with `isActive: false`, so the settings screen can show it.
 - **Behaviour of `handleCallback`** (142-269): consumes the state row (`findUnique` then `delete`) before any external call; checks expiry; `code` missing → `access_denied`; calls `adapter.exchangeCodeForToken(callbackUrl, state)` and `adapter.listAvailableOrganisations(tokenSet)` (failure → `exchange_failed`); zero organisations → `no_organisation`; more than one → logs a warning and uses the first. In a transaction: upserts `AccountingOrganisation` on `(distributorId, provider, externalOrganisationId)` and refreshes its name; retires all CONNECTED/ERROR connections for the distributor (status DISCONNECTED); creates a new CONNECTED `AccountingConnection` with `scopes = tokenSet.scope` and the encrypted token JSON.
 - **Behaviour of `getValidTokenSet`**: reads the newest connection for `(distributorId, provider)` (any status). Missing or DISCONNECTED → `NotFoundException`. ERROR or REVOKED → permanent `AccountingProviderError` built from `lastErrorMessage` (no provider call). Otherwise decrypts; returns the stored set when more than 5 minutes of life remain; otherwise acquires the Redis lock (see `AccountingRefreshLockService`) and refreshes. Lock not acquired → sleeps 1 to 1.5 s and loops until 45 s, then throws a transient `AccountingProviderError('Timed out waiting for the accounting refresh lock', true)`.
 - **Behaviour of `performRefresh`**: calls `adapters.get(provider).refreshAccessToken(currentTokenSet)`. Non-`AccountingProviderError` failures are wrapped as transient. Permanent failure → `AccountingConnection` set to ERROR with `lastErrorAt` and `lastErrorMessage`. Success → encrypts the new set and writes it with `updateMany` predicated on the old ciphertext and status CONNECTED, also setting `lastSyncedAt`. A zero-row result logs `accounting.connection.refresh_race_lost`, re-reads, and returns the newer credential if still valid, else throws transient.
 - **Behaviour of `notifyReconnectNeeded`**: runs only after the lock is released (in `finally`). Calls `AdminNotificationsService.notifyOrganisationAdmins` with type `ACCOUNTING_CONNECTION_NEEDS_RECONNECT`, link `/integrations/accounting`, and provider display name from `adapters.displayName(provider)`. Unless the error code is `invalid_client` (logged as an application-credential error, no email), it emails each DISTRIBUTOR_ADMIN membership through `MailService.sendAccountingConnectionNeedsReconnect`. Email failures are logged per user id.
 - **Dependencies**:
-  - Prisma models: `AccountingConnection`, `AccountingOrganisation`, `AccountingOAuthState`, `Membership`, `Organisation`
+  - Prisma models: `AccountingConnection`, `AccountingOrganisation`, `AccountingOAuthState`, `ExternalAccountingAccount`, `Membership`, `Organisation`
   - Services: `PrismaService`, `TokenEncryptionService`, `AccountingAdapterRegistry` (`get`, `displayName`), `AccountingRefreshLockService`, `AdminNotificationsService`, `MailService`, `ConfigService` (`ADMIN_URL`, required)
   - Errors and types: `AccountingOAuthError`, `AccountingProviderError`, `AccountingTokenSet`, `CONNECTION_WITH_ORGANISATION`
 
@@ -368,6 +369,31 @@ Each of the three record types has a controller (HTTP) and a service (business l
   - Read-only: writes no rows, outbox events or audit rows. Linking, unlinking and acknowledging use the contact and product routes.
 - **Dependencies**: `PrismaService`; `AccountingConnectionService.getCurrentConnection`; `AccountingAdapterRegistry.displayName`; `organisationScope` and `AccountingConnectionWithOrganisation` (`accounting-organisation.ts`); Prisma models `TradeRelationship`, `Product`, `CustomerAccountingMapping`, `ProductAccountingMapping`, `AccountingContactMatchSuggestion`, `AccountingProductMatchSuggestion`, `ExternalAccountingTaxType`, `User`; result types `AccountingRecordLink`, `AccountingCustomerLink`, `AccountingProductLink` from `@wholo/types`
 
+### 4b. Sales accounts and the default sales account (ADR-079)
+
+The chart of sales accounts is pulled by `accounting-account-sync` (documented in `c4-code-accounting-processors.md`, section 7) into `ExternalAccountingAccount`. This section is the read side. Nothing in Stocdup maps to these rows. Setting the default is `AccountingConnectionService.updateConnectionSettings` (section 1).
+
+#### `AccountingAccountController` (controller)
+
+- **Location**: `apps/api/src/accounting/accounting-account.controller.ts:15` (`@Controller('distributors/:distributorId/accounting/accounts')` at line 14)
+- **Group**: framework (provider-neutral)
+- **Process**: API
+- **Class guards** (line 13): `JwtAuthGuard`, `DistributorAccessGuard`, `PermissionsGuard`
+
+| Method and path (under `/api/v1`) | Handler (line) | Permission (line) | Delegates to |
+|---|---|---|---|
+| `GET /distributors/:distributorId/accounting/accounts` | `listSalesAccounts(distributorId)` (21) | `ACCOUNTING_READ` (19) | `AccountingAccountService.listSalesAccounts` |
+
+- **Dependencies**: `AccountingAccountService`
+
+#### `AccountingAccountService` (service)
+
+- **Location**: `apps/api/src/accounting/accounting-account.service.ts:10`
+- **Group**: framework (provider-neutral)
+- **Process**: Both (the controller is API only; the service is constructed in both processes)
+- **Method**: `listSalesAccounts(distributorId: string)` (18): returns `{ id, code, displayName }[]` for the organisation's active `ExternalAccountingAccount` rows, ordered by `code`. Uses `AccountingConnectionService.getActiveConnectionOrThrow` (`NotFoundException` when the distributor has no CONNECTED connection). It reads the cache only and never calls the provider, so the list works while the provider is down and does not use the provider call budget.
+- **Dependencies**: `PrismaService`, `AccountingConnectionService`, `organisationScope` (`accounting-organisation.ts`); Prisma model `ExternalAccountingAccount`
+
 ### 5. Invoice export
 
 #### `AccountingInvoiceExportController` (controller)
@@ -446,7 +472,7 @@ Each of the three record types has a controller (HTTP) and a service (business l
 
 - **Location**: `apps/api/src/accounting/accounting-sync.scheduler.ts:66`. Module-level: `TICK_MS = 60 s` (16), `INITIAL_DELAY_MS = 90 s` (19), `firstSlot(now: Date, connectedAt: Date, intervalMs: number, random = Math.random): Date` (25, exported), `interface TickSummary` (44, exported), private `interface SchedulerConnection` (30), `interface DueSync` (35)
 - **Group**: framework (provider-neutral)
-- **Process**: Worker only (`worker.module.ts:183`)
+- **Process**: Worker only (`worker.module.ts:195`)
 - **Methods**:
   - `onModuleInit(): void` (76): one-off `setTimeout(tick, 90 s)`, unref'd
   - `tick(): Promise<void>` (84, `@Interval(TICK_MS)` at line 83): re-entrancy guarded; catches and logs `accounting.scheduler.tick_failed`
@@ -455,11 +481,11 @@ Each of the three record types has a controller (HTTP) and a service (business l
 - **Behaviour of `runOnce`**:
   1. Loads CONNECTED connections (`id`, `distributorId`, `accountingOrganisationId`, `connectedAt`).
   2. `IngestionRunService.listScheduled('accounting', connectionIds)`.
-  3. For each connection and each resource type in `ACCOUNTING_SYNC_RESOURCE_TYPES` (contact, product, tax_type, invoice): no row → due now; row without `nextRunAt` → seeded via `firstSlot` (`fillMissingSchedules`); `nextRunAt` ≤ now → due.
+  3. For each connection and each resource type in `ACCOUNTING_SYNC_RESOURCE_TYPES` (contact, product, tax_type, invoice, account): no row → due now; row without `nextRunAt` → seeded via `firstSlot` (`fillMissingSchedules`); `nextRunAt` ≤ now → due.
   4. For invoice work, keeps only connections whose organisation has a COMPLETED export with an `externalInvoiceId` whose `invoiceState` is null or not in `SETTLED_INVOICE_STATES`. Due invoice rows that already have a stored run, but no unsettled invoices, call `AccountingSyncService.skipDue(runId, 'invoice', slot, now)` with no provider call. A due invoice row without a stored run is counted as `skippedNothingToDo` and is not enqueued.
   5. Every other due row calls `AccountingSyncService.enqueueDue(distributorId, connectionId, resourceType, slot, now)`, which writes the outbox event.
   6. Logs one `accounting.scheduler.tick` line per run with the counts.
-- **Intervals** (from `sync/accounting-sync.constants.ts`, documented elsewhere): contact 30 min, product 30 min, tax_type 6 h, invoice 15 min.
+- **Intervals** (from `sync/accounting-sync.constants.ts`, documented elsewhere): contact 30 min, product 30 min, tax_type 6 h, invoice 15 min, account 6 h.
 - **Dependencies**: `PrismaService`, `IngestionRunService` (`listScheduled`, `fillMissingSchedules`), `AccountingSyncService` (`enqueueDue`, `skipDue`), `SETTLED_INVOICE_STATES`, `@nestjs/schedule`
 
 ### 8. Module wiring
@@ -468,11 +494,11 @@ Each of the three record types has a controller (HTTP) and a service (business l
 
 - **Location**: `apps/api/src/accounting/accounting.module.ts:100` (decorator at line 35)
 - **Group**: framework wiring. It is one of the allowed provider-edge files, since it registers `XeroAccountingAdapter`.
-- **Process**: Both (`app.module.ts:77` and `worker.module.ts:165`)
-- **Imports** (36-45): `AdminCustomersModule`, `AdminProductsModule`, `TaxTypesModule`, `OutboxModule`, `IngestionRunModule`, `AuditModule`, `AdminNotificationsModule`, `OrderCompletionModule`
-- **Controllers** (46-54, 7 entries): `AccountingConnectionController`, `AccountingContactController`, `AccountingInvoiceExportController`, `AccountingProductController`, `AccountingRecordLinkController`, `AccountingTaxTypeController`, `XeroCallbackController`
-- **Providers** (55-73, 17 entries): the services, `AccountingRefreshLockService`, `AccountingCallBudgetService`, `TokenEncryptionService`, `AccountingAdapterRegistry`, `XeroAccountingAdapter`, and the three matcher services. `AccountingRecordLinkService` is among the services.
-- **Exports** (83-98): `IngestionRunModule`, `AccountingConnectionService`, `AccountingSyncService`, `AccountingContactService`, `AccountingProductService`, `AccountingTaxTypeService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, the three matcher services, `InvoicePaymentStateService`
+- **Process**: Both (`app.module.ts:80` and `worker.module.ts:176`)
+- **Imports** (39-46): `AdminCustomersModule`, `AdminProductsModule`, `TaxTypesModule`, `OutboxModule`, `IngestionRunModule`, `AuditModule`, `AdminNotificationsModule`, `OrderCompletionModule`
+- **Controllers** (49-56, 8 entries): `AccountingConnectionController`, `AccountingContactController`, `AccountingInvoiceExportController`, `AccountingProductController`, `AccountingRecordLinkController`, `AccountingTaxTypeController`, `AccountingAccountController`, `XeroCallbackController`
+- **Providers** (59-76, 18 entries): the services (including `AccountingAccountService` and `AccountingRecordLinkService`), `AccountingRefreshLockService`, `AccountingCallBudgetService`, `TokenEncryptionService`, `AccountingAdapterRegistry`, `XeroAccountingAdapter`, and the three matcher services.
+- **Exports** (88-101): `IngestionRunModule`, `AccountingConnectionService`, `AccountingSyncService`, `AccountingContactService`, `AccountingProductService`, `AccountingTaxTypeService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, the three matcher services, `InvoicePaymentStateService`
 
 Scheduler providers are not in this module. They are registered in `WorkerModule` (`worker.module.ts:182-183`): `AccountingTokenRefreshScheduler` and `AccountingSyncScheduler`.
 
@@ -494,7 +520,7 @@ All DTOs are class-validator classes. One DTO is a Xero implementation edge (`Xe
 | `MatchTaxTypeDto` (`match-tax-type.dto.ts:3`) | framework | `POST .../tax-types/:externalTaxTypeId/match` | `taxTypeId: string` (IsString, IsNotEmpty) |
 | `ProductQueryDto` (`product-query.dto.ts:30`) | framework | `GET .../accounting/products` | `limit?` (1-100); `cursor?`; `search?`; `status?: AccountingProductStatusFilter[]` (comma-separated); `type?: AccountingProductTypeFilter[]` (comma-separated, `sold`, `purchased`, `tracked`). Exports `ACCOUNTING_PRODUCT_STATUS_VALUES` (line 5) and `ACCOUNTING_PRODUCT_TYPE_VALUES` (line 20). |
 | `TaxTypeQueryDto` (`tax-type-query.dto.ts:7`) | framework | `GET .../accounting/tax-types` | `limit?` (1-100); `cursor?`. No filters. |
-| `UpdateConnectionSettingsDto` (`update-connection-settings.dto.ts:5`) | framework | `PATCH .../accounting/connection` | `invoiceExportTargetStatus: AccountingInvoiceTargetStatus` (IsEnum, required) |
+| `UpdateConnectionSettingsDto` (`update-connection-settings.dto.ts:6`) | framework | `PATCH .../accounting/connection` | Every field optional, only those sent change. `invoiceExportTargetStatus?: AccountingInvoiceTargetStatus` (IsOptional, IsEnum); `invoiceDefaultAccountId?: string \| null` (IsOptional, IsString, IsNotEmpty; `null` clears it, ADR-079) |
 | `XeroCallbackDto` (`xero-callback.dto.ts:3`) | Xero implementation | `POST /api/v1/accounting/xero/callback` | `callbackUrl: string` (IsString, IsNotEmpty, required); `code?: string`; `state?: string` |
 
 ## Dependencies
@@ -553,7 +579,7 @@ Internal dependency edges inside this directory:
 ```mermaid
 flowchart LR
     subgraph API["API process (main.ts, AppModule)"]
-        HTTP["7 HTTP controllers<br/>(JWT, distributor access, permissions)"]
+        HTTP["8 HTTP controllers<br/>(JWT, distributor access, permissions)"]
         AMOD["AccountingModule providers<br/>(constructed in both processes)"]
     end
     subgraph WORKER["Worker process (worker.ts, WorkerModule, no HTTP)"]
@@ -633,14 +659,15 @@ No direct BullMQ `queue.add` calls exist in the in-scope files (verified by grep
 | `AccountingProductSyncRequested` | as above | as above | `accounting-product-sync` | `accounting-product-sync/*` |
 | `AccountingTaxTypeSyncRequested` | as above | as above | `accounting-tax-type-sync` | `accounting-tax-type-sync/*` |
 | `AccountingInvoiceSyncRequested` | as above | as above | `accounting-invoice-sync` | `accounting-invoice-sync/*` |
+| `AccountingAccountSyncRequested` | as above | as above | `accounting-account-sync` | `accounting-account-sync/*` |
 
 Other side effects in this directory:
 
 - **Audit rows** (`AuditService.record`): `INVOICE_EXPORT_RETRY_REQUESTED` (entity `ORDER`, in `retryExport`); `INVOICE_PAYMENT_STATUS_CHANGED` (entity `ORDER`, in `InvoicePaymentStateService.apply`). Mapping changes made by users are logged through the application logger (`accounting.mapping.*`), not the audit table (comment at `accounting-contact.service.ts:577-578`).
-- **Admin notifications**: `ACCOUNTING_CONNECTION_NEEDS_RECONNECT` (`accounting-connection.service.ts:511`), link `/integrations/accounting`. Also `AccountingChangeDetectionService.detectAndFlag` through the caller-supplied notification.
+- **Admin notifications**: `ACCOUNTING_CONNECTION_NEEDS_RECONNECT` (`accounting-connection.service.ts:537`), link `/integrations/accounting`. Also `AccountingChangeDetectionService.detectAndFlag` through the caller-supplied notification.
 - **Email**: `MailService.sendAccountingConnectionNeedsReconnect` to DISTRIBUTOR_ADMIN users when a connection is marked ERROR (not for `invalid_client`).
 - **Redis keys**: `wholo:accounting-refresh:<connectionId>` (refresh lock, 15 s TTL, renewed every 5 s); `wholo:accounting-call-budget:<provider>:<externalOrgId>` (sliding 60 s window).
-- **Database writes from this directory**: `AccountingConnection` (create, status changes, encrypted credentials, `lastSyncedAt`, `lastErrorAt`, `lastErrorMessage`); `AccountingOAuthState` (create and delete); `AccountingOrganisation` (upsert on connect, `invoiceExportTargetStatus`); `ExternalAccountingContact`, `ExternalAccountingProduct`, `ExternalAccountingTaxType` (`ignoredAt`, `changeAcknowledgedAt`); mapping tables (create, `unlinkedAt`); suggestion tables (status changes); `AccountingBulkImportJob` (create); `Product` and `TaxType` (through admin services); `AccountingInvoiceExport` (invoice state columns, only in `InvoicePaymentStateService`); `Order` status is untouched here.
+- **Database writes from this directory**: `AccountingConnection` (create, status changes, encrypted credentials, `lastSyncedAt`, `lastErrorAt`, `lastErrorMessage`); `AccountingOAuthState` (create and delete); `AccountingOrganisation` (upsert on connect, `invoiceExportTargetStatus`, `invoiceDefaultAccountId`); `ExternalAccountingContact`, `ExternalAccountingProduct`, `ExternalAccountingTaxType` (`ignoredAt`, `changeAcknowledgedAt`); mapping tables (create, `unlinkedAt`); suggestion tables (status changes); `AccountingBulkImportJob` (create); `Product` and `TaxType` (through admin services); `AccountingInvoiceExport` (invoice state columns, only in `InvoicePaymentStateService`); `Order` status is untouched here.
 
 ## Provider neutrality
 

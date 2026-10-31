@@ -178,6 +178,19 @@ export interface AccountingExternalTaxRate {
   raw: unknown;
 }
 
+// One account from the provider's chart of accounts that a sales-invoice line
+// can be posted to, as cached by the account sync. `code` is exactly what goes
+// into AccountingInvoiceLineRequest.accountCode; externalId is the provider's
+// stable id for the account (its code can be changed), and is what the cache
+// is keyed on. Same provider-neutral contract as AccountingExternalTaxRate.
+export interface AccountingExternalAccount {
+  externalId: string;
+  code: string;
+  displayName: string;
+  isActive: boolean;
+  raw: unknown;
+}
+
 // Provider-neutral name for the status an invoice is created with in the
 // accounting system. Mirrors the AccountingInvoiceTargetStatus Prisma enum
 // (this file stays Prisma-free); each adapter maps it onto its provider's
@@ -312,6 +325,15 @@ export interface AccountingConnectionAdapter {
     tokenSet: AccountingTokenSet,
     externalOrganisationId: string,
   ): Promise<AccountingExternalTaxRate[]>;
+  // Every account a sales-invoice line can be posted to that has a code —
+  // archived ones included, with isActive false, so the sync can tell an
+  // account was archived. The organisation's default sales account is chosen
+  // from these. No cursor: chart-of-accounts counts are small, so every sync
+  // is a full fetch (as with listTaxRates).
+  listSalesAccounts(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+  ): Promise<AccountingExternalAccount[]>;
   // Whether the scopes granted at consent time (AccountingConnection.scopes,
   // space-separated) permit invoice creation. Scope vocabulary is
   // provider-specific, so the judgement lives here — callers use this to fail

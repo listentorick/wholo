@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AccountingConnectionStatus, AccountingProvider, Role } from '@prisma/client';
 import { AccountingConnectionService } from './accounting-connection.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,6 +25,10 @@ const mockPrisma = {
     findUnique: jest.fn(),
     upsert: jest.fn(),
     update: jest.fn(),
+  },
+  externalAccountingAccount: {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
   },
   accountingOAuthState: {
     create: jest.fn(),
@@ -116,7 +120,24 @@ describe('AccountingConnectionService', () => {
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
         invoiceExportTargetStatus: 'DRAFT',
+        invoiceDefaultAccount: null,
       });
+    });
+
+    it('includes the default sales account when one is chosen', async () => {
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue({
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        connectedAt: new Date('2026-01-01'),
+        lastSyncedAt: null,
+        organisation: { name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT', invoiceDefaultAccountId: 'acct-1' },
+      });
+      const account = { id: 'acct-1', code: '200', displayName: 'Sales', isActive: true };
+      mockPrisma.externalAccountingAccount.findUnique.mockResolvedValue(account);
+
+      const result = await service.getConnectionStatus('dist-1');
+
+      expect(result?.invoiceDefaultAccount).toEqual(account);
     });
 
     it('queries for CONNECTED or ERROR, so a broken connection is surfaced distinctly', async () => {
@@ -193,6 +214,71 @@ describe('AccountingConnectionService', () => {
         connectedAt: new Date('2026-01-01'),
         lastSyncedAt: null,
         invoiceExportTargetStatus: 'AUTHORISED',
+        invoiceDefaultAccount: null,
+      });
+    });
+
+    describe('default sales account', () => {
+      const connection = {
+        id: 'conn-1',
+        distributorId: 'dist-1',
+        accountingOrganisationId: 'acc-org-1',
+        provider: AccountingProvider.XERO,
+        status: AccountingConnectionStatus.CONNECTED,
+        connectedAt: new Date('2026-01-01'),
+        lastSyncedAt: null,
+        organisation: { id: 'acc-org-1', name: 'Acme Wines', invoiceExportTargetStatus: 'DRAFT', invoiceDefaultAccountId: null },
+      };
+
+      beforeEach(() => {
+        mockPrisma.accountingConnection.findFirst.mockResolvedValue(connection);
+        // Like Prisma, an undefined field leaves the column as it is.
+        mockPrisma.accountingOrganisation.update.mockImplementation(({ data }) =>
+          Promise.resolve({
+            ...connection.organisation,
+            ...Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined)),
+          }),
+        );
+      });
+
+      it("stores a cached account that is active and belongs to the connection's organisation", async () => {
+        const account = { id: 'acct-260', code: '260', displayName: 'Other Revenue', isActive: true };
+        mockPrisma.externalAccountingAccount.findFirst.mockResolvedValue({ id: 'acct-260' });
+        mockPrisma.externalAccountingAccount.findUnique.mockResolvedValue(account);
+
+        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-260' });
+
+        expect(mockPrisma.externalAccountingAccount.findFirst).toHaveBeenCalledWith({
+          where: { distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', id: 'acct-260', isActive: true },
+          select: { id: true },
+        });
+        expect(result.invoiceDefaultAccount).toEqual(account);
+        // Only the field that was sent changes.
+        expect(result.invoiceExportTargetStatus).toBe('DRAFT');
+      });
+
+      it("rejects an account that is inactive or not this organisation's", async () => {
+        mockPrisma.externalAccountingAccount.findFirst.mockResolvedValue(null);
+
+        await expect(
+          service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-other' }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockPrisma.accountingOrganisation.update).not.toHaveBeenCalled();
+      });
+
+      it('clears the default when given null', async () => {
+        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: null });
+
+        expect(result.invoiceDefaultAccount).toBeNull();
+        expect(mockPrisma.externalAccountingAccount.findFirst).not.toHaveBeenCalled();
+      });
+
+      it('leaves the default untouched when only the target status is sent', async () => {
+        await service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' });
+
+        const { data } = mockPrisma.accountingOrganisation.update.mock.calls[0][0];
+        expect(data.invoiceDefaultAccountId).toBeUndefined();
+        expect(data.invoiceExportTargetStatus).toBe('AUTHORISED');
       });
     });
   });

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'crypto';
 import { loggableError } from '@wholo/nest-telemetry';
@@ -17,7 +17,7 @@ import { AccountingOAuthError } from './accounting-oauth.error';
 import { AccountingTokenSet } from './adapters/accounting-connection-adapter.interface';
 import { AccountingProviderError } from './adapters/accounting-provider.error';
 import { AccountingRefreshLock, AccountingRefreshLockService } from './accounting-refresh-lock.service';
-import { AccountingConnectionWithOrganisation, CONNECTION_WITH_ORGANISATION } from './accounting-organisation';
+import { AccountingConnectionWithOrganisation, CONNECTION_WITH_ORGANISATION, organisationScope } from './accounting-organisation';
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 // Refresh if the access token has less than this much life left. Xero access
@@ -52,20 +52,39 @@ export class AccountingConnectionService {
     return this.toConnectionStatus(connection);
   }
 
-  // Per-organisation (not per-distributor, not per-connection) settings: the
-  // invoice target status is about how invoices are raised in this company,
-  // so it survives a reconnect to it (ADR-074).
+  // Per-organisation (not per-distributor, not per-connection) settings: how
+  // invoices are raised in this company, so they survive a reconnect to it
+  // (ADR-074). Each field is optional and only the ones given change. The
+  // default sales account is a cached account row (ADR-079): it must belong
+  // to this organisation and still be active. null clears it.
   async updateConnectionSettings(
     distributorId: string,
-    settings: { invoiceExportTargetStatus: AccountingInvoiceTargetStatus },
+    settings: {
+      invoiceExportTargetStatus?: AccountingInvoiceTargetStatus;
+      invoiceDefaultAccountId?: string | null;
+    },
   ) {
     const connection = await this.findCurrentConnection(distributorId);
     if (!connection) {
       throw new NotFoundException('No accounting connection exists for this distributor');
     }
+
+    if (settings.invoiceDefaultAccountId) {
+      const account = await this.prisma.externalAccountingAccount.findFirst({
+        where: { ...organisationScope(connection), id: settings.invoiceDefaultAccountId, isActive: true },
+        select: { id: true },
+      });
+      if (!account) {
+        throw new BadRequestException('That account is not an active sales account in your accounting system');
+      }
+    }
+
     const organisation = await this.prisma.accountingOrganisation.update({
       where: { id: connection.accountingOrganisationId },
-      data: { invoiceExportTargetStatus: settings.invoiceExportTargetStatus },
+      data: {
+        invoiceExportTargetStatus: settings.invoiceExportTargetStatus,
+        invoiceDefaultAccountId: settings.invoiceDefaultAccountId,
+      },
     });
     return this.toConnectionStatus({ ...connection, organisation });
   }
@@ -107,7 +126,13 @@ export class AccountingConnectionService {
     });
   }
 
-  private toConnectionStatus(connection: AccountingConnectionWithOrganisation) {
+  private async toConnectionStatus(connection: AccountingConnectionWithOrganisation) {
+    const defaultAccount = connection.organisation.invoiceDefaultAccountId
+      ? await this.prisma.externalAccountingAccount.findUnique({
+          where: { id: connection.organisation.invoiceDefaultAccountId },
+          select: { id: true, code: true, displayName: true, isActive: true },
+        })
+      : null;
     return {
       provider: connection.provider,
       status: connection.status,
@@ -115,6 +140,7 @@ export class AccountingConnectionService {
       connectedAt: connection.connectedAt,
       lastSyncedAt: connection.lastSyncedAt,
       invoiceExportTargetStatus: connection.organisation.invoiceExportTargetStatus,
+      invoiceDefaultAccount: defaultAccount,
     };
   }
 

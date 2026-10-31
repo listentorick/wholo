@@ -1,6 +1,7 @@
 import { OutboxEventStatus } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { EVENT_ROUTES } from '../queues/queue.constants';
 import { OutboxPublisherService } from './outbox-publisher.service';
 
 function makeEvent(overrides: Record<string, unknown> = {}) {
@@ -29,6 +30,7 @@ describe('OutboxPublisherService', () => {
   let deliveryRunAllocationQueue: { add: jest.Mock };
   let keycloakUserQueue: { add: jest.Mock };
   let accountingInvoiceSyncQueue: { add: jest.Mock };
+  let accountingAccountSyncQueue: { add: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -47,6 +49,7 @@ describe('OutboxPublisherService', () => {
     deliveryRunAllocationQueue = { add: jest.fn().mockResolvedValue({}) };
     keycloakUserQueue = { add: jest.fn().mockResolvedValue({}) };
     accountingInvoiceSyncQueue = { add: jest.fn().mockResolvedValue({}) };
+    accountingAccountSyncQueue = { add: jest.fn().mockResolvedValue({}) };
     service = new OutboxPublisherService(
       prisma as unknown as PrismaService,
       notificationsQueue as unknown as Queue,
@@ -55,6 +58,7 @@ describe('OutboxPublisherService', () => {
       accountingProductSyncQueue as unknown as Queue,
       accountingTaxTypeSyncQueue as unknown as Queue,
       accountingInvoiceSyncQueue as unknown as Queue,
+      accountingAccountSyncQueue as unknown as Queue,
       analyticsFactsQueue as unknown as Queue,
       accountingBulkImportQueue as unknown as Queue,
       deliveryRunAllocationQueue as unknown as Queue,
@@ -280,5 +284,23 @@ describe('OutboxPublisherService', () => {
 
     expect(accountingInvoiceSyncQueue.add).toHaveBeenCalledWith('AccountingInvoiceSyncRequested', expect.anything(), { jobId: 'evt-inv' });
     expect(accountingContactSyncQueue.add).not.toHaveBeenCalled();
+  });
+
+  it('routes AccountingAccountSyncRequested to the sales account sync queue', async () => {
+    prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ id: 'evt-acc', eventType: 'AccountingAccountSyncRequested' })]);
+
+    await service.publishPending();
+
+    expect(accountingAccountSyncQueue.add).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(Object.keys(EVENT_ROUTES))('has a queue for every route of %s', async (eventType) => {
+    prisma.outboxEvent.findMany.mockResolvedValue([makeEvent({ eventType })]);
+
+    await service.publishPending();
+
+    expect(prisma.outboxEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: OutboxEventStatus.PUBLISHED }) }),
+    );
   });
 });

@@ -293,7 +293,9 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
 
     // Product mappings are best-effort: mapped lines carry the external item
     // code and account treatment; unmapped lines still invoice from the
-    // Wholo description alone. Wholo always sends quantity + unit price —
+    // Wholo description alone. A line whose product brings no account of its
+    // own is posted to the organisation's default sales account when one is
+    // chosen (the item's own account always wins), else the provider decides. Wholo always sends quantity + unit price —
     // the provider's item defaults never determine the price. Tax code is
     // resolved separately below, from the order line's own Stocdup TaxType
     // (not the product's cached external tax code) — see
@@ -311,6 +313,14 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
       include: { externalProduct: true },
     });
     const mappingByProductId = new Map(productMappings.map((m) => [m.productId, m]));
+    // The default sales account's code as the last account sync saw it
+    // (ADR-079); an account since archived in the provider is not sent.
+    const defaultAccount = connection.organisation.invoiceDefaultAccountId
+      ? await this.prisma.externalAccountingAccount.findFirst({
+          where: { ...organisationScope(connection), id: connection.organisation.invoiceDefaultAccountId, isActive: true },
+          select: { code: true },
+        })
+      : null;
 
     // Cache the in-flight promise, not the resolved value: invoiceableLines
     // are mapped through Promise.all, so two lines sharing a taxTypeId call
@@ -338,13 +348,14 @@ export class AccountingInvoiceExportProcessor extends LoggedWorkerHost {
           ? line.productNameSnapshot
           : [line.productNameSnapshot, line.skuSnapshot].filter(Boolean).join(' — ');
         const taxCode = await resolveTaxCode(line.taxTypeId);
+        const accountCode = external?.accountCode || defaultAccount?.code;
         return {
           description,
           quantity: line.quantityOrdered,
           unitPrice: line.unitPriceSnapshot.toFixed(2),
           ...(external?.externalProductCode ? { externalItemCode: external.externalProductCode } : {}),
           ...(taxCode ? { taxCode } : {}),
-          ...(external?.accountCode ? { accountCode: external.accountCode } : {}),
+          ...(accountCode ? { accountCode } : {}),
         };
       }),
     );

@@ -101,6 +101,7 @@ describe('AccountingInvoiceExportProcessor', () => {
     tradeRelationship: { findUnique: jest.Mock };
     customerAccountingMapping: { findFirst: jest.Mock };
     productAccountingMapping: { findMany: jest.Mock };
+    externalAccountingAccount: { findFirst: jest.Mock };
     $transaction: jest.Mock;
   };
   let connectionService: { getValidTokenSet: jest.Mock };
@@ -137,6 +138,7 @@ describe('AccountingInvoiceExportProcessor', () => {
           },
         ]),
       },
+      externalAccountingAccount: { findFirst: jest.fn().mockResolvedValue(null) },
       $transaction: jest.fn(),
     };
     prisma.$transaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => fn(prisma));
@@ -310,6 +312,53 @@ describe('AccountingInvoiceExportProcessor', () => {
       );
       await processor.process(makeJob());
       expect(adapter.createInvoice.mock.calls[0][2].targetStatus).toBe('AUTHORISED');
+    });
+
+    describe('default sales account', () => {
+      const withDefault = (status = 'DRAFT') =>
+        makeConnection({
+          organisation: {
+            id: 'acc-org-1',
+            externalOrganisationId: 'tenant-1',
+            name: 'Acme Wines',
+            invoiceExportTargetStatus: status,
+            invoiceDefaultAccountId: 'acct-260',
+          },
+        });
+
+      it("posts lines without an account of their own to the organisation's default", async () => {
+        prisma.accountingConnection.findFirst.mockResolvedValue(withDefault('AUTHORISED'));
+        prisma.externalAccountingAccount.findFirst.mockResolvedValue({ code: '260' });
+
+        await processor.process(makeJob());
+
+        const [mappedLine, unmappedLine] = adapter.createInvoice.mock.calls[0][2].lines;
+        // The linked item's own account wins; the default only fills the gap.
+        expect(mappedLine.accountCode).toBe('200');
+        expect(unmappedLine.accountCode).toBe('260');
+      });
+
+      it('uses the default when the linked item has no account of its own', async () => {
+        prisma.productAccountingMapping.findMany.mockResolvedValue([
+          { productId: 'prod-1', externalProduct: { externalProductCode: 'CAB-SAUV-001', accountCode: null } },
+        ]);
+        prisma.accountingConnection.findFirst.mockResolvedValue(withDefault());
+        prisma.externalAccountingAccount.findFirst.mockResolvedValue({ code: '260' });
+
+        await processor.process(makeJob());
+
+        expect(adapter.createInvoice.mock.calls[0][2].lines[0].accountCode).toBe('260');
+      });
+
+      it('sends no account for those lines when the default is no longer active', async () => {
+        prisma.accountingConnection.findFirst.mockResolvedValue(withDefault());
+        // The lookup only returns an active account of this organisation.
+        prisma.externalAccountingAccount.findFirst.mockResolvedValue(null);
+
+        await processor.process(makeJob());
+
+        expect(adapter.createInvoice.mock.calls[0][2].lines[1]).not.toHaveProperty('accountCode');
+      });
     });
 
     it('obtains tokens only through getValidTokenSet', async () => {

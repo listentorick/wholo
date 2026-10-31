@@ -30,6 +30,10 @@ export class AccountingService {
     return this.api.patch(`/distributors/${distributorId}/accounting/connection`, token, dto);
   }
 
+  listSalesAccounts(distributorId: string, token: string) {
+    return this.api.get(`/distributors/${distributorId}/accounting/accounts`, token);
+  }
+
   retryInvoiceExport(distributorId: string, exportId: string, token: string) {
     return this.api.post(`/distributors/${distributorId}/accounting/invoice-exports/${exportId}/retry`, token);
   }

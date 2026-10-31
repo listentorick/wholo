@@ -60,7 +60,8 @@ import { ACCOUNTING_FULL_SYNC_INTERVAL_MS, ACCOUNTING_SOURCE_TYPE } from './acco
 //      implement it in every adapter.
 //   2. Add a queue and route its "…SyncRequested" event
 //      (queues/queue.constants.ts), register the queue in worker.module.ts
-//      with the `accounting` backoff.
+//      with the `accounting` backoff, inject it into OutboxPublisherService
+//      and add it to MONITORED_QUEUES (queue-metrics.scheduler.ts).
 //   3. Add the resource type to ACCOUNTING_SYNC_RESOURCE_TYPES with an
 //      interval, so the scheduler and manual Sync pick it up (triggers always
 //      go through the outbox and IngestionRunService.requestRun).

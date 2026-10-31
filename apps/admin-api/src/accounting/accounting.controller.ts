@@ -44,6 +44,12 @@ export class AccountingController {
     return this.service.updateConnectionSettings(organisationId, dto, token);
   }
 
+  @Get('accounts')
+  listSalesAccounts(@Req() req: Request) {
+    const { organisationId, token } = req.user as { organisationId: string; token: string };
+    return this.service.listSalesAccounts(organisationId, token);
+  }
+
   @Post('invoice-exports/:exportId/retry')
   retryInvoiceExport(@Param('exportId') exportId: string, @Req() req: Request) {
     const { organisationId, token } = req.user as { organisationId: string; token: string };

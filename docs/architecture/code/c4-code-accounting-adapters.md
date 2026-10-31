@@ -46,49 +46,55 @@ File header (lines 1-92) is the framework overview and the provider checklist. T
   - Shape: `{ taxType: string; displayName: string; ratePercentage: string /* decimal */; isActive: boolean; raw: unknown }`
   - Description: One tax rate. No `updatedAt` (the header says the provider has no per-record timestamp).
   - Process: Worker.
-- `AccountingInvoiceTargetStatusValue` (type alias, line 185)
+- `AccountingExternalAccount` (interface, line 186)
+  - Shape: `{ externalId: string; code: string; displayName: string; isActive: boolean; raw: unknown }`
+  - Description: One sales account from the provider's chart of accounts (ADR-079). `code` is exactly what goes into `AccountingInvoiceLineRequest.accountCode`. `externalId` is the provider's stable id, which the sales-account cache is keyed on, because a code can be changed in the accounting system. Archived accounts are returned with `isActive: false`.
+  - Process: Worker (account sync).
+- `AccountingInvoiceTargetStatusValue` (type alias, line 198)
   - Shape: `'DRAFT' | 'SUBMITTED' | 'AUTHORISED'`
   - Description: Status an invoice is created with. Mirrors the Prisma `AccountingInvoiceTargetStatus` enum.
-- `AccountingInvoiceLineRequest` (interface, line 193)
+- `AccountingInvoiceLineRequest` (interface, line 206)
   - Shape: `{ description: string; quantity: number; unitPrice: string /* decimal */; externalItemCode?: string; taxCode?: string; accountCode?: string }`
-  - Description: One invoice line. Description, quantity and unit price always come from the Stocdup order line; the external codes are optional enrichment.
+  - Description: One invoice line. Description, quantity and unit price always come from the Stocdup order line; the external codes are optional enrichment. `accountCode` is the linked item's account, or the organisation's default sales account (ADR-079), chosen by the export processor.
   - Process: Worker (invoice export).
-- `AccountingInvoiceRequest` (interface, line 203)
+- `AccountingInvoiceRequest` (interface, line 216)
   - Shape: `{ externalContactId: string; reference: string; currency: string /* ISO 4217 */; issueDate: string /* YYYY-MM-DD */; dueDate?: string /* YYYY-MM-DD */; targetStatus: AccountingInvoiceTargetStatusValue; lines: AccountingInvoiceLineRequest[] }`
   - Description: Complete invoice request. `dueDate` is omitted when payment terms leave it to the provider (the Xero adapter then sends no due date).
   - Process: Worker.
-- `AccountingInvoiceResult` (interface, line 222)
+- `AccountingInvoiceResult` (interface, line 235)
   - Shape: `{ externalInvoiceId: string; externalInvoiceNumber?: string; externalInvoiceStatus?: string /* provider vocabulary */; raw: unknown }`
   - Description: Result of creating or finding an invoice.
   - Process: Worker.
-- `AccountingInvoiceStateValue` (type alias, line 233)
+- `AccountingInvoiceStateValue` (type alias, line 246)
   - Shape: `'DRAFT' | 'AWAITING_APPROVAL' | 'AWAITING_PAYMENT' | 'PAID' | 'VOIDED' | 'DELETED'`
   - Description: Neutral invoice lifecycle state. Mirrors the Prisma `AccountingInvoiceState` enum.
-- `AccountingExternalInvoiceStatus` (interface, line 245)
+- `AccountingExternalInvoiceStatus` (interface, line 258)
   - Shape: `{ externalInvoiceId: string; externalInvoiceNumber?: string; state: AccountingInvoiceStateValue; rawStatus: string; currency?: string; total: string; amountPaid: string; amountCredited: string; amountDue: string; issueDate: string | null; dueDate: string | null; fullyPaidOn: string | null; providerUpdatedAt: Date | null }`
   - Description: Status and payment facts for one invoice the application created. Amounts are the provider's own (`amountDue` already nets off payments and credits).
   - Process: Worker (invoice status sync).
-- `AccountingFetchResult<T>` (interface, line 269)
+- `AccountingFetchResult<T>` (interface, line 282)
   - Shape: `{ records: T[]; nextCursor: string | null }`
   - Description: One page of a pull. `nextCursor` is opaque to callers; `null` means the next pull must be full.
   - Process: Worker.
-- `AccountingConnectionAdapter` (interface, line 278): **the port**
+- `AccountingConnectionAdapter` (interface, line 291): **the port**
   - Members (signatures copied from the interface):
-    - `readonly displayName: string` (line 281): provider name for user-facing text ("Xero").
-    - `buildAuthorizationUrl(state: string): Promise<string>` (282)
-    - `exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>` (286): `callbackUrl` is the full redirect URL including query string.
-    - `listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>` (287)
-    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (292)
-    - `listContacts(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalContact>>` (298)
-    - `listProducts(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalProduct>>` (303)
-    - `listTaxRates(tokenSet: AccountingTokenSet, externalOrganisationId: string): Promise<AccountingExternalTaxRate[]>` (311): no cursor, always a full fetch.
-    - `hasInvoiceCreationScope(grantedScopes: string): boolean` (320)
-    - `hasInvoiceReadScope(grantedScopes: string): boolean` (323)
-    - `listInvoiceStatuses(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalInvoiceStatus>>` (328)
-    - `findInvoiceByReference(tokenSet: AccountingTokenSet, externalOrganisationId: string, reference: string): Promise<AccountingInvoiceResult | null>` (340): the ADR-073 duplicate guard. Must answer from live provider data and throw rather than return `null` when it cannot tell.
-    - `createInvoice(tokenSet: AccountingTokenSet, externalOrganisationId: string, request: AccountingInvoiceRequest, idempotencyKey: string): Promise<AccountingInvoiceResult>` (353): failures are `AccountingProviderError`, with `outcomeUnknown` set when the provider may have created the invoice.
+    - `readonly displayName: string` (line 294): provider name for user-facing text ("Xero").
+    - `buildAuthorizationUrl(state: string): Promise<string>` (295)
+    - `exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>` (299): `callbackUrl` is the full redirect URL including query string.
+    - `listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>` (300)
+    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (305)
+    - `listContacts(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalContact>>` (311)
+    - `listProducts(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalProduct>>` (316)
+    - `listTaxRates(tokenSet: AccountingTokenSet, externalOrganisationId: string): Promise<AccountingExternalTaxRate[]>` (324): no cursor, always a full fetch.
+    - `listSalesAccounts(tokenSet: AccountingTokenSet, externalOrganisationId: string): Promise<AccountingExternalAccount[]>` (333): every account a sales line can use that has a code, archived ones included with `isActive: false`. No cursor, so every sync is a full fetch.
+    - `hasInvoiceCreationScope(grantedScopes: string): boolean` (342)
+    - `hasInvoiceReadScope(grantedScopes: string): boolean` (345)
+    - `listInvoiceStatuses(tokenSet: AccountingTokenSet, externalOrganisationId: string, cursor?: string | null): Promise<AccountingFetchResult<AccountingExternalInvoiceStatus>>` (350)
+    - `findInvoiceByReference(tokenSet: AccountingTokenSet, externalOrganisationId: string, reference: string): Promise<AccountingInvoiceResult | null>` (362): the ADR-073 duplicate guard. Must answer from live provider data and throw rather than return `null` when it cannot tell.
+    - `createInvoice(tokenSet: AccountingTokenSet, externalOrganisationId: string, request: AccountingInvoiceRequest, idempotencyKey: string): Promise<AccountingInvoiceResult>` (375): failures are `AccountingProviderError`, with `outcomeUnknown` set when the provider may have created the invoice.
   - Description: The only type the framework uses to talk to a provider. Its header (lines 51-89) lists the obligations every implementation meets (single call path with budget, timeout and logging; error classification; opaque cursors; neutral shapes; checklist for adding a provider).
   - Process: API and Worker (see each method under the implementation).
+  - Implemented by `XeroAccountingAdapter` in production, and by the framework integration test's fake provider (`apps/api/test/support/fake-accounting.adapter.ts`, `FakeAccountingAdapter`, which returns the `salesAccounts` array a test sets).
 
 #### Error type: `accounting-provider.error.ts`
 
@@ -117,41 +123,42 @@ File header (lines 1-92) is the framework overview and the provider checklist. T
 
 Exported declarations:
 
-- `XERO_SCOPES` (const, line 34; re-exported at line 804): `['openid', 'profile', 'email', 'accounting.contacts', 'accounting.settings', 'accounting.invoices', 'offline_access']`. Requested at consent. Not a provider call; used as the default scope string in `toAccountingTokenSet`.
-- `parseXeroCalendarDate(value: unknown): string | null` (function, line 95). Converts a JS `Date` (what xero-node 18 returns for Xero's `/Date(ms+0000)/` fields), the raw `/Date(ms+0000)/` string, and ISO forms to a `YYYY-MM-DD` date by taking the UTC date part. Returns `null` for anything else.
-- `nextXeroCursor` (function, line 121; re-exported at line 137): `(previous: string | null | undefined, updatedAt: Array<Date | string | undefined>): string | null`. Builds the next ISO UTC cursor as the newest `UpdatedDateUTC` minus `CURSOR_OVERLAP_MS` (5 min), never moving backwards; returns `null` if there is no previous cursor and no records.
-- `XeroAccountingAdapter` (`@Injectable()` class, line 151, `implements AccountingConnectionAdapter`)
-  - Field: `readonly displayName = 'Xero'` (line 152).
-  - Private fields: `logger` (Logger, line 154), `clientId`, `clientSecret`, `redirectUri` (lines 155-157).
-  - Constructor (line 159): `(config: ConfigService, budget: AccountingCallBudgetService)`. Reads `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` and `XERO_REDIRECT_URI` with `getOrThrow` (lines 163-170). `XERO_REDIRECT_URI` is the admin-api public callback URL (ADR-051).
+- `XERO_SCOPES` (const, line 35; re-exported at line 834): `['openid', 'profile', 'email', 'accounting.contacts', 'accounting.settings', 'accounting.invoices', 'offline_access']`. Requested at consent. Not a provider call; used as the default scope string in `toAccountingTokenSet`.
+- `parseXeroCalendarDate(value: unknown): string | null` (function, line 96). Converts a JS `Date` (what xero-node 18 returns for Xero's `/Date(ms+0000)/` fields), the raw `/Date(ms+0000)/` string, and ISO forms to a `YYYY-MM-DD` date by taking the UTC date part. Returns `null` for anything else.
+- `nextXeroCursor` (function, line 125; re-exported at line 141): `(previous: string | null | undefined, updatedAt: Array<Date | string | undefined>): string | null`. Builds the next ISO UTC cursor as the newest `UpdatedDateUTC` minus `CURSOR_OVERLAP_MS` (5 min), never moving backwards; returns `null` if there is no previous cursor and no records.
+- `XeroAccountingAdapter` (`@Injectable()` class, line 155, `implements AccountingConnectionAdapter`)
+  - Field: `readonly displayName = 'Xero'` (line 156).
+  - Private fields: `logger` (Logger, line 158), `clientId`, `clientSecret`, `redirectUri` (lines 159-161).
+  - Constructor (line 163): `(config: ConfigService, budget: AccountingCallBudgetService)`. Reads `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET` and `XERO_REDIRECT_URI` with `getOrThrow`. `XERO_REDIRECT_URI` is the admin-api public callback URL (ADR-051).
   - Public port methods (in port order):
-    - `buildAuthorizationUrl(state: string): Promise<string>` (185). Builds the consent URL with a fresh `XeroClient` pinned to `state`. Process: API.
-    - `exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>` (190). xero-node `apiCallback` (token exchange and state check). Not routed through `call()`. Process: API.
-    - `listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>` (196). `client.updateTenants(false)`, mapped to `{ externalId: tenantId, name: tenantName }`. Not routed through `call()`. Process: API.
-    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (215). Calls the Xero token endpoint with `fetch` and `AbortSignal.timeout(REFRESH_HTTP_TIMEOUT_MS)` (10 s), bypassing xero-node. Network failures are transient. HTTP failures go to `toRefreshTokenError`. Computes `expires_at` from `expires_in`. Process: API and Worker. Called from `performRefresh` (`accounting-connection.service.ts` line 400), which runs under `getValidTokenSet` (line 284).
-    - `listContacts(tokenSet, externalOrganisationId, cursor?)` (314). Pages `getContacts` with `includeArchived = true` and `CONTACTS_PAGE_SIZE` (1000) until a short page; `modifiedSince` from the cursor. Process: Worker (contact sync).
-    - `listProducts(tokenSet, externalOrganisationId, cursor?)` (351). One `getItems` call (no pagination), `unitdp = 4`. Process: Worker (product sync).
-    - `listTaxRates(tokenSet, externalOrganisationId)` (378). One `getTaxRates` call. Process: Worker (tax type sync).
-    - `hasInvoiceCreationScope(grantedScopes: string): boolean` (392). True for `accounting.invoices` or the legacy `accounting.transactions`. Process: Worker (invoice export preflight).
-    - `hasInvoiceReadScope(grantedScopes: string): boolean` (400). True for `accounting.invoices`, `accounting.invoices.read` or `accounting.transactions`. Process: Worker (invoice sync preflight).
-    - `listInvoiceStatuses(tokenSet, externalOrganisationId, cursor?)` (410). `getInvoices` with `Type=="ACCREC"`, `createdByMyApp = true`, paged at `INVOICES_PAGE_SIZE` (1000). Maps to `AccountingExternalInvoiceStatus` (line 705). Process: Worker.
-    - `findInvoiceByReference(tokenSet, externalOrganisationId, reference: string): Promise<AccountingInvoiceResult | null>` (458). Validates the reference against `/^[\w .\-/#]+$/` (otherwise a permanent error), then `getInvoices` with `Reference=="<reference>"`, live statuses only (`XERO_LIVE_INVOICE_STATUSES`), `Date ASC`, page 1. If more than one match, logs `accounting.invoice.duplicate_detected` at error level and returns the oldest. Process: Worker (invoice export).
-    - `createInvoice(tokenSet, externalOrganisationId, request, idempotencyKey: string): Promise<AccountingInvoiceResult>` (502). Builds an ACCREC invoice with `lineAmountTypes = Exclusive`, `unitAmount = Number(line.unitPrice)` (the only decimal-to-number conversion), `dueDate` only when present, and calls `createInvoices` with `summarizeErrors = true`, `unitdp = 4` and the idempotency key. A response with no invoice id throws a permanent error with `outcomeUnknown`. Process: Worker (invoice export).
+    - `buildAuthorizationUrl(state: string): Promise<string>` (189). Builds the consent URL with a fresh `XeroClient` pinned to `state`. Process: API.
+    - `exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>` (194). xero-node `apiCallback` (token exchange and state check). Not routed through `call()`. Process: API.
+    - `listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>` (200). `client.updateTenants(false)`, mapped to `{ externalId: tenantId, name: tenantName }`. Not routed through `call()`. Process: API.
+    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (219). Calls the Xero token endpoint with `fetch` and `AbortSignal.timeout(REFRESH_HTTP_TIMEOUT_MS)` (10 s), bypassing xero-node. Network failures are transient. HTTP failures go to `toRefreshTokenError`. Computes `expires_at` from `expires_in`. Process: API and Worker. Called from `performRefresh` (`accounting-connection.service.ts` line 419), which runs under `getValidTokenSet` (line 310).
+    - `listContacts(tokenSet, externalOrganisationId, cursor?)` (318). Pages `getContacts` with `includeArchived = true` and `CONTACTS_PAGE_SIZE` (1000) until a short page; `modifiedSince` from the cursor. Process: Worker (contact sync).
+    - `listProducts(tokenSet, externalOrganisationId, cursor?)` (355). One `getItems` call (no pagination), `unitdp = 4`. Process: Worker (product sync).
+    - `listTaxRates(tokenSet, externalOrganisationId)` (382). One `getTaxRates` call. Process: Worker (tax type sync).
+    - `listSalesAccounts(tokenSet, externalOrganisationId)` (401). One `getAccounts` call with `where` `Class=="REVENUE"` (no pagination), through `call()`. Revenue-class accounts only, because a sales invoice's income belongs in revenue and Xero's own invoice screen offers the same list. Archived accounts are returned with `isActive` false (`status` is `ACTIVE`). Accounts without a `code` are dropped, since a line can only carry a code. A response with no `accounts` list throws a transient `AccountingProviderError` ("Xero returned no accounts list"), so the sync never reads it as an empty chart, which would mark every cached account inactive; an empty list is valid. Process: Worker (account sync).
+    - `hasInvoiceCreationScope(grantedScopes: string): boolean` (422). True for `accounting.invoices` or the legacy `accounting.transactions`. Process: Worker (invoice export preflight).
+    - `hasInvoiceReadScope(grantedScopes: string): boolean` (430). True for `accounting.invoices`, `accounting.invoices.read` or `accounting.transactions`. Process: Worker (invoice sync preflight).
+    - `listInvoiceStatuses(tokenSet, externalOrganisationId, cursor?)` (440). `getInvoices` with `Type=="ACCREC"`, `createdByMyApp = true`, paged at `INVOICES_PAGE_SIZE` (1000). Maps to `AccountingExternalInvoiceStatus` (line 735). Process: Worker.
+    - `findInvoiceByReference(tokenSet, externalOrganisationId, reference: string): Promise<AccountingInvoiceResult | null>` (488). Validates the reference against `/^[\w .\-/#]+$/` (otherwise a permanent error), then `getInvoices` with `Reference=="<reference>"`, live statuses only (`XERO_LIVE_INVOICE_STATUSES`), `Date ASC`, page 1. If more than one match, logs `accounting.invoice.duplicate_detected` at error level and returns the oldest. Process: Worker (invoice export).
+    - `createInvoice(tokenSet, externalOrganisationId, request, idempotencyKey: string): Promise<AccountingInvoiceResult>` (532). Builds an ACCREC invoice with `lineAmountTypes = Exclusive`, `unitAmount = Number(line.unitPrice)` (the only decimal-to-number conversion), `dueDate` only when present, and calls `createInvoices` with `summarizeErrors = true`, `unitdp = 4` and the idempotency key. A response with no invoice id throws a permanent error with `outcomeUnknown`. Process: Worker (invoice export).
   - Private methods:
-    - `buildClient(state?: string): XeroClient` (175). Constructs `XeroClient` with the client id/secret, the redirect URI, `XERO_SCOPES` and `state`.
-    - `toRefreshTokenError(status: number, body: unknown): AccountingProviderError` (280). `invalid_grant` → permanent, code `invalid_grant`; `invalid_client` → permanent, code `invalid_client`; 429 and 5xx → transient; other → permanent.
-    - `toInvoiceResult(invoice: Invoice): AccountingInvoiceResult` (558).
-    - `call<T>(op: string, externalOrganisationId: string, fn: () => Promise<T>): Promise<T>` (573). The single call path for Accounting API calls: `budget.acquire('XERO', orgId, 50)`, timeout via `withTimeout`, one structured log line per call, day-limit warning below 500 remaining. On failure, logs `accounting.provider.call_failed` and throws the mapped `AccountingProviderError`.
-    - `withTimeout<T>(op: string, pending: Promise<T>): Promise<T>` (624). `Promise.race` with a 60 s timer that rejects with `XeroCallTimeoutError`.
-    - `toProviderError(op: string, parsed: ParsedXeroError): AccountingProviderError` (643). Transient: no response (code `NETWORK`), 401, 429, 5xx. Permanent: other statuses. `outcomeUnknown` is true for write ops (`createInvoices`) with no response or 5xx.
-    - `toAccountingExternalProduct(item: Item): AccountingExternalProduct` (678).
-    - `toAccountingExternalInvoiceStatus(invoice: Invoice): AccountingExternalInvoiceStatus` (705). Maps Xero status to neutral state via `XERO_TO_INVOICE_STATE`.
-    - `toAccountingExternalTaxRate(taxRate: TaxRate): AccountingExternalTaxRate` (725).
-    - `toAccountingExternalContact(contact: Contact): AccountingExternalContact` (736). Billing address = POBOX, falling back to STREET. Delivery address = STREET only.
-    - `toAccountingTokenSet(tokenSet: {...}): AccountingTokenSet` (774). Throws a plain `Error` when the set is incomplete.
-    - `toXeroTokenSetParams(tokenSet: AccountingTokenSet)` (793). Converts to xero-node's token shape (`expires_at` in epoch seconds).
+    - `buildClient(state?: string): XeroClient` (179). Constructs `XeroClient` with the client id/secret, the redirect URI, `XERO_SCOPES` and `state`.
+    - `toRefreshTokenError(status: number, body: unknown): AccountingProviderError` (284). `invalid_grant` → permanent, code `invalid_grant`; `invalid_client` → permanent, code `invalid_client`; 429 and 5xx → transient; other → permanent.
+    - `toInvoiceResult(invoice: Invoice): AccountingInvoiceResult` (588).
+    - `call<T>(op: string, externalOrganisationId: string, fn: () => Promise<T>): Promise<T>` (603). The single call path for Accounting API calls: `budget.acquire('XERO', orgId, 50)`, timeout via `withTimeout`, one structured log line per call, day-limit warning below 500 remaining. On failure, logs `accounting.provider.call_failed` and throws the mapped `AccountingProviderError`.
+    - `withTimeout<T>(op: string, pending: Promise<T>): Promise<T>` (654). `Promise.race` with a 60 s timer that rejects with `XeroCallTimeoutError`.
+    - `toProviderError(op: string, parsed: ParsedXeroError): AccountingProviderError` (673). Transient: no response (code `NETWORK`), 401, 429, 5xx. Permanent: other statuses. `outcomeUnknown` is true for write ops (`createInvoices`) with no response or 5xx.
+    - `toAccountingExternalProduct(item: Item): AccountingExternalProduct` (708).
+    - `toAccountingExternalInvoiceStatus(invoice: Invoice): AccountingExternalInvoiceStatus` (735). Maps Xero status to neutral state via `XERO_TO_INVOICE_STATE`.
+    - `toAccountingExternalTaxRate(taxRate: TaxRate): AccountingExternalTaxRate` (755).
+    - `toAccountingExternalContact(contact: Contact): AccountingExternalContact` (766). Billing address = POBOX, falling back to STREET. Delivery address = STREET only.
+    - `toAccountingTokenSet(tokenSet: {...}): AccountingTokenSet` (804). Throws a plain `Error` when the set is incomplete.
+    - `toXeroTokenSetParams(tokenSet: AccountingTokenSet)` (823). Converts to xero-node's token shape (`expires_at` in epoch seconds).
 - Module-private declarations:
-  - `XERO_TOKEN_ENDPOINT` (line 47), `REFRESH_HTTP_TIMEOUT_MS = 10_000` (51), `XERO_CALLS_PER_ORG_PER_MINUTE = 50` (60), `XERO_DAILY_LIMIT = 5_000` (61), `DAY_LIMIT_WARN_BELOW` (62), `XERO_CALL_TIMEOUT_MS = 60_000` (68), `XERO_WRITE_OPS = new Set(['createInvoices'])` (71), `XERO_LIVE_INVOICE_STATUSES` (74), `CONTACTS_PAGE_SIZE` and `INVOICES_PAGE_SIZE` (76-77), `XERO_TO_INVOICE_STATE` (79), `CURSOR_OVERLAP_MS = 5 min` (110), `XERO_INVOICE_STATUS` (139), `class XeroCallTimeoutError extends Error` (112), `decimalString` (104), `cursorToDate` (131).
+  - `XERO_TOKEN_ENDPOINT` (line 48), `REFRESH_HTTP_TIMEOUT_MS = 10_000` (52), `XERO_CALLS_PER_ORG_PER_MINUTE = 50` (61), `XERO_DAILY_LIMIT = 5_000` (62), `DAY_LIMIT_WARN_BELOW` (63), `XERO_CALL_TIMEOUT_MS = 60_000` (69), `XERO_WRITE_OPS = new Set(['createInvoices'])` (72), `XERO_LIVE_INVOICE_STATUSES` (75), `CONTACTS_PAGE_SIZE` and `INVOICES_PAGE_SIZE` (77-78), `XERO_TO_INVOICE_STATE` (80), `CURSOR_OVERLAP_MS = 5 min` (114), `class XeroCallTimeoutError extends Error` (116), `decimalString` (108), `cursorToDate` (135), `XERO_INVOICE_STATUS` (143).
 
 #### `xero-errors.ts`
 
@@ -175,16 +182,17 @@ Parsing of xero-node failures into plain facts. Nothing here leaves the adapter;
 - `xero-connection.adapter.ts` imports the port, `accounting-provider.error.ts`, `xero-errors.ts`, and `AccountingCallBudgetService` from `accounting/accounting-call-budget.service.ts` (outside this directory; per ADR-071 it is a Redis sliding-window log).
 - `accounting-connection-adapter.interface.ts`, `accounting-provider.error.ts` and `xero-errors.ts` have no internal imports.
 - Consumers outside this directory (via `AccountingAdapterRegistry`, never the concrete class):
-  - `accounting/accounting-connection.service.ts`: `buildAuthorizationUrl` (line 136, in `createAuthorizationUrl`), `exchangeCodeForToken` and `listAvailableOrganisations` (lines 174-175, in `handleCallback`), `refreshAccessToken` (line 400, in `performRefresh`), `displayName` (line 508).
+  - `accounting/accounting-connection.service.ts`: `buildAuthorizationUrl` (in `createAuthorizationUrl`), `exchangeCodeForToken` and `listAvailableOrganisations` (in `handleCallback`), `refreshAccessToken` (in `performRefresh`), `displayName`.
   - `accounting/sync/accounting-pull-processor.base.ts`: `get(provider)`.
   - `accounting-contact-sync`, `accounting-product-sync`, `accounting-tax-type-sync`, `accounting-invoice-sync` processors: the `list*` and scope methods.
+  - `accounting-account-sync/accounting-account-sync.processor.ts`: `listSalesAccounts`.
   - `accounting-invoice-export/accounting-invoice-export.processor.ts`: `hasInvoiceCreationScope`, `findInvoiceByReference`, `createInvoice`.
-- Concrete-class import outside this directory: `accounting/accounting.module.ts` line 28 (`XeroAccountingAdapter`), listed as a provider edge in the architecture spec.
+- Concrete-class import outside this directory: `accounting/accounting.module.ts` (`XeroAccountingAdapter`), listed as a provider edge in the architecture spec.
 
 ### External Dependencies
 
 - `@nestjs/common` (`Injectable`, `Logger`), `@nestjs/config` (`ConfigService`).
-- `xero-node` 18.1.0: `XeroClient`, `Invoice`, `Contact`, `Item`, `TaxRate`, `LineItem`, `Address`, `CurrencyCode`, `LineAmountTypes`.
+- `xero-node` 18.1.0: `XeroClient`, `Account`, `Invoice`, `Contact`, `Item`, `TaxRate`, `LineItem`, `Address`, `CurrencyCode`, `LineAmountTypes`.
 - `@prisma/client`: `AccountingProvider` enum (registry only).
 - Runtime globals: `fetch`, `AbortSignal.timeout`, `Buffer`, `URLSearchParams`.
 - Outside systems: Xero identity token endpoint `https://identity.xero.com/connect/token`; Xero Accounting API (via xero-node); Redis via `AccountingCallBudgetService` (per ADR-071).
@@ -209,6 +217,7 @@ classDiagram
             +listContacts(tokenSet, externalOrganisationId, cursor) Promise~AccountingFetchResult~
             +listProducts(tokenSet, externalOrganisationId, cursor) Promise~AccountingFetchResult~
             +listTaxRates(tokenSet, externalOrganisationId) Promise~AccountingExternalTaxRate~
+            +listSalesAccounts(tokenSet, externalOrganisationId) Promise~AccountingExternalAccount~
             +hasInvoiceCreationScope(grantedScopes) boolean
             +hasInvoiceReadScope(grantedScopes) boolean
             +listInvoiceStatuses(tokenSet, externalOrganisationId, cursor) Promise~AccountingFetchResult~
@@ -249,7 +258,7 @@ classDiagram
     XeroAccountingAdapter ..> xeroErrors : parses failures with
 ```
 
-Call path inside the Xero adapter: every `list*`, `findInvoiceByReference` and `createInvoice` call goes through `call()` (budget, then `withTimeout`, then the xero-node call). Errors pass through `parseXeroSdkError` and `toProviderError`. `buildAuthorizationUrl`, `exchangeCodeForToken`, `listAvailableOrganisations` and `refreshAccessToken` do not go through `call()`.
+Call path inside the Xero adapter: every `list*`, `findInvoiceByReference` and `createInvoice` call goes through `call()` (budget, then `withTimeout`, then the xero-node call), including `listSalesAccounts`. Errors pass through `parseXeroSdkError` and `toProviderError`. `buildAuthorizationUrl`, `exchangeCodeForToken`, `listAvailableOrganisations` and `refreshAccessToken` do not go through `call()`.
 
 ---
 
@@ -260,19 +269,20 @@ Call path inside the Xero adapter: every `list*`, `findInvoiceByReference` and `
 These are statements of what the code does today, checked against the header of `accounting-connection-adapter.interface.ts` (lines 51-73) and the ADRs.
 
 1. **Single call path is not universal.** The header says every provider API call goes through one private call path that acquires the budget, applies a timeout and logs one line per call. In `XeroAccountingAdapter`:
-   - `exchangeCodeForToken` (line 190) calls xero-node `apiCallback` directly: no budget, no `call()` timeout, no log line.
-   - `listAvailableOrganisations` (line 196) calls `client.updateTenants(false)` directly: same gaps.
-   - `refreshAccessToken` (line 215) makes its own `fetch` with a 10 s `AbortSignal` and no budget acquire. The code comment (lines 206-214) explains this as deliberate; the other two have no comment saying so.
-2. **Not every failure is an `AccountingProviderError`.** The header says every failure is thrown as one. `exchangeCodeForToken` and `listAvailableOrganisations` let xero-node errors propagate unwrapped. `toAccountingTokenSet` (line 781-783) throws a plain `Error` for an incomplete token set.
-3. **Raw provider body in `cause` on the refresh path.** The message is built only from `error`/`error_description`, as the header requires. But `toRefreshTokenError` (lines 280-312) passes the raw OAuth response body as `cause`. The `call()` path passes the parsed object as `cause`, which is what ADR-071 describes.
+   - `exchangeCodeForToken` calls xero-node `apiCallback` directly: no budget, no `call()` timeout, no log line.
+   - `listAvailableOrganisations` calls `client.updateTenants(false)` directly: same gaps.
+   - `refreshAccessToken` makes its own `fetch` with a 10 s `AbortSignal` and no budget acquire. The code comment above the method explains this as deliberate; the other two have no comment saying so.
+2. **Not every failure is an `AccountingProviderError`.** The header says every failure is thrown as one. `exchangeCodeForToken` and `listAvailableOrganisations` let xero-node errors propagate unwrapped. `toAccountingTokenSet` throws a plain `Error` for an incomplete token set.
+3. **Raw provider body in `cause` on the refresh path.** The message is built only from `error`/`error_description`, as the header requires. But `toRefreshTokenError` passes the raw OAuth response body as `cause`. The `call()` path passes the parsed object as `cause`, which is what ADR-071 describes.
 4. **Registry comment vs registry code.** `accounting-adapter.registry.ts` line 6 says the framework "never names a provider itself". The registry itself names `AccountingProvider.XERO` and `XeroAccountingAdapter` (lines 4 and 14). The checklist (interface header, step 3) makes the registry the registration point, so the comment describes callers, not the registry.
-5. **Concrete adapter import outside the directory.** The interface header says nothing outside `accounting/adapters/` may import a concrete adapter. `accounting/accounting.module.ts` line 28 does. The architecture spec allows it through its `PROVIDER_EDGES` list, which the header does not mention.
+5. **Concrete adapter import outside the directory.** The interface header says nothing outside `accounting/adapters/` may import a concrete adapter. `accounting/accounting.module.ts` does. The architecture spec allows it through its `PROVIDER_EDGES` list, which the header does not mention.
 6. **ADR-051 vs the header.** ADR-051 says adding a provider changes "nothing else in the service, controllers, or frontend". The interface header checklist (step 4) says a new provider also needs an OAuth start route, callback and admin connection card, and that the current ones are Xero-named.
-7. **ADR-071 on write retries.** ADR-071 says a timed-out write is "safe to retry: every write carries an idempotency key". ADR-073 supersedes this. The Xero adapter's comment (lines 63-67) and `toProviderError` (`outcomeUnknown`) follow ADR-073.
-8. **Stale scope comment.** The comment on `XERO_SCOPES` (lines 22-24) says contacts and settings are "unused until Phases 2-3". Contacts are read by `listContacts`. `accounting.settings` is requested but no call in this directory uses it.
+7. **ADR-071 on write retries.** ADR-071 says a timed-out write is "safe to retry: every write carries an idempotency key". ADR-073 supersedes this. The Xero adapter's comment above `call()` and `toProviderError` (`outcomeUnknown`) follow ADR-073.
+8. **Stale scope comment.** The comment on `XERO_SCOPES` (lines 23-25) says contacts and settings are "unused until Phases 2-3". Contacts are read by `listContacts`. `accounting.settings` is requested but no call in this directory uses it.
 
 ### Not determined from this directory
 
 - The internals of `AccountingCallBudgetService` (the Redis window and the 20 s wait behaviour described in ADR-071) are in `accounting/accounting-call-budget.service.ts`, which was not read for this document.
 - `AccountingConnectionService` internals (token encryption, advisory lock, status transitions) were not read; only the call sites of the adapter are recorded.
 - The contents of the xero-node 18.1.0 SDK were not inspected; the behaviour described is what this adapter code expects from it, as documented in its comments.
+- The live shape of Xero's `Account` response (which fields are populated for archived or non-revenue accounts) was not checked against Xero; `listSalesAccounts` relies on `accountID`, `code`, `name` and `status`.

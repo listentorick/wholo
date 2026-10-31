@@ -13,6 +13,7 @@ import { AccountingInvoiceExportModule } from './accounting-invoice-export/accou
 import { AccountingProductSyncModule } from './accounting-product-sync/accounting-product-sync.module';
 import { AccountingTaxTypeSyncModule } from './accounting-tax-type-sync/accounting-tax-type-sync.module';
 import { AccountingInvoiceSyncModule } from './accounting-invoice-sync/accounting-invoice-sync.module';
+import { AccountingAccountSyncModule } from './accounting-account-sync/accounting-account-sync.module';
 import { AnalyticsFactsModule } from './analytics-facts/analytics-facts.module';
 import { DeliveryRunAllocationWorkerModule } from './delivery-run-allocation/delivery-run-allocation-worker.module';
 import { HealthModule } from './health/health.module';
@@ -30,6 +31,7 @@ import {
   ACCOUNTING_PRODUCT_SYNC_QUEUE,
   ACCOUNTING_TAX_TYPE_SYNC_QUEUE,
   ACCOUNTING_INVOICE_SYNC_QUEUE,
+  ACCOUNTING_ACCOUNT_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,
   KEYCLOAK_USER_QUEUE,
@@ -108,6 +110,15 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
         },
       },
       {
+        name: ACCOUNTING_ACCOUNT_SYNC_QUEUE,
+        defaultJobOptions: {
+          attempts: 3,
+          backoff: { type: ACCOUNTING_BACKOFF_TYPE },
+          removeOnComplete: { count: 1000 },
+          removeOnFail: false,
+        },
+      },
+      {
         name: ACCOUNTING_BULK_IMPORT_QUEUE,
         // Local DB operations per item, not external API calls — same
         // reasoning as ANALYTICS_FACTS_QUEUE's backoff, just enough retries
@@ -167,6 +178,7 @@ import { redisConnectionFromUrl } from './queues/redis-connection';
     AccountingProductSyncModule,
     AccountingTaxTypeSyncModule,
     AccountingInvoiceSyncModule,
+    AccountingAccountSyncModule,
     AnalyticsFactsModule,
     DeliveryRunAllocationWorkerModule,
     KeycloakAdminWorkerModule,

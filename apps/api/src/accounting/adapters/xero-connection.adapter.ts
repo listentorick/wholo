@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Address, Contact, CurrencyCode, Invoice, Item, LineAmountTypes, LineItem, TaxRate, XeroClient } from 'xero-node';
+import { Account, Address, Contact, CurrencyCode, Invoice, Item, LineAmountTypes, LineItem, TaxRate, XeroClient } from 'xero-node';
 import {
   AccountingConnectionAdapter,
+  AccountingExternalAccount,
   AccountingExternalContact,
   AccountingExternalOrganisation,
   AccountingExternalProduct,
@@ -390,6 +391,37 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
       client.accountingApi.getTaxRates(externalOrganisationId),
     );
     return (body.taxRates ?? []).map((taxRate) => this.toAccountingExternalTaxRate(taxRate));
+  }
+
+  // Revenue-class accounts only: Xero accepts other classes on a sales line,
+  // but a sales invoice's income belongs in revenue, and Xero's own invoice
+  // screen offers the same list first. Archived ones are returned (isActive
+  // false) so the sync sees an account being archived. Accounts without a
+  // code can't be put on a line (LineItem.accountCode), so they are dropped.
+  async listSalesAccounts(
+    tokenSet: AccountingTokenSet,
+    externalOrganisationId: string,
+  ): Promise<AccountingExternalAccount[]> {
+    const client = this.buildClient();
+    client.setTokenSet(this.toXeroTokenSetParams(tokenSet));
+    // Like getTaxRates, no pagination — one call returns the whole chart.
+    const { body } = await this.call('getAccounts', externalOrganisationId, () =>
+      client.accountingApi.getAccounts(externalOrganisationId, undefined, 'Class=="REVENUE"'),
+    );
+    // A missing list is not an empty chart: treating it as one would mark every
+    // cached account inactive.
+    if (!body.accounts) {
+      throw new AccountingProviderError('Xero returned no accounts list', true);
+    }
+    return body.accounts
+      .filter((account): account is Account & { accountID: string; code: string } => !!account.accountID && !!account.code)
+      .map((account) => ({
+        externalId: account.accountID,
+        code: account.code,
+        displayName: account.name || account.code,
+        isActive: account.status === Account.StatusEnum.ACTIVE,
+        raw: account,
+      }));
   }
 
   hasInvoiceCreationScope(grantedScopes: string): boolean {

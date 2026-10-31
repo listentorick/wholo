@@ -33,14 +33,19 @@ export class AdminNotificationsService {
   // by a trade customer, a system-driven invoice export) — every
   // DISTRIBUTOR_ADMIN at the organisation gets their own row. Same
   // direct-write semantics as create(): no outbox, this IS the terminal write.
-  async notifyOrganisationAdmins(organisationId: string, input: NotifyOrganisationAdminsInput): Promise<void> {
-    const admins = await this.prisma.membership.findMany({
+  // Pass tx to commit the notification together with the caller's own writes.
+  async notifyOrganisationAdmins(
+    organisationId: string,
+    input: NotifyOrganisationAdminsInput,
+    tx: Prisma.TransactionClient = this.prisma,
+  ): Promise<void> {
+    const admins = await tx.membership.findMany({
       where: { organisationId, roles: { some: { role: Role.DISTRIBUTOR_ADMIN } } },
       select: { userId: true },
     });
     if (admins.length === 0) return;
 
-    await this.prisma.adminNotification.createMany({
+    await tx.adminNotification.createMany({
       data: admins.map((admin) => ({
         ...input,
         organisationId,

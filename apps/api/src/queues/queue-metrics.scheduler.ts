@@ -5,6 +5,7 @@ import { PlatformMetricsService } from '@wholo/nest-telemetry';
 import { Queue } from 'bullmq';
 import IORedis, { Redis } from 'ioredis';
 import {
+  ACCOUNTING_ACCOUNT_SYNC_QUEUE,
   ACCOUNTING_BULK_IMPORT_QUEUE,
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
@@ -30,6 +31,7 @@ const MONITORED_QUEUES = [
   // Invoice status sync: its oldest-waiting age is "how late is 'order shows
   // as paid'" (ADR-072).
   ACCOUNTING_INVOICE_SYNC_QUEUE,
+  ACCOUNTING_ACCOUNT_SYNC_QUEUE,
   ANALYTICS_FACTS_QUEUE,
   ACCOUNTING_BULK_IMPORT_QUEUE,
   DELIVERY_RUN_ALLOCATION_QUEUE,

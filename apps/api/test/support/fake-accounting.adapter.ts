@@ -1,5 +1,6 @@
 import type {
   AccountingConnectionAdapter,
+  AccountingExternalAccount,
   AccountingExternalContact,
   AccountingExternalInvoiceStatus,
   AccountingExternalOrganisation,
@@ -38,6 +39,7 @@ export class FakeAccountingAdapter implements AccountingConnectionAdapter {
   contacts: AccountingExternalContact[] = [];
   products: AccountingExternalProduct[] = [];
   taxRates: AccountingExternalTaxRate[] = [];
+  salesAccounts: AccountingExternalAccount[] = [];
   readonly createdInvoices: Array<{ request: AccountingInvoiceRequest; idempotencyKey: string }> = [];
   // Failures for the coming createInvoice calls, consumed in order.
   readonly failNextCreates: FakeCreateFailure[] = [];
@@ -80,6 +82,10 @@ export class FakeAccountingAdapter implements AccountingConnectionAdapter {
 
   async listTaxRates(): Promise<AccountingExternalTaxRate[]> {
     return this.taxRates;
+  }
+
+  async listSalesAccounts(): Promise<AccountingExternalAccount[]> {
+    return this.salesAccounts;
   }
 
   hasInvoiceCreationScope(_grantedScopes: string): boolean {

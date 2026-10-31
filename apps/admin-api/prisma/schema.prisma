@@ -332,6 +332,7 @@ model Organisation {
   productAccountingMappings         ProductAccountingMapping[]
   accountingProductMatchSuggestions AccountingProductMatchSuggestion[]
   externalAccountingTaxTypes        ExternalAccountingTaxType[]
+  externalAccountingAccounts        ExternalAccountingAccount[]
   taxTypeAccountingMappings         TaxTypeAccountingMapping[]
   accountingTaxTypeMatchSuggestions AccountingTaxTypeMatchSuggestion[]
   accountingInvoiceExports          AccountingInvoiceExport[]
@@ -1087,6 +1088,10 @@ model AccountingOrganisation {
   // Refreshed on every connect — organisations can be renamed.
   name                      String
   invoiceExportTargetStatus AccountingInvoiceTargetStatus      @default(DRAFT)
+  // Default sales account (ADR-079): invoice lines whose linked product brings
+  // no account of its own are posted to it. A cached account row, so the code
+  // sent is always the one the last sync saw; null = left to the provider.
+  invoiceDefaultAccountId   String?
   createdAt                 DateTime                           @default(now())
   updatedAt                 DateTime                           @updatedAt
   distributor               Organisation                       @relation(fields: [distributorId], references: [id])
@@ -1098,6 +1103,8 @@ model AccountingOrganisation {
   productMappings           ProductAccountingMapping[]
   productMatchSuggestions   AccountingProductMatchSuggestion[]
   externalTaxTypes          ExternalAccountingTaxType[]
+  externalAccounts          ExternalAccountingAccount[]        @relation("AccountingOrganisationAccounts")
+  invoiceDefaultAccount     ExternalAccountingAccount?         @relation("InvoiceDefaultAccount", fields: [invoiceDefaultAccountId], references: [id], onDelete: SetNull)
   taxTypeMappings           TaxTypeAccountingMapping[]
   taxTypeMatchSuggestions   AccountingTaxTypeMatchSuggestion[]
   invoiceExports            AccountingInvoiceExport[]
@@ -1387,6 +1394,33 @@ model ExternalAccountingTaxType {
   @@unique([accountingOrganisationId, taxType])
   @@index([distributorId, isActive])
   @@map("external_accounting_tax_types")
+}
+
+// One sales account from the accounting system's chart of accounts, as last
+// pulled by AccountingAccountSyncProcessor. Nothing in Stocdup maps to these
+// (no suggestions, no review); the organisation's default sales account
+// points at one. Belongs to the AccountingOrganisation (ADR-074).
+model ExternalAccountingAccount {
+  id                       String             @id @default(cuid())
+  distributorId            String
+  accountingOrganisationId String
+  provider                 AccountingProvider
+  externalAccountId        String
+  code                     String
+  displayName              String
+  isActive                 Boolean            @default(true)
+  lastSyncedAt             DateTime
+  rawProviderData          Json
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  distributor             Organisation             @relation(fields: [distributorId], references: [id])
+  organisation            AccountingOrganisation   @relation("AccountingOrganisationAccounts", fields: [accountingOrganisationId], references: [id])
+  defaultForOrganisations AccountingOrganisation[] @relation("InvoiceDefaultAccount")
+
+  @@unique([accountingOrganisationId, externalAccountId])
+  @@index([distributorId])
+  @@map("external_accounting_accounts")
 }
 
 // Confirmed link between a Wholo TaxType and one cached external tax rate.

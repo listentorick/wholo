@@ -2,24 +2,25 @@
 
 ## Overview
 
-- **Name**: Accounting queue processors (six directories, one module + one processor each)
-- **Description**: The six BullMQ processors that do the provider-facing work of the accounting integration after the outbox has relayed an event onto a queue: four pulls (contacts, products, tax rates, invoice status), the per-order invoice export (push), and the bulk import of accounting records into Stocdup.
+- **Name**: Accounting queue processors (seven directories, one module + one processor each)
+- **Description**: The seven BullMQ processors that do the provider-facing work of the accounting integration after the outbox has relayed an event onto a queue: five pulls (contacts, products, tax rates, invoice status, sales accounts), the per-order invoice export (push), and the bulk import of accounting records into Stocdup.
 - **Location**:
   - [apps/api/src/accounting-contact-sync](../../../apps/api/src/accounting-contact-sync)
   - [apps/api/src/accounting-product-sync](../../../apps/api/src/accounting-product-sync)
   - [apps/api/src/accounting-tax-type-sync](../../../apps/api/src/accounting-tax-type-sync)
   - [apps/api/src/accounting-invoice-sync](../../../apps/api/src/accounting-invoice-sync)
+  - [apps/api/src/accounting-account-sync](../../../apps/api/src/accounting-account-sync)
   - [apps/api/src/accounting-invoice-export](../../../apps/api/src/accounting-invoice-export)
   - [apps/api/src/accounting-bulk-import](../../../apps/api/src/accounting-bulk-import)
 - **Language**: TypeScript (NestJS, `@nestjs/bullmq`, Prisma, BullMQ)
-- **Purpose**: Consume accounting jobs, call the provider only through the provider-neutral adapter port, and write the results to Stocdup tables. Pulls cache provider records and produce match suggestions; the invoice status sync mirrors payment facts; the invoice export creates one invoice per order; the bulk import calls the same per-item services the single-row actions use.
-- **Process**: All six processors run in the **Worker** process only. Their modules are imported by `WorkerModule` (`apps/api/src/worker.module.ts:163-171`) and not by `AppModule`. The producers of their jobs run in both processes: the HTTP API (controllers and services write outbox rows) and the Worker (`AccountingSyncScheduler`).
+- **Purpose**: Consume accounting jobs, call the provider only through the provider-neutral adapter port, and write the results to Stocdup tables. Pulls cache provider records and produce match suggestions; the invoice status sync mirrors payment facts; the account sync caches the chart of sales accounts for the default sales account (ADR-079) without matching them; the invoice export creates one invoice per order; the bulk import calls the same per-item services the single-row actions use.
+- **Process**: All seven processors run in the **Worker** process only. Their modules are imported by `WorkerModule` (`apps/api/src/worker.module.ts:174-181`) and not by `AppModule`. The producers of their jobs run in both processes: the HTTP API (controllers and services write outbox rows) and the Worker (`AccountingSyncScheduler`).
 
-### Shared flow (all six)
+### Shared flow (all seven)
 
 1. A producer writes an outbox row in the same database transaction as its state change (`OutboxService.writeEvent`, `apps/api/src/outbox/outbox.service.ts`).
-2. `OutboxPublisherService` (`apps/api/src/outbox/outbox-publisher.service.ts`, `@Interval(5000)` at line 62) reads PENDING and retryable FAILED rows (`publishPending`, lines 73-122), looks up `EVENT_ROUTES[eventType]` (`apps/api/src/queues/queue.constants.ts:28-62`), and calls `queue.add(eventType, { eventId, aggregateType, aggregateId, payload }, { jobId: event.id })` for each route (lines 93-102). The job name is the event type.
-3. The matching processor consumes the job. Retries and backoff come from the queue registration in `worker.module.ts` (lines 55-121) and from the processor's `ACCOUNTING_WORKER_SETTINGS` where present.
+2. `OutboxPublisherService` (`apps/api/src/outbox/outbox-publisher.service.ts`, `@Interval(5000)` at line 65) reads PENDING and retryable FAILED rows (`publishPending`, lines 76-125), looks up `EVENT_ROUTES[eventType]` (`apps/api/src/queues/queue.constants.ts:29-65`), and calls `queue.add(eventType, { eventId, aggregateType, aggregateId, payload }, { jobId: event.id })` for each route (lines 96-105). The job name is the event type.
+3. The matching processor consumes the job. Retries and backoff come from the queue registration in `worker.module.ts` (lines 55-132) and from the processor's `ACCOUNTING_WORKER_SETTINGS` where present.
 
 ### Summary table
 
@@ -29,6 +30,7 @@
 | `accounting-product-sync` | `AccountingProductSyncProcessor` | `AccountingSyncProcessorBase` | `accounting-product-sync` | `OutboxEventJobData` `{ runId? }` | `AccountingProductSyncRequested` (scheduler and manual Sync) | `listProducts` |
 | `accounting-tax-type-sync` | `AccountingTaxTypeSyncProcessor` | `AccountingSyncProcessorBase` | `accounting-tax-type-sync` | `OutboxEventJobData` `{ runId? }` | `AccountingTaxTypeSyncRequested` (scheduler and manual Sync) | `listTaxRates` |
 | `accounting-invoice-sync` | `AccountingInvoiceSyncProcessor` | `AccountingPullProcessorBase` (directly) | `accounting-invoice-sync` | `OutboxEventJobData` `{ runId? }` | `AccountingInvoiceSyncRequested` (scheduler, only for organisations with unsettled invoices; manual Sync) | `hasInvoiceReadScope`, `listInvoiceStatuses` |
+| `accounting-account-sync` | `AccountingAccountSyncProcessor` | `AccountingPullProcessorBase` (directly) | `accounting-account-sync` | `OutboxEventJobData` `{ runId? }` | `AccountingAccountSyncRequested` (scheduler every 6 h; manual Sync) | `listSalesAccounts` |
 | `accounting-invoice-export` | `AccountingInvoiceExportProcessor` | `LoggedWorkerHost` (not a pull base) | `accounting-invoice-export` | `InvoiceExportJobData` `{ orderId?, distributorId? }` | `OrderAccepted` (domain) and `AccountingInvoiceExportRequested` (manual retry) | `hasInvoiceCreationScope`, `findInvoiceByReference`, `createInvoice` |
 | `accounting-bulk-import` | `AccountingBulkImportProcessor` | `LoggedWorkerHost` | `accounting-bulk-import` | `BulkImportJobData` (aggregate = `AccountingBulkImportJob` id; payload `{}`) | `AccountingBulkImportRequested` (contact and product bulk-import endpoints) | none (uses Stocdup services only) |
 
@@ -61,6 +63,7 @@ flowchart LR
         PP["AccountingProductSyncProcessor"]
         TP["AccountingTaxTypeSyncProcessor"]
         IP["AccountingInvoiceSyncProcessor"]
+        AP["AccountingAccountSyncProcessor"]
         EP["AccountingInvoiceExportProcessor"]
         BP["AccountingBulkImportProcessor"]
     end
@@ -70,6 +73,7 @@ flowchart LR
         QP["accounting-product-sync"]
         QT["accounting-tax-type-sync"]
         QI["accounting-invoice-sync"]
+        QA["accounting-account-sync"]
         QE["accounting-invoice-export"]
         QB["accounting-bulk-import"]
     end
@@ -83,6 +87,7 @@ flowchart LR
         A6["hasInvoiceCreationScope"]
         A7["findInvoiceByReference"]
         A8["createInvoice"]
+        A9["listSalesAccounts"]
     end
 
     SCH --> OBX
@@ -97,6 +102,7 @@ flowchart LR
     RELAY --> QI
     RELAY --> QE
     RELAY --> QB
+    RELAY --> QA
 
     QC --> CP
     QP --> PP
@@ -104,12 +110,14 @@ flowchart LR
     QI --> IP
     QE --> EP
     QB --> BP
+    QA --> AP
 
     CP --> SB
     PP --> SB
     TP --> SB
     SB --> PB
     IP --> PB
+    AP --> PB
     PB --> LWH
     EP --> LWH
     BP --> LWH
@@ -122,36 +130,38 @@ flowchart LR
     EP -.-> A6
     EP -.-> A7
     EP -.-> A8
+    AP -.-> A9
 ```
 
 ## Shared base classes these processors rely on
 
-These are documented in detail by the `accounting/sync` and `accounting/adapters` code-level docs. Only the parts that shape these six processors are summarised here.
+These are documented in detail by the `accounting/sync` and `accounting/adapters` code-level docs. Only the parts that shape these seven processors are summarised here.
 
-- **`AccountingPullProcessorBase`** (`apps/api/src/accounting/sync/accounting-pull-processor.base.ts`, class at line 152). `process(job)` at lines 176-259 runs: connection lookup (missing or not CONNECTED finalises the run as failed without a provider call, lines 181-201); `ensureRun` for legacy jobs without `runId` (lines 205-213); `ingestionRuns.claim` (line 215, return when null); `shouldRunFull` (line 218); started log; then, inside one `try`, `adapters.get(provider)`, `preflight`, `accountingConnectionService.getValidTokenSet(distributorId, provider)` (line 238), `pull(ctx)`. On success it writes `AccountingConnection.lastSyncedAt` (line 250), `finalizeSuccess` (line 251) and a completed log. On failure, `handleFailure` (lines 261-300) calls `classifyJobFailure` and then `finalizeFailure` (permanent or last attempt) or `requeueForRetry` (transient with attempts left); permanent failures throw `UnrecoverableError`; transient ones rethrow for BullMQ backoff; unexpected non-provider errors are logged with the stack and rethrown as transient.
+- **`AccountingPullProcessorBase`** (`apps/api/src/accounting/sync/accounting-pull-processor.base.ts`, class at line 153). `process(job)` at lines 177-260 runs: connection lookup (missing or not CONNECTED finalises the run as failed without a provider call, lines 182-202); `ensureRun` for legacy jobs without `runId` (lines 206-214); `ingestionRuns.claim` (line 216, return when null); `shouldRunFull` (line 219); started log; then, inside one `try`, `adapters.get(provider)`, `preflight`, `accountingConnectionService.getValidTokenSet(distributorId, provider)` (line 239), `pull(ctx)`. On success it writes `AccountingConnection.lastSyncedAt` (line 251), `finalizeSuccess` (line 252) and a completed log. On failure, `handleFailure` (lines 262-301) calls `classifyJobFailure` and then `finalizeFailure` (permanent or last attempt) or `requeueForRetry` (transient with attempts left); permanent failures throw `UnrecoverableError`; transient ones rethrow for BullMQ backoff; unexpected non-provider errors are logged with the stack and rethrown as transient.
   - `shouldRunFull(run, now)` (lines 77-85): full when MANUAL, no cursor, no `lastFullRunAt`, or the last full run is 24 h old (`ACCOUNTING_FULL_SYNC_INTERVAL_MS`).
   - `RunProgress` (lines 97-130): `setTotal`, `tick(counts, items)` and `flush(counts)` write heartbeats through `IngestionRunService` every `HEARTBEAT_ITEM_INTERVAL` (25) items or `HEARTBEAT_TIME_INTERVAL_MS` (5 s).
-  - `OutboxEventJobData` (lines 87-92, exported) is the job payload type for the four pulls.
+  - `OutboxEventJobData` (lines 87-92, exported) is the job payload type for the pulls.
 - **`AccountingSyncProcessorBase`** (`apps/api/src/accounting/sync/accounting-sync-processor.base.ts`, class at line 115). Extends the pull base and adds the cache, then match, then suggestion pipeline. `pull(ctx)` (lines 134-190) calls `fetchExternalRecords`, then `progress.setTotal`, then `upsertCacheRecord` in batches of `UPSERT_BATCH_SIZE` = 25 (line 100), then `handleStaleRecords` only when the fetch was full (lines 167-169), then `loadMatchCandidates`, then `runMatcherFor` per cached row (lines 206-238). `shouldAutoLink` (line 295) returns `false`; none of the three subclasses overrides it, so every match becomes a suggestion, never a mapping. `classifyChange` (lines 196-204) produces created, updated or unchanged.
-- **`accounting-sync.constants.ts`**: `ACCOUNTING_SYNC_RESOURCE_TYPES` (line 11), `ACCOUNTING_SYNC_EVENT_TYPE` (lines 15-20), `ACCOUNTING_SYNC_INTERVAL_MS` (lines 26-33: contact and product 30 min, tax 6 h, invoice 15 min), `ACCOUNTING_FULL_SYNC_INTERVAL_MS` (line 38).
+- **`accounting-sync.constants.ts`**: `ACCOUNTING_SYNC_RESOURCE_TYPES` (line 12, now including `account`), `ACCOUNTING_SYNC_EVENT_TYPE` (lines 16-22, `account` to `AccountingAccountSyncRequested`), `ACCOUNTING_SYNC_INTERVAL_MS` (lines 28-37: contact and product 30 min, tax 6 h, invoice 15 min, account 6 h), `ACCOUNTING_FULL_SYNC_INTERVAL_MS` (line 42).
 - **`ACCOUNTING_WORKER_SETTINGS`** (`apps/api/src/accounting/accounting-backoff.ts:37`) sets `settings.backoffStrategy`. `accountingBackoffStrategy` (lines 21-34) waits `retryAfterMs` plus up to 5 s jitter when the error carries it, otherwise `30 s * 2^(attempt-1)`, and at least 120 s after an `outcomeUnknown` failure.
 - **`classifyJobFailure`** (`apps/api/src/accounting/accounting-job-failure.ts:68-76`) returns `providerError`, `permanent` (provider error with `transient === false`), `lastAttempt`, and `budgetWait` (code `CALL_BUDGET_EXHAUSTED`). Non-provider errors are treated as transient.
 - **`LoggedWorkerHost`** (`apps/api/src/queues/logged-worker-host.ts:64`) gives each processor `queue.job.failed` and `queue.job.stalled` logging.
 
-## Queue registration (shared by the six)
+## Queue registration (shared by the seven)
 
 From `apps/api/src/worker.module.ts`:
 
 | Queue | Registration lines | Attempts | Backoff | Concurrency |
 |---|---|---|---|---|
 | `accounting-invoice-export` | 57-70 | 5 | `accounting` (`ACCOUNTING_BACKOFF_TYPE`) | default (1) |
-| `accounting-contact-sync` | 74-82 | 3 | `accounting` | 2 (`@Processor` option) |
+| `accounting-contact-sync` | 76-84 | 3 | `accounting` | 2 (`@Processor` option) |
 | `accounting-product-sync` | 83-91 | 3 | `accounting` | 2 |
 | `accounting-tax-type-sync` | 92-100 | 3 | `accounting` | 2 |
-| `accounting-invoice-sync` | 101-109 | 3 | `accounting` | 2 |
-| `accounting-bulk-import` | 110-121 | 5 | `exponential`, 5 000 ms | default (1) |
+| `accounting-invoice-sync` | 103-111 | 3 | `accounting` | 2 |
+| `accounting-account-sync` | 112-120 | 3 | `accounting` | 2 |
+| `accounting-bulk-import` | 121-132 | 5 | `exponential`, 5 000 ms | default (1) |
 
-All six use `removeOnComplete: { count: 1000 }` and `removeOnFail: false`. The bulk-import processor passes no `ACCOUNTING_WORKER_SETTINGS`, so it uses the exponential backoff from the registration.
+All seven use `removeOnComplete: { count: 1000 }` and `removeOnFail: false`. The bulk-import processor passes no `ACCOUNTING_WORKER_SETTINGS`, so it uses the exponential backoff from the registration.
 
 ---
 
@@ -497,7 +507,7 @@ Injected: `PrismaService`, `AccountingConnectionService`, `AccountingTaxTypeServ
 
 File: `apps/api/src/accounting-invoice-export/accounting-invoice-export.processor.ts`
 
-- **Class**: `AccountingInvoiceExportProcessor` (`@Processor(ACCOUNTING_INVOICE_EXPORT_QUEUE, { ...ACCOUNTING_WORKER_SETTINGS })`, line 84; class lines 85-629). Concurrency is the default, 1 (ADR-071).
+- **Class**: `AccountingInvoiceExportProcessor` (`@Processor(ACCOUNTING_INVOICE_EXPORT_QUEUE, { ...ACCOUNTING_WORKER_SETTINGS })`, line 84; class lines 85-640). Concurrency is the default, 1 (ADR-071).
 - **Base**: `LoggedWorkerHost`. This is a push, not a pull. It does not extend `AccountingPullProcessorBase` and does not use `IngestionRun`.
 - **Queue**: `accounting-invoice-export`
 - **Job payload**: `InvoiceExportJobData` (not exported, lines 40-45): `{ eventId, aggregateType, aggregateId, payload: { orderId?: string; distributorId?: string } }`. The processor reads only `payload.orderId`.
@@ -517,10 +527,10 @@ Also `OrderAccepted` is routed to `ANALYTICS_FACTS_QUEUE` and `DELIVERY_RUN_ALLO
 |---|---|---|---|
 | `process` | `async process(job: Job<InvoiceExportJobData>): Promise<void>` | Yes (`WorkerHost.process`) | 100-172 |
 | `claimExport` | `private async claimExport(connection: AccountingConnectionWithOrganisation, order: Order): Promise<AccountingInvoiceExport \| null>` | No | 178-236 |
-| `runExport` | `private async runExport(exportRow: AccountingInvoiceExport, connection: AccountingConnectionWithOrganisation, order: Order & { lines: OrderLine[] }, job: Job<InvoiceExportJobData>): Promise<void>` | No | 238-446 |
-| `recordCompleted` | `private async recordCompleted(exportRow: AccountingInvoiceExport, connection: AccountingConnectionWithOrganisation, order: Order & { lines: OrderLine[] }, result: AccountingInvoiceResult, adopted: boolean): Promise<void>` | No | 453-556 |
-| `markFailed` | `private async markFailed(exportRow: Pick<AccountingInvoiceExport, 'id' \| 'distributorId' \| 'orderId'>, errorCode: string, errorMessage: string, extraFields: Record<string, unknown> = {}): Promise<void>` | No | 570-628 |
-| `logFields` | `private logFields(connection, exportRow): object` | No | 558-567 |
+| `runExport` | `private async runExport(exportRow: AccountingInvoiceExport, connection: AccountingConnectionWithOrganisation, order: Order & { lines: OrderLine[] }, job: Job<InvoiceExportJobData>): Promise<void>` | No | 238-457 |
+| `recordCompleted` | `private async recordCompleted(exportRow: AccountingInvoiceExport, connection: AccountingConnectionWithOrganisation, order: Order & { lines: OrderLine[] }, result: AccountingInvoiceResult, adopted: boolean): Promise<void>` | No | 464-567 |
+| `markFailed` | `private async markFailed(exportRow: Pick<AccountingInvoiceExport, 'id' \| 'distributorId' \| 'orderId'>, errorCode: string, errorMessage: string, extraFields: Record<string, unknown> = {}): Promise<void>` | No | 581-639 |
+| `logFields` | `private logFields(connection, exportRow): object` | No | 569-578 |
 
 #### Flow
 
@@ -530,24 +540,24 @@ Also `OrderAccepted` is routed to `ANALYTICS_FACTS_QUEUE` and `DELIVERY_RUN_ALLO
    - Scope guard, outside `try`: `adapter.hasInvoiceCreationScope(connection.scopes)` false means `markFailed(..., 'SCOPE_MISSING', 'Reconnect the accounting integration to grant Wholo permission to create invoices.')` and return (lines 251-258).
    - No invoiceable lines (status not CANCELLED or REJECTED) means `markFailed('ORDER_NOT_INVOICEABLE')` and return (lines 260-266).
    - Contact mapping, outside `try`: `tradeRelationship.findUnique` by `distributorId_customerId`, then `customerAccountingMapping.findFirst` in organisation scope with `unlinkedAt: null` and `externalContact` included. None means `markFailed('CUSTOMER_NOT_MAPPED')` and return (lines 268-292).
-   - Product mappings: `productAccountingMapping.findMany` for the invoiceable product ids in organisation scope, including `externalProduct` (lines 305-313). Best-effort: unmapped lines use the Stocdup description.
-   - Tax code cache (lines 322-330): `accountingTaxTypes.resolveExternalCodeForTaxType(accountingOrganisationId, taxTypeId)`, cached as a promise.
-   - Line build (lines 333-350): `unitPrice: line.unitPriceSnapshot.toFixed(2)`, `quantity: line.quantityOrdered`, description from the line snapshots, `externalItemCode` and `accountCode` from the product mapping, `taxCode` from the tax-type cache.
-   - Request (lines 352-362): `externalContactId`, `reference: order.orderNumber`, `currency`, `issueDate` (from `invoiceDate` or `acceptedAt`, UTC date), `dueDate` only when set, `targetStatus: connection.organisation.invoiceExportTargetStatus`, `lines`.
-   - Inside `try` (364-443):
-     - `getValidTokenSet(order.distributorId, provider)` (line 369).
-     - `adapter.findInvoiceByReference(tokenSet, externalOrganisationId, request.reference)` (lines 376-380). `adopted = existing !== null`.
-     - `result = existing ?? await adapter.createInvoice(tokenSet, externalOrganisationId, request, invoiceIdempotencyKey(exportRow.id, request))` (lines 382-389). This is the only `createInvoice` call site.
-   - Catch (390-443): `classifyJobFailure`. If `budgetWait && !lastAttempt`: the row goes back to PENDING (lines 403-407), a `deferred` log is written, and the error is rethrown (BullMQ retry). Otherwise `expected` is provider error or `HttpException`. An unexpected error gets a generic stored message. `markFailed('PROVIDER_ERROR', message, { provider, connectionId, code, statusCode, transient, outcomeUnknown })` (lines 433-440). If `!permanent`, the error is rethrown. Permanent errors return without throwing, so the job completes and only a manual retry can run it again.
-   - On success: `recordCompleted` (line 445).
-4. `recordCompleted` (453-556): in one transaction, sets the export to COMPLETED with `externalInvoiceId`, `externalInvoiceNumber`, `externalInvoiceStatus`, `requestedDueDate`, `exportedAt` and clears error fields. Writes outbox `AccountingInvoiceExportProcessed` (aggregate `AccountingInvoiceExport`, lines 478-495) and `audit.record` `INVOICE_EXPORT_COMPLETED` (496-506). If the transaction fails, logs `accounting.invoice_export.persist_failed`, moves the row back to PENDING best-effort, and rethrows so the retry adopts the invoice. After commit, it logs `adopted` or `completed` and writes an admin notification with `notifyOrganisationAdmins` (542-555), best-effort.
-5. `markFailed` (570-628): sets FAILED, `failedAt`, `errorCode`, `errorMessage`. In one transaction, writes outbox `AccountingInvoiceExportFailed` (597-610) and `audit.record` `INVOICE_EXPORT_FAILED` (611-619). Then `notifyOrganisationAdmins` (621-627) outside the transaction.
+   - Product mappings: `productAccountingMapping.findMany` for the invoiceable product ids in organisation scope, including `externalProduct` (lines 307-315). Best-effort: unmapped lines use the Stocdup description. Default sales account (ADR-079, lines 318-324): when `organisation.invoiceDefaultAccountId` is set, the `ExternalAccountingAccount` with that id is read with `findFirst` in organisation scope with `isActive: true`, and its `code` becomes `defaultAccount`. An account archived in the provider gives no default, so nothing is sent.
+   - Tax code cache (lines 332-340): `accountingTaxTypes.resolveExternalCodeForTaxType(accountingOrganisationId, taxTypeId)`, cached as a promise.
+   - Line build (lines 343-361): `unitPrice: line.unitPriceSnapshot.toFixed(2)`, `quantity: line.quantityOrdered`, description from the line snapshots, `externalItemCode` from the product mapping, `accountCode` = the product mapping's `accountCode` if set, otherwise the default sales account's `code` (`external?.accountCode || defaultAccount?.code`, so the item's own account always wins), `taxCode` from the tax-type cache. A line with neither gets no `accountCode`.
+   - Request (lines 363-373): `externalContactId`, `reference: order.orderNumber`, `currency`, `issueDate` (from `invoiceDate` or `acceptedAt`, UTC date), `dueDate` only when set, `targetStatus: connection.organisation.invoiceExportTargetStatus`, `lines`.
+   - Inside `try` (375-454):
+     - `getValidTokenSet(order.distributorId, provider)` (line 380).
+     - `adapter.findInvoiceByReference(tokenSet, externalOrganisationId, request.reference)` (lines 387-391). `adopted = existing !== null`.
+     - `result = existing ?? await adapter.createInvoice(tokenSet, externalOrganisationId, request, invoiceIdempotencyKey(exportRow.id, request))` (lines 393-400). This is the only `createInvoice` call site.
+   - Catch (401-454): `classifyJobFailure`. If `budgetWait && !lastAttempt`: the row goes back to PENDING (lines 414-418), a `deferred` log is written, and the error is rethrown (BullMQ retry). Otherwise `expected` is provider error or `HttpException`. An unexpected error gets a generic stored message. `markFailed('PROVIDER_ERROR', message, { provider, connectionId, code, statusCode, transient, outcomeUnknown })` (lines 444-451). If `!permanent`, the error is rethrown. Permanent errors return without throwing, so the job completes and only a manual retry can run it again.
+   - On success: `recordCompleted` (line 456).
+4. `recordCompleted` (464-567): in one transaction, sets the export to COMPLETED with `externalInvoiceId`, `externalInvoiceNumber`, `externalInvoiceStatus`, `requestedDueDate`, `exportedAt` and clears error fields. Writes outbox `AccountingInvoiceExportProcessed` (aggregate `AccountingInvoiceExport`, lines 489-506) and `audit.record` `INVOICE_EXPORT_COMPLETED` (507-517). If the transaction fails, logs `accounting.invoice_export.persist_failed`, moves the row back to PENDING best-effort, and rethrows so the retry adopts the invoice. After commit, it logs `adopted` or `completed` and writes an admin notification with `notifyOrganisationAdmins` (553-566), best-effort.
+5. `markFailed` (581-639): sets FAILED, `failedAt`, `errorCode`, `errorMessage`. In one transaction, writes outbox `AccountingInvoiceExportFailed` (608-621) and `audit.record` `INVOICE_EXPORT_FAILED` (622-630). Then `notifyOrganisationAdmins` (632-638) outside the transaction.
 
 #### Adapter calls
 
 - `adapter.hasInvoiceCreationScope(connection.scopes)` (line 251).
-- `adapter.findInvoiceByReference(tokenSet, externalOrganisationId, reference)` (line 376). Always before `createInvoice`, on every attempt (ADR-073).
-- `adapter.createInvoice(tokenSet, externalOrganisationId, request, idempotencyKey)` (line 384).
+- `adapter.findInvoiceByReference(tokenSet, externalOrganisationId, reference)` (line 387). Always before `createInvoice`, on every attempt (ADR-073).
+- `adapter.createInvoice(tokenSet, externalOrganisationId, request, idempotencyKey)` (line 395).
 
 #### Prisma models
 
@@ -556,11 +566,12 @@ Also `OrderAccepted` is routed to `ANALYTICS_FACTS_QUEUE` and `DELIVERY_RUN_ALLO
 - `AccountingInvoiceExport` (`findFirst`, `create`, `findUnique`, `update`, transactional update).
 - `TradeRelationship` (`findUnique`), `CustomerAccountingMapping` (`findFirst`, `externalContact` included).
 - `ProductAccountingMapping` (`findMany`, `externalProduct` included).
+- `ExternalAccountingAccount` (`findFirst`, organisation scope, `isActive: true`), only when the organisation has a default sales account (ADR-079).
 - Writes: `OutboxEvent` (through `OutboxService.writeEvent`), `AuditLog` (through `AuditService.record`), `AdminNotification` (through `AdminNotificationsService.notifyOrganisationAdmins`).
 
 #### Domain services
 
-- `AccountingConnectionService.getValidTokenSet` (`accounting-connection.service.ts:284`), the only sanctioned token gateway.
+- `AccountingConnectionService.getValidTokenSet` (`accounting-connection.service.ts:310`), the only sanctioned token gateway.
 - `AccountingTaxTypeService.resolveExternalCodeForTaxType(accountingOrganisationId, taxTypeId)` (`accounting-tax-type.service.ts:299`).
 - `OutboxService.writeEvent`, `AuditService.record`, `AdminNotificationsService.notifyOrganisationAdmins`.
 - `classifyJobFailure` (`accounting-job-failure.ts`), `PROCESSING_STALE_MS` from `ingestion-run.service.ts`.
@@ -582,7 +593,7 @@ Also `OrderAccepted` is routed to `ANALYTICS_FACTS_QUEUE` and `DELIVERY_RUN_ALLO
 #### Provider-specific mentions
 
 - Code: none. Provider names come from `adapters.displayName(provider)`.
-- User-facing copy: line 255 (`SCOPE_MISSING`) says **"Wholo"** in the message stored on the export row and shown to the distributor. Other user-facing copy in the six processors uses "Stocdup" (see the invoice-sync processor, line 78), and the product name is Stocdup.
+- User-facing copy: line 255 (`SCOPE_MISSING`) says **"Wholo"** in the message stored on the export row and shown to the distributor. Other user-facing copy in the seven processors uses "Stocdup" (see the invoice-sync processor, line 78), and the product name is Stocdup.
 - Comments only: lines 296 and 298 use "Wholo" in comments.
 
 ---
@@ -674,18 +685,96 @@ Module-level: `tally(results)` (57-64) and `ItemOutcome = 'imported' | 'matched'
 
 ---
 
+## 7. accounting-account-sync
+
+### Module
+
+File: `apps/api/src/accounting-account-sync/accounting-account-sync.module.ts` (lines 10-13)
+
+- **Imports**: `BullModule.registerQueue({ name: ACCOUNTING_ACCOUNT_SYNC_QUEUE })`, `AccountingModule`, `AdminNotificationsModule`
+- **Providers**: `AccountingAccountSyncProcessor`
+- **Exports**: none
+- Worker-only.
+
+Injected: `PrismaService`, `AccountingConnectionService`, `AccountingAdapterRegistry`, `IngestionRunService` (passed to the base constructor), `AdminNotificationsService`.
+
+### Processor
+
+File: `apps/api/src/accounting-account-sync/accounting-account-sync.processor.ts`
+
+- **Class**: `AccountingAccountSyncProcessor` (`@Processor(ACCOUNTING_ACCOUNT_SYNC_QUEUE, { concurrency: 2, ...ACCOUNTING_WORKER_SETTINGS })`, line 32; class lines 33-124)
+- **Base**: `AccountingPullProcessorBase` (directly, line 33). Not an `AccountingSyncProcessorBase` subclass: no matcher, no suggestions, no review screen, no `handleStaleRecords` (every pull is full, see below).
+- **Module constant**: `WRITE_TRANSACTION_TIMEOUT_MS = 60_000` (line 30), the timeout for the write transaction (Prisma's default is 5 s).
+- **Properties**: `logger` (line 34), `recordNoun = 'account'` (line 35), `resourceType = 'account'` (line 36)
+- **Queue**: `accounting-account-sync`
+- **Job payload**: `OutboxEventJobData` `{ payload: { runId? } }`
+- **Triggers**: `AccountingAccountSyncRequested`, from the scheduler (every 6 h, `ACCOUNTING_SYNC_INTERVAL_MS.account`) and from manual Sync (`requestSync` queues every type in `ACCOUNTING_SYNC_RESOURCE_TYPES`). `account` is not in `ACCOUNTING_MAPPING_RESOURCE_TYPES`, so it is not shown in the sync status panel.
+
+#### Methods
+
+| Method | Signature (from source) | Override | Lines |
+|---|---|---|---|
+| `pull` | `protected async pull({ connection, adapter, tokenSet, progress }: PullContext): Promise<PullResult>` | Yes (abstract base hook) | 48-104 |
+| `isDefaultAccountActive` | `private async isDefaultAccountActive(tx: Prisma.TransactionClient, connection: AccountingConnectionWithOrganisation): Promise<boolean>` | No | 106-112 |
+| `notifyDefaultAccountInactive` | `private async notifyDefaultAccountInactive(tx: Prisma.TransactionClient, connection: AccountingConnectionWithOrganisation): Promise<void>` | No | 114-123 |
+
+Behaviour of `pull` (lines 48-104), in order:
+
+1. `adapter.listSalesAccounts(tokenSet, externalOrganisationId)` makes one provider call with no cursor. `progress.setTotal(accounts.length)` follows. Both run before the transaction opens.
+2. The writes run in one `prisma.$transaction` with a 60 s timeout (`WRITE_TRANSACTION_TIMEOUT_MS`). Its first step, `isDefaultAccountActive(tx, connection)`, reads the organisation's default (`invoiceDefaultAccount.isActive`) before any write. It is `false` when no default is set.
+3. For each fetched account, in sequence: `upsert` on `ExternalAccountingAccount`, keyed on `(accountingOrganisationId, externalAccountId)`. The update sets `code`, `displayName`, `isActive`, `lastSyncedAt` and `rawProviderData`. The create also sets the organisation scope and `provider`. The loop does not call `progress.tick`. Rows are not batched, unlike `AccountingSyncProcessorBase` (batches of 25).
+4. Rows of this organisation that are still `isActive: true` but were not in the fetch are set to `isActive: false` (`updateMany`). This covers accounts deleted in the provider, archived ones that the fetch no longer returns, and accounts that lost their code.
+5. If the default was active at step 2 and is not active after the writes, the transaction re-reads it and calls `notifyOrganisationAdmins` with `tx` as its third argument, with type `ACCOUNTING_DEFAULT_ACCOUNT_INACTIVE`, title "Default sales account no longer active in <provider>", link `/integrations/accounting?tab=settings`, and payload `{ distributorId, accountingOrganisationId }`. The notification row commits with the account changes. The notification is sent once, in the pull where the transition happens. A default that was already inactive gets no new notification. A failed attempt rolls the transaction back, so the retry still sees the default as active and sends the notification.
+6. Returns `nextCursor: null` (every pull is full) and counts `recordsProcessed` (fetched), `recordsUpdated` and `recordsRemoved` (deactivated). The summary reads "Account sync complete: N fetched, M no longer listed".
+
+#### Adapter calls
+
+- `adapter.listSalesAccounts(tokenSet, connection.organisation.externalOrganisationId)` (line 49). Returns only revenue-class accounts that have a code, with archived ones included as `isActive: false` (see the adapter docs).
+
+#### Prisma models
+
+- Writes `ExternalAccountingAccount` (`upsert` per fetched account; `updateMany` setting `isActive: false`).
+- Reads `AccountingOrganisation` (`findUnique`, selecting `invoiceDefaultAccount.isActive`) twice per pull, before and after the writes, both inside the transaction.
+- Base: `AccountingConnection.lastSyncedAt` (written after every successful pull), `IngestionRun`.
+
+#### Domain services
+
+- `AdminNotificationsService.notifyOrganisationAdmins` (`ACCOUNTING_DEFAULT_ACCOUNT_INACTIVE`, given the transaction client).
+- `AccountingAdapterRegistry.displayName` (the provider name in the notification title and body).
+- `organisationScope(connection)` (`accounting/accounting-organisation.ts`).
+- In the base: `AccountingConnectionService.getValidTokenSet`, `classifyJobFailure`, `IngestionRunService`.
+
+#### Errors, retry and budget
+
+- Provider errors follow the base policy: 3 attempts, accounting backoff (`ACCOUNTING_WORKER_SETTINGS`), and permanent provider errors become `UnrecoverableError`.
+- One provider call per pull, made through the adapter, so it uses the shared call budget.
+- The writes and the notification are one transaction. Any exception in it, including the 60 s timeout, rolls back every account write and fails the pull and so the run. The retry repeats the whole pull. `notifyOrganisationAdmins` has no try/catch of its own, so its errors propagate.
+
+#### Progress and ingestion-run tracking
+
+- `IngestionRun` (`resourceType = 'account'`): `recordsTotal`, `recordsProcessed`, `recordsUpdated`, `recordsRemoved`. No cursor (always null) and a `lastFullRunAt` on each successful pull.
+- Logs: `accounting.sync.started`, `accounting.sync.completed` (message "Account sync complete: ..."), `accounting.sync.failed`.
+- Not shown in the sync status panel (`AccountingSyncService.getStatus` filters to contact, product and tax_type).
+
+#### Provider-specific mentions
+
+- Code: none. The provider name comes from `adapters.displayName(provider)`.
+- User-facing copy: "Stocdup" is not used here; the notification text names only the provider and "your default sales account".
+
+---
+
 ## Dependencies
 
 ### Internal dependencies (shared with other domains)
 
-- `apps/api/src/accounting/**`: `AccountingModule` (providers and exports used by all six), `AccountingConnectionService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, matcher services, `InvoicePaymentStateService`, `AccountingTaxTypeService`, `AccountingProductService`, `AccountingContactService`, `accounting-organisation.ts`, `accounting-backoff.ts`, `accounting-job-failure.ts`, `accounting/sync/*`, `accounting/adapters/*` (port and error types).
+- `apps/api/src/accounting/**`: `AccountingModule` (providers and exports used by all seven), `AccountingConnectionService`, `AccountingAdapterRegistry`, `AccountingChangeDetectionService`, matcher services, `InvoicePaymentStateService`, `AccountingTaxTypeService`, `AccountingProductService`, `AccountingContactService`, `accounting-organisation.ts`, `accounting-backoff.ts`, `accounting-job-failure.ts`, `accounting/sync/*`, `accounting/adapters/*` (port and error types).
 - `apps/api/src/ingestion/`: `IngestionRunService`, `IngestionRunModule`, `PROCESSING_STALE_MS`, `HEARTBEAT_*`.
 - `apps/api/src/outbox/`: `OutboxService` (writes), `OutboxPublisherService` (relays).
 - `apps/api/src/audit/`: `AuditService`, `AuditModule`.
 - `apps/api/src/admin-notifications/`: `AdminNotificationsService`, `AdminNotificationsModule`.
 - `apps/api/src/queues/`: `queue.constants.ts` (queue names and `EVENT_ROUTES`), `logged-worker-host.ts`.
 - `apps/api/src/prisma/`: `PrismaService` (global).
-- Producers (not in these six directories): `apps/api/src/orders/orders.service.ts`, `apps/api/src/admin-orders/admin-orders.service.ts`, `apps/api/src/accounting/accounting-invoice-export.service.ts`, `apps/api/src/accounting/accounting-contact.service.ts`, `apps/api/src/accounting/accounting-product.service.ts`, `apps/api/src/accounting/sync/accounting-sync.service.ts`, `apps/api/src/accounting/accounting-sync.scheduler.ts`.
+- Producers (not in these seven directories): `apps/api/src/orders/orders.service.ts`, `apps/api/src/admin-orders/admin-orders.service.ts`, `apps/api/src/accounting/accounting-invoice-export.service.ts`, `apps/api/src/accounting/accounting-contact.service.ts`, `apps/api/src/accounting/accounting-product.service.ts`, `apps/api/src/accounting/sync/accounting-sync.service.ts`, `apps/api/src/accounting/accounting-sync.scheduler.ts`.
 
 ### External dependencies
 
@@ -695,20 +784,21 @@ Module-level: `tally(results)` (57-64) and `ItemOutcome = 'imported' | 'matched'
 - `@prisma/client` (enums and `Prisma`).
 - `@wholo/nest-telemetry` (`loggableError`).
 - `crypto` (`createHash`, export processor only).
-- The provider SDK is not imported by any of the six. Only the adapter port types (`accounting/adapters/accounting-connection-adapter.interface.ts`) and `AccountingProviderError` (`accounting/adapters/accounting-provider.error.ts`) are used.
+- The provider SDK is not imported by any of the seven. Only the adapter port types (`accounting/adapters/accounting-connection-adapter.interface.ts`) and `AccountingProviderError` (`accounting/adapters/accounting-provider.error.ts`) are used.
 
 ## Relationships
 
 The diagram in the overview covers the relationships: producer to outbox to queue to processor to base class to adapter port method. Additional relationships:
 
 - Pulls: `AccountingSyncProcessorBase` owns the pipeline. The three sync processors supply only domain hooks. The invoice-status pull supplies `preflight` and `pull` and calls `InvoicePaymentStateService` for each change.
+- Account pull: extends the pull base directly and supplies only `pull`. It writes cache rows and, when the default sales account goes inactive, one admin notification. It does no matching and writes no suggestions.
 - Export: one processor per order, with its own export row. The provider lookup always precedes `createInvoice`.
 - Bulk import: the processor calls the same per-item methods that the single-row admin actions call (`importAsNewProduct`, `confirmSuggestion`, and the contact equivalents).
 
 ## Notes
 
-- Every queue is served only in the Worker. In the API process, `AppModule` imports `AccountingModule` (controllers and services) but none of these six processor modules.
-- The four pulls and the export share the failure policy and token gateway. The bulk import shares only the Stocdup services it calls.
+- Every queue is served only in the Worker. In the API process, `AppModule` imports `AccountingModule` (controllers and services) but none of these seven processor modules.
+- The pulls and the export share the failure policy and token gateway. The bulk import shares only the Stocdup services it calls.
 - `shouldAutoLink` is false for all three matching pulls. No suggestion is ever auto-linked, and mappings are written only by explicit user actions.
 - `ignoredAt` is never cleared by a sync upsert (contacts, products, tax types).
 
@@ -721,7 +811,7 @@ The diagram in the overview covers the relationships: producer to outbox to queu
 5. **"Wholo" in user-facing copy.** `accounting-invoice-export.processor.ts:255` stores and shows "grant Wholo permission to create invoices". The invoice-sync processor (line 78) uses "Stocdup" for the equivalent text, and the product is named Stocdup.
 6. **Xero named in comments of provider-neutral processors.** `accounting-contact-sync.processor.ts` (lines 175, 210), `accounting-product-sync.processor.ts` (line 177) and `accounting-tax-type-sync.processor.ts` (lines 149-152) name Xero in comments. The code in these files names no provider. The framework header says that provider names appear only in adapters and as examples in comments, so this is a comment-level leak, not a code-level one.
 7. **Call-budget handling differs between pulls and export.** ADR-071 describes `CALL_BUDGET_EXHAUSTED` as a wait. The export honours it (PENDING, no FAILED, rethrow). The four pulls treat it as an ordinary transient failure (`requeueForRetry` to QUEUED, rethrow), which shows as a failed attempt in the run's error message. The code is consistent with its own paths; the ADR does not spell out the pull behaviour.
-8. **ADR-071 lists four accounting queues using the accounting backoff.** The code now has five: export, contact, product, tax type and invoice sync. The invoice-sync queue was added later (ADR-072). This is a documentation drift, not a code issue.
+8. **ADR-071 lists four accounting queues using the accounting backoff.** The code now has six: export, contact, product, tax type, invoice sync and account sync. The invoice-sync queue was added later (ADR-072). This is a documentation drift, not a code issue.
 
 ## Unclear from the code
 

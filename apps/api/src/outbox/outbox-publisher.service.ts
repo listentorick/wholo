@@ -5,6 +5,7 @@ import { OutboxEventStatus } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  ACCOUNTING_ACCOUNT_SYNC_QUEUE,
   ACCOUNTING_BULK_IMPORT_QUEUE,
   ACCOUNTING_CONTACT_SYNC_QUEUE,
   ACCOUNTING_INVOICE_EXPORT_QUEUE,
@@ -40,6 +41,7 @@ export class OutboxPublisherService {
     @InjectQueue(ACCOUNTING_PRODUCT_SYNC_QUEUE) accountingProductSyncQueue: Queue,
     @InjectQueue(ACCOUNTING_TAX_TYPE_SYNC_QUEUE) accountingTaxTypeSyncQueue: Queue,
     @InjectQueue(ACCOUNTING_INVOICE_SYNC_QUEUE) accountingInvoiceSyncQueue: Queue,
+    @InjectQueue(ACCOUNTING_ACCOUNT_SYNC_QUEUE) accountingAccountSyncQueue: Queue,
     @InjectQueue(ANALYTICS_FACTS_QUEUE) analyticsFactsQueue: Queue,
     @InjectQueue(ACCOUNTING_BULK_IMPORT_QUEUE) accountingBulkImportQueue: Queue,
     @InjectQueue(DELIVERY_RUN_ALLOCATION_QUEUE) deliveryRunAllocationQueue: Queue,
@@ -52,6 +54,7 @@ export class OutboxPublisherService {
       [ACCOUNTING_PRODUCT_SYNC_QUEUE, accountingProductSyncQueue],
       [ACCOUNTING_TAX_TYPE_SYNC_QUEUE, accountingTaxTypeSyncQueue],
       [ACCOUNTING_INVOICE_SYNC_QUEUE, accountingInvoiceSyncQueue],
+      [ACCOUNTING_ACCOUNT_SYNC_QUEUE, accountingAccountSyncQueue],
       [ANALYTICS_FACTS_QUEUE, analyticsFactsQueue],
       [ACCOUNTING_BULK_IMPORT_QUEUE, accountingBulkImportQueue],
       [DELIVERY_RUN_ALLOCATION_QUEUE, deliveryRunAllocationQueue],

@@ -61,15 +61,17 @@ describe('AccountingSyncService', () => {
         .mockResolvedValueOnce({ run: { id: 'r-contact' }, shouldEnqueue: true })
         .mockResolvedValueOnce({ run: { id: 'r-product' }, shouldEnqueue: false })
         .mockResolvedValueOnce({ run: { id: 'r-tax' }, shouldEnqueue: true })
-        .mockResolvedValueOnce({ run: { id: 'r-invoice' }, shouldEnqueue: true });
+        .mockResolvedValueOnce({ run: { id: 'r-invoice' }, shouldEnqueue: true })
+        .mockResolvedValueOnce({ run: { id: 'r-account' }, shouldEnqueue: true });
 
       await service.requestSync('dist-1', 'MANUAL');
 
-      expect(writeEvent).toHaveBeenCalledTimes(3);
+      expect(writeEvent).toHaveBeenCalledTimes(4);
       expect(writeEvent.mock.calls.map((c) => c[3])).toEqual([
         'AccountingContactSyncRequested',
         'AccountingTaxTypeSyncRequested',
         'AccountingInvoiceSyncRequested', // a manual Sync refreshes payment status too
+        'AccountingAccountSyncRequested', // and the chart of sales accounts
       ]);
     });
 

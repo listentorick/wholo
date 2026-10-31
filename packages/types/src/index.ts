@@ -1177,10 +1177,29 @@ export interface AccountingConnectionStatusResponse {
   connectedAt: string;
   lastSyncedAt: string | null;
   invoiceExportTargetStatus: AccountingInvoiceTargetStatus;
+  // Default sales account for invoice lines whose product brings no account
+  // of its own; null = left to the accounting system.
+  invoiceDefaultAccount: AccountingDefaultAccount | null;
 }
 
+// A sales account in the connected accounting system's chart of accounts, as
+// last synced into Stocdup.
+export interface AccountingSalesAccount {
+  id: string;
+  code: string;
+  displayName: string;
+}
+
+// isActive false = archived or deleted in the accounting system since it was
+// chosen; invoices no longer use it.
+export interface AccountingDefaultAccount extends AccountingSalesAccount {
+  isActive: boolean;
+}
+
+// Only the fields sent change. invoiceDefaultAccountId: null clears it.
 export interface UpdateAccountingConnectionSettingsRequest {
-  invoiceExportTargetStatus: AccountingInvoiceTargetStatus;
+  invoiceExportTargetStatus?: AccountingInvoiceTargetStatus;
+  invoiceDefaultAccountId?: string | null;
 }
 
 export interface AccountingAuthorizationUrlResponse {

@@ -347,7 +347,7 @@ function AccountingPageInner() {
         />
       )}
       {activeTab === 'settings' && accessToken && (
-        <AccountingSettingsTab connection={connection} onConnectionUpdated={setConnection} />
+        <AccountingSettingsTab connection={connection} onConnectionUpdated={setConnection} reloadSignal={reloadSignal} />
       )}
       {activeTab === 'invoices' && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-white py-16 px-8 text-center">
