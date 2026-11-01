@@ -40,7 +40,7 @@ File header (lines 1-92) is the framework overview and the provider checklist. T
   - Process: Worker.
 - `AccountingExternalProduct` (interface, line 142)
   - Shape: `externalId`, `code?`, `displayName`, `description?`, `salesUnitPrice?`, `purchaseUnitPrice?`, `taxCode?`, `accountCode?`, `purchaseTaxCode?`, `purchaseAccountCode?`, `isSold`, `isPurchased`, `isTracked`, `isActive` (booleans), `quantityOnHand?`, `updatedAt?`, `raw: unknown`. Prices and quantities are decimal strings.
-  - Description: One cached product/item. `isActive` is documented as "return true when the provider has no archived flag".
+  - Description: One cached product/item. `isActive` is documented as true for providers with no archived or deleted flag on products (Xero included).
   - Process: Worker.
 - `AccountingExternalTaxRate` (interface, line 170)
   - Shape: `{ taxType: string; displayName: string; ratePercentage: string /* decimal */; isActive: boolean; raw: unknown }`
@@ -134,7 +134,7 @@ Exported declarations:
     - `buildAuthorizationUrl(state: string, viaOps: boolean): Promise<string>` (192). Builds the consent URL with a fresh `XeroClient` pinned to `state`, with `opsRedirectUri` as the redirect URI when `viaOps` is true and `redirectUri` otherwise. Process: API.
     - `exchangeCodeForToken(callbackUrl: string, expectedState: string, viaOps: boolean): Promise<AccountingTokenSet>` (197). xero-node `apiCallback` (token exchange and state check) on a client built with the same `viaOps`-selected redirect URI. Not routed through `call()`. Process: API.
     - `listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>` (203). `client.updateTenants(false)`, mapped to `{ externalId: tenantId, name: tenantName }`. Not routed through `call()`. Process: API.
-    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (222). Calls the Xero token endpoint with `fetch` and `AbortSignal.timeout(REFRESH_HTTP_TIMEOUT_MS)` (10 s), bypassing xero-node. Network failures are transient. HTTP failures go to `toRefreshTokenError`. Computes `expires_at` from `expires_in`. Process: API and Worker. Called from `performRefresh` (`accounting-connection.service.ts` line 421), which runs under `getValidTokenSet` (line 312).
+    - `refreshAccessToken(tokenSet: AccountingTokenSet): Promise<AccountingTokenSet>` (222). Calls the Xero token endpoint with `fetch` and `AbortSignal.timeout(REFRESH_HTTP_TIMEOUT_MS)` (10 s), bypassing xero-node. Network failures are transient. HTTP failures go to `toRefreshTokenError`. Computes `expires_at` from `expires_in`. Process: API and Worker. Called from `performRefresh` (`accounting-connection.service.ts` line 472), which `refreshHoldingLock` (line 440) runs under the Redis refresh lock, reached from `getValidTokenSet` (line 393).
     - `listContacts(tokenSet, externalOrganisationId, cursor?)` (321). Pages `getContacts` with `includeArchived = true` and `CONTACTS_PAGE_SIZE` (1000) until a short page; `modifiedSince` from the cursor. Process: Worker (contact sync).
     - `listProducts(tokenSet, externalOrganisationId, cursor?)` (358). One `getItems` call (no pagination), `unitdp = 4`. Process: Worker (product sync).
     - `listTaxRates(tokenSet, externalOrganisationId)` (385). One `getTaxRates` call. Process: Worker (tax type sync).
@@ -148,7 +148,7 @@ Exported declarations:
     - `buildClient(state?: string, viaOps = false): XeroClient` (182). Constructs `XeroClient` with the client id/secret, the redirect URI (`opsRedirectUri` when `viaOps`, otherwise `redirectUri`), `XERO_SCOPES` and `state`. Only the two OAuth steps pass `viaOps`; every other caller uses the default `false`.
     - `toRefreshTokenError(status: number, body: unknown): AccountingProviderError` (287). `invalid_grant` → permanent, code `invalid_grant`; `invalid_client` → permanent, code `invalid_client`; 429 and 5xx → transient; other → permanent.
     - `toInvoiceResult(invoice: Invoice): AccountingInvoiceResult` (596).
-    - `call<T>(op: string, externalOrganisationId: string, fn: () => Promise<T>): Promise<T>` (611). The single call path for Accounting API calls: `budget.acquire('XERO', orgId, 50)`, timeout via `withTimeout`, one structured log line per call, day-limit warning below 500 remaining. On failure, logs `accounting.provider.call_failed` and throws the mapped `AccountingProviderError`.
+    - `call<T extends { response: { status?: number; headers?: unknown } }>(op: string, externalOrganisationId: string, fn: () => Promise<T>): Promise<T>` (611). The single call path for Accounting API calls: `budget.acquire('XERO', orgId, 50)`, timeout via `withTimeout`, one structured log line per call, day-limit warning below 500 remaining. On failure, logs `accounting.provider.call_failed` and throws the mapped `AccountingProviderError`.
     - `withTimeout<T>(op: string, pending: Promise<T>): Promise<T>` (662). `Promise.race` with a 60 s timer that rejects with `XeroCallTimeoutError`.
     - `toProviderError(op: string, parsed: ParsedXeroError): AccountingProviderError` (681). Transient: no response (code `NETWORK`), 401, 429, 5xx. Permanent: other statuses. `outcomeUnknown` is true for write ops (`createInvoices`) with no response or 5xx.
     - `toAccountingExternalProduct(item: Item): AccountingExternalProduct` (716).
@@ -278,7 +278,7 @@ These are statements of what the code does today, checked against the header of 
 5. **Concrete adapter import outside the directory.** The interface header says nothing outside `accounting/adapters/` may import a concrete adapter. `accounting/accounting.module.ts` does. The architecture spec allows it through its `PROVIDER_EDGES` list, which the header does not mention.
 6. **ADR-051 vs the header.** ADR-051 says adding a provider changes "nothing else in the service, controllers, or frontend". The interface header checklist (step 4) says a new provider also needs an OAuth start route, callback and admin connection card, and that the current ones are Xero-named.
 7. **ADR-071 on write retries.** ADR-071 says a timed-out write is "safe to retry: every write carries an idempotency key". ADR-073 supersedes this. The Xero adapter's comment above `call()` and `toProviderError` (`outcomeUnknown`) follow ADR-073.
-8. **Stale scope comment.** The comment on `XERO_SCOPES` (lines 23-25) says contacts and settings are "unused until Phases 2-3". Contacts are read by `listContacts`. `accounting.settings` is requested but no call in this directory uses it.
+8. **Stale scope comment.** The comment on `XERO_SCOPES` (lines 23-24) says contacts and settings are "unused until Phases 2-3". Contacts are read by `listContacts`. `accounting.settings` is requested but no call in this directory uses it.
 
 ### Not determined from this directory
 

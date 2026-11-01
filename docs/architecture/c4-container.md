@@ -305,7 +305,7 @@ table `support_access_grants`.
 
 | Container | Type | Helm template | Port | Technology | Responsibility |
 |---|---|---|---|---|---|
-| Ops app | Web app + BFF | `ops-api/` | 3050 locally (`opsApi.service.port`; BFF code 3020) | Next.js frontend + NestJS BFF, one image, `APP_MODE=ops` | Operator console, optionally at `ops.<domain>` (`ingress.hosts.ops`, empty by default). Its own endpoints `/api/v1/ops/*` forward to the Central API: `GET /platform/stats`, `GET /distributors`, `GET` and `POST /distributors/:id/support-grants`, `GET /users/:id/support-grants`, and `DELETE` of a grant. Holds no secret and no database. |
+| Ops app | Web app + BFF | `ops-api/` | 3050 locally (`opsApi.service.port`; BFF code 3020) | Next.js frontend + NestJS BFF, one image, `APP_MODE=ops` | Operator console, optionally at `ops.<domain>` (`ingress.hosts.ops`, empty by default). Its own endpoints `/api/v1/ops/*` forward to the Central API: `GET /platform/stats`, `GET /distributors`, `GET` and `POST /distributors/:id/support-grants`, `GET /users/:id/support-grants`, and `DELETE` of a grant. Also serves the Xero OAuth callback route (`accounting/xero/callback`), because it runs the same BFF code in ops mode; a connect started in an Ops session returns there through the Central API's `XERO_OPS_REDIRECT_URI` (the Admin app uses `XERO_REDIRECT_URI`). Holds no secret and no database. |
 
 Not drawn in 1b: the Ops app and the Admin app's other calls (see diagram 1),
 and the Central API's Keycloak admin-API calls, Redis and Worker.

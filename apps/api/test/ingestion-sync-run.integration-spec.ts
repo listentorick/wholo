@@ -175,9 +175,9 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
       const first = await scheduler.runOnce(now);
       const second = await scheduler.runOnce(new Date(now.getTime() + 60_000));
 
-      expect(first.enqueued).toBeGreaterThanOrEqual(3);
+      expect(first.enqueued).toBeGreaterThanOrEqual(4);
       expect(second.enqueued).toBe(0);
-      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(4);
       const runs = await prisma.ingestionRun.findMany({ where: { sourceRef: connectionA.id } });
       expect(runs.every((r) => r.nextRunAt !== null && r.nextRunAt.getTime() > now.getTime())).toBe(true);
     });
@@ -199,8 +199,8 @@ describe('Accounting sync trigger + IngestionRun (integration)', () => {
 
       const summary = await scheduler.runOnce(new Date(now.getTime() + 1000));
 
-      expect(summary.skippedInFlight).toBe(3);
-      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(3);
+      expect(summary.skippedInFlight).toBe(4);
+      expect(await prisma.outboxEvent.count({ where: { aggregateId: connectionA.id } })).toBe(4);
     });
   });
 
