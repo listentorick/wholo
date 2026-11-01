@@ -44,8 +44,15 @@ vi.mock('@wholo/admin-api-client', () => ({
   adminProductTypesApi: { list: () => Promise.resolve([]) },
   adminSuppliersApi: { list: () => Promise.resolve([]) },
   adminTaxTypesApi: {
+    // Arrives after the fields appear, as on a real connection: Save stays
+    // disabled until now, so a test that clicks too early fails every time.
     list: () =>
-      Promise.resolve({ data: [{ id: 'tax-1', name: 'Standard', ratePercentage: '20', active: true, isDefault: false }] }),
+      new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ data: [{ id: 'tax-1', name: 'Standard', ratePercentage: '20', active: true, isDefault: false }] }),
+          50,
+        ),
+      ),
   },
   adminPriceListsApi: { getProductPricing: () => Promise.resolve([]), list: () => Promise.resolve({ data: [] }) },
   adminAccountingApi: { getProductAccountingLink: (...a: unknown[]) => mockGetLink(...a) },
@@ -77,6 +84,14 @@ const notLinked = {
   history: [],
 } as unknown as AccountingProductLink;
 
+// Save and the fields stay disabled until the product type, supplier and tax
+// type lists load, so wait for that before using them, as a person has to.
+async function saveButtonWhenReady() {
+  const save = await screen.findByRole('button', { name: 'Save changes' });
+  await waitFor(() => expect(save).toBeEnabled());
+  return save;
+}
+
 describe('ProductPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,20 +113,20 @@ describe('ProductPage', () => {
   it('one Save sends the Details and Pricing fields together and stays on the page', async () => {
     mockRequestedTab = 'pricing';
     render(<ProductPage />);
-    fireEvent.change(await screen.findByLabelText('Price'), { target: { value: '4.50' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const save = await saveButtonWhenReady();
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '4.50' } });
+    fireEvent.click(save);
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith('prod-1', expect.objectContaining({ name: 'Sparkling Grape Juice', sku: 'NA-008', price: '4.50' })),
-      { timeout: 3000 },
     );
-    expect(await screen.findByText('Changes saved.', undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByText('Changes saved.')).toBeInTheDocument();
   });
 
   it('opens the Pricing tab when the failing field is there', async () => {
     render(<ProductPage />);
-    await screen.findByLabelText('Title');
+    const save = await saveButtonWhenReady();
     fireEvent.click(screen.getByLabelText('Active'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    fireEvent.click(save);
     await waitFor(() => expect(mockSetTab).toHaveBeenCalledWith('pricing'));
     expect(mockUpdate).not.toHaveBeenCalled();
   });
