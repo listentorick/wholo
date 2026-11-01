@@ -255,6 +255,7 @@ To use it:
 2. Browse to `https://admin.localhost:8443` and accept the one-time self-signed-cert warning.
 3. **This is a different browser origin than `localhost:3020`** — no shared login session. Log in fresh here rather than expecting a `localhost:3020` session to carry over. Use `localhost:3020` for everyday work; only switch to this URL to click "Connect Xero" and complete a real consent flow.
 4. `XERO_REDIRECT_URI` (`apps/api` env) must match this exactly: `https://admin.localhost:8443/api/v1/accounting/xero/callback` — this is what gets registered as the redirect URI in the Xero developer app, and it's `admin-api`'s route even though the env var lives on `apps/api` (see `xero-connection.adapter.ts`).
+5. The Ops app has its own entry point and callback, set up by the same script: `https://ops.localhost:8443`, with `XERO_OPS_REDIRECT_URI` set to `https://ops.localhost:8443/api/v1/accounting/xero/callback`, also registered in the Xero developer app. Re-running `scripts/setup-keycloak-ops-client.sh` resets the `stocdup-ops` client's URLs, so run `setup-local-xero-https.sh` again afterwards.
 
 ### Live (self-hosted k3s)
 

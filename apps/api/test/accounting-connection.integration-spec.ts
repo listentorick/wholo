@@ -35,6 +35,7 @@ import { createAccountingConnection } from './support/accounting-fixtures';
 import { FakeAccountingAdapter } from './support/fake-accounting.adapter';
 import { AccountingConnectionService } from '../src/accounting/accounting-connection.service';
 import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting-adapter.registry';
+import { AuditService } from '../src/audit/audit.service';
 import { TokenEncryptionService } from '../src/accounting/token-encryption.service';
 import { AccountingRefreshLockService } from '../src/accounting/accounting-refresh-lock.service';
 import { AdminNotificationsService } from '../src/admin-notifications/admin-notifications.service';
@@ -100,6 +101,7 @@ describe('Accounting connection routes (integration)', () => {
   });
 
   afterAll(async () => {
+    await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membership.deleteMany({ where: { userId: ADMIN_USER } });
     await prisma.user.deleteMany({ where: { id: ADMIN_USER } });
     await prisma.organisation.deleteMany({ where: { id: { in: [DIST_A, DIST_B] } } });
@@ -220,11 +222,13 @@ describe('Accounting connection routes (integration)', () => {
         get(AdminNotificationsService),
         get(MailService),
         get(ConfigService),
+        get(AuditService),
       );
     });
 
     afterEach(async () => {
       const where = { where: { distributorId: DIST_A } };
+      await prisma.auditLog.deleteMany(where);
       await prisma.customerAccountingMapping.deleteMany(where);
       await prisma.productAccountingMapping.deleteMany(where);
       await prisma.taxTypeAccountingMapping.deleteMany(where);
@@ -244,7 +248,7 @@ describe('Accounting connection routes (integration)', () => {
 
     // One full OAuth round trip, landing in whichever company the fake holds.
     async function connect() {
-      const { authorizationUrl } = await connections.createAuthorizationUrl(DIST_A, ADMIN_USER, AccountingProvider.XERO);
+      const { authorizationUrl } = await connections.createAuthorizationUrl(DIST_A, ADMIN_USER, AccountingProvider.XERO, false);
       const state = new URL(authorizationUrl).searchParams.get('state')!;
       await connections.handleCallback('https://admin.test/callback?code=c', 'c', state);
       return prisma.accountingConnection.findFirstOrThrow({
@@ -291,6 +295,27 @@ describe('Accounting connection routes (integration)', () => {
         .set('Authorization', `Bearer ${token}`)
         .expect((res) => expect(res.status).toBeLessThan(300));
     }
+
+    it('records who connected, changed settings and disconnected', async () => {
+      const connection = await connect();
+
+      await request(app.getHttpServer())
+        .patch(`/api/v1/distributors/${DIST_A}/accounting/connection`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ invoiceExportTargetStatus: 'AUTHORISED' })
+        .expect(200);
+      await disconnect();
+
+      const rows = await prisma.auditLog.findMany({
+        where: { distributorId: DIST_A, entityType: 'ACCOUNTING_CONNECTION', entityId: connection.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(rows.map((r) => r.action).sort()).toEqual(['ACCOUNTING_CONNECTED', 'ACCOUNTING_DISCONNECTED', 'ACCOUNTING_SETTINGS_CHANGED']);
+      expect(rows.every((r) => r.actorUserId === ADMIN_USER)).toBe(true);
+      expect(rows.find((r) => r.action === 'ACCOUNTING_SETTINGS_CHANGED')?.changes).toMatchObject({
+        invoiceExportTargetStatus: { to: 'AUTHORISED' },
+      });
+    });
 
     it('keeps every link after a disconnect and reconnect to the same organisation', async () => {
       const first = await connect();

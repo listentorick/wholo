@@ -19,6 +19,8 @@ import { OrganisationType, Role } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProblemDetailsFilter } from '../src/common/filters/problem-details.filter';
+import { AccountingAdapterRegistry } from '../src/accounting/adapters/accounting-adapter.registry';
+import { FakeAccountingAdapter } from './support/fake-accounting.adapter';
 import { startJwtTestServer, JwtTestServer } from './helpers/jwt-test-server';
 
 const PLATFORM = 'test-sg-platform';
@@ -65,7 +67,11 @@ describe('Support access grants (integration)', () => {
 
   beforeAll(async () => {
     jwt = await startJwtTestServer();
-    const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const fake = new FakeAccountingAdapter();
+    const module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(AccountingAdapterRegistry)
+      .useValue({ get: () => fake, displayName: () => fake.displayName })
+      .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
@@ -94,12 +100,21 @@ describe('Support access grants (integration)', () => {
     await member(DUAL, DIST_B, Role.DISTRIBUTOR_ADMIN);
   });
 
+  async function clearAccounting() {
+    const where = { where: { distributorId: { in: [DIST_A, DIST_B] } } };
+    await prisma.accountingOAuthState.deleteMany(where);
+    await prisma.accountingConnection.deleteMany(where);
+    await prisma.accountingOrganisation.deleteMany(where);
+  }
+
   beforeEach(async () => {
     await prisma.supportAccessGrant.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
+    await clearAccounting();
   });
 
   afterAll(async () => {
+    await clearAccounting();
     await prisma.supportAccessGrant.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.auditLog.deleteMany({ where: { distributorId: { in: [DIST_A, DIST_B] } } });
     await prisma.membershipRole.deleteMany({ where: { membership: { userId: { in: USERS } } } });
@@ -176,12 +191,42 @@ describe('Support access grants (integration)', () => {
 
       expect((await api().get(`/api/v1/distributors/${DIST_A}/price-lists`).set(auth)).status).toBe(200);
       expect((await api().get(`/api/v1/distributors/${DIST_A}/members`).set(auth)).status).toBe(403);
-      expect((await api().post(`/api/v1/distributors/${DIST_A}/accounting/connections/xero/authorization-url`).set(auth)).status).toBe(403);
+      expect((await api().post(`/api/v1/distributors/${DIST_B}/accounting/connections/xero/authorization-url`).set(auth)).status).toBe(403);
       expect((await api().get(`/api/v1/distributors/${DIST_B}/price-lists`).set(auth)).status).toBe(403);
 
       const me = await api().get(`/api/v1/auth/me?organisationId=${DIST_A}`).set(auth);
       expect(me.status).toBe(200);
       expect(me.body).toMatchObject({ organisationId: DIST_A, roles: ['SUPPORT'], access: { kind: 'SUPPORT' } });
+    });
+
+    it('lets the operator connect from Ops, and records who connected and disconnected', async () => {
+      await openGrant();
+      const auth = { Authorization: `Bearer ${opsToken()}` };
+
+      const started = await api().post(`/api/v1/distributors/${DIST_A}/accounting/connections/xero/authorization-url`).set(auth);
+      expect(started.status).toBe(201);
+      const stateRow = await prisma.accountingOAuthState.findFirstOrThrow({ where: { distributorId: DIST_A } });
+      expect(stateRow.viaOps).toBe(true);
+
+      const callback = await api()
+        .post('/api/v1/accounting/xero/callback')
+        .send({ callbackUrl: 'https://ops.test/callback?code=c', code: 'c', state: stateRow.state });
+      expect(callback.body).toEqual({ status: 'connected' });
+
+      expect((await api().delete(`/api/v1/distributors/${DIST_A}/accounting/connection`).set(auth)).status).toBe(200);
+
+      const rows = await prisma.auditLog.findMany({ where: { distributorId: DIST_A, entityType: 'ACCOUNTING_CONNECTION' } });
+      expect(rows.map((r) => r.action).sort()).toEqual(['ACCOUNTING_CONNECTED', 'ACCOUNTING_DISCONNECTED']);
+      expect(rows.every((r) => r.actorUserId === OPERATOR)).toBe(true);
+    });
+
+    it('marks a connect from the admin app as not from Ops', async () => {
+      const res = await api()
+        .post(`/api/v1/distributors/${DIST_A}/accounting/connections/xero/authorization-url`)
+        .set('Authorization', `Bearer ${adminClientToken(OWNER_A)}`);
+      expect(res.status).toBe(201);
+      const stateRow = await prisma.accountingOAuthState.findFirstOrThrow({ where: { distributorId: DIST_A } });
+      expect(stateRow.viaOps).toBe(false);
     });
 
     it('does nothing through the admin client', async () => {

@@ -1124,6 +1124,7 @@ model AccountingOAuthState {
   provider          AccountingProvider
   distributorId     String
   connectedByUserId String
+  viaOps            Boolean            @default(false)
   createdAt         DateTime           @default(now())
   expiresAt         DateTime
 

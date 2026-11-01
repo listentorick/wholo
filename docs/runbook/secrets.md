@@ -66,7 +66,7 @@ Keep these in the password manager, with two-factor authentication on where the 
 - Cloudflare: DNS, WAF rules, R2, Origin CA.
 - GitHub: repository, Actions variables, GHCR.
 - PurelyMail: the three sending addresses.
-- Xero developer app: client id and secret, redirect URI.
+- Xero developer app: client id and secret, and both redirect URIs (`https://admin.<domain>/api/v1/accounting/xero/callback` and `https://ops.<domain>/api/v1/accounting/xero/callback`). These must match `api.xero.redirectUri` and `api.xero.opsRedirectUri` exactly.
 - The WAF appliance admin login.
 - SSH or console access to the three k3s nodes.
 - The ops-host InfluxDB and Grafana admins.

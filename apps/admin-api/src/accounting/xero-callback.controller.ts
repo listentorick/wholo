@@ -13,7 +13,8 @@ interface XeroCallbackQuery {
 // Wholo JWT — so it cannot sit behind JwtAuthGuard. apps/api's own callback
 // endpoint stays internal-only (cluster DNS); this controller is the one
 // public hop, forwarding to it server-to-server and owning the browser
-// redirect back into the admin app itself (same origin — see main.ts).
+// redirect back into the app it was reached on (same origin — see main.ts).
+// ops-api runs this controller too, so a connect started in Ops returns to Ops.
 @Controller('accounting/xero')
 export class XeroCallbackController {
   private readonly logger = new Logger(XeroCallbackController.name);
@@ -30,7 +31,8 @@ export class XeroCallbackController {
     // req.protocol alone would report 'http' even when reached over the
     // HTTPS ingress — prefer the forwarded-proto header when present.
     // Cosmetic only: the redirect_uri actually sent to Xero comes from
-    // apps/api's own XERO_REDIRECT_URI config, not this reconstructed string.
+    // apps/api's own XERO_REDIRECT_URI or XERO_OPS_REDIRECT_URI config, not this
+    // reconstructed string.
     const protocol = req.get('x-forwarded-proto') ?? req.protocol;
     const callbackUrl = `${protocol}://${req.get('host')}${req.originalUrl}`;
 

@@ -6,11 +6,14 @@ import {
   AccountingConnectionStatus,
   AccountingInvoiceTargetStatus,
   AccountingProvider,
+  ActorType,
+  Prisma,
   Role,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { AuditService } from '../audit/audit.service';
 import { TokenEncryptionService } from './token-encryption.service';
 import { AccountingAdapterRegistry } from './adapters/accounting-adapter.registry';
 import { AccountingOAuthError } from './accounting-oauth.error';
@@ -44,6 +47,7 @@ export class AccountingConnectionService {
     private readonly adminNotifications: AdminNotificationsService,
     private readonly mail: MailService,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   async getConnectionStatus(distributorId: string) {
@@ -63,6 +67,7 @@ export class AccountingConnectionService {
       invoiceExportTargetStatus?: AccountingInvoiceTargetStatus;
       invoiceDefaultAccountId?: string | null;
     },
+    actorUserId: string,
   ) {
     const connection = await this.findCurrentConnection(distributorId);
     if (!connection) {
@@ -79,14 +84,48 @@ export class AccountingConnectionService {
       }
     }
 
-    const organisation = await this.prisma.accountingOrganisation.update({
-      where: { id: connection.accountingOrganisationId },
-      data: {
-        invoiceExportTargetStatus: settings.invoiceExportTargetStatus,
-        invoiceDefaultAccountId: settings.invoiceDefaultAccountId,
-      },
+    const changes: Prisma.JsonObject = {};
+    const { invoiceExportTargetStatus, invoiceDefaultAccountId } = settings;
+    if (invoiceExportTargetStatus !== undefined && invoiceExportTargetStatus !== connection.organisation.invoiceExportTargetStatus) {
+      changes.invoiceExportTargetStatus = { from: connection.organisation.invoiceExportTargetStatus, to: invoiceExportTargetStatus };
+    }
+    if (invoiceDefaultAccountId !== undefined && invoiceDefaultAccountId !== connection.organisation.invoiceDefaultAccountId) {
+      changes.invoiceDefaultAccountId = { from: connection.organisation.invoiceDefaultAccountId, to: invoiceDefaultAccountId };
+    }
+
+    const organisation = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.accountingOrganisation.update({
+        where: { id: connection.accountingOrganisationId },
+        data: { invoiceExportTargetStatus, invoiceDefaultAccountId },
+      });
+      if (Object.keys(changes).length > 0) {
+        await this.recordConnectionAudit(tx, connection, actorUserId, 'ACCOUNTING_SETTINGS_CHANGED', `Changed the accounting settings for ${updated.name}`, changes);
+      }
+      return updated;
     });
     return this.toConnectionStatus({ ...connection, organisation });
+  }
+
+  private async recordConnectionAudit(
+    tx: Prisma.TransactionClient,
+    connection: { id: string; distributorId: string },
+    actorUserId: string,
+    action: string,
+    summary: string,
+    changes: Prisma.InputJsonValue,
+  ) {
+    const actor = await tx.user.findUnique({ where: { id: actorUserId }, select: { firstName: true, lastName: true } });
+    await this.audit.record(tx, {
+      distributorId: connection.distributorId,
+      entityType: 'ACCOUNTING_CONNECTION',
+      entityId: connection.id,
+      action,
+      actorType: ActorType.USER,
+      actorUserId,
+      actorName: actor ? `${actor.firstName} ${actor.lastName}` : undefined,
+      summary,
+      changes,
+    });
   }
 
   // The distributor's current connection (CONNECTED or ERROR), or null.
@@ -148,6 +187,7 @@ export class AccountingConnectionService {
     distributorId: string,
     connectedByUserId: string,
     provider: AccountingProvider,
+    viaOps: boolean,
   ): Promise<{ authorizationUrl: string }> {
     const state = randomBytes(32).toString('hex');
     await this.prisma.accountingOAuthState.create({
@@ -156,10 +196,11 @@ export class AccountingConnectionService {
         provider,
         distributorId,
         connectedByUserId,
+        viaOps,
         expiresAt: new Date(Date.now() + STATE_TTL_MS),
       },
     });
-    const authorizationUrl = await this.adapters.get(provider).buildAuthorizationUrl(state);
+    const authorizationUrl = await this.adapters.get(provider).buildAuthorizationUrl(state, viaOps);
     return { authorizationUrl };
   }
 
@@ -197,7 +238,7 @@ export class AccountingConnectionService {
     let tokenSet;
     let organisations;
     try {
-      tokenSet = await adapter.exchangeCodeForToken(callbackUrl, state);
+      tokenSet = await adapter.exchangeCodeForToken(callbackUrl, state, stateRow.viaOps);
       organisations = await adapter.listAvailableOrganisations(tokenSet);
     } catch (err) {
       this.logger.error(
@@ -275,6 +316,11 @@ export class AccountingConnectionService {
           connectedByUserId: stateRow.connectedByUserId,
           connectedAt: now,
         },
+      });
+      await this.recordConnectionAudit(tx, connection, stateRow.connectedByUserId, 'ACCOUNTING_CONNECTED', `Connected to ${organisation.name}`, {
+        provider: stateRow.provider,
+        organisationName: organisation.name,
+        reconnect: retired.count > 0,
       });
       return { connection, reconnect: retired.count > 0, knownOrganisation: existingOrganisation !== null };
     });
@@ -595,16 +641,23 @@ export class AccountingConnectionService {
     );
   }
 
-  async disconnect(distributorId: string): Promise<void> {
+  async disconnect(distributorId: string, actorUserId: string): Promise<void> {
     const connection = await this.prisma.accountingConnection.findFirst({
       where: { distributorId, status: AccountingConnectionStatus.CONNECTED },
+      include: CONNECTION_WITH_ORGANISATION,
     });
     if (!connection) {
       throw new NotFoundException('No active accounting connection for this distributor');
     }
-    await this.prisma.accountingConnection.update({
-      where: { id: connection.id },
-      data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.accountingConnection.update({
+        where: { id: connection.id },
+        data: { status: AccountingConnectionStatus.DISCONNECTED, disconnectedAt: new Date() },
+      });
+      await this.recordConnectionAudit(tx, connection, actorUserId, 'ACCOUNTING_DISCONNECTED', `Disconnected from ${connection.organisation.name}`, {
+        provider: connection.provider,
+        organisationName: connection.organisation.name,
+      });
     });
     this.logger.log(
       {

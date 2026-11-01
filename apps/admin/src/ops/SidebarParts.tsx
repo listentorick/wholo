@@ -16,7 +16,7 @@ export function OpsLogoTag() {
 export function OpsSidebarNote() {
   const [selection] = useState(() => getSelection());
   if (!selection) return null;
-  return <p data-build={OPS_BUILD_MARKER} className="shrink-0 border-t border-sidebar-border px-6 py-3 text-[11px] leading-snug text-sidebar-fg/50">Team, and connecting or disconnecting accounting, are not available with support access.</p>;
+  return <p data-build={OPS_BUILD_MARKER} className="shrink-0 border-t border-sidebar-border px-6 py-3 text-[11px] leading-snug text-sidebar-fg/50">Team is not available with support access.</p>;
 }
 
 /** At the top of every dialog inside a wholesaler: which account the action is for. */

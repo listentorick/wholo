@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { AccountingConnectionStatus, AccountingProvider, Role } from '@prisma/client';
 import { AccountingConnectionService } from './accounting-connection.service';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
@@ -41,6 +42,9 @@ const mockPrisma = {
   organisation: {
     findUnique: jest.fn(),
   },
+  user: {
+    findUnique: jest.fn(),
+  },
   $transaction: jest.fn(),
 };
 
@@ -58,6 +62,7 @@ const mockRegistry = { get: jest.fn(), displayName: jest.fn().mockReturnValue('X
 const mockRefreshLock = { tryAcquire: jest.fn() };
 const mockAdminNotifications = { notifyOrganisationAdmins: jest.fn() };
 const mockMail = { sendAccountingConnectionNeedsReconnect: jest.fn() };
+const mockAudit = { record: jest.fn() };
 const mockConfig = {
   get: jest.fn((_key: string, fallback: string) => fallback),
   getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
@@ -93,6 +98,7 @@ describe('AccountingConnectionService', () => {
         { provide: AdminNotificationsService, useValue: mockAdminNotifications },
         { provide: MailService, useValue: mockMail },
         { provide: ConfigService, useValue: mockConfig },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
     service = module.get(AccountingConnectionService);
@@ -178,7 +184,7 @@ describe('AccountingConnectionService', () => {
     it('throws NotFoundException when no connection exists', async () => {
       mockPrisma.accountingConnection.findFirst.mockResolvedValue(null);
       await expect(
-        service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' }),
+        service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' }, 'user-1'),
       ).rejects.toThrow(NotFoundException);
       expect(mockPrisma.accountingOrganisation.update).not.toHaveBeenCalled();
     });
@@ -201,7 +207,7 @@ describe('AccountingConnectionService', () => {
 
       const result = await service.updateConnectionSettings('dist-1', {
         invoiceExportTargetStatus: 'AUTHORISED',
-      });
+      }, 'user-1');
 
       expect(mockPrisma.accountingOrganisation.update).toHaveBeenCalledWith({
         where: { id: 'acc-org-1' },
@@ -246,7 +252,7 @@ describe('AccountingConnectionService', () => {
         mockPrisma.externalAccountingAccount.findFirst.mockResolvedValue({ id: 'acct-260' });
         mockPrisma.externalAccountingAccount.findUnique.mockResolvedValue(account);
 
-        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-260' });
+        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-260' }, 'user-1');
 
         expect(mockPrisma.externalAccountingAccount.findFirst).toHaveBeenCalledWith({
           where: { distributorId: 'dist-1', accountingOrganisationId: 'acc-org-1', id: 'acct-260', isActive: true },
@@ -261,20 +267,20 @@ describe('AccountingConnectionService', () => {
         mockPrisma.externalAccountingAccount.findFirst.mockResolvedValue(null);
 
         await expect(
-          service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-other' }),
+          service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: 'acct-other' }, 'user-1'),
         ).rejects.toThrow(BadRequestException);
         expect(mockPrisma.accountingOrganisation.update).not.toHaveBeenCalled();
       });
 
       it('clears the default when given null', async () => {
-        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: null });
+        const result = await service.updateConnectionSettings('dist-1', { invoiceDefaultAccountId: null }, 'user-1');
 
         expect(result.invoiceDefaultAccount).toBeNull();
         expect(mockPrisma.externalAccountingAccount.findFirst).not.toHaveBeenCalled();
       });
 
       it('leaves the default untouched when only the target status is sent', async () => {
-        await service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' });
+        await service.updateConnectionSettings('dist-1', { invoiceExportTargetStatus: 'AUTHORISED' }, 'user-1');
 
         const { data } = mockPrisma.accountingOrganisation.update.mock.calls[0][0];
         expect(data.invoiceDefaultAccountId).toBeUndefined();
@@ -287,7 +293,7 @@ describe('AccountingConnectionService', () => {
     it('persists a state row with a future expiry and returns the adapter URL', async () => {
       mockAdapter.buildAuthorizationUrl.mockResolvedValue('https://xero.example/consent');
 
-      const result = await service.createAuthorizationUrl('dist-1', 'user-1', AccountingProvider.XERO);
+      const result = await service.createAuthorizationUrl('dist-1', 'user-1', AccountingProvider.XERO, false);
 
       expect(result).toEqual({ authorizationUrl: 'https://xero.example/consent' });
       expect(mockPrisma.accountingOAuthState.create).toHaveBeenCalledTimes(1);
@@ -296,7 +302,18 @@ describe('AccountingConnectionService', () => {
       expect(created.connectedByUserId).toBe('user-1');
       expect(created.provider).toBe(AccountingProvider.XERO);
       expect(created.expiresAt.getTime()).toBeGreaterThan(Date.now());
-      expect(mockAdapter.buildAuthorizationUrl).toHaveBeenCalledWith(created.state);
+      expect(created.viaOps).toBe(false);
+      expect(mockAdapter.buildAuthorizationUrl).toHaveBeenCalledWith(created.state, false);
+    });
+
+    it('remembers a connect started from Ops and asks for the Ops callback', async () => {
+      mockAdapter.buildAuthorizationUrl.mockResolvedValue('https://xero.example/consent');
+
+      await service.createAuthorizationUrl('dist-1', 'user-1', AccountingProvider.XERO, true);
+
+      const created = mockPrisma.accountingOAuthState.create.mock.calls[0][0].data;
+      expect(created.viaOps).toBe(true);
+      expect(mockAdapter.buildAuthorizationUrl).toHaveBeenCalledWith(created.state, true);
     });
   });
 
@@ -320,7 +337,17 @@ describe('AccountingConnectionService', () => {
       provider: AccountingProvider.XERO,
       distributorId: 'dist-1',
       connectedByUserId: 'user-1',
+      viaOps: false,
       expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    it('swaps the code using the app the connect started from', async () => {
+      mockPrisma.accountingOAuthState.findUnique.mockResolvedValue({ ...validState(), viaOps: true });
+      mockAdapter.exchangeCodeForToken.mockRejectedValue(new Error('stop here'));
+
+      await expect(service.handleCallback(callbackUrl, 'abc', 'xyz')).rejects.toThrow();
+
+      expect(mockAdapter.exchangeCodeForToken).toHaveBeenCalledWith(callbackUrl, 'xyz', true);
     });
 
     it('points a reconnect to a company seen before at its existing organisation, keeping its data', async () => {
@@ -508,7 +535,7 @@ describe('AccountingConnectionService', () => {
       expect(updateManyWhere.status.in).toContain(AccountingConnectionStatus.CONNECTED);
     });
 
-    it('takes the first organisation and logs a warning when more than one is returned', async () => {
+    it('uses the first organisation when more than one is returned', async () => {
       mockPrisma.accountingOAuthState.findUnique.mockResolvedValue({
         id: 'state-1',
         state: 'xyz',
@@ -919,13 +946,13 @@ describe('AccountingConnectionService', () => {
   describe('disconnect', () => {
     it('throws NotFoundException when there is no active connection', async () => {
       mockPrisma.accountingConnection.findFirst.mockResolvedValue(null);
-      await expect(service.disconnect('dist-1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.disconnect('dist-1', 'user-1')).rejects.toBeInstanceOf(NotFoundException);
       expect(mockPrisma.accountingConnection.update).not.toHaveBeenCalled();
     });
 
     it('marks the active connection disconnected and never deletes it', async () => {
-      mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1' });
-      await service.disconnect('dist-1');
+      mockPrisma.accountingConnection.findFirst.mockResolvedValue({ id: 'conn-1', organisation: { name: 'Acme Wines' } });
+      await service.disconnect('dist-1', 'user-1');
       expect(mockPrisma.accountingConnection.update).toHaveBeenCalledWith({
         where: { id: 'conn-1' },
         data: expect.objectContaining({ status: AccountingConnectionStatus.DISCONNECTED }),

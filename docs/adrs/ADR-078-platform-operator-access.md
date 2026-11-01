@@ -35,7 +35,9 @@ What we wanted, modelled on Azure PIM's time-bound assignments:
 
 ### Support grants
 
-A support grant (`support_access_grants`) gives one operator the `SUPPORT` role at one distributor for a limited time. `SUPPORT` holds what `DISTRIBUTOR_ADMIN` holds, minus `team:manage`, `accounting:manage` and `order-as:initiate`.
+A support grant (`support_access_grants`) gives one operator the `SUPPORT` role at one distributor for a limited time. `SUPPORT` holds what `DISTRIBUTOR_ADMIN` holds, minus `team:manage` and `order-as:initiate`.
+
+`SUPPORT` originally lacked `accounting:manage` too. It now has it, because setting up a wholesaler includes its integrations: connecting, disconnecting and connection settings. A connect started in Ops uses its own callback URL (`XERO_OPS_REDIRECT_URI`), so the operator returns to Ops, where the grant applies. The consent screen offers only the companies of whoever is signed in to Xero, so the operator needs access to the wholesaler's Xero organisation. Connecting, disconnecting and changing connection settings each write an audit row, whoever does them.
 
 - **Created only by the operator, for themselves, in an Ops session.** `userId` must be the caller; the distributor must be a live `DISTRIBUTOR` the operator is not a member of; a reason is required; the length is clamped to 15 minutes–8 hours (default 4). There is no approver.
 - **One active grant per person per distributor.** Opening again extends the current grant (never beyond 8 hours from now) instead of adding a row. This is enforced in a serializable transaction, not a partial index (ADR-052).

@@ -116,7 +116,7 @@ Source: `apps/api/src/auth/role-permissions.ts`.
 | `delivery:manage` |  | ✓ | ✓ | ✓ | ✓ | ✓ |  |
 | `accounting:read` |  | ✓ | ✓ | ✓ |  |  |  |
 | `accounting:import` |  | ✓ | ✓ | ✓ |  |  |  |
-| `accounting:manage` |  | ✓ |  |  |  |  |  |
+| `accounting:manage` |  | ✓ | ✓ |  |  |  |  |
 | `settings:manage` |  | ✓ | ✓ |  |  |  |  |
 | `asset-images:manage` |  | ✓ | ✓ | ✓ |  |  |  |
 | `analytics:read` |  | ✓ | ✓ | ✓ |  |  |  |

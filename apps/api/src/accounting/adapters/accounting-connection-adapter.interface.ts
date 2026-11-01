@@ -292,11 +292,13 @@ export interface AccountingConnectionAdapter {
   // The provider's name as people know it ("Xero"), for every user-facing
   // sentence that names the provider — never the enum value.
   readonly displayName: string;
-  buildAuthorizationUrl(state: string): Promise<string>;
+  // viaOps: the connect started in the Ops app, whose callback URL differs from
+  // the admin app's. A provider must send the same URL at both of these steps.
+  buildAuthorizationUrl(state: string, viaOps: boolean): Promise<string>;
   // callbackUrl is the full request URL (incl. querystring) the provider
   // redirected the browser to — some provider SDKs (xero-node included)
   // validate the state themselves from it, in addition to our own check.
-  exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet>;
+  exchangeCodeForToken(callbackUrl: string, expectedState: string, viaOps: boolean): Promise<AccountingTokenSet>;
   listAvailableOrganisations(tokenSet: AccountingTokenSet): Promise<AccountingExternalOrganisation[]>;
   // Failures should be thrown as AccountingProviderError so callers can
   // distinguish transient (retryable) from permanent (user-actionable, e.g.

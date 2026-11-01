@@ -38,6 +38,7 @@ data:
   DRIVER_APP_URL: {{ .Values.global.driverUrl | quote }}
   XERO_CLIENT_ID: {{ .Values.api.xero.clientId | quote }}
   XERO_REDIRECT_URI: {{ .Values.api.xero.redirectUri | quote }}
+  XERO_OPS_REDIRECT_URI: {{ .Values.api.xero.opsRedirectUri | quote }}
   SMTP_HOST: {{ .Values.api.smtp.host | default (printf "%s-mailhog" (include "wholo.fullname" .)) | quote }}
   SMTP_PORT: {{ .Values.api.smtp.port | default "1025" | toString | quote }}
   SMTP_SECURE: {{ .Values.api.smtp.secure | default "false" | toString | quote }}

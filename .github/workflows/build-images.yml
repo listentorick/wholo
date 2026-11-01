@@ -125,6 +125,7 @@ jobs:
       XERO_CLIENT_ID: ci
       XERO_CLIENT_SECRET: ci
       XERO_REDIRECT_URI: https://admin.localhost:8443/api/v1/accounting/xero/callback
+      XERO_OPS_REDIRECT_URI: https://ops.localhost:8443/api/v1/accounting/xero/callback
       # 32 zero bytes, base64 — the shape the app validates; protects nothing.
       ACCOUNTING_TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     steps:

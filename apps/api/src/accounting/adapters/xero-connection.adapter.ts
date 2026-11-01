@@ -159,6 +159,7 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
+  private readonly opsRedirectUri: string;
 
   constructor(
     private readonly config: ConfigService,
@@ -172,27 +173,29 @@ export class XeroAccountingAdapter implements AccountingConnectionAdapter {
     // endpoint server-to-server. xero-node still needs this value verbatim
     // for the token-exchange request regardless of who received the redirect.
     this.redirectUri = config.getOrThrow<string>('XERO_REDIRECT_URI');
+    // The same callback route on the Ops app, so a connect started there returns there.
+    this.opsRedirectUri = config.getOrThrow<string>('XERO_OPS_REDIRECT_URI');
   }
 
   // xero-node's XeroClient pins `state` at construction (it's checked
   // internally on the callback), so a fresh client is built per state value.
-  private buildClient(state?: string): XeroClient {
+  private buildClient(state?: string, viaOps = false): XeroClient {
     return new XeroClient({
       clientId: this.clientId,
       clientSecret: this.clientSecret,
-      redirectUris: [this.redirectUri],
+      redirectUris: [viaOps ? this.opsRedirectUri : this.redirectUri],
       scopes: XERO_SCOPES,
       state,
     });
   }
 
-  async buildAuthorizationUrl(state: string): Promise<string> {
-    const client = this.buildClient(state);
+  async buildAuthorizationUrl(state: string, viaOps: boolean): Promise<string> {
+    const client = this.buildClient(state, viaOps);
     return client.buildConsentUrl();
   }
 
-  async exchangeCodeForToken(callbackUrl: string, expectedState: string): Promise<AccountingTokenSet> {
-    const client = this.buildClient(expectedState);
+  async exchangeCodeForToken(callbackUrl: string, expectedState: string, viaOps: boolean): Promise<AccountingTokenSet> {
+    const client = this.buildClient(expectedState, viaOps);
     const tokenSet = await client.apiCallback(callbackUrl);
     return this.toAccountingTokenSet(tokenSet);
   }

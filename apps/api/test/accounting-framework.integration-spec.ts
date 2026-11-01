@@ -325,10 +325,10 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     expect(listed.map((a) => a.code)).toEqual(['400', '410']);
     const archived = await prisma.externalAccountingAccount.findFirstOrThrow({ where: { distributorId: DIST, code: '420' } });
     await expect(
-      connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: archived.id }),
+      connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: archived.id }, USER),
     ).rejects.toThrow(/not an active sales account/);
     const chosen = listed.find((a) => a.code === '400')!;
-    const status = await connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: chosen.id });
+    const status = await connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: chosen.id }, USER);
     expect(status.invoiceDefaultAccount).toMatchObject({ id: chosen.id, code: '400', displayName: 'Wholesale Sales' });
 
     // The account is recoded in the provider; the next sync (requested the way
@@ -411,7 +411,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
 
     expect(await accountService.listSalesAccounts(DIST)).toEqual([]);
     await expect(
-      connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: theirAccount.id }),
+      connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: theirAccount.id }, USER),
     ).rejects.toThrow(/not an active sales account/);
     expect((await connectionService.getConnectionStatus(DIST))?.invoiceDefaultAccount).toBeNull();
   });
@@ -425,7 +425,7 @@ describe('Accounting integration framework, through a non-Xero provider (integra
     fake.salesAccounts = [{ externalId: 'fake-acc-400', code: '400', displayName: 'Wholesale Sales', isActive: true, raw: {} }];
     await accountSync.process(job({ aggregateId: connection.id, payload: {} }));
     const [chosen] = await accountService.listSalesAccounts(DIST);
-    await connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: chosen.id });
+    await connectionService.updateConnectionSettings(DIST, { invoiceDefaultAccountId: chosen.id }, USER);
 
     fake.salesAccounts = [{ ...fake.salesAccounts[0], isActive: false }];
     const { run } = await prisma.$transaction((tx) =>

@@ -52,11 +52,11 @@ export class FakeAccountingAdapter implements AccountingConnectionAdapter {
   private readonly resultsByKey = new Map<string, { request: string; result: AccountingInvoiceResult }>();
   private sequence = 0;
 
-  async buildAuthorizationUrl(state: string): Promise<string> {
+  async buildAuthorizationUrl(state: string, _viaOps: boolean): Promise<string> {
     return `https://fake-books.test/consent?state=${encodeURIComponent(state)}`;
   }
 
-  async exchangeCodeForToken(_callbackUrl: string, _expectedState: string): Promise<AccountingTokenSet> {
+  async exchangeCodeForToken(_callbackUrl: string, _expectedState: string, _viaOps: boolean): Promise<AccountingTokenSet> {
     return FakeAccountingAdapter.tokenSet();
   }
 

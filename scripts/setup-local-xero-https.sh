@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Sets up local HTTPS for the admin app so a real Xero developer app can be
-# tested (Xero requires an HTTPS redirect URI, even for local dev). Routes
-# only admin.localhost through the Traefik ingress already running in this
-# Docker Desktop cluster — apps/api is never given a public route.
+# Sets up local HTTPS for the admin and Ops apps so a real Xero developer app
+# can be tested (Xero requires an HTTPS redirect URI, even for local dev). Routes
+# only admin.localhost and ops.localhost through the Traefik ingress already
+# running in this Docker Desktop cluster — apps/api is never given a public route.
 #
 # Safe to re-run:
-#  - cert/key are only (re)generated if missing
+#  - cert/key are only (re)generated if missing or not valid for both hosts
 #  - the k8s TLS secret is applied idempotently (kubectl apply, not create)
-#  - the Keycloak wholo-admin client update is read-merge-write: it adds the
-#    admin.localhost:8443 origin alongside whatever is already registered
+#  - the Keycloak client updates are read-merge-write: they add the
+#    https://*.localhost:8443 origin alongside whatever is already registered
 #    (e.g. http://localhost:3020) rather than replacing it.
 set -euo pipefail
 
@@ -16,7 +16,6 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-http://localhost:3080}"
 REALM="wholo"
 ADMIN_USER="${KEYCLOAK_ADMIN:-admin}"
 ADMIN_PASS="${KEYCLOAK_ADMIN_PASSWORD:-admin}"
-NEW_ORIGIN="${NEW_ORIGIN:-https://admin.localhost:8443}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CERT_DIR="$SCRIPT_DIR/../helm/wholo/.local-certs"
@@ -24,13 +23,13 @@ mkdir -p "$CERT_DIR"
 CERT_FILE="$CERT_DIR/admin-localhost-cert.pem"
 KEY_FILE="$CERT_DIR/admin-localhost-key.pem"
 
-echo "== 1. Self-signed cert for admin.localhost =="
-if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]]; then
+echo "== 1. Self-signed cert for admin.localhost and ops.localhost =="
+if [[ -f "$CERT_FILE" && -f "$KEY_FILE" ]] && openssl x509 -in "$CERT_FILE" -noout -ext subjectAltName | grep -q "DNS:ops.localhost"; then
   echo "  Cert already exists at $CERT_FILE — leaving it in place."
 else
   openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
     -keyout "$KEY_FILE" -out "$CERT_FILE" \
-    -subj "/CN=admin.localhost" -addext "subjectAltName=DNS:admin.localhost"
+    -subj "/CN=admin.localhost" -addext "subjectAltName=DNS:admin.localhost,DNS:ops.localhost"
   echo "  Generated $CERT_FILE / $KEY_FILE"
 fi
 
@@ -38,7 +37,7 @@ echo "== 2. k8s TLS secret (wholo-tls) =="
 kubectl create secret tls wholo-tls --cert="$CERT_FILE" --key="$KEY_FILE" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "== 3. Keycloak wholo-admin client: add $NEW_ORIGIN (read-merge-write) =="
+echo "== 3. Keycloak clients: add the HTTPS origins (read-merge-write) =="
 echo "Obtaining Keycloak admin token from $KEYCLOAK_URL ..."
 TOKEN=$(curl -sf \
   -d "client_id=admin-cli" \
@@ -53,12 +52,16 @@ if [[ -z "$TOKEN" ]]; then
   exit 1
 fi
 
+add_origin() {
+local CLIENT_ID="$1" NEW_ORIGIN="$2"
+echo "  $CLIENT_ID: adding $NEW_ORIGIN"
+
 CLIENT_UUID=$(curl -sf -H "Authorization: Bearer $TOKEN" \
-  "$KEYCLOAK_URL/admin/realms/$REALM/clients?clientId=wholo-admin" \
+  "$KEYCLOAK_URL/admin/realms/$REALM/clients?clientId=$CLIENT_ID" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
 
 if [[ -z "$CLIENT_UUID" ]]; then
-  echo "ERROR: Could not find the wholo-admin client in realm $REALM" >&2
+  echo "ERROR: Could not find the $CLIENT_ID client in realm $REALM" >&2
   exit 1
 fi
 
@@ -107,4 +110,9 @@ print('  webOrigins:', client.get('webOrigins'))
 print('  post.logout.redirect.uris:', client.get('attributes', {}).get('post.logout.redirect.uris'))
 " <<< "$VERIFY"
 
-echo "Done. Keep 'kubectl port-forward svc/traefik -n traefik 8443:443' running, then browse https://admin.localhost:8443"
+}
+
+add_origin wholo-admin https://admin.localhost:8443
+add_origin stocdup-ops https://ops.localhost:8443
+
+echo "Done. Keep 'kubectl port-forward svc/traefik -n traefik 8443:443' running, then browse https://admin.localhost:8443 or https://ops.localhost:8443"

@@ -27,6 +27,7 @@
 | `www.<domain>` | `wholo-www` (marketing site) | The apex `<domain>` 301s here via a Cloudflare Redirect Rule |
 | `portal.<domain>` | `wholo-portal-api` (customer portal + BFF) | |
 | `admin.<domain>` | `wholo-admin-api` (admin app + BFF) | Also the Xero OAuth callback |
+| `ops.<domain>` | `wholo-ops-api` (Ops app + BFF, ADR-078) | Stocdup operators only. Also the Xero OAuth callback for a connect started in Ops |
 | `driver.<domain>` | `wholo-driver-api` (driver PWA + BFF) | QR delivery links are minted on this host |
 | `auth.<domain>` | `wholo-keycloak` | Identity: token issuer, login pages |
 | `health.<domain>` | health endpoints | **Internal DNS only**, IP-allowlisted (`healthAccess.allowedIPs`) |
@@ -43,6 +44,7 @@ All resources are in namespace `wholo` and named `wholo-*`.
 | `wholo-worker` | Deployment ×1, **Recreate**; health on :3099 (`/health/live`, `/health/ready`) | none | postgresql, redis, SMTP, Keycloak admin, Xero | Order events, emails, Xero sync, analytics facts and Keycloak disables queue up. **Must stay at exactly 1 replica** (ADR-047: the outbox relay is the only publisher) |
 | `wholo-portal-api` | Deployment ×1, RollingUpdate | none | api, keycloak (JWKS) | Customer portal down |
 | `wholo-admin-api` | Deployment ×1, RollingUpdate | none | api, keycloak (JWKS) | Admin app down, Xero connect callback fails |
+| `wholo-ops-api` | Deployment ×1, RollingUpdate | none | api, keycloak (JWKS) | Ops app down, and a Xero connect started in Ops fails. Wholesalers' own admin app is unaffected |
 | `wholo-driver-api` | Deployment ×1, RollingUpdate | none | api | Driver PWA and delivery QR links down |
 | `wholo-www` | Deployment ×1, RollingUpdate | none | SMTP, plausible | Marketing site down |
 | `wholo-keycloak` | Deployment ×1; initContainer `db-init` | the `keycloak` database | postgresql | **Nobody can log in**. Existing sessions fail when their tokens need refreshing |

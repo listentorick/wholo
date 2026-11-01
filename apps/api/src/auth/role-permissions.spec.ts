@@ -27,7 +27,7 @@ describe('ROLE_PERMISSIONS', () => {
     }
   });
 
-  it('gives SUPPORT configuration access but not the team, the accounting connection or order-as', () => {
+  it('gives SUPPORT configuration access, including the accounting connection, but not the team or order-as', () => {
     const perms = ROLE_PERMISSIONS[Role.SUPPORT];
     expect(perms).toEqual(
       expect.arrayContaining([
@@ -37,9 +37,10 @@ describe('ROLE_PERMISSIONS', () => {
         Permission.DELIVERY_MANAGE,
         Permission.SETTINGS_MANAGE,
         Permission.ACCOUNTING_IMPORT,
+        Permission.ACCOUNTING_MANAGE,
       ]),
     );
-    for (const p of [Permission.TEAM_MANAGE, Permission.ACCOUNTING_MANAGE, Permission.ORDER_AS_INITIATE]) {
+    for (const p of [Permission.TEAM_MANAGE, Permission.ORDER_AS_INITIATE]) {
       expect(perms).not.toContain(p);
     }
   });
@@ -84,12 +85,11 @@ describe('ROLE_PERMISSIONS', () => {
     );
   });
 
-  it('keeps the integration connection and the team Owner-only', () => {
-    const ownerOnly = [Permission.ACCOUNTING_MANAGE, Permission.TEAM_MANAGE];
+  it('gives the integration connection to the Owner and to Stocdup support only', () => {
     for (const role of Object.values(Role)) {
-      for (const permission of ownerOnly) {
-        expect(ROLE_PERMISSIONS[role].includes(permission)).toBe(role === Role.DISTRIBUTOR_ADMIN);
-      }
+      expect(ROLE_PERMISSIONS[role].includes(Permission.ACCOUNTING_MANAGE)).toBe(
+        role === Role.DISTRIBUTOR_ADMIN || role === Role.SUPPORT,
+      );
     }
   });
 

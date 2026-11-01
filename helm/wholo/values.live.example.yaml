@@ -77,6 +77,7 @@ api:
     # app. This is admin-api's public callback route via the admin ingress
     # host — never a route on apps/api (see xero-connection.adapter.ts).
     redirectUri: "https://admin.<domain>/api/v1/accounting/xero/callback"
+    opsRedirectUri: "https://ops.<domain>/api/v1/accounting/xero/callback"
   # 32-byte key, base64-encoded (openssl rand -base64 32) — encrypts stored
   # accounting OAuth tokens at rest. Changing it orphans stored tokens.
   accountingTokenEncryptionKey: "CHANGE_ME"

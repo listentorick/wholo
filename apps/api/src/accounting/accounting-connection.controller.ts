@@ -12,7 +12,7 @@ import { AccountingSyncService } from './sync/accounting-sync.service';
 import { UpdateConnectionSettingsDto } from './dto/update-connection-settings.dto';
 
 interface RequestWithUser extends Request {
-  user: { sub: string; organisationId: string };
+  user: { sub: string; organisationId: string; opsSession?: boolean };
 }
 
 @ApiTags('Accounting')
@@ -49,7 +49,7 @@ export class AccountingConnectionController {
     @Param('distributorId') distributorId: string,
     @Req() req: RequestWithUser,
   ) {
-    return this.service.createAuthorizationUrl(distributorId, req.user.sub, AccountingProvider.XERO);
+    return this.service.createAuthorizationUrl(distributorId, req.user.sub, AccountingProvider.XERO, !!req.user.opsSession);
   }
 
   @Patch('connection')
@@ -58,15 +58,16 @@ export class AccountingConnectionController {
   updateConnectionSettings(
     @Param('distributorId') distributorId: string,
     @Body() dto: UpdateConnectionSettingsDto,
+    @Req() req: RequestWithUser,
   ) {
-    return this.service.updateConnectionSettings(distributorId, dto);
+    return this.service.updateConnectionSettings(distributorId, dto, req.user.sub);
   }
 
   @Delete('connection')
   @RequirePermissions(Permission.ACCOUNTING_MANAGE)
   @ApiOperation({ summary: 'Disconnect the distributor\'s active accounting connection' })
-  disconnect(@Param('distributorId') distributorId: string) {
-    return this.service.disconnect(distributorId);
+  disconnect(@Param('distributorId') distributorId: string, @Req() req: RequestWithUser) {
+    return this.service.disconnect(distributorId, req.user.sub);
   }
 
   @Post('sync')

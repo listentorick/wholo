@@ -71,11 +71,11 @@ describe('AccountingConnectionController', () => {
 
       const result = await controller.updateConnectionSettings('dist-1', {
         invoiceExportTargetStatus: 'AUTHORISED' as never,
-      });
+      }, { user: { sub: 'user-1', organisationId: 'dist-1' } } as never);
 
       expect(mockService.updateConnectionSettings).toHaveBeenCalledWith('dist-1', {
         invoiceExportTargetStatus: 'AUTHORISED',
-      });
+      }, 'user-1');
       expect(result).toBe(status);
     });
   });
@@ -92,14 +92,30 @@ describe('AccountingConnectionController', () => {
         'dist-1',
         'user-1',
         AccountingProvider.XERO,
+        false,
+      );
+    });
+
+    it('says the connect came from Ops when the token is an Ops session', async () => {
+      mockService.createAuthorizationUrl.mockResolvedValue({ authorizationUrl: 'https://xero.example' });
+
+      await controller.createXeroAuthorizationUrl('dist-1', {
+        user: { sub: 'user-1', organisationId: 'dist-1', opsSession: true },
+      } as never);
+
+      expect(mockService.createAuthorizationUrl).toHaveBeenCalledWith(
+        'dist-1',
+        'user-1',
+        AccountingProvider.XERO,
+        true,
       );
     });
   });
 
   describe('disconnect', () => {
     it('delegates to the service', async () => {
-      await controller.disconnect('dist-1');
-      expect(mockService.disconnect).toHaveBeenCalledWith('dist-1');
+      await controller.disconnect('dist-1', { user: { sub: 'user-1', organisationId: 'dist-1' } } as never);
+      expect(mockService.disconnect).toHaveBeenCalledWith('dist-1', 'user-1');
     });
   });
 

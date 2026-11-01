@@ -22,7 +22,7 @@ function SyncStatChip({ label, count }: { label: string; count: number }) {
 
 export function XeroConnectionCard() {
   // Connecting, reconnecting and disconnecting change the integration itself
-  // (accounting:manage, Owner-only). Everyone who can see the card sees its status.
+  // (accounting:manage: the Owner and Stocdup support). Everyone who can see the card sees its status.
   const canManageConnection = useCan()(Permission.ACCOUNTING_MANAGE);
   const [connection, setConnection] = useState<AccountingConnectionStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
