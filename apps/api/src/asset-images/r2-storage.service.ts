@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -54,6 +55,17 @@ export class R2StorageService {
     );
     const bytes = await result.Body!.transformToByteArray();
     return Buffer.from(bytes);
+  }
+
+  /** Whether an object is stored under `key` (a HEAD request; nothing is downloaded). */
+  async exists(key: string, bucket?: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: bucket ?? this.bucket, Key: key }));
+      return true;
+    } catch (e) {
+      if ((e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) return false;
+      throw e;
+    }
   }
 
   async delete(key: string, bucket?: string): Promise<void> {

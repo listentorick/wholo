@@ -68,6 +68,21 @@ describe('R2StorageService', () => {
     );
   });
 
+  it('exists is true when the object is there', async () => {
+    mockSend.mockResolvedValueOnce({});
+    await expect(service.exists('test/key.webp')).resolves.toBe(true);
+  });
+
+  it('exists is false when R2 answers 404', async () => {
+    mockSend.mockRejectedValueOnce(Object.assign(new Error('NotFound'), { $metadata: { httpStatusCode: 404 } }));
+    await expect(service.exists('test/missing.webp')).resolves.toBe(false);
+  });
+
+  it('exists rethrows any other error', async () => {
+    mockSend.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { $metadata: { httpStatusCode: 403 } }));
+    await expect(service.exists('test/key.webp')).rejects.toThrow('Forbidden');
+  });
+
   it('upload targets an explicit bucket when one is given', async () => {
     const buffer = Buffer.from('fake-image');
     await service.upload('test/key.webp', buffer, 'image/webp', service.deliveryBucket);

@@ -42,3 +42,9 @@ private.txt
 
 # Test coverage reports (pnpm test:coverage)
 coverage/
+.scenario-docs/
+.env.docs
+
+# Docs scenarios: saved Xero connection (encrypted tokens) and the cloned app-screenshots skill
+apps/api/scripts/docs-scenarios/xero-connection.json
+.claude/skills/app-screenshots/
