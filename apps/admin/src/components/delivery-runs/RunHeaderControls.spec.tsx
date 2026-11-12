@@ -70,4 +70,21 @@ describe('RunHeaderControls', () => {
     render(<RunHeaderControls run={{ runId: 'run-1', name: 'Yorkshire', driverName: null, status: 'OPEN' }} {...NOOP} pending />);
     expect(screen.getByRole('button', { name: 'Mark ready' })).toBeDisabled();
   });
+  it('shows the run driver and saves a new one for this run', async () => {
+    const onSetDriver = vi.fn();
+    render(<RunHeaderControls run={{ runId: 'run-1', name: 'Yorkshire', driverName: 'Chris Moore', status: 'OPEN' }} {...NOOP} onSetDriver={onSetDriver} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Chris Moore' }));
+    const input = screen.getByRole('textbox', { name: 'Driver for this run — overrides the route default' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Dan Hughes');
+    await userEvent.click(screen.getByRole('button', { name: 'Save driver' }));
+
+    expect(onSetDriver).toHaveBeenCalledWith('run-1', 'Dan Hughes');
+  });
+
+  it('locks the driver once the run is ready', () => {
+    render(<RunHeaderControls run={{ runId: 'run-1', name: 'Yorkshire', driverName: 'Chris Moore', status: 'READY' }} {...NOOP} />);
+    expect(screen.getByRole('button', { name: 'Chris Moore' })).toBeDisabled();
+  });
 });

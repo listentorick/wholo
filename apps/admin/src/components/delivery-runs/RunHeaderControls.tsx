@@ -7,11 +7,12 @@ import { READY_BADGE, OPEN_BADGE } from './attention';
 import { MarkReadyDialog } from './MarkReadyDialog';
 import { ReopenConfirm } from './ReopenConfirm';
 import { DriverManifestButton } from './DriverManifestButton';
+import { RunDriverField } from './RunDriverField';
 
 interface Props {
   run: Pick<DeliveryRunColumn, 'runId' | 'name' | 'driverName' | 'status'>;
-  // True while this specific run has a status mutation in flight — drives
-  // the confirm dialog's `submitting` state.
+  // True while this specific run has a status/driver mutation in flight —
+  // drives both the confirm dialog's `submitting` state and RunDriverField.
   pending: boolean;
   onMarkReady: (runId: string) => Promise<void>;
   onReopen: (runId: string) => Promise<void>;
@@ -39,6 +40,12 @@ export function RunHeaderControls({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-text">{run.name}</h3>
+          <RunDriverField
+            driverName={run.driverName}
+            locked={isReady}
+            saving={pending}
+            onSave={(driverName) => onSetDriver(run.runId, driverName)}
+          />
         </div>
         <div className="shrink-0">
           <StatusBadge label={badge.label} tone={badge.tone} />
