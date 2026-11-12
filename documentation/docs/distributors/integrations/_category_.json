@@ -1,0 +1,10 @@
+{
+  "label": "Integrations",
+  "position": 7,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "slug": "/distributors/integrations",
+    "description": "Connect Stocdup to the other systems your business uses."
+  }
+}

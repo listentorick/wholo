@@ -1,0 +1,186 @@
+# scenario-docs config. Format: .claude/skills/scenario-docs/references/config.md
+# Personas are the sign-in users created by the docs base seed
+# (apps/api/scripts/docs-scenarios), which also exist in the local Keycloak realm
+# (helm/wholo/templates/keycloak/realm-secret.yaml). The demo seed (pnpm db:seed) is
+# not used for docs.
+# Credentials are never stored here: put them in .env.docs (git-ignored) under the
+# variable names below.
+
+# Pages and images for the help site (apps/help, ADR-080).
+docs_dir: documentation/docs
+
+apps:
+  admin:
+    url: http://localhost:3020      # distributor admin app (Docker Desktop k8s)
+  portal:
+    url: http://localhost:3010      # trade customer portal
+  driver:
+    url: http://localhost:3030      # driver app: opened only through a delivery link
+
+default_persona: distributor-owner
+
+personas:
+  # James Vine, Owner (DISTRIBUTOR_ADMIN) of Vine & Co, the docs distributor. The base
+  # gives Vine & Co its product types, suppliers, tax type and default price list;
+  # each scenario's seed adds the customers, products and orders it needs.
+  distributor-owner:
+    audience: distributors
+    app: admin
+    login:
+      method: form
+      path: /login                  # redirects straight to the Keycloak sign-in page
+      username_env: DOCS_DISTRIBUTOR_OWNER_EMAIL       # james@vineandco.com
+      password_env: DOCS_DISTRIBUTOR_OWNER_PASSWORD
+      env_file: .env.docs
+      username_field: Email
+      password_field: Password
+      submit: Log In
+      signed_in_check: Team         # nav item only an Owner sees
+    reader_role: an Owner account
+
+  # Peter Walsh, buyer at The Blackbird Restaurant (a trade customer). His customer
+  # organisation exists only in scenarios whose seed adds it.
+  trade-customer:
+    audience: customers
+    app: portal
+    login:
+      method: form
+      path: /login
+      username_env: DOCS_TRADE_CUSTOMER_EMAIL          # peter@blackbird.com
+      password_env: DOCS_TRADE_CUSTOMER_PASSWORD
+      env_file: .env.docs
+      username_field: Email
+      password_field: Password
+      submit: Log In
+      signed_in_check: Vine & Co    # unconfirmed: a distributor Peter is connected to
+    reader_role: a trade customer account
+
+  # Tom Rowe at The Rusty Anchor Bar & Grill, before he has a login: he starts from the
+  # portal invitation in his inbox (the seed writes the address to the output) and creates
+  # his account with the password below. Every reset deletes that account again.
+  invited-customer:
+    audience: customers
+    app: portal
+    login:
+      method: email
+      output_key: inviteEmail
+      password_env: DOCS_NEW_CUSTOMER_PASSWORD         # the password he chooses
+      env_file: .env.docs
+    reader_role: an invitation email from your distributor
+
+  # A delivery driver. Drivers have no account: the seed creates a delivery link and
+  # writes it to the seed output under this key.
+  driver:
+    audience: drivers
+    app: driver
+    login:
+      method: link
+      output_key: deliveryLink
+    reader_role: a delivery link from your distributor
+
+  # James again, before he has a business: seeds that start from nothing
+  # (distributor-onboarding, get-started-owner) remove his user record, so signing in
+  # opens the onboarding wizard. Once it's done he is the Owner of Harbour Wines.
+  new-distributor:
+    audience: distributors
+    app: admin
+    login:
+      method: form
+      path: /login
+      username_env: DOCS_DISTRIBUTOR_OWNER_EMAIL       # james@vineandco.com
+      password_env: DOCS_DISTRIBUTOR_OWNER_PASSWORD
+      env_file: .env.docs
+      username_field: Email
+      password_field: Password
+      submit: Log In
+      signed_in_check: Create your distributorship
+    becomes: distributor-owner
+    reader_role: a newly registered account
+
+# The reader's inbox: every email the local cluster sends lands in MailHog. The command
+# saves the newest email to an address (whose subject contains {subject}, if given) as an
+# HTML file and prints its file:// URL.
+mail:
+  open: pnpm -s docs:mail {address} {subject}
+
+# Help-site layout. Each audience is one reader group: its own sidebar, its own item in
+# the top menu and its own URL prefix (/distributors/<page id>). A persona's audience
+# decides where its scenarios' pages go; a scenario's `section:` is a path within it
+# (integrations/xero/products). Sections are listed in sidebar order, following the
+# app's own menu. Format: .claude/skills/scenario-docs/references/config.md
+audiences:
+  - id: distributors
+    label: For distributors
+    sections:
+      - id: getting-started
+        label: Getting started
+        collapsed: false
+      - id: orders-and-deliveries
+        label: Orders & deliveries
+      - id: customers
+        label: Customers
+      - id: catalogue-and-pricing
+        label: Catalogue & pricing
+      - id: delivery-setup
+        label: Delivery setup
+      - id: team
+        label: Team
+      - id: integrations
+        label: Integrations
+        description: Connect Stocdup to the other systems your business uses.
+        sections:
+          - id: xero
+            label: Xero
+            description: >-
+              Connect Stocdup to Xero, link your tax types, products and customers to
+              Xero's, and send each accepted order to Xero as an invoice.
+            sections:
+              - id: setting-up
+                label: Setting up
+              - id: tax-types
+                label: Tax types
+              - id: products
+                label: Products
+              - id: customers
+                label: Customers
+              - id: invoices
+                label: Invoices
+  - id: customers
+    label: For trade customers
+    sections:
+      - id: getting-started
+        label: Getting started
+        collapsed: false
+      - id: ordering
+        label: Ordering
+      - id: invoices-and-payments
+        label: Invoices & payments
+  - id: drivers
+    label: For drivers
+    sections:
+      - id: making-deliveries
+        label: Making deliveries
+        collapsed: false
+
+# Every scenario has its own seed (apps/api/scripts/docs-scenarios/scenarios/<id>.ts).
+# Each one resets the database to the base (Vine & Co, ready) and adds that scenario's
+# starting data, so no scenario depends on another. Needs the database port-forward
+# (kubectl port-forward svc/wholo-postgresql 5432:5432); refuses a non-local database.
+seeding:
+  seed: pnpm -s docs:seed {scenario}            # also the re-seed before capture
+  teardown: pnpm -s docs:teardown               # back to the base, after every run
+  before_batch: pnpm -s docs:base
+  after_batch: pnpm -s docs:clear               # removes the base too
+  output: .scenario-docs/runs/{scenario}/seed-output.json
+  notes: documentation/scenarios/_seeding.md      # how to write a seed in this repo
+
+# Xero scenarios (seeds made with withXero): Vine & Co is connected to Xero's Demo Company
+# (UK) from the saved connection (apps/api/scripts/docs-scenarios/xero-connection.json), and
+# Demo Company (UK) is put back into a known state first (pnpm docs:xero-data on its own).
+# They need wholo-worker running (it does the first sync) and internet access to Xero. Every
+# reset and clear saves the connection's newest token, so finish a batch with after_batch.
+# If Xero rejects the saved connection, connect again once as James at
+# https://admin.localhost:8443 on the base, then run the teardown to save it.
+
+# Not for docs: the demo data (pnpm db:seed) uses the same slug and sign-in users as the
+# docs distributor. The docs commands refuse to run while it's loaded.

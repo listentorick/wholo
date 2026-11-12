@@ -1,0 +1,12 @@
+[
+  {
+    "id": "distributors",
+    "label": "For distributors",
+    "first": "distributors/getting-started/get-started-owner.mdx"
+  },
+  {
+    "id": "customers",
+    "label": "For trade customers",
+    "first": "customers/getting-started/accept-portal-invitation.mdx"
+  }
+]

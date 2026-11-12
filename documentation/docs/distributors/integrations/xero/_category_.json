@@ -1,0 +1,10 @@
+{
+  "label": "Xero",
+  "position": 1,
+  "collapsed": true,
+  "link": {
+    "type": "generated-index",
+    "slug": "/distributors/integrations/xero",
+    "description": "Connect Stocdup to Xero, link your tax types, products and customers to Xero's, and send each accepted order to Xero as an invoice."
+  }
+}
