@@ -42,8 +42,9 @@ interface AuthContextValue {
    * `prompt: 'none'` asks Keycloak whether a session already exists without
    * showing a screen — it comes straight back, signed in or not.
    */
-  loginWithRedirect: (redirectUri: string, options?: { prompt?: 'none' }) => void;
-  registerWithRedirect: (redirectUri: string) => void;
+  /** `loginHint` pre-fills the email on Keycloak's sign-in or sign-up form (an invitation's address, ADR-081). */
+  loginWithRedirect: (redirectUri: string, options?: { prompt?: 'none'; loginHint?: string }) => void;
+  registerWithRedirect: (redirectUri: string, options?: { loginHint?: string }) => void;
   changePassword: () => void;
   logout: () => void;
   /** Sign out, then return to `redirectUri` instead of the login page. */
@@ -124,14 +125,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureKeycloak().then((kc) => kc?.login({ redirectUri }));
   }, []);
 
-  const loginWithRedirect = useCallback((redirectUri: string, options?: { prompt?: 'none' }) => {
+  const loginWithRedirect = useCallback((redirectUri: string, options?: { prompt?: 'none'; loginHint?: string }) => {
     resetAuthTokenState();
     ensureKeycloak().then((kc) => kc?.login({ redirectUri, ...options }));
   }, []);
 
-  const registerWithRedirect = useCallback((redirectUri: string) => {
+  const registerWithRedirect = useCallback((redirectUri: string, options?: { loginHint?: string }) => {
     resetAuthTokenState();
-    ensureKeycloak().then((kc) => kc?.register({ redirectUri }));
+    ensureKeycloak().then((kc) => kc?.register({ redirectUri, ...options }));
   }, []);
 
   const changePassword = useCallback(() => {

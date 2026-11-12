@@ -21,7 +21,31 @@ describe('InvitationsController (portal-api)', () => {
 
     const result = await controller.accept({ token: 'invite-token' }, { user: { token: 'bearer-token' } } as never);
 
-    expect(accept).toHaveBeenCalledWith('invite-token', 'bearer-token');
+    expect(accept).toHaveBeenCalledWith('invite-token', 'bearer-token', undefined);
     expect(result).toEqual({ distributorSlug: 'vine-and-co' });
+  });
+
+  it('passes a code on accept, when there is one', async () => {
+    const accept = jest.fn().mockResolvedValue({ distributorSlug: 'vine-and-co' });
+    const controller = new InvitationsController({ accept } as unknown as InvitationsService);
+
+    await controller.accept({ token: 'invite-token', code: '123456' }, { user: { token: 'bearer-token' } } as never);
+
+    expect(accept).toHaveBeenCalledWith('invite-token', 'bearer-token', '123456');
+  });
+
+  it('looks an invitation up with no guard, and sends codes only for a signed-in identity', () => {
+    expect(Reflect.getMetadata(GUARDS_METADATA, InvitationsController.prototype.lookup)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, InvitationsController.prototype.sendCode)).toEqual([KeycloakJwtAuthGuard]);
+  });
+
+  it('forwards lookup and send-code to apps/api', async () => {
+    const lookup = jest.fn().mockResolvedValue({ invitedEmail: 'orders@x.test' });
+    const sendCode = jest.fn().mockResolvedValue({ sentTo: 'orders@x.test', expiresInMinutes: 10 });
+    const controller = new InvitationsController({ lookup, sendCode } as unknown as InvitationsService);
+
+    await expect(controller.lookup({ token: 't' })).resolves.toEqual({ invitedEmail: 'orders@x.test' });
+    await expect(controller.sendCode({ token: 't' }, { user: { token: 'bearer' } } as never)).resolves.toMatchObject({ sentTo: 'orders@x.test' });
+    expect(sendCode).toHaveBeenCalledWith('t', 'bearer');
   });
 });

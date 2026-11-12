@@ -39,9 +39,10 @@ interface AuthContextValue {
    * `prompt: 'none'` asks Keycloak whether a session already exists without
    * showing a screen — it comes straight back, signed in or not.
    */
-  login: (returnUrl?: string, options?: { prompt?: 'none' }) => void;
+  /** `loginHint` pre-fills the email on Keycloak's form (an invitation's address, ADR-081). */
+  login: (returnUrl?: string, options?: { prompt?: 'none'; loginHint?: string }) => void;
   /** Send the visitor to Keycloak's sign-up form, returning to `returnUrl` (a same-origin path). */
-  register: (returnUrl?: string) => void;
+  register: (returnUrl?: string, options?: { loginHint?: string }) => void;
   logout: () => void;
   /** Sign out, then land on `returnUrl` (a same-origin path) instead of /login. */
   logoutWithRedirect: (returnUrl: string) => void;
@@ -145,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (getKeycloak()?.token) await loadSession();
   }, [loadSession]);
 
-  const login = useCallback((returnUrlOverride?: string, options?: { prompt?: 'none' }) => {
+  const login = useCallback((returnUrlOverride?: string, options?: { prompt?: 'none'; loginHint?: string }) => {
     resetAuthTokenState();
     const params = new URLSearchParams(window.location.search);
     const requestedReturnUrl = returnUrlOverride ?? params.get('returnUrl') ?? '/';
@@ -157,10 +158,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ensureKeycloak().then((kc) => kc?.login({ redirectUri, ...options }));
   }, []);
 
-  const register = useCallback((returnUrl = '/') => {
+  const register = useCallback((returnUrl = '/', options?: { loginHint?: string }) => {
     resetAuthTokenState();
     const safe = isSafeReturnUrl(returnUrl) ? returnUrl : '/';
-    ensureKeycloak().then((kc) => kc?.register({ redirectUri: window.location.origin + safe }));
+    ensureKeycloak().then((kc) => kc?.register({ redirectUri: window.location.origin + safe, ...options }));
   }, []);
 
   const signOut = useCallback((landing: string) => {

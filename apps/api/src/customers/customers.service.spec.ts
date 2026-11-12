@@ -114,6 +114,29 @@ describe('CustomersService', () => {
       );
     });
 
+    it('says who accepted an invitation and when, which can be another address than the invited one (ADR-081)', async () => {
+      const acceptedAt = new Date('2026-01-05');
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue({
+        ...relRow,
+        invitations: [{
+          ...relRow.invitations[0], status: 'ACCEPTED', acceptedAt,
+          acceptedBy: { firstName: 'Tom', lastName: 'Rowe', email: 'tom@bistro.test' },
+        }],
+      });
+
+      const result = await service.getCustomer('dist-1', 'cust-1');
+
+      expect(result.invitations[0]).toMatchObject({ email: 'a@b.com', acceptedAt, acceptedBy: { name: 'Tom Rowe', email: 'tom@bistro.test' } });
+    });
+
+    it('has no acceptor for an open invitation', async () => {
+      (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(relRow);
+
+      const result = await service.getCustomer('dist-1', 'cust-1');
+
+      expect(result.invitations[0]).toMatchObject({ acceptedAt: null, acceptedBy: null });
+    });
+
     it('throws NotFoundException when no trade relationship exists', async () => {
       (prisma.tradeRelationship.findFirst as jest.Mock).mockResolvedValue(null);
 

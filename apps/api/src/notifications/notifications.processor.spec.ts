@@ -4,6 +4,7 @@ import { DeliveryOutcomeNotificationService } from './delivery-outcome-notificat
 import { NotificationsProcessor, OutboxEventJobData } from './notifications.processor';
 import { OrderPlacedNotificationService } from './order-placed-notification.service';
 import { StaffInviteNotificationService } from './staff-invite-notification.service';
+import { InviteAcceptedNotificationService } from './invite-accepted-notification.service';
 import { TradeRelationshipNotificationService } from './trade-relationship-notification.service';
 
 function makeJob(name: string, payload: unknown = { orderId: 'order-1' }): Job<OutboxEventJobData> {
@@ -26,6 +27,7 @@ describe('NotificationsProcessor', () => {
   };
   let deliveryOutcome: { handleOrderDelivered: jest.Mock; handleOrderDeliveryFailed: jest.Mock };
   let staffInvite: { handleStaffInviteSent: jest.Mock };
+  let inviteAccepted: { handleCustomerInviteAccepted: jest.Mock; handleStaffInviteAccepted: jest.Mock };
 
   beforeEach(() => {
     orderPlaced = { handleOrderSubmitted: jest.fn().mockResolvedValue(undefined) };
@@ -42,13 +44,26 @@ describe('NotificationsProcessor', () => {
       handleOrderDeliveryFailed: jest.fn().mockResolvedValue(undefined),
     };
     staffInvite = { handleStaffInviteSent: jest.fn().mockResolvedValue(undefined) };
+    inviteAccepted = {
+      handleCustomerInviteAccepted: jest.fn().mockResolvedValue(undefined),
+      handleStaffInviteAccepted: jest.fn().mockResolvedValue(undefined),
+    };
     processor = new NotificationsProcessor(
       orderPlaced as unknown as OrderPlacedNotificationService,
       customerInvite as unknown as CustomerInviteNotificationService,
       tradeRelationship as unknown as TradeRelationshipNotificationService,
       deliveryOutcome as unknown as DeliveryOutcomeNotificationService,
       staffInvite as unknown as StaffInviteNotificationService,
+      inviteAccepted as unknown as InviteAcceptedNotificationService,
     );
+  });
+
+  it('routes CustomerInviteAccepted and StaffInviteAccepted to the acceptance notice', async () => {
+    await processor.process(makeJob('CustomerInviteAccepted', { invitationId: 'c-1' }));
+    await processor.process(makeJob('StaffInviteAccepted', { invitationId: 's-1' }));
+
+    expect(inviteAccepted.handleCustomerInviteAccepted).toHaveBeenCalledWith({ invitationId: 'c-1' });
+    expect(inviteAccepted.handleStaffInviteAccepted).toHaveBeenCalledWith({ invitationId: 's-1' });
   });
 
   it('routes OrderSubmitted jobs to the order-placed handler', async () => {

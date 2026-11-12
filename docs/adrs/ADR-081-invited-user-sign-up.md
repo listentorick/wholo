@@ -1,6 +1,6 @@
 # ADR-081 — Accepting an Invitation: Prefilled Email, and Mailbox Approval for a Different Login
 
-**Status**: Proposed
+**Status**: Accepted (built 2026-11-12)
 **Date**: 2026-11-12
 **Deciders**: Rick Walsh
 
@@ -60,7 +60,7 @@ If the signed-in account's verified email equals the invited address, acceptance
 If the signed-in account's verified email differs from the invited address, `apps/api` does not refuse. It asks the invited mailbox to approve this account:
 
 1. The accept page offers: "This invitation was sent to **orders@company.com**. We'll send a code there to confirm you can use it."
-2. `apps/api` creates an **invitation claim** for (invitation, signed-in user) and emails a code to the **invited** address, through the outbox and `wholo-worker` like the invitation itself.
+2. `apps/api` creates an **invitation claim** for (invitation, signed-in user) and emails a code to the **invited** address. This email is sent by `apps/api` during the request, not through the outbox: the person is waiting for it, and outbox payloads are stored, so the plain code would be kept in the database. If sending fails, the request fails and the person can try again.
 3. The person enters the code on the accept page, in the same signed-in session.
 4. `apps/api` checks the code against the claim, then runs the existing acceptance for the signed-in user and marks the invitation used.
 
@@ -77,7 +77,7 @@ This replaces the dead-end "This invitation was sent to a different email addres
 
 ### 4. Tell people when an invitation is accepted
 
-When any invitation is accepted, `apps/api` emails the **invited address**: "Rick Walsh (rick@company.com) joined The Rusty Anchor on Stocdup. Not expected? Contact Vine & Co." The inviting business sees who accepted and when on the record the invitation was sent from. A misuse is noticed instead of silent.
+When an invitation is accepted **with a code** (by a login other than the invited address), `apps/api` emails the **invited address**: "Rick Walsh (rick@company.com) joined The Rusty Anchor on Stocdup. Not expected? Contact Vine & Co." A misuse is noticed instead of silent. When the invited address accepts for itself, no notice is sent: that person already knows, and a "not expected?" warning about their own action would teach people to ignore the email. Either way, the inviting business sees who accepted and when on the record the invitation was sent from.
 
 ### 5. Keycloak's own verification is unchanged
 
@@ -96,7 +96,7 @@ Portal and staff invitations get decisions 1–4. Each app builds its own accept
 | Existing or federated account, other address | 2 (invitation, code) | Sign in → enter code → in |
 | New password account, other address | 3 (invitation, verify, code) | Create account (changes email) → verify → enter code → in |
 
-Plus the acceptance notice to the invited address in every case.
+Plus the acceptance notice to the invited address when a code was used.
 
 ## Alternatives considered
 
@@ -126,12 +126,12 @@ Plus the acceptance notice to the invited address in every case.
 - New risk: the reader of the invited mailbox being talked into passing on a code. Handled by naming the requesting account in the code email, the "don't share" wording, short expiry, and the acceptance notice.
 - A new account still gets Keycloak's verification email; a new account under a different address gets three emails in all.
 - One invitation admits one account. A business that wants several people ordering needs one invitation each (or a later feature for a business to invite its colleagues).
-- New in `apps/api`: an unauthenticated invitation lookup per invitation type; an invitation-claim record with hashed code, expiry and attempt count; send-code and confirm-code endpoints; the code and acceptance-notice emails (MJML, through the outbox). New in portal and admin: prefill on Create account, and a code-entry step. Each needs unit tests, and integration tests for the claim rules (wrong user, expired, too many attempts, reused code).
+- New in `apps/api`: an unauthenticated invitation lookup per invitation type; an invitation-claim record with hashed code, expiry and attempt count; send-code and confirm-code endpoints; the code email (MJML, sent in the request) and the acceptance-notice email (MJML, through the outbox and `wholo-worker`). New in portal and admin: prefill on Create account, and a code-entry step. Each needs unit tests, and integration tests for the claim rules (wrong user, expired, too many attempts, reused code).
 - The help pages for accepting invitations and inviting customers or team members change: the address is prefilled, and a different address is allowed with a code.
 - Federated sign-in, when added, needs no change to invitations. Its provider's Trust Email setting decides whether its accounts count as verified.
 
-## To verify while building
+## Checked while building
 
-- Whether the theme can tell a `login_hint` prefill from a value redisplayed after a form error (matters only for wording, since the field stays editable).
-- Whether Keycloak's account console lets users change their email; if so, an email change must re-verify (Keycloak's update-email action), or decision 2's "verified email" is weaker than assumed.
-- The behaviour when a signed-in person already belongs to another business (one login, several trade customers) or is distributor staff accepting a portal invitation. Today both are accepted; decide whether that is intended before building on it.
+- **Prefill.** Create account and Sign in pass the invited address as `login_hint`; Keycloak's sign-up form shows it in Work email, still editable (checked in the browser for both invitation types). The theme was not changed to tell a prefill from a value redisplayed after a form error; the wording doesn't depend on it.
+- **Changing email in Keycloak's account console.** Not possible for users in this realm: with `registrationEmailAsUsername` on and `editUsernameAllowed` off (its default), the account console shows Email as a disabled field (checked as a newly registered user). So a verified email stays the address the account was verified with. Only the account console form was checked; the Account REST API was not called directly.
+- **A signed-in person who already belongs to another business, or is distributor staff accepting a portal invitation.** Unchanged by this decision and still accepted, as before. Whether that is intended is still to decide.

@@ -39,7 +39,10 @@ const relationshipInclude = {
   },
   invitations: {
     orderBy: { createdAt: 'desc' as const },
-    select: { id: true, email: true, status: true, expiresAt: true, createdAt: true },
+    select: {
+      id: true, email: true, status: true, expiresAt: true, createdAt: true, acceptedAt: true,
+      acceptedBy: { select: { firstName: true, lastName: true, email: true } },
+    },
   },
   traderCustomerSettings: {
     select: {
@@ -580,6 +583,11 @@ export class AdminCustomersService {
         status: inv.status,
         expiresAt: inv.expiresAt,
         createdAt: inv.createdAt,
+        acceptedAt: inv.acceptedAt ?? null,
+        // Who accepted: may be a different address than the invitation's (ADR-081).
+        acceptedBy: inv.acceptedBy
+          ? { name: `${inv.acceptedBy.firstName} ${inv.acceptedBy.lastName}`.trim(), email: inv.acceptedBy.email }
+          : null,
       })),
       createdAt: rel.createdAt,
       updatedAt: rel.updatedAt,

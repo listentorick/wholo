@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AcceptedStaffInvitation, StaffInvitation, SupportGrant, TeamMember, TeamOverview } from '@wholo/types';
+import type { AcceptedStaffInvitation, InvitationCodeSent, StaffInvitation, StaffInvitationSummary, SupportGrant, TeamMember, TeamOverview } from '@wholo/types';
 import { ApiClientService } from '../api-client/api-client.service';
 import { InviteTeamMemberDto, UpdateTeamRolesDto } from './dto/team.dto';
 
@@ -54,7 +54,16 @@ export class TeamService {
 
   // The invitee has no membership yet, so this is not scoped to a distributor:
   // apps/api resolves everything from the emailed token + the caller's identity.
-  acceptInvitation(token: string, bearerToken: string): Promise<AcceptedStaffInvitation> {
-    return this.api.post<AcceptedStaffInvitation>('/staff-invitations/accept', bearerToken, { token });
+  acceptInvitation(token: string, bearerToken: string, code?: string): Promise<AcceptedStaffInvitation> {
+    return this.api.post<AcceptedStaffInvitation>('/staff-invitations/accept', bearerToken, { token, ...(code ? { code } : {}) });
+  }
+
+  // No sign-in: the invitee may not have an account yet (ADR-081).
+  lookupInvitation(token: string): Promise<StaffInvitationSummary> {
+    return this.api.post<StaffInvitationSummary>('/staff-invitations/lookup', '', { token });
+  }
+
+  sendInvitationCode(token: string, bearerToken: string): Promise<InvitationCodeSent> {
+    return this.api.post<InvitationCodeSent>('/staff-invitations/email-code', bearerToken, { token });
   }
 }

@@ -45,6 +45,31 @@ export interface SendStaffInviteParams {
   expiresAt: Date;
 }
 
+export interface SendInvitationCodeParams {
+  /** The business the invitation joins: the trade customer (portal) or the distributor (staff). */
+  businessName: string;
+  /** Who sent the invitation, when it helps: the distributor (portal) or the Owner (staff). */
+  inviterName: string | null;
+  invitedEmail: string;
+  /** The signed-in account asking to use the invitation. */
+  claimantEmail: string;
+  code: string;
+  expiresInMinutes: number;
+}
+
+export interface SendInviteAcceptedParams {
+  businessName: string;
+  /** The distributor, for a portal invitation; null for a staff invitation (the business IS the distributor). */
+  distributorName: string | null;
+  invitedEmail: string;
+  acceptorName: string;
+  acceptorEmail: string;
+  /** Who to contact if it wasn't expected (the distributor), and how. */
+  contactName: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+
 // Shared by sendOrderReceivedToCustomer/sendOrderConfirmedToCustomer.
 // orderUrl is null when the distributor has no slug set — the template
 // omits the "View order" CTA gracefully rather than linking somewhere broken.
@@ -220,8 +245,8 @@ export class MailService {
   }
 
   // An Owner inviting an employee to their distributor's team (ADR-067).
-  // The invitation only works for the address it was sent to, so the email
-  // says so — the invitee must sign up with, and verify, that exact address.
+  // The invitation is bound to the address it was sent to: signing in with
+  // another address needs a code sent to this one (ADR-081), so the email says so.
   async sendStaffInvite(to: string, params: SendStaffInviteParams): Promise<void> {
     const { distributorName, inviterName, roleLabels, inviteUrl, recipientEmail, expiresAt } = params;
 
@@ -235,7 +260,7 @@ export class MailService {
       `Accept your invitation:`,
       inviteUrl,
       ``,
-      `Create your Stocdup account with ${recipientEmail} \u2014 this invitation only works for that address \u2014 and verify it when asked. The invitation expires on ${expiresAtFormatted}.`,
+      `Create your Stocdup account with ${recipientEmail} and verify it when asked. If you sign in with a different address, we'll send a code to ${recipientEmail} to confirm it's you. The invitation expires on ${expiresAtFormatted}.`,
       ``,
       `Wasn't expecting this? You can ignore this email \u2014 nothing happens unless you accept.`,
       ``,
@@ -269,6 +294,74 @@ export class MailService {
   // right now" fact set (total, item count, requested delivery, PO
   // reference) since the recipient is the distributor's own ops team, not
   // a trade customer — closing a real gap, not just a re-skin.
+  // ADR-081: the code that lets a signed-in person whose login uses another
+  // address accept an invitation. Sent synchronously from the request (the
+  // person is waiting, and the plaintext code must never be stored), to the
+  // INVITED address, naming the account that asked.
+  async sendInvitationCode(to: string, params: SendInvitationCodeParams): Promise<void> {
+    const { businessName, inviterName, invitedEmail, claimantEmail, code, expiresInMinutes } = params;
+    const subject = `Your code to join ${headerSafe(businessName)} on Stocdup`;
+    const inviterText = inviterName ? `, invited by ${inviterName}` : '';
+    const text = [
+      `${claimantEmail} wants to use the invitation sent to ${invitedEmail} to join ${businessName} on Stocdup${inviterText}.`,
+      ``,
+      `Your code: ${code}`,
+      ``,
+      `If that's you, enter this code where you were asked for it. It expires in ${expiresInMinutes} minutes.`,
+      ``,
+      `Don't share this code with anyone. If you don't know ${claimantEmail}, ignore this email: nobody can use the invitation without the code.`,
+      ``,
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+    ].join('\n');
+    const html = await compileMjmlTemplate('invitation-code', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      businessName: esc(businessName),
+      inviterClause: inviterName ? `, invited by <strong>${esc(inviterName)}</strong>` : '',
+      invitedEmail: esc(invitedEmail),
+      claimantEmail: esc(claimantEmail),
+      code: esc(code),
+      expiresInMinutes: String(expiresInMinutes),
+      distributorContactLine: '',
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
+    try {
+      await this.transporter.sendMail({ from: this.inviteFrom, to, subject, text, html });
+      this.logger.log(`Invitation code email sent to ${maskEmail(to)}`);
+    } catch (err) {
+      this.logger.error(`Failed to send invitation code email to ${maskEmail(to)}: ${(err as Error).message}`);
+      throw err;
+    }
+  }
+
+  // ADR-081: tells an invitation's address that it was accepted, and by whom,
+  // so a misuse of a forwarded or leaked link is noticed.
+  async sendInviteAccepted(to: string, params: SendInviteAcceptedParams): Promise<void> {
+    const { businessName, distributorName, invitedEmail, acceptorName, acceptorEmail, contactName, contactEmail, contactPhone } = params;
+    const subject = `${headerSafe(acceptorName)} joined ${headerSafe(businessName)} on Stocdup`;
+    const distributorText = distributorName ? ` to order from ${distributorName}` : '';
+    const contactLine = [contactEmail, contactPhone].filter((v): v is string => !!v).join(' or ');
+    const text = [
+      `${acceptorName} (${acceptorEmail}) accepted the invitation sent to ${invitedEmail} and joined ${businessName} on Stocdup${distributorText}.`,
+      ``,
+      `Not expected? Contact ${contactName}${contactLine ? ` at ${contactLine}` : ''} straight away.`,
+      ``,
+      `Need help using Stocdup? Contact ${this.supportEmail}.`,
+    ].join('\n');
+    const html = await compileMjmlTemplate('invite-accepted', {
+      stocdupIconUrl: esc(this.logoOnlyUrl),
+      businessName: esc(businessName),
+      distributorClause: distributorName ? ` to order from <strong>${esc(distributorName)}</strong>` : '',
+      invitedEmail: esc(invitedEmail),
+      acceptorName: esc(acceptorName),
+      acceptorEmail: esc(acceptorEmail),
+      contactName: esc(contactName),
+      contactLine: contactLine ? ` at ${esc(contactLine)}` : '',
+      distributorContactLine: '',
+      stocdupSupportEmail: esc(this.supportEmail),
+    });
+    await this.send(to, subject, text, html, 'invite-accepted');
+  }
+
   async sendOrderPlacedToDistributor(to: string, params: SendOrderPlacedToDistributorParams): Promise<void> {
     const { customerName, orderNumber, orderUrl, totalAmount, currency, requestedDeliveryDate, customerReference, lineItemCount, orderLines } = params;
     const subject = `New order from ${headerSafe(customerName)}`;

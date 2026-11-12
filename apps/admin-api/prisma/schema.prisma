@@ -128,6 +128,8 @@ enum NotificationType {
   ORDER_PLACED
   CUSTOMER_INVITE_SENT
   STAFF_INVITE_SENT
+  CUSTOMER_INVITE_ACCEPTED
+  STAFF_INVITE_ACCEPTED
   TRADE_RELATIONSHIP_REQUEST_ACCEPTED
   TRADE_RELATIONSHIP_REQUEST_DECLINED
   TRADE_RELATIONSHIP_SUSPENDED
@@ -345,24 +347,25 @@ model Organisation {
 }
 
 model User {
-  id                       String               @id @default(cuid())
-  email                    String               @unique
-  keycloakId               String?              @unique
-  passwordHash             String?
-  firstName                String
-  lastName                 String
-  createdAt                DateTime             @default(now())
-  updatedAt                DateTime             @updatedAt
-  deletedAt                DateTime?
-  memberships              Membership[]
-  refreshTokens            RefreshToken[]
-  cartOrders               CartOrder[]
-  orderAsSessions          OrderAsSession[]     @relation("AdminOrderAsSessions")
-  delegateOrders           Order[]              @relation("DelegateOrders")
-  staffInvitationsSent     StaffInvitation[]    @relation("StaffInvitationInvitedBy")
-  staffInvitationsAccepted StaffInvitation[]    @relation("StaffInvitationAcceptedBy")
-  supportAccessGrants      SupportAccessGrant[] @relation("SupportAccessGrantHolder")
-  supportGrantsRevoked     SupportAccessGrant[] @relation("SupportAccessGrantRevokedBy")
+  id                          String               @id @default(cuid())
+  email                       String               @unique
+  keycloakId                  String?              @unique
+  passwordHash                String?
+  firstName                   String
+  lastName                    String
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  deletedAt                   DateTime?
+  memberships                 Membership[]
+  refreshTokens               RefreshToken[]
+  cartOrders                  CartOrder[]
+  orderAsSessions             OrderAsSession[]     @relation("AdminOrderAsSessions")
+  delegateOrders              Order[]              @relation("DelegateOrders")
+  staffInvitationsSent        StaffInvitation[]    @relation("StaffInvitationInvitedBy")
+  staffInvitationsAccepted    StaffInvitation[]    @relation("StaffInvitationAcceptedBy")
+  customerInvitationsAccepted CustomerInvitation[] @relation("CustomerInvitationAcceptedBy")
+  supportAccessGrants         SupportAccessGrant[] @relation("SupportAccessGrantHolder")
+  supportGrantsRevoked        SupportAccessGrant[] @relation("SupportAccessGrantRevokedBy")
 
   @@map("users")
 }
@@ -551,18 +554,21 @@ model TradeRelationship {
 }
 
 model CustomerInvitation {
-  id                  String            @id @default(cuid())
+  id                  String                @id @default(cuid())
   tradeRelationshipId String
   distributorId       String
   email               String
-  token               String            @unique
-  status              InvitationStatus  @default(PENDING)
+  token               String                @unique
+  status              InvitationStatus      @default(PENDING)
   expiresAt           DateTime
   acceptedAt          DateTime?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  tradeRelationship   TradeRelationship @relation(fields: [tradeRelationshipId], references: [id])
-  distributor         Organisation      @relation(fields: [distributorId], references: [id])
+  acceptedByUserId    String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  tradeRelationship   TradeRelationship     @relation(fields: [tradeRelationshipId], references: [id])
+  distributor         Organisation          @relation(fields: [distributorId], references: [id])
+  acceptedBy          User?                 @relation("CustomerInvitationAcceptedBy", fields: [acceptedByUserId], references: [id])
+  emailCodes          InvitationEmailCode[]
 
   @@index([token])
   @@index([distributorId])
@@ -575,25 +581,54 @@ model CustomerInvitation {
 // appears in the emailed link; we store its sha256. Acceptance copies `roles`
 // onto the new Membership.
 model StaffInvitation {
-  id               String           @id @default(cuid())
+  id               String                @id @default(cuid())
   distributorId    String
   email            String
   roles            Role[]
-  tokenHash        String           @unique
-  status           InvitationStatus @default(PENDING)
+  tokenHash        String                @unique
+  status           InvitationStatus      @default(PENDING)
   expiresAt        DateTime
   invitedByUserId  String
   acceptedByUserId String?
   acceptedAt       DateTime?
   revokedAt        DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  distributor      Organisation     @relation(fields: [distributorId], references: [id])
-  invitedBy        User             @relation("StaffInvitationInvitedBy", fields: [invitedByUserId], references: [id])
-  acceptedBy       User?            @relation("StaffInvitationAcceptedBy", fields: [acceptedByUserId], references: [id])
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  distributor      Organisation          @relation(fields: [distributorId], references: [id])
+  invitedBy        User                  @relation("StaffInvitationInvitedBy", fields: [invitedByUserId], references: [id])
+  acceptedBy       User?                 @relation("StaffInvitationAcceptedBy", fields: [acceptedByUserId], references: [id])
+  emailCodes       InvitationEmailCode[]
 
   @@index([distributorId, status])
   @@map("staff_invitations")
+}
+
+// A one-time code emailed to an invitation's address so that a signed-in person
+// whose login uses a DIFFERENT address can accept it (ADR-081). Exactly one of
+// customerInvitationId / staffInvitationId is set (enforced by
+// InvitationCodesService). The claimant is identified by Keycloak `sub`: a new
+// portal invitee has no User row until the acceptance creates it. Only a hash of
+// the code is stored; the plaintext exists only in the email.
+model InvitationEmailCode {
+  id                   String              @id @default(cuid())
+  customerInvitationId String?
+  staffInvitationId    String?
+  keycloakSub          String
+  claimantEmail        String
+  codeHash             String
+  expiresAt            DateTime
+  attempts             Int                 @default(0)
+  sendCount            Int                 @default(0)
+  lastSentAt           DateTime?
+  consumedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  customerInvitation   CustomerInvitation? @relation(fields: [customerInvitationId], references: [id], onDelete: Cascade)
+  staffInvitation      StaffInvitation?    @relation(fields: [staffInvitationId], references: [id], onDelete: Cascade)
+
+  @@unique([customerInvitationId, keycloakSub])
+  @@unique([staffInvitationId, keycloakSub])
+  @@map("invitation_email_codes")
 }
 
 // ─── Cart backing data ────────────────────────────────────────────────────────

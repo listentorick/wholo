@@ -3,6 +3,7 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
 import { UsersModule } from '../users/users.module';
+import { InvitationCodesModule } from '../invitation-codes/invitation-codes.module';
 import { StaffInvitationAcceptController } from './staff-invitation-accept.controller';
 import { StaffInvitationAcceptService } from './staff-invitation-accept.service';
 import { StaffInvitationsController } from './staff-invitations.controller';
@@ -11,7 +12,7 @@ import { TeamMembersController } from './team-members.controller';
 import { TeamMembersService } from './team-members.service';
 
 @Module({
-  imports: [AdminNotificationsModule, AuditModule, OutboxModule, UsersModule],
+  imports: [AdminNotificationsModule, AuditModule, OutboxModule, UsersModule, InvitationCodesModule],
   controllers: [StaffInvitationsController, StaffInvitationAcceptController, TeamMembersController],
   providers: [StaffInvitationsService, StaffInvitationAcceptService, TeamMembersService],
   exports: [StaffInvitationsService],

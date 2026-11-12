@@ -7,6 +7,7 @@ import { CHANNEL_SENDERS } from './channel-senders/channel-sender.interface';
 import { EmailChannelSender } from './channel-senders/email-channel.sender';
 import { CustomerInviteNotificationService } from './customer-invite-notification.service';
 import { StaffInviteNotificationService } from './staff-invite-notification.service';
+import { InviteAcceptedNotificationService } from './invite-accepted-notification.service';
 import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
 import { NotificationDeliveryProcessor } from './notification-delivery.processor';
 import { NotificationsProcessor } from './notifications.processor';
@@ -38,6 +39,7 @@ import { TradeRelationshipNotificationService } from './trade-relationship-notif
     OrderPlacedNotificationService,
     CustomerInviteNotificationService,
     StaffInviteNotificationService,
+    InviteAcceptedNotificationService,
     TradeRelationshipNotificationService,
     DeliveryOutcomeNotificationService,
     NotificationsProcessor,

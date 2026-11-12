@@ -756,13 +756,13 @@ describe('MailService — staff invite email', () => {
     }
   });
 
-  it('says the invitation only works for the address it was sent to, and when it expires', async () => {
+  it('names the address it is for, that another address needs a code sent there, and when it expires', async () => {
     await service.sendStaffInvite('sam.patel@vine.test', staffInviteParams());
 
     const mail = sendMail.mock.calls[0][0];
     for (const body of [mail.text, mail.html]) {
       expect(body).toContain('sam.patel@vine.test');
-      expect(body).toContain('only works for that address');
+      expect(body).toMatch(/different address, we(&rsquo;|')ll send a code to sam\.patel@vine\.test/);
       expect(body).toContain('23 September 2026');
     }
   });
@@ -792,5 +792,77 @@ describe('MailService — staff invite email', () => {
   it('propagates a delivery failure so the notification can retry', async () => {
     sendMail.mockRejectedValue(new Error('SMTP down'));
     await expect(service.sendStaffInvite('sam.patel@vine.test', staffInviteParams())).rejects.toThrow('SMTP down');
+  });
+});
+
+describe('MailService — invitation code and acceptance emails (ADR-081)', () => {
+  let service: MailService;
+  let sendMail: jest.Mock;
+
+  beforeEach(() => {
+    sendMail = jest.fn().mockResolvedValue({});
+    (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
+    const config = {
+      get: jest.fn((key: string, defaultValue?: unknown) => (key === 'SMTP_INVITE_FROM' ? 'invites@stocdup.com' : defaultValue)),
+      getOrThrow: jest.fn().mockReturnValue('http://localhost:3020'),
+    } as unknown as ConfigService;
+    service = new MailService(config);
+  });
+
+  const codeParams = {
+    businessName: 'The Rusty Anchor',
+    inviterName: 'Vine & Co',
+    invitedEmail: 'orders@rustyanchor.test',
+    claimantEmail: 'rick@rustyanchor.test',
+    code: '482913',
+    expiresInMinutes: 10,
+  };
+
+  it('sends the code to the invited address, naming the account that asked and warning not to share it', async () => {
+    await service.sendInvitationCode('orders@rustyanchor.test', codeParams);
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe('orders@rustyanchor.test');
+    expect(mail.from).toBe('invites@stocdup.com');
+    expect(mail.subject).toBe('Your code to join The Rusty Anchor on Stocdup');
+    for (const body of [mail.text, mail.html]) {
+      expect(body).toContain('482913');
+      expect(body).toContain('rick@rustyanchor.test');
+      expect(body).toContain('10 minutes');
+    }
+    expect(mail.text).toContain("Don't share this code with anyone.");
+    expect(mail.html).toContain('Vine &amp; Co');
+  });
+
+  it('escapes a hostile business name in the code email', async () => {
+    await service.sendInvitationCode('orders@rustyanchor.test', { ...codeParams, businessName: '<b>Bad</b>\nBcc: x@y.test' });
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.html).not.toContain('<b>Bad</b>');
+    expect(mail.subject).not.toMatch(/[\r\n]/);
+  });
+
+  it('propagates a failed code email so the request can report it', async () => {
+    sendMail.mockRejectedValue(new Error('SMTP down'));
+    await expect(service.sendInvitationCode('orders@rustyanchor.test', codeParams)).rejects.toThrow('SMTP down');
+  });
+
+  it('tells the invited address who accepted, and who to contact if it was not expected', async () => {
+    await service.sendInviteAccepted('orders@rustyanchor.test', {
+      businessName: 'The Rusty Anchor',
+      distributorName: 'Vine & Co',
+      invitedEmail: 'orders@rustyanchor.test',
+      acceptorName: 'Rick Walsh',
+      acceptorEmail: 'rick@rustyanchor.test',
+      contactName: 'Vine & Co',
+      contactEmail: 'hello@vineandco.test',
+      contactPhone: null,
+    });
+
+    const mail = sendMail.mock.calls[0][0];
+    expect(mail.to).toBe('orders@rustyanchor.test');
+    expect(mail.subject).toBe('Rick Walsh joined The Rusty Anchor on Stocdup');
+    expect(mail.text).toContain('Rick Walsh (rick@rustyanchor.test) accepted the invitation sent to orders@rustyanchor.test');
+    expect(mail.text).toContain('Not expected? Contact Vine & Co at hello@vineandco.test straight away.');
+    expect(mail.html).toContain('hello@vineandco.test');
   });
 });

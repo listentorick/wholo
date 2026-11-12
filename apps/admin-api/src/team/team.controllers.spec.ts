@@ -40,6 +40,24 @@ describe('InvitationsController', () => {
 
     await controller.accept({ user: { token: 'kc-token' } } as never, { token: 'emailed' });
 
-    expect(service.acceptInvitation).toHaveBeenCalledWith('emailed', 'kc-token');
+    expect(service.acceptInvitation).toHaveBeenCalledWith('emailed', 'kc-token', undefined);
+  });
+
+  it('passes a code on accept, looks up without a guard, and sends codes for a signed-in identity', async () => {
+    const service = {
+      acceptInvitation: jest.fn().mockResolvedValue({}),
+      lookupInvitation: jest.fn().mockResolvedValue({ invitedEmail: 'sam@vine.test' }),
+      sendInvitationCode: jest.fn().mockResolvedValue({ sentTo: 'sam@vine.test', expiresInMinutes: 10 }),
+    } as unknown as TeamService;
+    const controller = new InvitationsController(service);
+
+    await controller.accept({ user: { token: 'kc-token' } } as never, { token: 'emailed', code: '123456' });
+    expect(service.acceptInvitation).toHaveBeenCalledWith('emailed', 'kc-token', '123456');
+    await expect(controller.lookup({ token: 'emailed' })).resolves.toEqual({ invitedEmail: 'sam@vine.test' });
+    await controller.sendCode({ user: { token: 'kc-token' } } as never, { token: 'emailed' });
+    expect(service.sendInvitationCode).toHaveBeenCalledWith('emailed', 'kc-token');
+
+    expect(Reflect.getMetadata('__guards__', InvitationsController.prototype.lookup)).toBeUndefined();
+    expect(Reflect.getMetadata('__guards__', InvitationsController.prototype.sendCode)).toEqual([KeycloakJwtAuthGuard]);
   });
 });

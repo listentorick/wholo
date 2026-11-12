@@ -23,18 +23,31 @@ const STATUS_LABELS: Record<TradeRelationshipStatus, { label: string; tone: Stat
   [TradeRelationshipStatus.INACTIVE]:         { label: 'Inactive',        tone: 'gray' },
 };
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function InviteRow({ inv }: { inv: CustomerInvitation }) {
   const meta = INVITE_STATUS[inv.status];
-  const date = new Date(inv.status === InvitationStatus.ACCEPTED ? inv.expiresAt : inv.expiresAt);
+  const accepted = inv.status === InvitationStatus.ACCEPTED;
   const label = inv.status === InvitationStatus.EXPIRED || inv.status === InvitationStatus.REVOKED
     ? 'Expired'
-    : inv.status === InvitationStatus.ACCEPTED
-    ? 'Accepted'
-    : `Expires ${date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    : accepted
+    ? (inv.acceptedAt ? `Accepted ${formatDate(inv.acceptedAt)}` : 'Accepted')
+    : `Expires ${formatDate(inv.expiresAt)}`;
+  // Who used it: with a code, that can be another address than the one invited (ADR-081).
+  const acceptedBy = accepted && inv.acceptedBy ? inv.acceptedBy : null;
 
   return (
     <div className="flex items-center justify-between gap-4 py-2.5 border-b border-border last:border-0">
-      <span className="text-sm text-text truncate">{inv.email}</span>
+      <div className="min-w-0">
+        <span className="block text-sm text-text truncate">{inv.email}</span>
+        {acceptedBy ? (
+          <span className="block text-xs text-muted truncate">
+            Accepted by {acceptedBy.name} ({acceptedBy.email})
+          </span>
+        ) : null}
+      </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-xs" style={{ color: meta.color }}>● {meta.label}</span>
         <span className="text-xs text-muted">{label}</span>

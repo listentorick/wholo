@@ -6,7 +6,21 @@ import { AuditService } from '../audit/audit.service';
 import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { InvitationCodesService, sameEmail } from '../invitation-codes/invitation-codes.service';
 import { fullName, hashInvitationToken } from './staff-invitations.service';
+
+export interface StaffInvitationSummary {
+  invitedEmail: string;
+  distributorName: string;
+  inviterName: string;
+  expiresAt: string;
+}
+
+const invitationInclude = {
+  distributor: { select: { id: true, name: true, email: true, phone: true } },
+  invitedBy: { select: { firstName: true, lastName: true } },
+} as const;
 
 export interface AcceptedStaffInvitation {
   distributorId: string;
@@ -23,21 +37,15 @@ export class StaffInvitationAcceptService {
     private readonly users: UsersService,
     private readonly audit: AuditService,
     private readonly adminNotifications: AdminNotificationsService,
+    private readonly outbox: OutboxService,
+    private readonly codes: InvitationCodesService,
   ) {}
 
-  /**
-   * Accepts a staff invitation on behalf of an authenticated, email-verified
-   * Keycloak identity (KeycloakIdentityGuard rejects unverified emails). The
-   * invitation is bound to the address it was sent to: a verified identity
-   * with a different address cannot claim it. Creates the Membership on the
-   * inviting DISTRIBUTOR with every invited role.
-   */
-  async accept(identity: KeycloakIdentity, token: string): Promise<AcceptedStaffInvitation> {
+  private async findOpen(token: string) {
     const invitation = await this.prisma.staffInvitation.findUnique({
       where: { tokenHash: hashInvitationToken(token) },
-      include: { distributor: { select: { id: true, name: true } } },
+      include: invitationInclude,
     });
-
     if (!invitation) throw new NotFoundException('Invitation not found');
     if (invitation.status === InvitationStatus.ACCEPTED) {
       throw new ConflictException('This invitation has already been accepted');
@@ -45,10 +53,49 @@ export class StaffInvitationAcceptService {
     if (invitation.status !== InvitationStatus.PENDING || invitation.expiresAt <= new Date()) {
       throw new GoneException('This invitation is no longer valid');
     }
+    return invitation;
+  }
+
+  /** What the accept page shows before sign-in: the invited address (login_hint) and who sent it (ADR-081). */
+  async lookup(token: string): Promise<StaffInvitationSummary> {
+    const invitation = await this.findOpen(token);
+    return {
+      invitedEmail: invitation.email,
+      distributorName: invitation.distributor.name,
+      inviterName: fullName(invitation.invitedBy),
+      expiresAt: invitation.expiresAt.toISOString(),
+    };
+  }
+
+  /** Emails a code to the invited address so a login with another address can accept (ADR-081). */
+  async sendCode(identity: KeycloakIdentity, token: string) {
+    const invitation = await this.findOpen(token);
+    return this.codes.send({
+      kind: 'STAFF',
+      invitationId: invitation.id,
+      invitedEmail: invitation.email,
+      claimant: { sub: identity.sub, email: identity.email },
+      businessName: invitation.distributor.name,
+      inviterName: fullName(invitation.invitedBy),
+    });
+  }
+
+  /**
+   * Accepts a staff invitation on behalf of an authenticated, email-verified
+   * Keycloak identity (KeycloakIdentityGuard rejects unverified emails). The
+   * invitation is bound to the address it was sent to: either the login IS
+   * that address, or whoever reads that mailbox approved this login with a
+   * code (ADR-081). Creates the Membership on the inviting DISTRIBUTOR with
+   * every invited role.
+   */
+  async accept(identity: KeycloakIdentity, token: string, code?: string): Promise<AcceptedStaffInvitation> {
+    const invitation = await this.findOpen(token);
     // Checked BEFORE any user row is created, so a wrong-address attempt
     // leaves no trace in our database.
-    if (identity.email.trim().toLowerCase() !== invitation.email.toLowerCase()) {
-      throw new ForbiddenException('This invitation was sent to a different email address');
+    let claimId: string | null = null;
+    if (!sameEmail(identity.email, invitation.email)) {
+      if (!code) throw new ForbiddenException('This invitation was sent to a different email address');
+      claimId = await this.codes.check({ kind: 'STAFF', invitationId: invitation.id, sub: identity.sub, code });
     }
 
     let user;
@@ -74,6 +121,7 @@ export class StaffInvitationAcceptService {
 
     const roles = invitation.roles;
     await this.prisma.$transaction(async (tx) => {
+      if (claimId) await this.codes.consume(tx, claimId);
       // Compare-and-set: of two simultaneous accepts of the same link, only
       // one flips PENDING -> ACCEPTED; the other rolls back here.
       const claimed = await tx.staffInvitation.updateMany({
@@ -104,7 +152,21 @@ export class StaffInvitationAcceptService {
         actorUserId: user.id,
         actorName: fullName(user),
         summary: `${fullName(user)} accepted the invitation and joined the team`,
-        changes: { userId: user.id, email: user.email, roles, invitationId: invitation.id },
+        changes: { userId: user.id, email: user.email, roles, invitationId: invitation.id, acceptedWithCode: claimId !== null },
+      });
+
+      // For the acceptance notice to the invited address (ADR-081).
+      await this.outbox.writeEvent(tx, 'StaffInvitation', invitation.id, 'StaffInviteAccepted', {
+        invitationId: invitation.id,
+        distributorId: invitation.distributorId,
+        invitationEmail: invitation.email,
+        acceptedByName: fullName(user),
+        acceptedByEmail: user.email,
+        acceptedWithCode: claimId !== null,
+        distributorName: invitation.distributor.name,
+        distributorEmail: invitation.distributor.email,
+        distributorPhone: invitation.distributor.phone,
+        acceptedAt: new Date().toISOString(),
       });
     });
 

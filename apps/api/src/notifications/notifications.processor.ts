@@ -5,6 +5,11 @@ import { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE } from '../queues/queue.constants';
 import { CustomerInviteNotificationService, CustomerInviteSentEventPayload } from './customer-invite-notification.service';
 import { DeliveryOutcomeNotificationService } from './delivery-outcome-notification.service';
+import {
+  CustomerInviteAcceptedEventPayload,
+  InviteAcceptedNotificationService,
+  StaffInviteAcceptedEventPayload,
+} from './invite-accepted-notification.service';
 import { StaffInviteNotificationService, StaffInviteSentEventPayload } from './staff-invite-notification.service';
 import { OrderDeliveryOutcomeEventPayload } from './notification-payload';
 import { OrderPlacedNotificationService, OrderSubmittedEventPayload } from './order-placed-notification.service';
@@ -30,6 +35,7 @@ export class NotificationsProcessor extends LoggedWorkerHost {
     private readonly tradeRelationship: TradeRelationshipNotificationService,
     private readonly deliveryOutcome: DeliveryOutcomeNotificationService,
     private readonly staffInvite: StaffInviteNotificationService,
+    private readonly inviteAccepted: InviteAcceptedNotificationService,
   ) {
     super();
   }
@@ -45,6 +51,14 @@ export class NotificationsProcessor extends LoggedWorkerHost {
     }
     if (job.name === 'StaffInviteSent') {
       await this.staffInvite.handleStaffInviteSent(job.data.payload as StaffInviteSentEventPayload);
+      return;
+    }
+    if (job.name === 'CustomerInviteAccepted') {
+      await this.inviteAccepted.handleCustomerInviteAccepted(job.data.payload as CustomerInviteAcceptedEventPayload);
+      return;
+    }
+    if (job.name === 'StaffInviteAccepted') {
+      await this.inviteAccepted.handleStaffInviteAccepted(job.data.payload as StaffInviteAcceptedEventPayload);
       return;
     }
     if (job.name === 'TradeRelationshipRequestAccepted') {

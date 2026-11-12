@@ -5,8 +5,8 @@
   corners — built on the shared header/footer partials so it reads as one
   family of emails. The hero band carries the headline, the one factual
   sentence and the CTA; the white section below states the two things the
-  invitee must know: the invitation only works for the address it was sent
-  to, and when it expires. A plain-text fallback link follows because the
+  invitee must know: the address it is for (another address needs a code
+  sent to this one, ADR-081), and when it expires. A plain-text fallback link follows because the
   link IS the credential and some clients block buttons.
 -->
 <mj-head>
@@ -39,7 +39,7 @@
   <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
     <mj-column>
       <mj-text color="#5B6B7F" padding-bottom="16px">
-        Create your Stocdup account with <strong style="color:#0B1D3A;">{{recipientEmail}}</strong> &mdash; this invitation only works for that address &mdash; and verify it when asked. The invitation expires on {{expiresAtFormatted}}.
+        Create your Stocdup account with <strong style="color:#0B1D3A;">{{recipientEmail}}</strong> and verify it when asked. If you sign in with a different address, we&rsquo;ll send a code to {{recipientEmail}} to confirm it&rsquo;s you. The invitation expires on {{expiresAtFormatted}}.
       </mj-text>
       <mj-text font-size="12px" font-weight="500" letter-spacing="0.02em" color="#5B6B7F" padding-bottom="16px">
         Button not working? Paste this link into your browser:<br /><span style="color:#1565FF;word-break:break-all;">{{inviteUrl}}</span>

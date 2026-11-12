@@ -1,7 +1,9 @@
 import type {
   AcceptedStaffInvitation,
+  InvitationCodeSent,
   InviteTeamMemberRequest,
   StaffInvitation,
+  StaffInvitationSummary,
   SupportGrant,
   TeamMember,
   TeamOverview,
@@ -47,8 +49,28 @@ export const adminTeamApi = {
     return apiFetch<SupportGrant>(`/api/v1/team/support-grants/${encodeURIComponent(grantId)}`, { method: 'DELETE' });
   },
 
-  /** Accept the emailed invitation as the signed-in, email-verified user. */
-  acceptInvitation(token: string): Promise<AcceptedStaffInvitation> {
-    return apiFetch<AcceptedStaffInvitation>('/api/v1/invitations/accept', { method: 'POST', body: JSON.stringify({ token }) });
+  /**
+   * Accept the emailed invitation as the signed-in, email-verified user;
+   * `code` when signed in with another address than the invited one (ADR-081).
+   */
+  acceptInvitation(token: string, code?: string): Promise<AcceptedStaffInvitation> {
+    return apiFetch<AcceptedStaffInvitation>('/api/v1/invitations/accept', {
+      method: 'POST',
+      body: JSON.stringify({ token, ...(code ? { code } : {}) }),
+    });
+  },
+
+  /** The invited address and who sent it, before anyone signs in. */
+  lookupInvitation(token: string): Promise<StaffInvitationSummary> {
+    return apiFetch<StaffInvitationSummary>('/api/v1/invitations/lookup', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+      anonymous: true,
+    });
+  },
+
+  /** Email a one-time code to the invited address, for a login with another address. */
+  sendInvitationCode(token: string): Promise<InvitationCodeSent> {
+    return apiFetch<InvitationCodeSent>('/api/v1/invitations/email-code', { method: 'POST', body: JSON.stringify({ token }) });
   },
 };

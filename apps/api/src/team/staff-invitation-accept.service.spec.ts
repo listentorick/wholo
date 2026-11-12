@@ -1,11 +1,13 @@
 import { Test } from '@nestjs/testing';
-import { ConflictException, ForbiddenException, GoneException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, GoneException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InvitationStatus, Prisma, Role } from '@prisma/client';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { AuditService } from '../audit/audit.service';
 import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+import { OutboxService } from '../outbox/outbox.service';
+import { InvitationCodesService } from '../invitation-codes/invitation-codes.service';
 import { StaffInvitationAcceptService } from './staff-invitation-accept.service';
 import { hashInvitationToken } from './staff-invitations.service';
 
@@ -29,7 +31,8 @@ const invitation = (overrides = {}) => ({
   tokenHash: hashInvitationToken(TOKEN),
   status: InvitationStatus.PENDING,
   expiresAt: new Date(Date.now() + 3 * DAY),
-  distributor: { id: 'dist-1', name: 'Vine & Co' },
+  distributor: { id: 'dist-1', name: 'Vine & Co', email: 'hello@vine.test', phone: null },
+  invitedBy: { firstName: 'Priya', lastName: 'Shah' },
   ...overrides,
 });
 
@@ -47,10 +50,14 @@ describe('StaffInvitationAcceptService', () => {
   const users = { findOrCreateFromKeycloak: jest.fn() };
   const audit = { record: jest.fn().mockResolvedValue({}) };
   const adminNotifications = { notifyOrganisationAdmins: jest.fn() };
+  let events: { type: string; payload: Record<string, unknown> }[];
+  const outbox = { writeEvent: jest.fn(async (_tx: unknown, _agg: string, _id: string, type: string, payload: Record<string, unknown>) => { events.push({ type, payload }); }) };
+  const codes = { send: jest.fn(), check: jest.fn(), consume: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
     memberships = [];
+    events = [];
     claimResult = { count: 1 };
     prisma.$transaction.mockImplementation((fn: (t: unknown) => unknown) =>
       fn({
@@ -70,6 +77,8 @@ describe('StaffInvitationAcceptService', () => {
         { provide: UsersService, useValue: users },
         { provide: AuditService, useValue: audit },
         { provide: AdminNotificationsService, useValue: adminNotifications },
+        { provide: OutboxService, useValue: outbox },
+        { provide: InvitationCodesService, useValue: codes },
       ],
     }).compile();
     service = module.get(StaffInvitationAcceptService);
@@ -110,6 +119,55 @@ describe('StaffInvitationAcceptService', () => {
 
   it('matches the invited address ignoring case and surrounding whitespace', async () => {
     await expect(service.accept(identity({ email: ' Sam.Patel@VINE.test ' }), TOKEN)).resolves.toBeDefined();
+  });
+
+  it('writes an accepted event naming who accepted, for the notice to the invited address', async () => {
+    await service.accept(identity(), TOKEN);
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'StaffInviteAccepted',
+        payload: expect.objectContaining({
+          invitationId: 'inv-1', distributorId: 'dist-1', invitationEmail: 'sam.patel@vine.test',
+          acceptedByName: 'Sam Patel', acceptedByEmail: 'sam.patel@vine.test', acceptedWithCode: false,
+          distributorName: 'Vine & Co', distributorEmail: 'hello@vine.test',
+        }),
+      }),
+    ]);
+  });
+
+  it('accepts another address with a valid code, and uses the code up', async () => {
+    codes.check.mockResolvedValue('claim-1');
+    users.findOrCreateFromKeycloak.mockResolvedValue({ ...sam, email: 'sam@gmail.test' });
+
+    await service.accept(identity({ email: 'sam@gmail.test' }), TOKEN, '123456');
+
+    expect(codes.check).toHaveBeenCalledWith({ kind: 'STAFF', invitationId: 'inv-1', sub: 'kc-sam', code: '123456' });
+    expect(codes.consume).toHaveBeenCalledWith(expect.anything(), 'claim-1');
+    expect(memberships).toHaveLength(1);
+    expect(events[0].payload).toMatchObject({ acceptedWithCode: true, acceptedByEmail: 'sam@gmail.test', invitationEmail: 'sam.patel@vine.test' });
+  });
+
+  it('refuses another address with a bad code, and creates no user', async () => {
+    codes.check.mockRejectedValue(new UnprocessableEntityException("That code isn't right."));
+    await expect(service.accept(identity({ email: 'sam@gmail.test' }), TOKEN, '000000')).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(users.findOrCreateFromKeycloak).not.toHaveBeenCalled();
+    expect(memberships).toHaveLength(0);
+  });
+
+  it('looks up the invited address and who sent it, without sign-in', async () => {
+    await expect(service.lookup(TOKEN)).resolves.toMatchObject({
+      invitedEmail: 'sam.patel@vine.test', distributorName: 'Vine & Co', inviterName: 'Priya Shah',
+    });
+  });
+
+  it('sends a code to the invited address for the signed-in account', async () => {
+    codes.send.mockResolvedValue({ sentTo: 'sam.patel@vine.test', expiresInMinutes: 10 });
+    await service.sendCode(identity({ email: 'sam@gmail.test' }), TOKEN);
+    expect(codes.send).toHaveBeenCalledWith({
+      kind: 'STAFF', invitationId: 'inv-1', invitedEmail: 'sam.patel@vine.test',
+      claimant: { sub: 'kc-sam', email: 'sam@gmail.test' }, businessName: 'Vine & Co', inviterName: 'Priya Shah',
+    });
   });
 
   it('refuses an identity with a different email, and creates no user for it', async () => {

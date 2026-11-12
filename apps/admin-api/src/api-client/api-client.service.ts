@@ -20,7 +20,8 @@ export class ApiClientService {
       method,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        // No header at all for the one unauthenticated call (invitation lookup).
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });

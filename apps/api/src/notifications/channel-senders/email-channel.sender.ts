@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Notification, NotificationAudience, NotificationChannel, NotificationDelivery, NotificationType } from '@prisma/client';
 import { MailService } from '../../mail/mail.service';
-import { CustomerInviteNotificationPayload, DeliveryOutcomeNotificationPayload, OrderPlacedNotificationPayload, StaffInviteNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
+import { CustomerInviteNotificationPayload, DeliveryOutcomeNotificationPayload, InviteAcceptedNotificationPayload, OrderPlacedNotificationPayload, StaffInviteNotificationPayload, TradeRelationshipNotificationPayload } from '../notification-payload';
 import { ChannelSender } from './channel-sender.interface';
 
 @Injectable()
@@ -45,6 +45,21 @@ export class EmailChannelSender implements ChannelSender {
         inviteUrl: staffPayload.inviteUrl,
         recipientEmail: staffPayload.recipientEmail,
         expiresAt: new Date(staffPayload.expiresAt),
+      });
+      return;
+    }
+
+    if (notification.type === NotificationType.CUSTOMER_INVITE_ACCEPTED || notification.type === NotificationType.STAFF_INVITE_ACCEPTED) {
+      const accepted = notification.payload as unknown as InviteAcceptedNotificationPayload;
+      await this.mail.sendInviteAccepted(delivery.recipient, {
+        businessName: accepted.businessName,
+        distributorName: accepted.distributorName,
+        invitedEmail: accepted.recipientEmail,
+        acceptorName: accepted.acceptedByName,
+        acceptorEmail: accepted.acceptedByEmail,
+        contactName: accepted.contactName,
+        contactEmail: accepted.contactEmail,
+        contactPhone: accepted.contactPhone,
       });
       return;
     }

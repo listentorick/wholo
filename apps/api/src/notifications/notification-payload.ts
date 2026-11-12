@@ -60,6 +60,23 @@ export interface StaffInviteNotificationPayload {
   expiresAt: string;
 }
 
+// Snapshot stored on Notification.payload for CUSTOMER_INVITE_ACCEPTED and
+// STAFF_INVITE_ACCEPTED (ADR-081): who accepted, sent to the invited address.
+export interface InviteAcceptedNotificationPayload {
+  invitationId: string;
+  /** The business joined: the trade customer, or (staff) the distributor. */
+  businessName: string;
+  /** The distributor, for a portal invitation; null for staff. */
+  distributorName: string | null;
+  recipientEmail: string;
+  acceptedByName: string;
+  acceptedByEmail: string;
+  acceptedWithCode: boolean;
+  contactName: string;
+  contactEmail: string | null;
+  contactPhone: string | null;
+}
+
 // Snapshot stored on Notification.payload for ORDER_DELIVERED / ORDER_DELIVERY_FAILED.
 // Deliberately minimal, same shape discipline as OrderSubmittedEventPayload —
 // recipients are resolved live by DeliveryOutcomeNotificationService from the

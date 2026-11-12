@@ -1,0 +1,49 @@
+<mjml>
+<!--
+  One-time code for accepting an invitation with a different login (ADR-081).
+  Sent to the INVITED address, so whoever reads that mailbox approves the
+  account named here. It names that account and says not to share the code:
+  the risk this email carries is someone being talked into passing it on.
+  Same family as staff-invite.mjml (shared header/footer partials).
+-->
+<mj-head>
+  <mj-title>Your code to join {{businessName}} on Stocdup</mj-title>
+  <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <mj-attributes>
+    <mj-all font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" />
+    <mj-text font-size="14px" font-weight="400" line-height="1.5" color="#0B1D3A" padding="0" />
+  </mj-attributes>
+</mj-head>
+<mj-body background-color="#F2F4F7" width="480px">
+
+  {{> header}}
+
+  <mj-section background-color="#E6EEFF" padding="32px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text font-size="24px" font-weight="600" line-height="1.3" color="#0B1D3A" padding-bottom="16px">
+        Confirm who can use this invitation
+      </mj-text>
+      <mj-text color="#0B1D3A" padding-bottom="24px">
+        <strong>{{claimantEmail}}</strong> wants to use the invitation sent to <strong>{{invitedEmail}}</strong> to join <strong>{{businessName}}</strong> on Stocdup{{inviterClause}}.
+      </mj-text>
+      <mj-text font-size="32px" font-weight="700" letter-spacing="0.3em" align="center" color="#0B1D3A" padding-bottom="32px">
+        {{code}}
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  <mj-section background-color="#FFFFFF" padding="24px 32px 0" border-left="1px solid #E6ECF2" border-right="1px solid #E6ECF2">
+    <mj-column>
+      <mj-text color="#5B6B7F" padding-bottom="16px">
+        If that&rsquo;s you, enter this code where you were asked for it. It expires in {{expiresInMinutes}} minutes.
+      </mj-text>
+      <mj-text color="#5B6B7F" padding-bottom="0">
+        <strong style="color:#0B1D3A;">Don&rsquo;t share this code with anyone.</strong> If you don&rsquo;t know {{claimantEmail}}, ignore this email: nobody can use the invitation without the code.
+      </mj-text>
+    </mj-column>
+  </mj-section>
+
+  {{> footer}}
+
+</mj-body>
+</mjml>

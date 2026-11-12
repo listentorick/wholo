@@ -3,9 +3,10 @@ import { PortalInvitationsController } from './portal-invitations.controller';
 import { PortalInvitationsService } from './portal-invitations.service';
 import { UsersModule } from '../users/users.module';
 import { OutboxModule } from '../outbox/outbox.module';
+import { InvitationCodesModule } from '../invitation-codes/invitation-codes.module';
 
 @Module({
-  imports: [UsersModule, OutboxModule],
+  imports: [UsersModule, OutboxModule, InvitationCodesModule],
   controllers: [PortalInvitationsController],
   providers: [PortalInvitationsService],
 })

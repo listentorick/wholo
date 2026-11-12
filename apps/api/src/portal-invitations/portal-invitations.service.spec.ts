@@ -1,16 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ConflictException, ForbiddenException, GoneException } from '@nestjs/common';
+import { NotFoundException, ConflictException, ForbiddenException, GoneException, UnprocessableEntityException } from '@nestjs/common';
 import { InvitationStatus, Role, TradeRelationshipStatus } from '@prisma/client';
 import { PortalInvitationsService } from './portal-invitations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { OutboxService } from '../outbox/outbox.service';
 import type { KeycloakIdentity } from '../auth/strategies/keycloak-identity.strategy';
+import { InvitationCodesService } from '../invitation-codes/invitation-codes.service';
 
 const mockPrisma = {
   customerInvitation: {
     findFirst: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   },
   membership: {
     upsert: jest.fn(),
@@ -23,6 +25,8 @@ const mockPrisma = {
 };
 
 const mockOutbox = { writeEvent: jest.fn() };
+
+const mockCodes = { send: jest.fn(), check: jest.fn(), consume: jest.fn() };
 
 const mockUsers = {
   findOrCreateFromKeycloak: jest.fn(),
@@ -45,12 +49,13 @@ const makeInvitation = (overrides: Record<string, unknown> = {}) => ({
   tradeRelationship: {
     id: 'rel-1',
     customerId: 'customer-org-1',
-    distributor: { id: 'dist-1', slug: 'winos', name: 'Winos Pty Ltd' },
+    distributor: { id: 'dist-1', slug: 'winos', name: 'Winos Pty Ltd', email: 'hello@winos.test', phone: null },
+    customer: { name: 'The Rusty Anchor' },
   },
   ...overrides,
 });
 
-const makeUser = () => ({ id: 'user-1', email: 'buyer@example.com' });
+const makeUser = () => ({ id: 'user-1', email: 'buyer@example.com', firstName: 'Jane', lastName: 'Doe' });
 
 describe('PortalInvitationsService', () => {
   let service: PortalInvitationsService;
@@ -62,12 +67,14 @@ describe('PortalInvitationsService', () => {
       id: 'rel-1', distributorId: 'dist-1', customerId: 'customer-org-1', status: TradeRelationshipStatus.PENDING_INVITE,
     });
     mockOutbox.writeEvent.mockResolvedValue({});
+    mockPrisma.customerInvitation.updateMany.mockResolvedValue({ count: 1 });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PortalInvitationsService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: UsersService, useValue: mockUsers },
         { provide: OutboxService, useValue: mockOutbox },
+        { provide: InvitationCodesService, useValue: mockCodes },
       ],
     }).compile();
     service = module.get(PortalInvitationsService);
@@ -192,6 +199,63 @@ describe('PortalInvitationsService', () => {
       expect(mockUsers.findOrCreateFromKeycloak).toHaveBeenCalledTimes(1);
     });
 
+    it('records who accepted, and refuses a second simultaneous accept', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation());
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+      mockPrisma.customerInvitation.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      await expect(service.acceptInvite(identity, 'valid-token')).rejects.toThrow(ConflictException);
+    });
+
+    it('puts the acceptor and invited address on the accepted event, for the acceptance notice', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation());
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+
+      await service.acceptInvite(identity, 'valid-token');
+
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'CustomerInviteAccepted',
+        expect.objectContaining({
+          invitationEmail: 'buyer@example.com', acceptedByName: 'Jane Doe', acceptedByEmail: 'buyer@example.com',
+          acceptedWithCode: false, customerName: 'The Rusty Anchor', distributorName: 'Winos Pty Ltd', distributorEmail: 'hello@winos.test',
+        }),
+      );
+    });
+
+    it('accepts a different address with a valid code, as the signed-in account, and uses the code up', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation({ email: 'orders@rustyanchor.test' }));
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+      mockCodes.check.mockResolvedValue('claim-1');
+
+      const result = await service.acceptInvite(identity, 'valid-token', '123456');
+
+      expect(result).toEqual({ distributorSlug: 'winos' });
+      expect(mockCodes.check).toHaveBeenCalledWith({ kind: 'CUSTOMER', invitationId: 'inv-1', sub: 'kc-sub-123', code: '123456' });
+      expect(mockCodes.consume).toHaveBeenCalledWith(mockPrisma, 'claim-1');
+      expect(mockOutbox.writeEvent).toHaveBeenCalledWith(
+        expect.anything(), 'TradeRelationship', 'rel-1', 'CustomerInviteAccepted',
+        expect.objectContaining({ invitationEmail: 'orders@rustyanchor.test', acceptedByEmail: 'buyer@example.com', acceptedWithCode: true }),
+      );
+    });
+
+    it('refuses a different address with a bad code, creating nothing', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation({ email: 'orders@rustyanchor.test' }));
+      mockCodes.check.mockRejectedValue(new UnprocessableEntityException("That code isn't right."));
+
+      await expect(service.acceptInvite(identity, 'valid-token', '000000')).rejects.toThrow(UnprocessableEntityException);
+      expect(mockUsers.findOrCreateFromKeycloak).not.toHaveBeenCalled();
+      expect(mockPrisma.customerInvitation.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('does not ask for a code when the address matches', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation());
+      mockUsers.findOrCreateFromKeycloak.mockResolvedValue(makeUser());
+
+      await service.acceptInvite(identity, 'valid-token', '123456');
+
+      expect(mockCodes.check).not.toHaveBeenCalled();
+    });
+
     it('throws ForbiddenException when JWT email does not match invitation email', async () => {
       mockPrisma.customerInvitation.findFirst.mockResolvedValue(
         makeInvitation({ email: 'someone-else@example.com' }),
@@ -213,6 +277,46 @@ describe('PortalInvitationsService', () => {
       const result = await service.acceptInvite(identity, 'valid-token');
 
       expect(result).toEqual({ distributorSlug: 'winos' });
+    });
+  });
+
+  describe('lookup', () => {
+    it('returns the invited address and who the invitation is from', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation({ expiresAt: new Date('2099-01-01T00:00:00Z') }));
+
+      await expect(service.lookup('valid-token')).resolves.toEqual({
+        invitedEmail: 'buyer@example.com',
+        distributorName: 'Winos Pty Ltd',
+        customerName: 'The Rusty Anchor',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      });
+    });
+
+    it('is a 404 for an unknown token and a 410 for an expired invitation', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValueOnce(null);
+      await expect(service.lookup('nope')).rejects.toThrow(NotFoundException);
+      mockPrisma.customerInvitation.findFirst.mockResolvedValueOnce(makeInvitation({ expiresAt: new Date(Date.now() - 1) }));
+      await expect(service.lookup('old')).rejects.toThrow(GoneException);
+    });
+  });
+
+  describe('sendCode', () => {
+    it('sends a code to the invited address for the signed-in account', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation({ email: 'orders@rustyanchor.test' }));
+      mockCodes.send.mockResolvedValue({ sentTo: 'orders@rustyanchor.test', expiresInMinutes: 10 });
+
+      await expect(service.sendCode(identity, 'valid-token')).resolves.toEqual({ sentTo: 'orders@rustyanchor.test', expiresInMinutes: 10 });
+      expect(mockCodes.send).toHaveBeenCalledWith({
+        kind: 'CUSTOMER', invitationId: 'inv-1', invitedEmail: 'orders@rustyanchor.test',
+        claimant: { sub: 'kc-sub-123', email: 'buyer@example.com' },
+        businessName: 'The Rusty Anchor', inviterName: 'Winos Pty Ltd',
+      });
+    });
+
+    it('refuses for an accepted invitation', async () => {
+      mockPrisma.customerInvitation.findFirst.mockResolvedValue(makeInvitation({ status: InvitationStatus.ACCEPTED }));
+      await expect(service.sendCode(identity, 'valid-token')).rejects.toThrow(ConflictException);
+      expect(mockCodes.send).not.toHaveBeenCalled();
     });
   });
 });

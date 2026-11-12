@@ -254,6 +254,22 @@ describe('AdminCustomersService', () => {
       await expect(service.findOne('rel-1', 'dist-2')).rejects.toThrow(NotFoundException);
     });
 
+    it('says who accepted each invitation, and when', async () => {
+      const acceptedAt = new Date('2026-11-12T10:00:00Z');
+      mockPrisma.tradeRelationship.findFirst.mockResolvedValue(makeRel({
+        invitations: [
+          { id: 'inv-1', email: 'orders@acme.test', status: 'ACCEPTED', expiresAt: new Date('2026-11-19'), createdAt: new Date('2026-11-12'),
+            acceptedAt, acceptedBy: { firstName: 'Rick', lastName: 'Walsh', email: 'rick@acme.test' } },
+          { id: 'inv-2', email: 'bar@acme.test', status: 'PENDING', expiresAt: new Date('2026-11-19'), createdAt: new Date('2026-11-12'),
+            acceptedAt: null, acceptedBy: null },
+        ],
+      }));
+
+      const result = await service.findOne('rel-1', 'dist-1');
+      expect(result.invitations[0]).toMatchObject({ acceptedAt, acceptedBy: { name: 'Rick Walsh', email: 'rick@acme.test' } });
+      expect(result.invitations[1]).toMatchObject({ acceptedAt: null, acceptedBy: null });
+    });
+
     it('includes minimumOrderSpend in formatted customer', async () => {
       mockPrisma.tradeRelationship.findFirst.mockResolvedValue(
         makeRel({ minimumOrderSpend: { toString: () => '150.00', toJSON: () => '150.00' } }),

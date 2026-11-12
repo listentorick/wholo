@@ -41,6 +41,7 @@ describe('EmailChannelSender', () => {
       sendOrderConfirmedToCustomer: jest.fn().mockResolvedValue(undefined),
       sendInvite: jest.fn().mockResolvedValue(undefined),
       sendStaffInvite: jest.fn().mockResolvedValue(undefined),
+      sendInviteAccepted: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipRequestAccepted: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipRequestDeclined: jest.fn().mockResolvedValue(undefined),
       sendTradeRelationshipSuspended: jest.fn().mockResolvedValue(undefined),
@@ -217,6 +218,36 @@ describe('EmailChannelSender', () => {
       inviteUrl: 'http://localhost:3020/accept-invite?token=abc',
       recipientEmail: 'sam.patel@vine.test',
       expiresAt: new Date('2026-09-23T00:00:00.000Z'),
+    });
+  });
+
+  it('sends the acceptance notice for CUSTOMER_INVITE_ACCEPTED and STAFF_INVITE_ACCEPTED notifications', async () => {
+    const payload = {
+      invitationId: 'inv-1',
+      businessName: 'The Rusty Anchor',
+      distributorName: 'Vine & Co',
+      recipientEmail: 'orders@rustyanchor.test',
+      acceptedByName: 'Rick Walsh',
+      acceptedByEmail: 'rick@rustyanchor.test',
+      acceptedWithCode: true,
+      contactName: 'Vine & Co',
+      contactEmail: 'hello@vineandco.test',
+      contactPhone: null,
+    };
+    for (const type of [NotificationType.CUSTOMER_INVITE_ACCEPTED, NotificationType.STAFF_INVITE_ACCEPTED]) {
+      await sender.send(makeDelivery(NotificationAudience.CUSTOMER, 'orders@rustyanchor.test'), { type, payload } as unknown as Notification);
+    }
+
+    expect(mail.sendInviteAccepted).toHaveBeenCalledTimes(2);
+    expect(mail.sendInviteAccepted).toHaveBeenCalledWith('orders@rustyanchor.test', {
+      businessName: 'The Rusty Anchor',
+      distributorName: 'Vine & Co',
+      invitedEmail: 'orders@rustyanchor.test',
+      acceptorName: 'Rick Walsh',
+      acceptorEmail: 'rick@rustyanchor.test',
+      contactName: 'Vine & Co',
+      contactEmail: 'hello@vineandco.test',
+      contactPhone: null,
     });
   });
 

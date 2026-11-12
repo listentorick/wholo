@@ -860,6 +860,10 @@ export interface CustomerInvitation {
   status: InvitationStatus;
   expiresAt: string;
   createdAt: string;
+  /** Set once accepted (ADR-081). */
+  acceptedAt?: string | null;
+  /** The login that accepted it, which may use a different address than `email` (ADR-081). */
+  acceptedBy?: { name: string; email: string } | null;
 }
 
 export interface Customer {
@@ -2566,4 +2570,28 @@ export interface PlatformStats {
   wholesalersWithOpenSupport: number;
   /** One entry per day, oldest first, each wholesaler's orders counted on its own local date. */
   ordersPerDay: { date: string; orders: number }[];
+}
+
+// ─── Invitation acceptance (ADR-081) ─────────────────────────────────────────
+
+/** What a portal invitation's accept page shows before sign-in. */
+export interface PortalInvitationSummary {
+  invitedEmail: string;
+  distributorName: string;
+  customerName: string;
+  expiresAt: string;
+}
+
+/** What a staff invitation's accept page shows before sign-in. */
+export interface StaffInvitationSummary {
+  invitedEmail: string;
+  distributorName: string;
+  inviterName: string;
+  expiresAt: string;
+}
+
+/** A code was emailed to the invited address. */
+export interface InvitationCodeSent {
+  sentTo: string;
+  expiresInMinutes: number;
 }

@@ -30,11 +30,13 @@ export const EVENT_ROUTES: Record<string, string[]> = {
   OrderSubmitted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   CustomerInviteSent: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   StaffInviteSent: [NOTIFICATIONS_QUEUE],
+  // Acceptance notice to the invited address (ADR-081).
+  StaffInviteAccepted: [NOTIFICATIONS_QUEUE],
   StaffKeycloakDisableRequested: [KEYCLOAK_USER_QUEUE],
   // Relationship lifecycle (ADR-070): every change also feeds relationship_facts.
   TradeRelationshipCreated: [ANALYTICS_FACTS_QUEUE],
   TradeRelationshipAccessRequested: [ANALYTICS_FACTS_QUEUE],
-  CustomerInviteAccepted: [ANALYTICS_FACTS_QUEUE],
+  CustomerInviteAccepted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   TradeRelationshipRemoved: [ANALYTICS_FACTS_QUEUE],
   TradeRelationshipRequestAccepted: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
   TradeRelationshipRequestDeclined: [NOTIFICATIONS_QUEUE, ANALYTICS_FACTS_QUEUE],
