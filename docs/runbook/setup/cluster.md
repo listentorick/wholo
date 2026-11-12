@@ -3,7 +3,7 @@
 > Part of the [live-ops runbook](../README.md). One-time setup — do this once per environment; day-to-day operation is in the runbook's other pages.
 
 1. **DNS / Cloudflare** — zone on Cloudflare (nameservers delegated from the
-   registrar). A records for `www.`, `portal.`, `admin.`, `auth.`, `driver.<domain>` →
+   registrar). A records for `www.`, `help.`, `portal.`, `admin.`, `auth.`, `driver.<domain>` →
    the WAF's public IP, all **Proxied** (`apps/api` gets no public host —
    BFFs reach it over cluster DNS). Cloudflare settings: SSL/TLS mode
    **Full (strict)**, **Always Use HTTPS** on.

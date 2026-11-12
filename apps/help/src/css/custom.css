@@ -1,0 +1,62 @@
+/* Stocdup brand on Docusaurus' Infima theme. Values mirror apps/www's
+   src/styles/theme.css (Cobalt primary, Deep Navy ink, hairline borders). */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/InterVariable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --ifm-font-family-base: 'Inter', system-ui, sans-serif;
+  --ifm-heading-font-family: 'Inter', system-ui, sans-serif;
+  --ifm-heading-letter-spacing: -0.018em;
+
+  --ifm-color-primary: #1565ff;
+  --ifm-color-primary-dark: #0058fa;
+  --ifm-color-primary-darker: #0053eb;
+  --ifm-color-primary-darkest: #0d4fd6;
+  --ifm-color-primary-light: #3479ff;
+  --ifm-color-primary-lighter: #4483ff;
+  --ifm-color-primary-lightest: #6ea8f7;
+
+  --ifm-font-color-base: #0b1d3a;
+  --ifm-heading-color: #0b1d3a;
+  --ifm-color-emphasis-600: #5b6b7f;
+  --ifm-background-color: #fafbfc;
+  --ifm-toc-border-color: #e6ecf2;
+  --ifm-hr-border-color: #e6ecf2;
+  --ifm-global-radius: 6px;
+  --ifm-code-font-size: 95%;
+  --ifm-navbar-height: 64px;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #6ea8f7;
+  --ifm-color-primary-dark: #4f95f5;
+  --ifm-color-primary-darker: #3f8bf4;
+  --ifm-color-primary-darkest: #0f6ee5;
+  --ifm-color-primary-light: #8dbbf9;
+  --ifm-color-primary-lighter: #9dc5fa;
+  --ifm-color-primary-lightest: #cbe0fc;
+  --ifm-font-color-base: #e6ecf2;
+  --ifm-heading-color: #ffffff;
+  --ifm-background-color: #0b1d3a;
+  --ifm-background-surface-color: #12294a;
+}
+
+.navbar {
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+  box-shadow: none;
+}
+
+.navbar__logo {
+  height: 2rem;
+}
+
+/* Screenshots: hairline frame so white app pages don't bleed into the page. */
+.markdown img {
+  border: 1px solid var(--ifm-toc-border-color);
+  border-radius: 8px;
+}

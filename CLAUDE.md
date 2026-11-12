@@ -39,6 +39,7 @@ Three primary actor types:
 | Ops app (`ops-api`) | 3050 | Stocdup operators: `apps/admin` + `apps/admin-api` built with `NEXT_PUBLIC_APP_MODE=ops`, run with `APP_MODE=ops`; Keycloak client `stocdup-ops` requires an authenticator. See [ADR-078](docs/adrs/ADR-078-platform-operator-access.md) |
 | `apps/portal` | 3010 | Customer portal Next.js frontend |
 | `apps/www` | 3040 | Public marketing site (`www.stocdup.com`) — standalone Next.js, no BFF, no DB. See [ADR-060](docs/adrs/ADR-060-marketing-site.md) |
+| `apps/help` | 3060 | Public help site (`help.stocdup.com`) — Docusaurus static build on nginx; content is `documentation/docs` (written by the scenario-docs skill). See [ADR-080](docs/adrs/ADR-080-help-site.md) |
 
 **Auth architecture**: Keycloak issues login tokens; staff and trade customers sign in to it directly. `apps/api` and the admin and portal BFFs each verify a token's signature against Keycloak's public keys (JWKS, ADR-049) — there is no shared JWT secret — and `apps/api` alone resolves organisation and role, from its own database. Drivers have no login: a delivery link carries a random 128-bit token stored on the order, which only `apps/api` can resolve. `apps/api` checks it in a guard before reading any request body, and the driver BFF asks `apps/api` before it reads a photo upload (ADR-076). **No BFF holds a secret or a signing key; keep it that way** — anything that needs a secret or the database belongs in `apps/api`. Future: dedicated auth service + client credentials for BFF→API calls.
 
@@ -224,6 +225,7 @@ kubectl rollout restart deployment/wholo-<service>
 - `portal-api` and `admin-api` bake their Next.js frontend (`portal`/`admin` respectively) into the same image at build time — rebuild `portal-api`/`admin-api` (not `portal`/`admin`) to pick up frontend-only changes.
 - `ops-api` (the Ops app, ADR-078) is built from `apps/admin-api/Dockerfile` with `--build-arg NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=stocdup-ops --build-arg NEXT_PUBLIC_APP_MODE=ops` and tagged `wholo/ops-api:local` (`pnpm k8s:build` does this). A change to `apps/admin` or `apps/admin-api` needs both `admin-api` and `ops-api` rebuilt and restarted.
 - `www` (the marketing site) is its own standalone image `wholo/www:local` with no BFF — build and restart it directly. It needs Plausible only when analytics is being tested (`plausible.enabled` in `values.local.yaml`); the register form posts to in-cluster MailHog locally. See [ADR-060](docs/adrs/ADR-060-marketing-site.md).
+- `help` (the help site) is its own static image `wholo/help:local` (nginx, no BFF). It bakes in `documentation/docs` at build time, so rebuild and restart it after any docs change. A broken link or missing image fails the build. See [ADR-080](docs/adrs/ADR-080-help-site.md).
 
 #### Local URLs
 
@@ -235,6 +237,7 @@ Docker Desktop exposes each `LoadBalancer` service directly on Windows/WSL `loca
 | Ops app (operators, ADR-078) | `http://localhost:3050` |
 | Portal app (frontend + BFF) | `http://localhost:3010` |
 | Marketing site (`apps/www`) | `http://localhost:3040` |
+| Help site (`apps/help`) | `http://localhost:3060` |
 | API (central domain API) | `http://localhost:3001` |
 | Keycloak | `http://localhost:3080` |
 | MailHog UI | `http://localhost:30825` |
@@ -261,7 +264,7 @@ To use it:
 
 Live-ops runbook (setup, deploy, rollback, incidents, secrets, maintenance, DR): [`docs/runbook/`](docs/runbook/README.md) (see also [ADR-048](docs/adrs/ADR-048-live-environment-k3s.md)). Pushing to `master` does **not** deploy to live by itself — the day-to-day promote-to-live loop is:
 
-1. Push to `master` (or run the workflow manually on `master`) — a push to any branch triggers `.github/workflows/build-images.yml`, which runs the unit and integration tests and, only if both pass, builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`). On every other branch the same tests and image builds run, but nothing is published.
+1. Push to `master` (or run the workflow manually on `master`) — a push to any branch triggers `.github/workflows/build-images.yml`, which runs the unit and integration tests and, only if both pass, builds and pushes `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,www,help,keycloak}` tagged `sha-<shortsha>` (and `latest` — never deploy `latest`). On every other branch the same tests and image builds run, but nothing is published.
 2. Bump the `sha-` tags in `helm/wholo/values.live.yaml` (gitignored, not committed) to the new sha.
 3. Deploy: `pnpm helm:install:live` (`helm upgrade --install wholo helm/wholo -n wholo -f helm/wholo/values.live.yaml`).
 

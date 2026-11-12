@@ -16,6 +16,7 @@ flowchart LR
 
     subgraph edge ["Traefik ingress — host routing (TLS terminated upstream on live)"]
         WWW("www.&lt;domain&gt;")
+        HLP("help.&lt;domain&gt;")
         P("portal.&lt;domain&gt;")
         A("admin.&lt;domain&gt;")
         AU("auth.&lt;domain&gt;")
@@ -24,6 +25,7 @@ flowchart LR
 
     subgraph cluster ["k3s cluster — internal HTTP, service DNS"]
         WW["wholo-www :3040<br/>marketing site (no BFF)"]
+        HL["wholo-help :3060<br/>help site (static, nginx)"]
         PA["wholo-portal-api :3010<br/>portal frontend + BFF"]
         AA["wholo-admin-api :3020<br/>admin frontend + BFF"]
         KC["wholo-keycloak :8080"]
@@ -47,6 +49,7 @@ flowchart LR
     OPS[("ops host<br/>InfluxDB 2 + Loki + Grafana (live)")]
 
     B -->|"pages, POST /api/register, /js/script.js, /api/event"| WWW --> WW
+    B -->|"help pages (static)"| HLP --> HL
     B -->|"pages + /api/v1/* (same origin)"| P --> PA
     B -->|"pages + /api/v1/* (same origin)"| A --> AA
     B -->|"login redirect, PKCE, tokens"| AU --> KC
@@ -94,6 +97,7 @@ Solid arrows = request traffic; dotted = auxiliary (JWKS fetches, images, mail).
 | Subdomain | Routes to (service) | Who calls it | Purpose |
 |---|---|---|---|
 | `www.<domain>` | `wholo-www:3040` | Anyone (public marketing site) | Distributor landing page; `POST /api/register` (lead → email); first-party proxy of `/js/script.js` + `/api/event` to Plausible. Bare apex `<domain>` is a **Cloudflare Redirect Rule → `www.<domain>`** (the origin cert is `*.<domain>`, which does not cover the apex) |
+| `help.<domain>` | `wholo-help:3060` | Anyone (public help site) | Static how-to pages built from `documentation/docs` (ADR-080). No backend calls |
 | `portal.<domain>` | `wholo-portal-api:3010` | Trade customers' browsers | Portal pages + its BFF endpoints (`/api/v1/*`, same origin) |
 | `admin.<domain>` | `wholo-admin-api:3020` | Distributor staff browsers | Admin pages + its BFF endpoints |
 | `auth.<domain>` | `wholo-keycloak:8080` | Browsers (redirects from both frontends) | Keycloak login page, PKCE flow, token endpoint |

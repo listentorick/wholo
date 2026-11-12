@@ -2,7 +2,7 @@
 
 > Part of the [live-ops runbook](README.md). If the release turns out bad, see [rollback.md](rollback.md).
 
-Pushing to `master` does **not** deploy anything. It builds six images, tagged `sha-<7-char sha>`. Live changes only when you pin those tags in `values.live.yaml` and run Helm.
+Pushing to `master` does **not** deploy anything. It builds seven images, tagged `sha-<7-char sha>`. Live changes only when you pin those tags in `values.live.yaml` and run Helm.
 
 ## 1. Pre-flight
 
@@ -11,7 +11,7 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
 3. **All six images exist.** The packages are public, so this needs no login:
    ```bash
    SHA=<sha>
-   for i in api portal-api admin-api driver-api keycloak www; do
+   for i in api portal-api admin-api driver-api keycloak www help; do
      docker manifest inspect ghcr.io/listentorick/wholo/$i:sha-$SHA >/dev/null \
        && echo "ok   $i" || echo "MISSING $i"
    done
@@ -50,9 +50,9 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
 
 ## 2. Deploy
 
-1. In `helm/wholo/values.live.yaml`, set every `tag: sha-…` line to the new sha. There are six: api (also used by the worker), portal-api, admin-api, driver-api, www and keycloak. Upstream images (Postgres, Redis, Telegraf and so on) are pinned separately and don't change here.
+1. In `helm/wholo/values.live.yaml`, set every `tag: sha-…` line to the new sha. There are seven: api (also used by the worker), portal-api, admin-api, driver-api, www, help and keycloak. Upstream images (Postgres, Redis, Telegraf and so on) are pinned separately and don't change here.
    ```bash
-   grep -n 'tag: sha-' helm/wholo/values.live.yaml   # all six should show the new sha
+   grep -n 'tag: sha-' helm/wholo/values.live.yaml   # all seven should show the new sha
    ```
 2. Apply:
    ```bash
@@ -63,7 +63,7 @@ Pushing to `master` does **not** deploy anything. It builds six images, tagged `
    ```bash
    kubectl -n wholo get pods -w                          # Ctrl-C once everything is Running/Ready
    kubectl -n wholo logs deploy/wholo-api -c migrate     # migration output (new api pod)
-   for d in api worker portal-api admin-api driver-api www keycloak; do
+   for d in api worker portal-api admin-api driver-api www help keycloak; do
      kubectl -n wholo rollout status deploy/wholo-$d --timeout=10m
    done
    ```
@@ -84,6 +84,7 @@ Do this after every deploy. Steps 6–9 matter most after changes to telemetry, 
 3. Browse `https://admin.<domain>`: you're redirected to `auth.<domain>`, you log in, and you land back on admin. That proves the baked-in Keycloak URL, the realm redirect URIs and JWKS validation agree. Repeat for the portal.
    - `https://www.<domain>/` serves the landing page, and `https://<domain>/` 301s to it.
    - Submitting the register form sends a lead email to `www.smtp.leadsTo`.
+   - `https://help.<domain>/` serves the help site, and `https://help.<domain>/healthz` returns `ok`.
    - If analytics is on, a pageview appears in the port-forwarded Plausible dashboard, and `curl -sI https://www.<domain>/js/script.js` returns 200 from the first-party proxy.
 4. Trigger an email and check it arrives from PurelyMail with `https://` links. The simplest is Keycloak "Forgot password?" for your own account; an order or invite email also works. (MailHog is not used in live.)
 5. `kubectl -n wholo logs deploy/wholo-worker` shows the queue consumers up. `kubectl -n wholo get deploy wholo-worker` shows exactly 1 replica (ADR-047).

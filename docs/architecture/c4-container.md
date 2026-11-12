@@ -18,8 +18,8 @@ Four diagrams, because one would be unreadable:
    the apps, the central API, the worker, Keycloak (and who talks to it),
    Postgres, Redis, and the off-site backup CronJob.
    Diagram [1b](#1b-operator-access) adds the Ops app and the Stocdup operator.
-2. [Marketing site and analytics](#2-marketing-site-and-analytics) — the public
-   site, Plausible and ClickHouse.
+2. [Public sites and analytics](#2-public-sites-and-analytics) — the public
+   marketing site, Plausible and ClickHouse, and the public help site.
 3. [Telemetry](#3-telemetry) — metrics and logs, for the operator.
 
 **Editing the diagrams.** Mermaid's C4 renderer places elements on a grid in
@@ -310,30 +310,34 @@ table `support_access_grants`.
 Not drawn in 1b: the Ops app and the Admin app's other calls (see diagram 1),
 and the Central API's Keycloak admin-API calls, Redis and Worker.
 
-## 2. Marketing site and analytics
+## 2. Public sites and analytics
 
 ```mermaid
 %%{init: {"wrap": true, "c4": {"c4ShapeMargin": 110, "diagramMarginX": 40, "diagramMarginY": 20}}}%%
 C4Container
-    title Stocdup — Containers (marketing site and analytics)
+    title Stocdup — Containers (public sites and analytics)
 
     Person(prospect, "Prospective distributor", "Evaluating Stocdup")
     System_Ext(email, "Email provider", "SMTP relay")
+    Person(reader, "Anyone", "Customer, distributor staff or visitor reading how-to pages")
 
     System_Boundary(k3s, "Stocdup on k3s") {
         Container(www, "Marketing site", "Next.js", "Public site, no BFF, no DB")
         Container(plausible, "Plausible", "Elixir", "Cookieless web analytics")
-        ContainerDb(clickhouse, "ClickHouse", "ClickHouse", "Analytics events")
+        Container(help, "Help site", "Docusaurus, nginx", "Public how-to pages, no BFF, no DB")
         ContainerDb(pg, "Postgres", "TimescaleDB 16", "Plausible app database")
+        ContainerDb(clickhouse, "ClickHouse", "ClickHouse", "Analytics events")
     }
 
     Rel(prospect, www, "Registers interest", "HTTPS")
+    Rel(reader, help, "Reads help pages", "HTTPS")
     Rel(www, email, "Sends lead email", "SMTP")
     Rel(www, plausible, "Proxies script, events", "HTTP")
     Rel(plausible, clickhouse, "Stores events", "HTTP")
     Rel(plausible, pg, "Stores app data", "SQL")
 
     UpdateRelStyle(prospect, www, $offsetX="15", $offsetY="0")
+    UpdateRelStyle(reader, help, $offsetX="15", $offsetY="0")
     UpdateRelStyle(www, email, $offsetX="0", $offsetY="0")
     UpdateRelStyle(www, plausible, $offsetX="-60", $offsetY="-40")
     UpdateRelStyle(plausible, clickhouse, $offsetX="-40", $offsetY="-40")
@@ -345,9 +349,14 @@ C4Container
 | Container | Helm template | Port | Notes |
 |---|---|---|---|
 | Marketing site | `www/` | 3040 | Standalone Next.js at `www.<domain>` (ADR-060). `POST /api/register` turns a lead into an email (its own nodemailer, not `apps/api`'s mail module). Next rewrites proxy `/js/script.js` and `/api/event` to Plausible so analytics is first-party. Calls nothing else. |
+| Help site | `help/` | 3060 | Static Docusaurus 3 site served by nginx (`nginxinc/nginx-unprivileged`, image `ghcr.io/listentorick/wholo/help`) at `help.<domain>` (live: `help.stocdup.com`, ADR-080). Public, no login. How-to pages are built into the image from `documentation/docs`, with a local search index. Routed by `app-ingressroute.yaml` behind the same Cloudflare → WAF edge as `www`; locally a LoadBalancer on `localhost:3060`. Makes no outgoing calls: no Central API, Keycloak, database, secret or SMTP. 16Mi, 10m → 64Mi, 200m. |
 | Plausible | `plausible/` | 8000 | No ingress; only reachable from `www` via `PLAUSIBLE_INTERNAL_URL`. Enabled on live and optionally locally (`plausible.enabled`). |
 | ClickHouse | `clickhouse/` | 8123 | Plausible's event store (`plausible_events_db`). |
 | Postgres | `postgres/` | 5432 | The same Postgres pod as diagram 1, drawn again as Plausible's app database. |
+
+Grid, row by row: outside the boundary, Prospective distributor / Email provider /
+Anyone; inside it, Marketing site / Plausible / Help site, then Postgres /
+ClickHouse. Anyone sits above the Help site so that line is vertical.
 
 Lead emails go to the real SMTP provider on live and to MailHog locally.
 
@@ -422,7 +431,7 @@ C4Container
 ## Deliberately not containers
 
 - **Traefik** — the cluster's ingress controller (host routing: `www`, `portal`,
-  `admin`, `ops`, `driver`, `auth`), shared infrastructure rather than part of the
+  `admin`, `ops`, `driver`, `help`, `auth`), shared infrastructure rather than part of the
   Stocdup release. On live the edge is Cloudflare → WAF appliance → Traefik.
 - **MailHog** — local-only SMTP sink and UI; live uses an SMTP provider.
 - **Seed Job** (`api/seed-job.yaml`) — local demo-data job, disabled on live.

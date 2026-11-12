@@ -139,6 +139,15 @@ www:
     from: "leads@<domain>"
     leadsTo: "CHANGE_ME@<domain>"
 
+# Public help site (ADR-080). Static; the site URL is baked in by CI.
+help:
+  image:
+    repository: ghcr.io/listentorick/wholo/help
+    tag: sha-CHANGE_ME
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+
 # Self-hosted analytics for www. Dashboard: kubectl -n wholo port-forward
 # svc/wholo-plausible 8000:8000 (register the first user, then it's invite-only).
 plausible:
@@ -233,6 +242,8 @@ ingress:
     # Cloudflare Redirect Rule -> https://www.<domain>; the cluster only
     # serves www. (`*.<domain>` Origin CA cert covers www, not the apex.)
     www: www.<domain>
+    # Public help site (ADR-080). Covered by the `*.<domain>` certificates.
+    help: help.<domain>
     # Driver PWA (QR delivery flow + authenticated manifest). Must match
     # global.driverUrl so apps/api mints QR delivery URLs on this host.
     driver: driver.<domain>

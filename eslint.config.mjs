@@ -31,6 +31,7 @@ export default tseslint.config(
       '**/coverage/**',
       '**/build/**',
       '**/.turbo/**',
+      '**/.docusaurus/**',
       '**/*.tsbuildinfo',
       '**/next-env.d.ts',
       '**/prisma/migrations/**',

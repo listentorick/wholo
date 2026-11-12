@@ -54,6 +54,7 @@ In order, for a new environment:
 6. [setup/backups.md](setup/backups.md): R2 bucket, token, encryption keys, alerts.
 7. [setup/telemetry.md](setup/telemetry.md) and [setup/logging.md](setup/logging.md): the ops-host InfluxDB, Grafana and Loki side.
 8. [setup/marketing-site.md](setup/marketing-site.md): the marketing site (`www`) and its web analytics (Plausible). What Plausible is: [overview.md](overview.md#web-analytics-plausible).
+   - [setup/help-site.md](setup/help-site.md): the help site (`help`).
 
 ## Conventions in this runbook
 

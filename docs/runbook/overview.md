@@ -13,7 +13,7 @@
   - There is no cert-manager or Let's Encrypt.
 - **Traefik:** runs as a DaemonSet, one pod per node labelled `svccontroller.k3s.cattle.io/enablelb=true` (all 3 nodes currently).
   - It uses `externalTrafficPolicy: Local`, so the real client IP reaches Traefik whichever node a request lands on.
-- **Images:** published to GHCR as `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,keycloak,www}` by the `build-images` workflow on every push to `master`.
+- **Images:** published to GHCR as `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,keycloak,www,help}` by the `build-images` workflow on every push to `master`.
   - Tags are `sha-<7-char sha>` plus `latest`. Always deploy a pinned `sha-` tag.
   - The packages are currently public, so no pull secret is needed. If they are made private, see [secrets.md](secrets.md#ghcr-pull-secret).
 - **Live config:** `helm/wholo/values.live.yaml`. It is gitignored and holds every live secret; copy it from `values.live.example.yaml`.

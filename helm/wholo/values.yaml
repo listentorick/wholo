@@ -261,6 +261,26 @@ www:
     from: "leads@stocdup.com"
     leadsTo: "leads@stocdup.com"
 
+# Public help site (help.stocdup.com, ADR-080). Docusaurus static build served
+# by nginx: no BFF, no apps/api call, no config or secret at runtime — the
+# site URL is baked in at image build time.
+help:
+  image:
+    repository: wholo/help
+    tag: local
+    pullPolicy: Never
+  replicaCount: 1
+  service:
+    type: LoadBalancer
+    port: 3060
+  resources:
+    requests:
+      memory: "16Mi"
+      cpu: "10m"
+    limits:
+      memory: "64Mi"
+      cpu: "200m"
+
 # Self-hosted analytics for the marketing site. Off by default (local dev has
 # no need for ClickHouse); the www app's analytics is a no-op when absent.
 # Enable in values.live.yaml. Dashboard is ClusterIP-only:
@@ -527,6 +547,7 @@ ingress:
     ops: ""
     driver: ""
     www: ""
+    help: ""
     api: ""
     auth: ""
     # Internal-only host for health checks (admin-api/portal-api/apps-api),

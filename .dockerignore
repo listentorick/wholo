@@ -4,3 +4,5 @@
 **/.next
 **/coverage
 **/.turbo
+**/.docusaurus
+apps/help/build

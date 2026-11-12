@@ -17,6 +17,9 @@
        to `stocdup.com`)
      - `WWW_EXPERIMENT_HERO_VARIANTS` = e.g. `growth,operations` to turn on
        the hero A/B split (blank ⇒ `/` stays static, single hero)
+   - Help site (`apps/help`), baked at image build time (optional):
+     - `LIVE_HELP_SITE_URL` = the help site's public URL (defaults to
+       `https://help.stocdup.com`)
 2. Push to `master` (or run the `build-images` workflow manually) and confirm
-   the six packages appear:
-   `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,keycloak,www}`.
+   the seven packages appear:
+   `ghcr.io/listentorick/wholo/{api,portal-api,admin-api,driver-api,keycloak,www,help}`.

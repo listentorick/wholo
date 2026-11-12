@@ -146,4 +146,27 @@ spec:
         - name: {{ include "wholo.fullname" . }}-www
           port: {{ .Values.www.service.port }}
 {{- end }}
+{{- if .Values.ingress.hosts.help }}
+---
+# Public help site (ADR-080) — fully public, no health allowlist.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "wholo.fullname" . }}-help
+  labels:
+    app: {{ include "wholo.fullname" . }}
+spec:
+  entryPoints:
+    - {{ .Values.ingress.tls | ternary "websecure" "web" }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    secretName: {{ include "wholo.fullname" . }}-tls
+  {{- end }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.hosts.help }}`) && PathPrefix(`/`)
+      services:
+        - name: {{ include "wholo.fullname" . }}-help
+          port: {{ .Values.help.service.port }}
+{{- end }}
 {{- end }}

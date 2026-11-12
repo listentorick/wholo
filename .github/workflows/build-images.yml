@@ -206,6 +206,13 @@ jobs:
               PLAUSIBLE_ENABLED=${{ vars.WWW_PLAUSIBLE_ENABLED }}
               PLAUSIBLE_DOMAIN=${{ vars.WWW_PLAUSIBLE_DOMAIN || 'stocdup.com' }}
               EXPERIMENT_HERO_VARIANTS=${{ vars.WWW_EXPERIMENT_HERO_VARIANTS }}
+          # Public help site (ADR-080) — Docusaurus static build on nginx.
+          # The canonical URL is baked in; a broken link or image fails the build.
+          - name: help
+            dockerfile: apps/help/Dockerfile
+            context: .
+            build-args: |
+              HELP_SITE_URL=${{ vars.LIVE_HELP_SITE_URL || 'https://help.stocdup.com' }}
           - name: keycloak
             dockerfile: apps/keycloak/Dockerfile
             context: apps/keycloak
