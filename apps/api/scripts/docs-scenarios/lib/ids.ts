@@ -18,7 +18,7 @@ export const DOCS_ONBOARDING_SLUGS: readonly string[] = ['harbour-wines'];
  * invited customer creating their login). Every reset deletes them from Keycloak and
  * empties their inbox (lib/sign-ups.ts). Only .example addresses, which can't be real.
  */
-export const DOCS_SIGN_UP_EMAILS: readonly string[] = ['orders@rustyanchor.example'];
+export const DOCS_SIGN_UP_EMAILS: readonly string[] = ['orders@rustyanchor.example', 'tom@rustyanchor.example'];
 
 export const DOCS_USERS = {
   owner: { id: 'docs-user-owner', keycloakId: 'kc-seed-admin-1', email: 'james@vineandco.com', firstName: 'James', lastName: 'Vine' },

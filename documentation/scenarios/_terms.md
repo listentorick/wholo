@@ -224,9 +224,9 @@ Source: UI, apps/admin/src/components/settings/DiscoverySettingsForm.tsx
 Where: a customer's Portal Access tab (Invitation history)
 Kind: state
 - **Pending** (shown with "Expires …"): sent and not yet used; the link works for 7 days.
-- **Accepted**: the customer used the link, and is now an Active customer.
+- **Accepted** (shown with the date, and "Accepted by" the person's name and email): the customer used the link, and is now an Active customer. The person who accepted can have a different address from the one invited, if they confirmed it with a code sent to the invited address.
 - **Expired**: the link can no longer be used, because 7 days passed or a newer invitation to the same address replaced it. Send a new one for a fresh link.
-Source: apps/admin/src/components/customers/tabs/PortalAccessTab.tsx (Expired and Revoked both shown as "Expired"); admin-customers.service.ts (7-day expiry; a new invitation revokes the earlier pending one); portal-invitations.service.ts (only PENDING, unexpired invitations can be accepted; accepting sets the customer ACTIVE)
+Source: apps/admin/src/components/customers/tabs/PortalAccessTab.tsx (Expired and Revoked both shown as "Expired"); admin-customers.service.ts (7-day expiry; a new invitation revokes the earlier pending one); portal-invitations.service.ts (only PENDING, unexpired invitations can be accepted; accepting sets the customer ACTIVE and records who accepted, ADR-081); customers.service.ts (acceptedAt, acceptedBy)
 
 ## Team member status
 Where: the Team page

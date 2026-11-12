@@ -14,8 +14,10 @@ address.
 ## Concept
 The portal is where your customers browse the products in their catalogues, at their
 prices, and place orders themselves. The invitation is an email with a link that lasts 7
-days. The customer must accept it with the same email address it was sent to, and
-accepting it makes them an active customer if they weren't already. Sending a new
+days. The customer accepts it by creating a login with that email address, or with
+another address once they've entered a code emailed to the invited one, and accepting it
+makes them an active customer if they weren't already. Portal access then shows who
+accepted it and when. Sending a new
 invitation to the same address cancels the earlier one.
 
 ## Starting data

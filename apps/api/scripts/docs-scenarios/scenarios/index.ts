@@ -1,6 +1,7 @@
 import { ScenarioEntry } from '../lib/types';
 import acceptOrder from './accept-order';
 import acceptPortalInvitation from './accept-portal-invitation';
+import acceptPortalInvitationWithAnotherAddress from './accept-portal-invitation-with-another-address';
 import addCustomer from './add-customer';
 import addProduct from './add-product';
 import addTaxType from './add-tax-type';
@@ -37,6 +38,7 @@ import xeroInvoiceSettings from './xero-invoice-settings';
 export const SCENARIOS: Record<string, ScenarioEntry> = {
   'accept-order': acceptOrder,
   'accept-portal-invitation': acceptPortalInvitation,
+  'accept-portal-invitation-with-another-address': acceptPortalInvitationWithAnotherAddress,
   'add-customer': addCustomer,
   'add-product': addProduct,
   'add-tax-type': addTaxType,

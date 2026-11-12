@@ -17,7 +17,8 @@ and deliveries, but can't change company settings, connect integrations or manag
 team. Warehouse staff fulfil orders and manage deliveries, and can only view the catalogue
 and customers. You can give someone more than one role; only the Owner manages the team,
 and the Owner role can't be given by invitation. The invitation is an email with a link
-that lasts 7 days, and the person must sign up with exactly that email address.
+that lasts 7 days. The person signs up with that email address, which is filled in for
+them, or with another address once they've entered a code emailed to the invited one.
 
 ## Starting data
 - James Vine (Owner) is Vine & Co's only team member, and there are no invitations
