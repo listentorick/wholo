@@ -79,7 +79,9 @@ describe('Invitation codes (integration)', () => {
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     app.useGlobalFilters(new ProblemDetailsFilter());
-    await app.init();
+    // Listen once: otherwise supertest starts and stops the server per request,
+    // and the 20 simultaneous requests below race it (read ECONNRESET on CI).
+    await app.listen(0);
     prisma = app.get(PrismaService);
 
     jest.spyOn(app.get(MailService), 'sendInvitationCode').mockImplementation(async (to, params) => {
