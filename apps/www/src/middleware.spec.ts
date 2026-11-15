@@ -41,3 +41,40 @@ describe('middleware — hero A/B', () => {
     expect(['default', 'growth']).toContain(res.cookies.get('hero_variant')?.value);
   });
 });
+
+describe('middleware — markdown for agents', () => {
+  const at = (path: string, accept: string) =>
+    new NextRequest(`https://www.stocdup.com${path}`, { headers: { accept } });
+  const rewrittenTo = (res: Response) => res.headers.get('x-middleware-rewrite');
+
+  it('rewrites a markdown request for the homepage to the markdown route', async () => {
+    const middleware = await loadMiddleware();
+    const res = middleware(at('/', 'text/markdown'));
+    expect(rewrittenTo(res)).toBe('https://www.stocdup.com/api/markdown');
+  });
+
+  it('rewrites a markdown request for the privacy page', async () => {
+    const middleware = await loadMiddleware();
+    const res = middleware(at('/privacy', 'text/markdown, text/html;q=0.5'));
+    expect(rewrittenTo(res)).toBe('https://www.stocdup.com/api/markdown/privacy');
+  });
+
+  it('leaves browser requests as HTML', async () => {
+    const middleware = await loadMiddleware();
+    const res = middleware(at('/', 'text/html,application/xhtml+xml,*/*;q=0.8'));
+    expect(rewrittenTo(res)).toBeNull();
+  });
+
+
+  it('serves markdown without assigning a hero variant cookie', async () => {
+    const middleware = await loadMiddleware('default,growth');
+    const res = middleware(at('/', 'text/markdown'));
+    expect(res.cookies.get('hero_variant')).toBeUndefined();
+  });
+
+  it('does not run the hero experiment on the privacy page', async () => {
+    const middleware = await loadMiddleware('default,growth');
+    const res = middleware(at('/privacy', 'text/html'));
+    expect(res.cookies.get('hero_variant')).toBeUndefined();
+  });
+});
