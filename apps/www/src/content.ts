@@ -407,6 +407,7 @@ export const FOOTER = {
     { label: 'Product', href: '#product' },
     { label: 'Why Stocdup?', href: '#why' },
     { label: 'Register interest', href: '#register' },
+    { label: 'Help', href: 'https://help.stocdup.com' },
     { label: 'Privacy', href: '/privacy' },
   ],
   legal:

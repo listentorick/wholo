@@ -77,6 +77,12 @@ const config: Config = {
     },
     footer: {
       style: 'light',
+      links: [
+        {
+          label: 'Stocdup — wholesale platform for UK distributors',
+          href: 'https://www.stocdup.com',
+        },
+      ],
       copyright: `© ${new Date().getFullYear()} Stocdup`,
     },
     prism: {},
