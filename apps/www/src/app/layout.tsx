@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import './globals.css';
 import { MotionProvider } from '@/components/motion/MotionProvider';
 import { Analytics } from '@/components/Analytics';
+import { buildStructuredData } from './structured-data';
 
 const inter = localFont({
   src: './fonts/InterVariable.woff2',
@@ -55,16 +56,7 @@ export const viewport: Viewport = {
   colorScheme: 'light',
 };
 
-const organizationJsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Organization',
-  name: 'Stocdup',
-  url: SITE_URL,
-  description: DESCRIPTION,
-  logo: `${SITE_URL}/logo-mark.png`,
-  areaServed: 'GB',
-  slogan: 'Sell more. Run smoother.',
-};
+const structuredData = buildStructuredData(SITE_URL, DESCRIPTION);
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -81,7 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger -- static, trusted, first-party structured data
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </body>
     </html>
