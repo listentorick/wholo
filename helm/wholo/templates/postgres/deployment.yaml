@@ -23,6 +23,14 @@ spec:
       containers:
         - name: postgresql
           image: {{ .Values.postgresql.image }}
+          # Run as the image's postgres user (UID/GID 70, Alpine) from the start.
+          # Started as root, the entrypoint switches user with gosu, and on a node
+          # running Ubuntu kernel 7.0.0-43 gosu hangs at that switch (reported
+          # AppArmor signal-denial bug), so Postgres never starts. Starting as 70
+          # skips gosu altogether. Existing data is already owned by 70.
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
           # timescaledb must be loaded at server start, not just CREATE EXTENSION'd —
           # the entrypoint's default CMD is bare `postgres`, so this is the standard
           # way to pass it a server config flag without a mounted postgresql.conf.
@@ -42,16 +50,26 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+          # Crash recovery (WAL replay) after an unclean stop can take a while;
+          # liveness/readiness only start once this has passed once, so the
+          # liveness probe can't kill Postgres mid-recovery and restart-loop it.
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12   # up to 2 minutes to start
           livenessProbe:
             exec:
               command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
-            initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
-            initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.postgresql.resources | nindent 12 }}
       volumes:
