@@ -30,12 +30,13 @@ sign-up is noticed.
 ## Steps
 1. Open the invitation email to orders@rustyanchor.example and accept it
 2. Choose to create an account
-3. Enter your details: Tom Rowe, your own email address tom@rustyanchor.example instead of
-   the one filled in, and a password
+3. Enter your details: Tom Rowe and your own email address tom@rustyanchor.example instead
+   of the one filled in
 4. Confirm tom@rustyanchor.example from the email Stocdup sends there
-5. Ask for a code to be sent to the invited address
-6. Enter the code from the email to orders@rustyanchor.example
-7. Arrive at Vine & Co's catalogue
+5. Choose a password
+6. Ask for a code to be sent to the invited address
+7. Enter the code from the email to orders@rustyanchor.example
+8. Arrive at Vine & Co's catalogue
 
 ## Done when
 Vine & Co's catalogue opens in the portal, with prices, and The Rusty Anchor Bar & Grill

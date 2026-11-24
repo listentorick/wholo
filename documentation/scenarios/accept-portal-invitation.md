@@ -29,10 +29,11 @@ The link lasts 7 days; after that, ask your supplier to send a new one.
 ## Steps
 1. Open the invitation email from Vine & Co and accept it
 2. Choose to create an account
-3. Enter your details: Tom Rowe and a password, keeping the email address that's already
-   filled in (orders@rustyanchor.example)
+3. Enter your details: Tom Rowe, keeping the email address that's already filled in
+   (orders@rustyanchor.example)
 4. Confirm your email address from the email Stocdup sends you
-5. Arrive at Vine & Co's catalogue
+5. Choose a password
+6. Arrive at Vine & Co's catalogue
 
 ## Done when
 Vine & Co's catalogue opens in the portal, with prices, and The Rusty Anchor Bar & Grill

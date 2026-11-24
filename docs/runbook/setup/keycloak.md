@@ -41,7 +41,9 @@ client, `wholo-api-admin`, which holds only `realm-management: manage-users`.
   scripts/setup-keycloak-api-admin-client.sh
   ```
 
-  Idempotent; it ends by proving the client can obtain a token. Until the
+  Idempotent. It also assigns the `kc-admin-api` client scope, which Keycloak
+  26.8.2+ requires for Admin REST API calls, and ends by proving the client's
+  token is accepted by the Admin REST API. Until the
   client exists, removal still works in Stocdup (the person is locked out at
   the API), but the queued Keycloak disables retry and fail — check the worker
   logs for `KEYCLOAK_ADMIN_CLIENT_SECRET` / `Keycloak could not …`.

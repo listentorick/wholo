@@ -98,6 +98,8 @@ Portal and staff invitations get decisions 1–4. Each app builds its own accept
 
 Plus the acceptance notice to the invited address when a code was used.
 
+**Update 2026-11-22 (Keycloak 26.8.2).** Since Keycloak 26.7, a realm with both `registrationAllowed` and `verifyEmail` on no longer asks for a password on the registration form. A new password account now goes: create account (name and email only) → verify → **choose a password** (our `login-update-password.ftl`, "Choose a password") → in. The same number of emails as the table. `login_hint` still fills in `register.formData.email`. Both were checked against a running 26.8.2 realm. Nobody can sign in before choosing a password: until then the account has no credential.
+
 ## Alternatives considered
 
 **A. Keep the current flow.** Strongest guarantee, but the retyping, late failure and dead end remain, and shared inboxes and federated sign-in with another address can't be supported. Rejected.

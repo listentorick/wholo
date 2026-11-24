@@ -104,7 +104,23 @@ Traffic between pods inside the cluster is plain HTTP, so the apps themselves ha
 Postgres, Redis, ClickHouse, Plausible, Telegraf, Fluent Bit, MailHog and the rclone image are pinned in `helm/wholo/values.yaml`. Keycloak's base image is pinned in `apps/keycloak/Dockerfile`. Upgrade them through a normal commit and [deploy.md](deploy.md), one component per release. Upgrading any of Postgres, Redis or ClickHouse restarts it (`Recreate`), which means brief downtime.
 
 - **Postgres/TimescaleDB:** minor versions (same `pg16`) are a normal deploy. Run `ALTER EXTENSION timescaledb UPDATE;` in each database that uses it if the TimescaleDB release notes ask for it. A **major** Postgres version can't start on the old data directory: dump, recreate and restore ([postgres-restore.md](postgres-restore.md) part B, from a fresh manual backup). Rehearse it with part A first.
-- **Keycloak:** read the upgrade notes. The theme (`apps/keycloak/themes/wholo`) overrides login templates, so check the login, register and reset-password pages after upgrading.
+- **Keycloak:** read the upgrade notes. The theme (`apps/keycloak/themes/wholo`) overrides login templates, so check the login, register and reset-password pages after upgrading. Keycloak migrates its database schema on startup and can't be downgraded afterwards, so back up the `keycloak` database first:
+
+  ```powershell
+  kubectl -n wholo exec deploy/wholo-postgresql -- pg_dump -U wholo -Fc -f /tmp/keycloak-pre-upgrade.dump keycloak
+  $pod = kubectl -n wholo get pod -l app=wholo-postgresql -o jsonpath='{.items[0].metadata.name}'
+  kubectl cp "wholo/${pod}:/tmp/keycloak-pre-upgrade.dump" .\keycloak-pre-upgrade.dump
+  ```
+
+  The Keycloak Deployment uses `Recreate` (two versions must never run at once), so sign-in is down for the minute or so it takes to start.
+  **First deploy with `Recreate`:** if the Deployment was created with the old default (`RollingUpdate`), `helm upgrade` fails with `spec.strategy.rollingUpdate: Forbidden`. Helm applies server-side and can't remove the rolling-update settings Kubernetes filled in. Switch it once, then deploy:
+
+  ```powershell
+  # A patch file avoids PowerShell 5/7 differences in quoting JSON for kubectl.
+  '[{"op":"remove","path":"/spec/strategy/rollingUpdate"},{"op":"replace","path":"/spec/strategy/type","value":"Recreate"}]' | Set-Content keycloak-recreate.json
+  kubectl -n wholo patch deployment wholo-keycloak --type=json --patch-file keycloak-recreate.json
+  ```
+  **Upgrading from before 26.8.2:** the Admin REST API then accepts only tokens with the `kc-admin-api` scope. Right after the deploy, re-run `scripts/setup-keycloak-api-admin-client.sh` ([setup/keycloak.md](setup/keycloak.md#keycloak-service-account-client-team-removal)) to give the worker's `wholo-api-admin` client that scope. Until then, disabling removed staff in Keycloak fails with 401 and retries.
 - **Plausible:** its `migrate` initContainer handles schema changes.
 
 ## Rotating secrets
