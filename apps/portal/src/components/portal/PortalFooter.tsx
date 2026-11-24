@@ -3,10 +3,35 @@
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 
-/** A footer link. Real destinations use next/link; the rest are placeholders
- *  ("fake links" for now) styled the same, per the storefront mock. */
-function FooterLink({ href, children }: { href?: string; children: React.ReactNode }) {
+const WWW_URL = 'https://www.stocdup.com';
+const HELP_URL = 'https://help.stocdup.com';
+
+/** A footer link. In-app destinations use next/link; `external` links go to the
+ *  marketing or help site (`newTab` opens them in another tab); the rest are
+ *  placeholders ("fake links" for now) styled the same, per the storefront mock. */
+function FooterLink({
+  href,
+  external,
+  newTab,
+  children,
+}: {
+  href?: string;
+  external?: boolean;
+  newTab?: boolean;
+  children: React.ReactNode;
+}) {
   const className = 'block py-1.5 text-sm text-muted transition-colors hover:text-foreground';
+  if (href && external) {
+    return (
+      <a
+        href={href}
+        className={className}
+        {...(newTab ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
+        {children}
+      </a>
+    );
+  }
   if (href) {
     return (
       <Link href={href} className={className}>
@@ -32,8 +57,8 @@ function FooterColumn({ title, children }: { title: string; children: React.Reac
 
 /**
  * Global footer for the storefront layout — Pale Stone ground, the Stocdup
- * slogan, four link columns (only "My Suppliers" and "Settings" resolve for
- * now; the rest are placeholders), and a legal line. Structure follows the
+ * slogan, four link columns (in-app links, plus help-site and marketing-site
+ * links; the rest are placeholders), and a legal line. Structure follows the
  * `Main3` / `Mobile3` storefront artboards.
  */
 export function PortalFooter() {
@@ -59,22 +84,26 @@ export function PortalFooter() {
             <FooterLink href="/settings">Settings</FooterLink>
             <FooterLink>Saved products</FooterLink>
             <FooterLink>Invoices</FooterLink>
-            <FooterLink>Delivery addresses</FooterLink>
           </FooterColumn>
 
           <FooterColumn title="Ordering">
-            <FooterLink>How ordering works</FooterLink>
-            <FooterLink>Delivery areas</FooterLink>
-            <FooterLink>Minimum order</FooterLink>
-            <FooterLink>Payment &amp; credit</FooterLink>
+            <FooterLink href={`${HELP_URL}/customers/place-order`} external newTab>
+              How ordering works
+            </FooterLink>
           </FooterColumn>
 
           <FooterColumn title="Stocdup">
-            <FooterLink>About Stocdup</FooterLink>
-            <FooterLink>Help centre</FooterLink>
+            <FooterLink href={WWW_URL} external newTab>
+              About Stocdup
+            </FooterLink>
+            <FooterLink href={HELP_URL} external newTab>
+              Help centre
+            </FooterLink>
             <FooterLink>Contact support</FooterLink>
             <FooterLink>Terms &amp; conditions</FooterLink>
-            <FooterLink>Privacy policy</FooterLink>
+            <FooterLink href={`${WWW_URL}/privacy`} external newTab>
+              Privacy policy
+            </FooterLink>
           </FooterColumn>
         </div>
 
