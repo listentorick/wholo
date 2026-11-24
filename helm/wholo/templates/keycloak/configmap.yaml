@@ -14,6 +14,10 @@ data:
   {{- end }}
   KC_HOSTNAME_STRICT: "false"
   KC_HTTP_ENABLED: "true"
+  # Listen on every interface. Since 26.6, `start-dev` (local) binds to
+  # localhost only, which the Service can't reach. `start` (live) already
+  # listens on all interfaces, so this changes nothing there.
+  KC_HTTP_HOST: "0.0.0.0"
   KC_HEALTH_ENABLED: "true"
   {{- with .Values.keycloak.proxyHeaders }}
   KC_PROXY_HEADERS: {{ . | quote }}
