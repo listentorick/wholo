@@ -67,8 +67,22 @@ ROLE=$(api "$ADMIN/clients/$RM_UUID/roles/manage-users")
 echo "Granting realm-management:manage-users to the service account ..."
 api -X POST -d "[$ROLE]" "$ADMIN/users/$SA_USER_ID/role-mappings/clients/$RM_UUID" >/dev/null
 
+# Keycloak 26.8.2+ rejects Admin REST API calls (401) unless the token carries
+# the built-in `kc-admin-api` scope. Upgrades add it to admin-cli and
+# security-admin-console only, so our own service account needs it assigned.
+SCOPE_ID=$(api "$ADMIN/client-scopes" | json 'next((s["id"] for s in d if s["name"]=="kc-admin-api"), "")')
+[[ -n "$SCOPE_ID" ]] || { echo "ERROR: client scope kc-admin-api not found. Is Keycloak 26.8.2 or later?" >&2; exit 1; }
+echo "Assigning default client scope kc-admin-api ..."
+api -X PUT "$ADMIN/clients/$CLIENT_UUID/default-client-scopes/$SCOPE_ID" >/dev/null
+
 echo "Verifying the client can authenticate ..."
-curl -sf -d "grant_type=client_credentials" -d "client_id=$CLIENT_ID" -d "client_secret=$CLIENT_SECRET" \
-  "$KEYCLOAK_URL/realms/$REALM/protocol/openid-connect/token" >/dev/null \
-  && echo "OK: $CLIENT_ID can obtain a token." \
+SA_TOKEN=$(curl -sf -d "grant_type=client_credentials" -d "client_id=$CLIENT_ID" -d "client_secret=$CLIENT_SECRET" \
+  "$KEYCLOAK_URL/realms/$REALM/protocol/openid-connect/token" | json 'd["access_token"]') \
   || { echo "ERROR: the client could not obtain a token with the given secret." >&2; exit 1; }
+
+# A token alone isn't enough: prove the Admin REST API accepts it, as the
+# worker's disable call needs.
+echo "Verifying the token is accepted by the Admin REST API ..."
+curl -sf -o /dev/null -H "Authorization: Bearer $SA_TOKEN" "$ADMIN/users?max=1" \
+  && echo "OK: $CLIENT_ID can call the Admin REST API." \
+  || { echo "ERROR: the Admin REST API rejected $CLIENT_ID's token (missing kc-admin-api scope or manage-users role?)." >&2; exit 1; }
