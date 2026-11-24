@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>New Password — Stocdup</title>
+  <title>Choose a password — Stocdup</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="${url.resourcesPath}/css/login.css">
@@ -20,12 +20,17 @@
         <img src="${url.resourcesPath}/img/stocdup-logo-only.png" alt="" class="wh-logo" />
         <span class="wh-title">stocd<span class="wh-title-accent">up</span></span>
       </div>
-      <p class="wh-subtitle">New Password</p>
+      <#-- Shown both for a reset and, since Keycloak 26.7, to a new account choosing
+           its first password after verifying its email, so the wording fits both. -->
+      <p class="wh-subtitle">Choose a password</p>
       <div class="wh-divider"></div>
     </div>
 
+    <#-- Keycloak always sends a "warning" prompt with this page (updatePasswordMessage,
+         reworded in messages/). Only real errors, such as a password that breaks
+         the policy, get the red error style. -->
     <#if message?has_content>
-      <p class="wh-error">${kcSanitize(message.summary)}</p>
+      <p class="<#if message.type == 'error'>wh-error<#else>wh-body</#if>">${kcSanitize(message.summary)}</p>
     </#if>
 
     <form id="kc-passwd-update-form" action="${url.loginAction}" method="post">
@@ -33,7 +38,7 @@
       <input type="hidden" id="username" name="username" value="${(auth.attemptedUsername)!''}" autocomplete="username" />
 
       <div class="wh-field">
-        <label for="password-new">New Password</label>
+        <label for="password-new">Password</label>
         <div class="wh-pw-wrap">
           <input
             type="password"
@@ -55,7 +60,7 @@
       </div>
 
       <div class="wh-field wh-field--last">
-        <label for="password-confirm">Confirm Password</label>
+        <label for="password-confirm">Confirm password</label>
         <div class="wh-pw-wrap">
           <input
             type="password"
@@ -80,7 +85,7 @@
       </label>
 
       <button class="wh-btn" type="submit">
-        Update Password
+        Save password
       </button>
 
     </form>
