@@ -30,7 +30,7 @@
          reworded in messages/). Only real errors, such as a password that breaks
          the policy, get the red error style. -->
     <#if message?has_content>
-      <p class="<#if message.type == 'error'>wh-error<#else>wh-body</#if>">${kcSanitize(message.summary)}</p>
+      <p class="<#if message.type == 'error'>wh-error<#else>wh-body</#if>">${kcSanitize(message.summary)?no_esc}</p>
     </#if>
 
     <form id="kc-passwd-update-form" action="${url.loginAction}" method="post">

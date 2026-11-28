@@ -26,7 +26,7 @@
     </div>
 
     <#if message?has_content && message.type != 'warning'>
-      <p class="wh-error">${kcSanitize(message.summary)}</p>
+      <p class="wh-error">${kcSanitize(message.summary)?no_esc}</p>
     </#if>
 
     <p class="wh-body">Enter the 6-digit code from your authenticator app for ${(auth.attemptedUsername)!''}.</p>

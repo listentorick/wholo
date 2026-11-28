@@ -24,7 +24,7 @@
     </div>
 
     <#if message?has_content>
-      <p class="wh-error">${kcSanitize(message.summary)}</p>
+      <p class="wh-error">${kcSanitize(message.summary)?no_esc}</p>
     </#if>
 
     <form id="kc-form-login" action="${url.loginAction}" method="post">

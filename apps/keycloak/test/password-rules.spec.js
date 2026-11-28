@@ -354,25 +354,22 @@ describe('attach on update-password', () => {
     expect(ruleEl('notEmail').classList.contains('is-met')).toBe(true);
   });
 
-  it('leaves the email rule neutral and uncounted when the page does not know the email', () => {
+  it('removes the email rule when the page does not know the email, so it never reads as unmet', () => {
     renderUpdatePassword('');
+    expect(ruleEl('notEmail')).toBeNull();
+    expect(ruleEl('length')).not.toBeNull();
     type('password-new', 'sam@example.com');
-    expect(ruleEl('notEmail').classList.contains('is-met')).toBe(false);
-    expect(ruleEl('notEmail').querySelector('.wh-rule-status').textContent).toBe(
-      'Checked when you submit: ',
-    );
     const fill = document.querySelector('.wh-pw-progress-fill');
     expect(fill.style.width).toBe('100%');
     expect(fill.classList.contains('is-complete')).toBe(true);
   });
 
-  it('does not hold back a submit, or mark an error, for a rule it cannot check', () => {
+  it('lets a valid, matching password submit first time when the email rule was removed', () => {
     renderUpdatePassword('');
     type('password-new', 'abcd');
     type('password-confirm', 'abcd');
     const event = new Event('submit', { bubbles: true, cancelable: true });
     document.getElementById('kc-passwd-update-form').dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
-    expect(ruleEl('notEmail').classList.contains('is-error')).toBe(false);
   });
 });

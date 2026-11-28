@@ -71,9 +71,10 @@ const IDENTITY_RULES = new Set(['notUsername', 'notEmail']);
 
 // An identity rule can only be checked here if the page holds the value to
 // compare with: an input the user fills in (register's email), or a hidden one
-// the server populated. With neither (e.g. update-password reached from a reset
-// email) it stays neutral, uncounted and never holds a submit back — the server
-// still enforces it.
+// the server populated. Keycloak leaves that hidden value empty on its
+// required-action pages (choose a password after verifying an email, or after a
+// reset link), so there the rule is removed from the checklist: a rule that can
+// never tick would read as unmet. The server still enforces it on submit.
 function isCheckable(rule, againstEl) {
   if (!IDENTITY_RULES.has(rule)) return true;
   return !!againstEl && (againstEl.type !== 'hidden' || againstEl.value.trim() !== '');
@@ -100,8 +101,12 @@ export function attach(list) {
     min: Number(el.dataset.min),
     max: Number(el.dataset.max),
     againstEl: el.dataset.against ? doc.querySelector(el.dataset.against) : null,
-  })).map((item) => ({ ...item, checkable: isCheckable(item.rule, item.againstEl) }));
-  const total = items.filter((i) => i.checkable).length;
+  })).filter((item) => {
+    if (isCheckable(item.rule, item.againstEl)) return true;
+    item.el.remove();
+    return false;
+  });
+  const total = items.length;
 
   let attempted = false;
   let liveTimer = null;
@@ -135,10 +140,6 @@ export function attach(list) {
     );
     let metCount = 0;
     items.forEach((item, idx) => {
-      if (!item.checkable) {
-        if (item.status) item.status.textContent = 'Checked when you submit: ';
-        return;
-      }
       const met = results[idx];
       if (met) metCount++;
       item.el.classList.toggle('is-met', met);

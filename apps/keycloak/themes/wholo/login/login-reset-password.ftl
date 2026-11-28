@@ -25,9 +25,9 @@
 
     <#if message?has_content>
       <#if message.type == 'success'>
-        <p class="wh-info">${kcSanitize(message.summary)}</p>
+        <p class="wh-info">${kcSanitize(message.summary)?no_esc}</p>
       <#else>
-        <p class="wh-error">${kcSanitize(message.summary)}</p>
+        <p class="wh-error">${kcSanitize(message.summary)?no_esc}</p>
       </#if>
     </#if>
 
